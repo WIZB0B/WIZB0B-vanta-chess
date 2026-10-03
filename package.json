@@ -12,10 +12,12 @@
     "security": "node scripts/security-check.mjs",
     "e2e": "playwright test",
     "prepare:stockfish": "node scripts/prepare-stockfish.mjs",
-    "predev": "npm run prepare:stockfish",
-    "prebuild": "npm run prepare:stockfish",
-    "presecurity": "npm run prepare:stockfish",
-    "pretest": "npm run prepare:stockfish"
+    "predev": "npm run prepare:runtime",
+    "prebuild": "npm run prepare:runtime",
+    "presecurity": "npm run prepare:runtime",
+    "pretest": "npm run prepare:runtime",
+    "prepare:assets": "node scripts/prepare-vch-assets.mjs",
+    "prepare:runtime": "npm run prepare:stockfish && npm run prepare:assets"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

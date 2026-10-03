@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-const ignored = new Set(['.git', 'node_modules', 'dist']);
+const ignored = new Set(['.git', 'node_modules', 'dist', 'generated']);
 const files = [];
 function walk(directory) { for (const name of readdirSync(directory)) { if (ignored.has(name)) continue; const path = join(directory, name); statSync(path).isDirectory() ? walk(path) : files.push(path); } }
 walk('.');
@@ -19,5 +19,6 @@ for (const asset of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wa
   if (!existsSync(join('public/engines', asset))) failures.push(`prepared Stockfish asset missing: ${asset}`);
 }
 if (existsSync('public/engines/Copying.txt') && !readFileSync('public/engines/Copying.txt', 'utf8').includes('GNU GENERAL PUBLIC LICENSE')) failures.push('prepared Stockfish GPL license is invalid');
+for (const asset of ['pieces-white.png','pieces-black.png','wallpaper-emerald.webp','wallpaper-cobalt.webp','wallpaper-burgundy.webp','wallpaper-ivory.webp']) if (!existsSync(join('public/assets/generated', asset))) failures.push(`prepared VCH visual asset missing: ${asset}`);
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`security-check: ${files.length} files inspected`);

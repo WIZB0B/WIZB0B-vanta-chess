@@ -1,5 +1,5 @@
 const CACHE = 'vanta-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/assets/generated/pieces-white.png', '/assets/generated/pieces-black.png', '/assets/generated/wallpaper-emerald.webp'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))));
 self.addEventListener('fetch', event => {
