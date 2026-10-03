@@ -3,6 +3,7 @@ import { Chess } from 'chess.js';
 import { VchApi, stableGuestToken } from './vch-api.js';
 import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
+import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -10,16 +11,111 @@ let room=normalizeRoomId(params.get('game'),generatedRoom);
 const playerToken=stableGuestToken();
 const api=new VchApi({token:playerToken});
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0;
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0;
 const stockfish=new Worker('/stockfish.worker.js');
 stockfish.onmessage=({data})=>{if(data.type==='uci'&&data.line.startsWith('bestmove ')){const u=data.line.split(' ')[1];enginePending?.(u);enginePending=null}else if(data.type==='unavailable'&&enginePending){enginePending(null);enginePending=null}};
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const app=$('#app');
 app.innerHTML=`
-<div class="shell"><header><a class="brand"><span class="mark">V</span><b>VANTA<br>CHESS</b></a><nav><button class="active">♞ <span>Play</span></button><button>♛ <span>Arena</span></button><button>♟ <span>Puzzles</span></button><button>▤ <span>Learn</span></button><button>♜ <span>Openings</span></button></nav><div class="user"><i></i><span>Guest-${room.slice(-4)}</span><small>1200 rating</small></div></header>
-<main><aside class="lpanel panel"><div class="hero"><label>● &nbsp; LIVE CHESS</label><h1>Play your<br>next game.</h1><p>Guest play is instant. Rated games save your Elo and tournament record.</p></div><div class="modes"><button data-mode="match">⚡<span>Match</span></button><button data-mode="room" class="on">♟<span>Room</span></button><button data-mode="computer">▣<span>Computer</span></button></div><section><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p></section><label class="tiny">GAME SETTINGS</label><div class="settings"><select id="time"><option value="600">◷ 10+0 Rapid</option><option value="300">◷ 5+0 Blitz</option><option value="180">◷ 3+0 Blitz</option></select><select id="level"><option value="1200">Casual · 1200</option><option value="1600">Club · 1600</option><option value="2000">Expert · 2000</option></select></div><button class="gold" id="create">Create room & get link <b>＋</b></button><div class="divider">or join an existing room</div><div class="join"><input id="roomInput" placeholder="Enter room code"><button id="join">Join room</button></div><div class="room"><small>ROOM CODE</small><strong>${room}</strong><em>● Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy">▣</button></div></div></aside>
-<section class="game"><div class="player top"><span class="avatar">GU</span><div><b>Guest-Opponent</b><small>☆ 1200</small></div><i class="signal">▥ 42 ms</i><time id="blackClock">10:00</time></div><div id="board" class="board" aria-label="Chess board"></div><div class="player bottom"><span class="avatar light">GU</span><div><b>You · Guest-${room.slice(-4)}</b><small>☆ 1200</small></div><i class="signal">▥ connected</i><time id="whiteClock">10:00</time></div><div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button></div></section>
-<aside class="rpanel panel"><div class="tabs"><button class="on">Moves</button><button>Analysis</button><button>Openings</button></div><div class="status"><small>● &nbsp; LIVE GAME</small><h2 id="turn">White to move</h2><p id="state">Real time &nbsp;•&nbsp; Casual game</p></div><div class="quick-actions"><button id="draw">½ Offer draw</button></div><div id="moves" class="moves"><span>Game ready — make a move.</span></div><section class="analysis"><header><b>▣ Engine Analysis</b><small>Stockfish 19 · Elo <span id="elo">1200</span></small></header><h2 id="score">+0.0</h2><div class="meter"><i></i></div><p id="line">Analysis begins after your move.</p></section><section class="chat"><h3>Player chat</h3><div id="messages"></div><form id="chat"><input id="message" maxlength="160" placeholder="Send a friendly message…"><button>Send</button></form></section><div class="cards"><article><b>♛ Arena</b><p>Live tournaments and events from Vanta.</p></article><article><b>◎ Daily Puzzle</b><p>Sharpen tactics with a new position.</p></article></div></aside></main></div><div id="toast"></div><dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog><dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme">Done</button></dialog>`;
+<div class="shell">
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Vanta Chess home"><span class="mark">V</span><b>VANTA<br>CHESS</b></a>
+    <nav class="main-nav" aria-label="Primary">
+      <button class="active" data-nav="play"><span>♞</span>Play</button>
+      <button data-nav="arena"><span>♛</span>Arena</button>
+      <button data-nav="puzzles"><span>♟</span>Puzzles</button>
+      <button data-nav="learn"><span>▤</span>Learn</button>
+      <button data-nav="openings"><span>♜</span>Openings</button>
+      <button data-nav="famous"><span>▣</span>Famous Games</button>
+      <button data-nav="review"><span>☑</span>Review</button>
+    </nav>
+    <div class="header-actions">
+      <button id="searchBtn" class="icon-btn" aria-label="Search">⌕</button>
+      <button id="installBtn" class="install-btn">⇩ <span>Install App</span></button>
+      <button id="notifyBtn" class="icon-btn" aria-label="Notifications">♧</button>
+      <div class="user"><i></i><span>${guestName}</span><small>1200 rating</small></div>
+    </div>
+  </header>
+
+  <main>
+    <aside class="lpanel panel">
+      <div class="hero">
+        <div class="hero-art" aria-hidden="true"></div>
+        <label>● &nbsp; LIVE CHESS</label>
+        <h1>Play your<br>next game.</h1>
+        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>
+      </div>
+
+      <div class="modes">
+        <button data-mode="match">⚡<span>Match</span></button>
+        <button data-mode="room" class="on">♟<span>Room</span></button>
+        <button data-mode="computer">▣<span>Computer</span></button>
+      </div>
+
+      <section class="private-card"><span class="link-icon">↗</span><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div><b>›</b></section>
+      <label class="tiny">GAME SETTINGS</label>
+      <div class="settings">
+        <label><span>Time control</span><select id="time"><option value="600">◷ 10+0 Rapid</option><option value="300">◷ 5+0 Blitz</option><option value="180">◷ 3+0 Blitz</option></select></label>
+        <label><span>Opponent / room</span><select id="level"><option value="900">Casual · 900</option><option value="1200" selected>Casual · 1200</option><option value="1500">Club · 1500</option><option value="1800">Advanced · 1800</option><option value="2200">Expert · 2200</option><option value="2700">Legend · 2700</option></select></label>
+      </div>
+      <button class="gold" id="create"><span>Create room & get link</span><b>＋</b></button>
+      <div class="divider">or join an existing room</div>
+      <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>
+      <div class="room"><small>ROOM CODE</small><strong>${room}</strong><em>● Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">▣</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>
+    </aside>
+
+    <section class="game">
+      <div class="player top"><span class="avatar">GU</span><div><b>Waiting for opponent</b><small>☆ 1200</small></div><i class="signal" id="topSignal">▥ live</i><time id="blackClock">10:00</time></div>
+      <div id="board" class="board" aria-label="Chess board"></div>
+      <div class="player bottom"><span class="avatar light">GU</span><div><b>You · ${guestName}</b><small>☆ 1200</small></div><i class="signal" id="bottomSignal">▥ connecting…</i><time id="whiteClock">10:00</time></div>
+      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button></div>
+    </section>
+
+    <aside class="rpanel panel">
+      <div class="tabs" role="tablist">
+        <button class="on" data-tab="moves">Moves</button><button data-tab="analysis">Analysis</button><button data-tab="openings">Openings</button><button data-tab="famous">Famous Games</button>
+      </div>
+      <div id="rightWorkspace">
+        <section class="live-card">
+          <div class="live-card-copy"><small>● &nbsp; Live Game</small><h2 id="turn">White to move</h2><p id="state">Real time &nbsp;•&nbsp; Casual game</p></div>
+          <button id="openChat" class="chat-chip">Chat</button>
+        </section>
+
+        <div id="movesView" class="right-view">
+          <div class="moves-head"><span>Move</span><span>Eval</span><span>Time</span></div>
+          <div id="moves" class="moves"><span>Game ready — make a move.</span></div>
+          <div class="analysis">
+            <header><b>▣ Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
+            <div class="analysis-row"><h2 id="score">+0.0</h2><div class="meter"><i id="meterFill"></i></div></div>
+            <p id="advantage">Equal position</p>
+            <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
+          </div>
+          <div class="feature-grid">
+            <button class="feature-card opening" data-action="openings"><span class="asset"></span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><i>›</i></button>
+            <button class="feature-card famous" data-action="famous"><span class="asset"></span><b>Famous Games</b><small>Study legendary matches and ideas.</small><i>›</i></button>
+            <button class="feature-card review" data-action="review"><span class="asset"></span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><i>›</i></button>
+            <button class="feature-card practice" data-action="learn"><span class="asset"></span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><i>›</i></button>
+          </div>
+        </div>
+        <div id="dynamicView" class="right-view hidden"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<aside id="chatDrawer" class="chat-drawer" aria-hidden="true">
+  <header><div><small>PLAYER CHAT</small><h3>Game conversation</h3></div><button id="closeChat" aria-label="Close chat">×</button></header>
+  <div id="messages"></div>
+  <form id="chat"><input id="message" maxlength="160" placeholder="Send a friendly message…"><button>Send</button></form>
+</aside>
+
+<dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme">Done</button></dialog>
+
+<dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><h2>Search Vanta Chess</h2><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
+`
 
 let clocks=initialClocks(Number($('#time').value));
 function render(){
