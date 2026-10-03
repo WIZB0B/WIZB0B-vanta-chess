@@ -13,15 +13,14 @@ const api=new VchApi({token:playerToken});
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0;
 const stockfish=new Worker('/stockfish.worker.js');
+const analysisWorker=new Worker('/stockfish.worker.js');
 stockfish.onmessage=({data})=>{
-  if(data.type==='uci'){
-    const text=String(data.line||'');
-    if(text.startsWith('info '))updateAnalysisFromUci(text);
-    if(text.startsWith('bestmove ')&&enginePending){const u=text.split(' ')[1];enginePending(u);enginePending=null}
-  }else if(data.type==='unavailable'){
-    if(enginePending){enginePending(null);enginePending=null}
-    const line=$('#line');if(line)line.textContent='Stockfish 19 unavailable in this browser.';
-  }
+  if(data.type==='uci'&&String(data.line||'').startsWith('bestmove ')&&enginePending){const u=String(data.line).split(' ')[1];enginePending(u);enginePending=null}
+  if(data.type==='unavailable'&&enginePending){enginePending(null);enginePending=null}
+};
+analysisWorker.onmessage=({data})=>{
+  if(data.type==='uci'&&String(data.line||'').startsWith('info '))updateAnalysisFromUci(String(data.line));
+  if(data.type==='unavailable'){const line=$('#line');if(line)line.textContent='Stockfish 19 unavailable in this browser.'}
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const app=$('#app');
@@ -298,7 +297,7 @@ function updateAnalysisFromUci(text){
 function scheduleAnalysis(){
   clearTimeout(analysisTimer);
   if(mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
-  analysisTimer=setTimeout(()=>{if(!enginePending&&!botThinking)stockfish.postMessage({fen:game.fen(),elo:3190,movetime:280})},220);
+  analysisTimer=setTimeout(()=>{if(!botThinking)analysisWorker.postMessage({fen:game.fen(),elo:3190,movetime:280})},220);
 }
 function showMovesView(){
   currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
