@@ -39,14 +39,14 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
     if(!response.url().includes('/functions/v1/chess')||response.request().method()!=='POST')return false;
     try{return response.request().postDataJSON()?.action==='puzzle_next'}catch{return false}
   });
-  await a.getByRole('button',{name:/Puzzles/}).click();
+  await a.locator('.main-nav [data-nav="puzzles"]').click();
   const puzzle=await (await puzzleResponse).json();
   expect(puzzle.puzzle?.fen).toBeTruthy();
   await expect(a.locator('#dynamicView')).toContainText(/Puzzle Training|Find the best continuation/);
 
   let arenaReady=false;
   for(let attempt=0;attempt<3&&!arenaReady;attempt++){
-    await a.getByRole('button',{name:/Arena/}).click();
+    await a.locator('.main-nav [data-nav="arena"]').click();
     try{await expect(a.locator('#dynamicView .arena-join').first()).toBeVisible({timeout:6000});arenaReady=true}
     catch(error){if(attempt===2)throw error;await a.waitForTimeout(1000)}
   }
