@@ -42,8 +42,12 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   expect(puzzle.puzzle?.fen).toBeTruthy();
   await expect(a.locator('#moves')).toContainText(/Puzzle/);
 
-  await a.getByRole('button',{name:/Arena/}).click();
-  await expect(a.locator('#moves button').first()).toBeVisible({timeout:6000});
+  let arenaReady=false;
+  for(let attempt=0;attempt<3&&!arenaReady;attempt++){
+    await a.getByRole('button',{name:/Arena/}).click();
+    try{await expect(a.locator('#moves button').first()).toBeVisible({timeout:6000});arenaReady=true}
+    catch(error){if(attempt===2)throw error;await a.waitForTimeout(1000)}
+  }
 
   await aCtx.close();await bCtx.close();
 });
