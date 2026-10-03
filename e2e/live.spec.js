@@ -25,6 +25,8 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   const after=await a.locator('#whiteClock').textContent();
   expect(after).not.toBe(before);
 
+  await a.locator('#openChat').click();
+  await b.locator('#openChat').click();
   await a.locator('#message').fill('acceptance-chat');
   await a.locator('#chat button').click();
   await expect(b.locator('#messages')).toContainText('acceptance-chat',{timeout:6000});
