@@ -1,0 +1,66 @@
+const DEFAULT_ENDPOINT = 'https://ubjldcfiwrwiouwgmduo.supabase.co/functions/v1/chess';
+
+export class VchApiError extends Error {
+  constructor(message, status, code) {
+    super(message);
+    this.name = 'VchApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export class VchApi {
+  constructor({ endpoint = import.meta.env?.VITE_CHESS_API_URL || DEFAULT_ENDPOINT, token, accessToken } = {}) {
+    if (!/^https:\/\/[a-z0-9.-]+\/functions\/v1\/chess$/.test(endpoint)) {
+      throw new Error('Invalid authoritative chess API endpoint');
+    }
+    this.endpoint = endpoint;
+    this.token = token;
+    this.accessToken = accessToken;
+  }
+
+  async request(action, payload = {}, { signal } = {}) {
+    const headers = { 'content-type': 'application/json', accept: 'application/json' };
+    if (this.accessToken) headers.authorization = `Bearer ${this.accessToken}`;
+    const response = await fetch(this.endpoint, {
+      method: 'POST', headers, signal, cache: 'no-store', referrerPolicy: 'no-referrer',
+      body: JSON.stringify({ action, ...(this.token ? { token: this.token } : {}), ...payload }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) {
+      throw new VchApiError(data.error?.message || data.message || 'Chess service request failed', response.status, data.error?.code);
+    }
+    return data;
+  }
+
+  profile(name) { return this.request('profile', { name }); }
+  create(options) { return this.request('create', options); }
+  join(code, name) { return this.request('join', { code, name }); }
+  move(gameId, expectedVersion, move) { return this.request('move', { gameId, expectedVersion, ...move }); }
+  history(gameId) { return this.request('history', { gameId }); }
+  heartbeat(gameId) { return this.request('heartbeat', { gameId }); }
+  resign(gameId) { return this.request('resign', { gameId }); }
+  drawOffer(gameId) { return this.request('draw_offer', { gameId }); }
+  drawRespond(gameId, accept) { return this.request('draw_respond', { gameId, accept }); }
+  chatList(gameId, limit = 60) { return this.request('chat_list', { gameId, limit }); }
+  chatSend(gameId, message, clientNonce = crypto.randomUUID()) { return this.request('chat_send', { gameId, message, clientNonce }); }
+  puzzleNext(difficulty = 'normal', rating = 1400) { return this.request('puzzle_next', { difficulty, rating }); }
+  puzzleAttempt(payload) { return this.request('puzzle_attempt', payload); }
+  queueJoin(options) { return this.request('queue_join', options); }
+  queueStatus(rated = false) { return this.request('queue_status', { rated, allowBots: !rated }); }
+  queueLeave() { return this.request('queue_leave'); }
+  tournaments() { return this.request('tournaments'); }
+  tournamentJoin(tournamentId) { return this.request('tournament_join', { tournamentId }); }
+  tournamentStandings(tournamentId) { return this.request('tournament_standings', { tournamentId }); }
+  bots() { return this.request('bots'); }
+}
+
+export function stableGuestToken(storage = localStorage) {
+  const key = 'vanta.guest-token';
+  let token = storage.getItem(key);
+  if (!token || token.length < 20) {
+    token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+    storage.setItem(key, token);
+  }
+  return token;
+}
