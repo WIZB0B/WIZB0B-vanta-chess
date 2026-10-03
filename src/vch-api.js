@@ -37,6 +37,8 @@ export class VchApi {
   create(options) { return this.request('create', options); }
   join(code, name) { return this.request('join', { code, name }); }
   move(gameId, expectedVersion, move) { return this.request('move', { gameId, expectedVersion, ...move }); }
+  botMove(gameId, expectedVersion, move) { return this.request('bot_move', { gameId, expectedVersion, ...move }); }
+  state(gameId) { return this.request('state', { gameId }); }
   history(gameId) { return this.request('history', { gameId }); }
   heartbeat(gameId) { return this.request('heartbeat', { gameId }); }
   resign(gameId) { return this.request('resign', { gameId }); }

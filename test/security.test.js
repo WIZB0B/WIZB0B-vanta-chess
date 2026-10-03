@@ -43,3 +43,23 @@ test('production headers and service worker private-data boundary are configured
   assert.match(worker, /url\.origin !== self\.location\.origin/);
   assert.match(worker, /event\.request\.method !== 'GET'/);
 });
+
+test('state and bot move use authenticated POST actions with versioned coordinates', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => { requests.push(JSON.parse(options.body)); return new Response('{}'); };
+  try {
+    const api = new VchApi({ token: 'b'.repeat(40) });
+    await api.state('game-2');
+    await api.botMove('game-2', 9, { from: 'g8', to: 'f6' });
+    assert.equal(requests[0].action, 'state');
+    assert.deepEqual(requests[1], { action: 'bot_move', token: 'b'.repeat(40), gameId: 'game-2', expectedVersion: 9, from: 'g8', to: 'f6' });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('vendored Stockfish 19 includes executable assets and GPL/source notices', () => {
+  assert.ok(readFileSync('public/engines/stockfish-19-lite-single.js').length > 20_000);
+  assert.ok(readFileSync('public/engines/stockfish-19-lite-single.wasm').length > 1_000_000);
+  assert.match(readFileSync('public/engines/Copying.txt', 'utf8'), /GNU GENERAL PUBLIC LICENSE/);
+  assert.match(readFileSync('public/engines/SOURCE.md', 'utf8'), /stockfish@19\.0\.0/);
+});

@@ -1,6 +1,6 @@
 # Security, privacy, and production-readiness audit
 
-Audit date: 2026-10-03. Scope: the complete repository and documented hosted VCH Edge Function contract. Production database policies and function source were unavailable for direct inspection; those checks remain deployment gates.
+Audit date: 2026-10-03. Scope: the complete repository and the reviewed hosted VCH Edge Function v11 contract. The project owner reports zero Supabase security-advisor lints and direct-access-deny RLS on all `chess_*` tables; remaining performance notices are unused indexes, not security findings.
 
 ## A. Architecture and data flow
 
@@ -32,14 +32,14 @@ Google Fonts was removed. Icons, service-worker files, and future Stockfish asse
 ### Critical
 
 * **Resolved in frontend:** the parallel client-authoritative `games/moves` model trusted client FEN and clocks. It and its migrations were removed. API regression tests assert that move requests contain coordinates/version and no FEN, SAN, clocks, result, rating, or seat.
-* **Deployment verification required:** inspect the live Edge Function and all `chess_*` grants/RLS to confirm authorization, legal move validation, atomic expected-version handling, clock/result integrity, and IDOR resistance.
+* **Backend hardened:** Edge Function v11 removed anonymous full-state GET, added participant-authorized `state` and `heartbeat`, returns authoritative seats, rejects bodies over 64 KiB/invalid JSON, and allow-lists production, preview, and local browser origins. The client uses POST state/heartbeat exclusively.
 
 ### High
 
 * **Resolved:** untrusted room codes are allow-listed before DOM interpolation.
 * **Resolved:** persistent chat renders with `textContent`, is length-bounded in the UI, and uses server persistence rather than peer broadcast.
 * **Resolved:** Netlify adds CSP, HSTS, frame denial, MIME sniffing, referrer, and permissions policies. Verify these on the deployed candidate.
-* **Open:** official Stockfish 19 WASM/JS and GPL source notice are absent; the client now fails closed rather than playing a random substitute under its name.
+* **Resolved in repository:** the GPLv3 Stockfish.js 19.0.0 lite single-threaded JS/WASM build, license, and exact source links are self-hosted. The worker remains same-origin and isolated; deployment execution remains an acceptance gate.
 
 ### Medium
 
@@ -58,9 +58,8 @@ Google Fonts was removed. Icons, service-worker files, and future Stockfish asse
 
 ## F. Remaining manual gates
 
-1. Inspect the deployed Edge Function source, RLS, grants, Realtime channels, and storage buckets; run Supabase security/performance advisors.
-2. Run cross-user negative tests for every action using two guest identities and authenticated identities where applicable.
-3. Vendor and verify official Stockfish 19 browser artifacts plus GPL obligations.
-4. Exercise two independent browser contexts through create/join, both move directions, clocks, chat, reconnect, draw/resign/endgame, queue fallback, puzzles, Arena, mobile, and visual comparison.
-5. Inspect deployed Netlify response headers and PWA cache behavior.
-6. Have qualified owners decide privacy retention, export/deletion, child safety, and chat moderation requirements. This audit makes no legal-compliance claim.
+1. Run cross-user negative tests for every action using two guest identities and authenticated identities where applicable.
+2. Exercise two independent browser contexts through create/join, both move directions, clocks, chat, reconnect, draw/resign/endgame, queue fallback, puzzles, Arena, mobile, and visual comparison.
+3. Verify the vendored Stockfish 19 build under deployed Netlify headers.
+4. Inspect deployed Netlify response headers and PWA cache behavior.
+5. Have qualified owners decide privacy retention, export/deletion, child safety, and chat moderation requirements. This audit makes no legal-compliance claim.

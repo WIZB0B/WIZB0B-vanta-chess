@@ -29,4 +29,9 @@ npm run check
 
 Netlify builds with `netlify.toml` for the single `vanta-chess-play` site. The configuration pins Node, provides SPA routing, and defines production security headers. Verify actual deployed headers rather than assuming configuration was applied.
 
-Official Stockfish 19 JS/WASM artifacts must be self-hosted at `public/engines/` with the upstream GPL license and source offer. Until those reviewed artifacts are present the worker fails closed and the UI does not substitute a random bot while calling it Stockfish.
+The pinned `stockfish@19.0.0` dependency supplies the self-hosted Stockfish.js 19
+lite single-threaded build. `predev` and `prebuild` copy its JS, WASM, README, and
+GPLv3 license into the gitignored `public/engines/` runtime directory; no engine
+binary is stored in the Git patch or fetched from a CDN at runtime. Exact source
+links remain in `public/engines/SOURCE.md`. The worker fails closed and never
+substitutes random moves while presenting them as Stockfish.

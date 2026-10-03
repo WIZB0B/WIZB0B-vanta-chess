@@ -10,10 +10,16 @@
     "test": "node --test",
     "check": "npm run security && npm test && npm run build",
     "security": "node scripts/security-check.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "prepare:stockfish": "node scripts/prepare-stockfish.mjs",
+    "predev": "npm run prepare:stockfish",
+    "prebuild": "npm run prepare:stockfish",
+    "presecurity": "npm run prepare:stockfish",
+    "pretest": "npm run prepare:stockfish"
   },
   "dependencies": {
-    "chess.js": "^1.4.0"
+    "chess.js": "^1.4.0",
+    "stockfish": "19.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
