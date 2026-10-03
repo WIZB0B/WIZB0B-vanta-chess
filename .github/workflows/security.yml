@@ -3,17 +3,28 @@ on:
   pull_request:
   push:
     branches: [main]
+
 permissions:
   contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
         with:
           node-version: 20.19.0
           cache: npm
+      - name: Verify project files
+        run: |
+          pwd
+          ls -la package.json package-lock.json
+          test -s package-lock.json
+          node -e "const p=require('./package-lock.json'); if(!p.lockfileVersion) process.exit(1); console.log('lockfileVersion', p.lockfileVersion)"
       - run: npm ci
       - run: npm audit --audit-level=high
       - run: npm run security
