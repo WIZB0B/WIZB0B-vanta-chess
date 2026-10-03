@@ -17,7 +17,7 @@ const assets={
   'bp.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_170927_fcaa44cd-5f97-4e56-82e4-4d8d07f6dc68.png',
   'hero-knight.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232839_ddd8cb8c-d6a5-4e2b-88b2-102726384587.png',
   'opening-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232839_06a812fc-fe25-438f-8163-6c5d78819665.png',
-  'famous-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232840_37ea61f2-7b60-4c8-bcd2-b6662947e1f1.png',
+  'famous-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232840_37ea61f2-7b60-4c32-bcd2-b6662947e1f1.png',
   'review-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232839_ff9a7250-062b-4407-810b-e9ca7d8fb1c2.png',
   'practice-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232839_1474bd74-fe3f-4ae6-9324-b6023785aebb.png',
   'live-banner.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232838_f5cd8889-7db2-4257-9f3b-0f818f144f0a.png',
