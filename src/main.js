@@ -13,7 +13,16 @@ const api=new VchApi({token:playerToken});
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0;
 const stockfish=new Worker('/stockfish.worker.js');
-stockfish.onmessage=({data})=>{if(data.type==='uci'&&data.line.startsWith('bestmove ')){const u=data.line.split(' ')[1];enginePending?.(u);enginePending=null}else if(data.type==='unavailable'&&enginePending){enginePending(null);enginePending=null}};
+stockfish.onmessage=({data})=>{
+  if(data.type==='uci'){
+    const text=String(data.line||'');
+    if(text.startsWith('info '))updateAnalysisFromUci(text);
+    if(text.startsWith('bestmove ')&&enginePending){const u=text.split(' ')[1];enginePending(u);enginePending=null}
+  }else if(data.type==='unavailable'){
+    if(enginePending){enginePending(null);enginePending=null}
+    const line=$('#line');if(line)line.textContent='Stockfish 19 unavailable in this browser.';
+  }
+};
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const app=$('#app');
 app.innerHTML=`
@@ -78,7 +87,7 @@ app.innerHTML=`
       <div id="rightWorkspace">
         <section class="live-card">
           <div class="live-card-copy"><small>● &nbsp; Live Game</small><h2 id="turn">White to move</h2><p id="state">Real time &nbsp;•&nbsp; Casual game</p></div>
-          <button id="openChat" class="chat-chip">Chat</button>
+          <div class="live-actions"><button id="draw" class="draw-chip">½ Draw</button><button id="openChat" class="chat-chip">Chat</button></div>
         </section>
 
         <div id="movesView" class="right-view">
@@ -147,9 +156,10 @@ function render(){
   }
   document.body.dataset.seat=myColor||'';
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
+  updateOpeningLabel();scheduleAnalysis();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
-async function clickSquare(sq,p){if(game.isGameOver()||(serverGameId&&mode==='room'&&myColor!==game.turn()))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
+async function clickSquare(sq,p){if(game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn()))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
 function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');d.showModal();$$('#promotion button').forEach(b=>b.onclick=()=>{d.close();resolve(b.dataset.piece)})})}
 async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
   game.move(move);puzzleSession.played.push(uci);puzzleSession.index++;render();
@@ -158,11 +168,17 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made;try{made=game.move(move)}catch{return}render();updateMoves();playTone();if(mode==='computer'&&!game.isGameOver())setTimeout(engineMove,280);}
 function updateMoves(){
-  const h=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.map(x=>x.san||x.lan||''):game.history();
-  $('#moves').innerHTML=h.length?h.map((m,i)=>i%2===0?`<div><b>${i/2+1}.</b><span>${m}</span><span>${h[i+1]||''}</span></div>`:'').join(''):'<span>Game ready — make a move.</span>';
-  $('#moves').scrollTop=9999;
+  const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history().map((san,index)=>({san,color:index%2?'b':'w'}));
+  const target=$('#moves');if(!target)return;
+  if(!records.length){target.innerHTML='<span>Game ready — make a move.</span>';return}
+  target.innerHTML=records.map((record,index)=>{
+    const color=record.color||(index%2?'b':'w'),moveNo=Math.floor(index/2)+1,prefix=color==='w'?moveNo+'.':moveNo+'...';
+    const isLast=index===records.length-1,evalText=isLast?(analysisScore>=0?'+':'')+analysisScore.toFixed(1):'';
+    return `<div class="move-row"><span><b>${prefix}</b> ${escapeHtml(record.san||record.lan||'')}</span><span>${evalText}</span><span>${record.elapsed_ms?Math.max(1,Math.round(record.elapsed_ms/1000))+'s':''}</span></div>`;
+  }).join('');
+  target.scrollTop=target.scrollHeight;
 }
-async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:Number($('#level').value),movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
+async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||$('#level').value||1200);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
 async function engineMove(){const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 function playTone(){if($('#sound').dataset.off)return;const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1)}
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
@@ -194,16 +210,19 @@ function syncRoomUi(){
   const code=serverGame?.invite_code||room;
   const strong=$('.room strong');if(strong)strong.textContent=code||'—';
   if(code)$('#share').value=`${location.origin}${location.pathname}?game=${encodeURIComponent(code)}`;
-  const topName=serverGame?.black_name||'Waiting for opponent',bottomName=serverGame?.white_name||guestName;
+  const opponentConnected=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
+  const topName=currentBot?.display_name||currentBot?.name||(opponentConnected?'Opponent connected':'Waiting for opponent');
   $('.player.top b').textContent=topName;
-  $('.player.bottom b').textContent=myColor==='b'?`You · ${topName}`:`You · ${bottomName}`;
+  $('.player.bottom b').textContent=`You · ${guestName}`;
+  const topRating=$('.player.top small');if(topRating)topRating.textContent='☆ '+(currentBot?.elo||1200);
+  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ 1200';
 }
 function applyServerState(payload){
   const state=payload.game||payload;if(!state)return;
   const previousVersion=serverVersion,previousGameId=serverGameId;
   animateLastServerMove(state,previousGameId===state.id?previousVersion:0);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
-  currentPlayerId=payload.player?.id||currentPlayerId;
+  currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
   myColor=seatFromEnvelope(payload,myColor);
   if(myColor&&!orientationSet){flipped=myColor==='b';orientationSet=true}
   clockSnapshot=createClockSnapshot(payload);
@@ -218,37 +237,156 @@ function applyServerState(payload){
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
 async function connect(){try{await api.profile(guestName);if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`);startPolling()}}catch(error){toast(error.message)}}
-function startPolling(){clearInterval(pollTimer);pollCount=0;pollTimer=setInterval(async()=>{if(document.hidden||!serverGameId)return;try{applyServerState(await api.heartbeat(serverGameId));if(++pollCount%2===0)await loadChat()}catch{}},1000)}
+function startPolling(){
+  clearInterval(pollTimer);pollCount=0;
+  pollTimer=setInterval(async()=>{
+    if(document.hidden||!serverGameId)return;
+    const started=performance.now();
+    try{
+      const payload=await api.heartbeat(serverGameId);
+      latencyMs=Math.max(1,Math.round(performance.now()-started));
+      const signal=$('#bottomSignal');if(signal)signal.textContent='▥ '+latencyMs+' ms';
+      applyServerState(payload);
+      if(++pollCount%2===0)await loadChat();
+    }catch{const signal=$('#bottomSignal');if(signal)signal.textContent='▥ reconnecting…'}
+  },1000)
+}
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
 async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
-$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160||!serverGameId)return;try{await api.chatSend(serverGameId,v);$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
+$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
 $$('.modes button').forEach(b=>b.onclick=async()=>{$$('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=b.dataset.mode;if(mode==='computer')toast('Choose an engine level');if(mode==='match'){try{await api.queueJoin({seconds:Number($('#time').value),increment:0,rated:false});toast('Searching for a player…');const started=Date.now(),timer=setInterval(async()=>{try{const state=await api.queueStatus(false);if(state.game||state.matched){clearInterval(timer);applyServerState(state);startPolling();toast(Date.now()-started>=15000?'Closest Elo engine matched':'Player matched')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}}});
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}};$('#draw').onclick=async()=>{if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{try{const state=await api.create({name:guestName,seconds:Number($('#time').value),increment:0,rated:false});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=e=>$('#elo').textContent=e.target.value;
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}};$('#draw').onclick=async()=>{if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{try{const state=await api.create({name:guestName,seconds:Number($('#time').value),increment:0,rated:false});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer')toast('Engine strength updated')};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)};
 render();startClock();connect();
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
 
-async function showBackendView(kind){
-  const target=$('#moves');target.replaceChildren();
-  try{
-    if(kind==='puzzle'){
-      const data=await api.puzzleNext('normal',1400), puzzle=data.puzzle||data;
-      game.load(puzzle.fen); mode='puzzle'; puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now()};
-      render(); const note=document.createElement('p');note.textContent=`Puzzle ${puzzle.rating||'—'} · ${(puzzle.themes||[]).join(', ')}`;target.append(note);return;
-    }
-    const data=await api.tournaments();
-    for(const tournament of data.tournaments||data.events||[]){
-      const row=document.createElement('div'),title=document.createElement('strong'),join=document.createElement('button'),standings=document.createElement('button');
-      title.textContent=`${tournament.name||tournament.title||'Arena'} · ${tournament.time_control||tournament.seconds||''}`;
-      join.textContent='Join';standings.textContent='Standings';
-      join.onclick=async()=>{try{await api.tournamentJoin(tournament.id);await api.queueJoin({seconds:Number(tournament.base_seconds||600),increment:Number(tournament.increment_seconds||0),rated:!!tournament.rated,tournamentId:tournament.id});toast('Arena queue joined');const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!tournament.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);startPolling();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}};
-      standings.onclick=async()=>{const result=await api.tournamentStandings(tournament.id);row.querySelectorAll('p').forEach(x=>x.remove());for(const player of result.standings||[]){const line=document.createElement('p');line.textContent=`${player.rank||'–'}. ${player.display_name||player.name} · ${player.score||0}`;row.append(line)}};
-      row.append(title,join,standings);target.append(row);
-    }
-  }catch(error){toast(error.message)}
+function escapeHtml(value=''){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function currentHistory(){return serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.map(x=>x.san||x.lan||''):game.history()}
+function updateOpeningLabel(){
+  const opening=detectOpening(currentHistory());
+  const state=$('#state');if(!state)return;
+  const base=game.inCheck()?'Check · Real time':(serverGame?.rated?'Real time · Rated game':'Real time · Casual game');
+  state.textContent=opening?`${base} · ${opening.name}`:base;
 }
-$$('nav button').forEach(button=>button.addEventListener('click',()=>{const label=button.textContent;if(label.includes('Arena'))showBackendView('arena');if(label.includes('Puzzles'))showBackendView('puzzle')}));
+function formatPv(pv=''){
+  try{
+    const position=new Chess(game.fen()),out=[];
+    for(const token of pv.trim().split(/\s+/).slice(0,8)){
+      const move=position.move({from:token.slice(0,2),to:token.slice(2,4),promotion:token[4]});
+      if(!move)break;out.push(move.san);
+    }
+    return out.join(' ');
+  }catch{return pv}
+}
+function updateAnalysisFromUci(text){
+  const depth=Number(text.match(/\bdepth (\d+)/)?.[1]||0);
+  const scoreMatch=text.match(/\bscore (cp|mate) (-?\d+)/);
+  const pv=text.match(/\bpv (.+)$/)?.[1]||'';
+  if(scoreMatch){
+    let score=scoreMatch[1]==='mate'?(Number(scoreMatch[2])>0?99:-99):Number(scoreMatch[2])/100;
+    if(game.turn()==='b')score=-score;
+    analysisScore=Math.max(-99,Math.min(99,score));
+    const scoreEl=$('#score');if(scoreEl)scoreEl.textContent=(analysisScore>=0?'+':'')+(Math.abs(analysisScore)>=90?'M'+Math.abs(Number(scoreMatch[2])||1):analysisScore.toFixed(1));
+    const fill=$('#meterFill');if(fill)fill.style.width=(50+Math.max(-45,Math.min(45,analysisScore*8)))+'%';
+    const advantage=$('#advantage');if(advantage)advantage.textContent=Math.abs(analysisScore)<.2?'Equal position':analysisScore>0?'Advantage for White':'Advantage for Black';
+    updateMoves();
+  }
+  const depthEl=$('#depth');if(depthEl&&depth)depthEl.textContent=String(depth);
+  const line=$('#line');if(line&&pv)line.textContent=formatPv(pv);
+}
+function scheduleAnalysis(){
+  clearTimeout(analysisTimer);
+  if(mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
+  analysisTimer=setTimeout(()=>{if(!enginePending&&!botThinking)stockfish.postMessage({fen:game.fen(),elo:3190,movetime:280})},220);
+}
+function showMovesView(){
+  currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
+  $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
+  updateMoves();scheduleAnalysis();
+}
+function setDynamicView(kind,title,html){
+  currentRightView=kind;
+  $('#movesView')?.classList.add('hidden');
+  const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><small>VANTA CHESS</small><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
+  target.querySelector('.back-view').onclick=showMovesView;
+  $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
+}
+function renderOpenings(){
+  const current=detectOpening(currentHistory());
+  setDynamicView('openings','Opening Explorer',`
+    ${current?`<article class="current-opening"><small>CURRENT POSITION</small><h4>${escapeHtml(current.name)} <span>${current.eco}</span></h4><p>${escapeHtml(current.idea)}</p></article>`:''}
+    <div class="library-list">${OPENINGS.map(o=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p></article>`).join('')}</div>`);
+}
+function renderFamous(){
+  setDynamicView('famous','Famous Games',`<div class="library-list famous-list">${FAMOUS_GAMES.map(g=>`<article><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.players)} · ${g.place} ${g.year}</small></div><p><strong>${g.result}</strong> · ${escapeHtml(g.opening)} — ${escapeHtml(g.lesson)}</p></article>`).join('')}</div>`);
+}
+function renderLearn(){
+  setDynamicView('learn','Practice & Learn',`<div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button>`);
+  $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
+}
+function renderReview(){
+  const records=serverGame?.move_history||[],captures=records.filter(x=>x.captured).length,checks=records.filter(x=>String(x.san||'').includes('+')).length;
+  const opening=detectOpening(records.map(x=>x.san||x.lan||''));
+  setDynamicView('review','Post-Game Review',`<div class="review-summary"><div><b>${records.length}</b><small>plies played</small></div><div><b>${captures}</b><small>captures</small></div><div><b>${checks}</b><small>checks</small></div><div><b>${analysisScore>=0?'+':''}${analysisScore.toFixed(1)}</b><small>current eval</small></div></div><article class="review-note"><h4>${opening?escapeHtml(opening.name):'Unclassified opening'}</h4><p>${opening?escapeHtml(opening.idea):'Play a few moves to identify the opening family.'}</p></article><button class="primary-action analyze-now">Analyze current position</button>`);
+  $('#dynamicView .analyze-now').onclick=()=>{showMovesView();scheduleAnalysis()};
+}
+async function showBackendView(kind){
+  if(kind==='puzzle'){
+    setDynamicView('puzzles','Puzzle Training','<div class="loading-card">Loading a real tactical position…</div>');
+    try{
+      const data=await api.puzzleNext('normal',1400),puzzle=data.puzzle||data;
+      game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;
+      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now()};
+      render();
+      $('#dynamicView .view-content').innerHTML=`<article class="puzzle-info"><small>LIVE PUZZLE · ${puzzle.rating||'—'} RATING</small><h4>Find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).join(' · ')||'Tactical training')}</p><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button></article>`;
+      $('#dynamicView .next-puzzle').onclick=()=>showBackendView('puzzle');
+    }catch(error){toast(error.message);showMovesView()}
+    return;
+  }
+  if(kind==='arena'){
+    setDynamicView('arena','Arena','<div class="loading-card">Loading live Vanta tournaments…</div>');
+    try{
+      const data=await api.tournaments(),events=data.tournaments||data.events||[];
+      const target=$('#dynamicView .view-content');
+      target.innerHTML=`<div class="arena-list">${events.map((t,i)=>`<article data-arena="${i}"><div><small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4><p>${Number(t.base_seconds||600)/60}+${t.increment_seconds||0} · ${t.status||'active'}</p></div><div><button class="arena-join">Join</button><button class="arena-standings">Standings</button></div><section class="standings-slot"></section></article>`).join('')}</div>`;
+      [...target.querySelectorAll('[data-arena]')].forEach((row,i)=>{
+        const t=events[i];
+        row.querySelector('.arena-join').onclick=async()=>{try{await api.tournamentJoin(t.id);await api.queueJoin({seconds:Number(t.base_seconds||600),increment:Number(t.increment_seconds||0),rated:!!t.rated,tournamentId:t.id});mode='match';toast('Arena queue joined');const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);startPolling();showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}};
+        row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=(result.standings||[]).slice(0,10).map(p=>`<p>${p.rank||'–'}. ${escapeHtml(p.display_name||p.name||'Player')} <b>${p.score||0}</b></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
+      });
+    }catch(error){toast(error.message);showMovesView()}
+  }
+}
+function activateNav(kind){
+  $$('.main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.nav===kind));
+  if(kind==='play')showMovesView();
+  if(kind==='arena')showBackendView('arena');
+  if(kind==='puzzles')showBackendView('puzzle');
+  if(kind==='learn')renderLearn();
+  if(kind==='openings')renderOpenings();
+  if(kind==='famous')renderFamous();
+  if(kind==='review')renderReview();
+}
+$$('.main-nav button').forEach(button=>button.onclick=()=>activateNav(button.dataset.nav));
+$$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
+$$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){showMovesView();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
+$('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
+$('#closeChat').onclick=()=>{$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')};
+$('#searchBtn').onclick=()=>{$('#searchDialog').showModal();$('#searchInput').focus()};
+$('#searchInput').oninput=e=>{
+  const q=e.target.value.trim().toLowerCase(),target=$('#searchResults');if(!q){target.innerHTML='';return}
+  const results=[
+    ...OPENINGS.filter(x=>(x.name+' '+x.eco+' '+x.idea).toLowerCase().includes(q)).map(x=>({type:'Opening',title:x.name,sub:x.idea,action:'openings'})),
+    ...FAMOUS_GAMES.filter(x=>(x.title+' '+x.players+' '+x.opening).toLowerCase().includes(q)).map(x=>({type:'Famous game',title:x.title,sub:x.players,action:'famous'})),
+    ...LESSONS.filter(x=>(x.title+' '+x.body).toLowerCase().includes(q)).map(x=>({type:'Lesson',title:x.title,sub:x.level,action:'learn'}))
+  ].slice(0,8);
+  target.innerHTML=results.map((r,i)=>`<button data-result="${i}"><small>${r.type}</small><b>${escapeHtml(r.title)}</b><span>${escapeHtml(r.sub)}</span></button>`).join('')||'<p>No results yet.</p>';
+  [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{$('#searchDialog').close();activateNav(results[i].action)});
+};
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.add('ready')});
+$('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install Vanta Chess')};
+$('#notifyBtn').onclick=()=>toast('Game notifications will appear here');
 const savedTheme=JSON.parse(localStorage.getItem('vanta.theme')||'{}');document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece||'#f0d9a4');document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint??.18));
 for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else document.documentElement.style.setProperty(key,value)}
 $$('[data-theme]').forEach(input=>input.oninput=()=>{const value=input.type==='range'?(input.dataset.theme==='--glass'?`${input.value/100}`:`${input.value/100}s`):input.value;document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))});
