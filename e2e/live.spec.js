@@ -19,9 +19,9 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await b.locator('[data-sq="e7"]').click();await b.locator('[data-sq="e5"]').click();
   await expect(a.locator('[data-sq="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
 
-  const before=await a.locator('#blackClock').textContent();
+  const before=await a.locator('#whiteClock').textContent();
   await a.waitForTimeout(1200);
-  const after=await a.locator('#blackClock').textContent();
+  const after=await a.locator('#whiteClock').textContent();
   expect(after).not.toBe(before);
 
   await a.locator('#message').fill('acceptance-chat');

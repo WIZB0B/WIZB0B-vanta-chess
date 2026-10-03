@@ -146,7 +146,7 @@ async function showBackendView(kind){
       const row=document.createElement('div'),title=document.createElement('strong'),join=document.createElement('button'),standings=document.createElement('button');
       title.textContent=`${tournament.name||tournament.title||'Arena'} · ${tournament.time_control||tournament.seconds||''}`;
       join.textContent='Join';standings.textContent='Standings';
-      join.onclick=async()=>{const state=await api.tournamentJoin(tournament.id);if(state.game)applyServerState(state);toast('Arena joined')};
+      join.onclick=async()=>{try{await api.tournamentJoin(tournament.id);await api.queueJoin({seconds:Number(tournament.base_seconds||600),increment:Number(tournament.increment_seconds||0),rated:!!tournament.rated,tournamentId:tournament.id});toast('Arena queue joined');const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!tournament.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);startPolling();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}};
       standings.onclick=async()=>{const result=await api.tournamentStandings(tournament.id);row.querySelectorAll('p').forEach(x=>x.remove());for(const player of result.standings||[]){const line=document.createElement('p');line.textContent=`${player.rank||'–'}. ${player.display_name||player.name} · ${player.score||0}`;row.append(line)}};
       row.append(title,join,standings);target.append(row);
     }
