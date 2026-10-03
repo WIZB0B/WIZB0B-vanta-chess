@@ -8,8 +8,13 @@ async function mockApi(page) {
 }
 
 test('renders an exact 8x8 board without room-code injection', async ({ page }) => {
+  const runtimeErrors=[];
+  page.on('pageerror', error=>{runtimeErrors.push(error.message);console.log('PAGEERROR',error.message)});
+  page.on('console', message=>{if(message.type()==='error')console.log('CONSOLEERROR',message.text())});
   await mockApi(page);
   await page.goto('/?game=%3Cimg%20src=x%20onerror=alert(1)%3E');
+  await page.waitForTimeout(300);
+  if(runtimeErrors.length)console.log('RUNTIME_ERRORS',JSON.stringify(runtimeErrors));
   await expect(page.locator('.square')).toHaveCount(64);
   await expect(page.locator('.board')).toHaveCSS('aspect-ratio', '1 / 1');
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
