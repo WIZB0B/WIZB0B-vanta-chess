@@ -11,7 +11,7 @@ let room=normalizeRoomId(params.get('game'),generatedRoom);
 const playerToken=stableGuestToken();
 const api=new VchApi({token:playerToken});
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0;
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false;
 const stockfish=new Worker('/stockfish.worker.js');
 const analysisWorker=new Worker('/stockfish.worker.js');
 stockfish.onmessage=({data})=>{
@@ -253,7 +253,26 @@ function startPolling(){
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
 async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
 $('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
-$$('.modes button').forEach(b=>b.onclick=async()=>{$$('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=b.dataset.mode;if(mode==='computer')toast('Choose an engine level');if(mode==='match'){try{await api.queueJoin({seconds:Number($('#time').value),increment:0,rated:false});toast('Searching for a player…');const started=Date.now(),timer=setInterval(async()=>{try{const state=await api.queueStatus(false);if(state.game||state.matched){clearInterval(timer);applyServerState(state);startPolling();toast(Date.now()-started>=15000?'Closest Elo engine matched':'Player matched')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}}});
+$('.modes button').forEach(b=>b.onclick=async()=>{
+  const next=b.dataset.mode;
+  if(matchTimer){clearInterval(matchTimer);matchTimer=null}
+  if(searching&&next!=='match'){searching=false;try{await api.queueLeave()}catch{}}
+  $('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=next;
+  if(mode==='computer'){serverGameId=null;serverGame=null;currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)};myColor='w';orientationSet=true;flipped=false;game.reset();render();updateMoves();toast('Computer mode ready')}
+  if(mode==='room'){currentBot=null;toast('Private-room mode ready')}
+  if(mode==='match'){
+    try{
+      searching=true;await api.queueJoin({seconds:Number($('#time').value),increment:0,rated:false});toast('Searching for a player…');
+      const started=Date.now();
+      matchTimer=setInterval(async()=>{
+        try{
+          const state=await api.queueStatus(false);
+          if(state.game||state.matched){clearInterval(matchTimer);matchTimer=null;searching=false;applyServerState(state);startPolling();showMovesView();toast(Date.now()-started>=15000?'Closest Elo engine matched':'Player matched')}
+        }catch(error){clearInterval(matchTimer);matchTimer=null;searching=false;toast(error.message)}
+      },1000);
+    }catch(error){searching=false;toast(error.message)}
+  }
+});
 $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}};$('#draw').onclick=async()=>{if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{try{const state=await api.create({name:guestName,seconds:Number($('#time').value),increment:0,rated:false});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer')toast('Engine strength updated')};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)};
 render();startClock();connect();
