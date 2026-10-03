@@ -36,3 +36,13 @@ jobs:
         env:
           VCH_LIVE_E2E: "1"
         run: npx playwright test e2e/live.spec.js --project=desktop
+      - name: Capture VCH visual baselines
+        env:
+          VCH_CAPTURE_VISUAL: "1"
+        run: npx playwright test e2e/visual.spec.js --project=desktop
+      - name: Upload VCH visual baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: vch-visual-baselines
+          path: test-results/visual/
+          if-no-files-found: error
