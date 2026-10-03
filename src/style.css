@@ -19,3 +19,9 @@ body[data-wallpaper="ivory"]{background-image:linear-gradient(rgb(2 7 8 / .38),r
 .board.mate{box-shadow:0 0 0 2px rgb(226 193 118 / .7),0 0 34px rgb(226 193 118 / .22)}
 .quick-actions{display:flex;justify-content:flex-end;margin-top:8px}.quick-actions button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#111d1c;font-size:11px}
 @media(max-width:800px){body{background-attachment:scroll}.piece{width:96%;height:96%}}
+
+/* Individual 1:1 reference-locked VCH piece assets override the temporary atlases. */
+.piece{--sprite-pos:center;background-size:contain;background-position:center;background-repeat:no-repeat}
+.piece::after{-webkit-mask-size:contain;mask-size:contain;-webkit-mask-position:center;mask-position:center}
+.piece.w.piece-k{--piece-atlas:url('/assets/generated/wk.png')}.piece.w.piece-q{--piece-atlas:url('/assets/generated/wq.png')}.piece.w.piece-r{--piece-atlas:url('/assets/generated/wr.png')}.piece.w.piece-b{--piece-atlas:url('/assets/generated/wb.png')}.piece.w.piece-n{--piece-atlas:url('/assets/generated/wn.png')}.piece.w.piece-p{--piece-atlas:url('/assets/generated/wp.png')}
+.piece.b.piece-k{--piece-atlas:url('/assets/generated/bk.png')}.piece.b.piece-q{--piece-atlas:url('/assets/generated/bq.png')}.piece.b.piece-r{--piece-atlas:url('/assets/generated/br.png')}.piece.b.piece-b{--piece-atlas:url('/assets/generated/bb.png')}.piece.b.piece-n{--piece-atlas:url('/assets/generated/bn.png')}.piece.b.piece-p{--piece-atlas:url('/assets/generated/bp.png')}
