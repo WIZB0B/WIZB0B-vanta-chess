@@ -46,3 +46,23 @@ jobs:
           name: vch-visual-baselines
           path: test-results/visual/
           if-no-files-found: error
+      - name: Wait for Netlify PR preview
+        if: github.event_name == 'pull_request'
+        env:
+          PREVIEW_URL: https://deploy-preview-${{ github.event.pull_request.number }}--vanta-chess-play.netlify.app
+        run: |
+          for i in {1..30}; do
+            if curl -fsS --max-time 10 "$PREVIEW_URL" >/dev/null; then
+              echo "Netlify preview ready: $PREVIEW_URL"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Netlify preview did not become ready in time"
+          exit 1
+      - name: Verify deployed Netlify preview
+        if: github.event_name == 'pull_request'
+        env:
+          VCH_DEPLOYED_PREVIEW: "1"
+          VCH_BASE_URL: https://deploy-preview-${{ github.event.pull_request.number }}--vanta-chess-play.netlify.app
+        run: npx playwright test e2e/deployed-preview.spec.js --project=desktop
