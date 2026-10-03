@@ -253,11 +253,11 @@ function startPolling(){
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
 async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
 $('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
-$('.modes button').forEach(b=>b.onclick=async()=>{
+$$('.modes button').forEach(b=>b.onclick=async()=>{
   const next=b.dataset.mode;
   if(matchTimer){clearInterval(matchTimer);matchTimer=null}
   if(searching&&next!=='match'){searching=false;try{await api.queueLeave()}catch{}}
-  $('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=next;
+  $$('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=next;
   if(mode==='computer'){serverGameId=null;serverGame=null;currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)};myColor='w';orientationSet=true;flipped=false;game.reset();render();updateMoves();toast('Computer mode ready')}
   if(mode==='room'){currentBot=null;toast('Private-room mode ready')}
   if(mode==='match'){
