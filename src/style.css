@@ -184,3 +184,18 @@ main{
 }
 
 @media(max-width:800px){.game,.lpanel,.rpanel{width:auto!important;max-width:calc(100vw - 12px);margin-left:6px!important;margin-right:6px!important}.shell,main{max-width:100vw}.feature-grid{min-width:0}.settings,.join,.room,.live-card,.right-view{min-width:0}}
+
+/* Final reference-proportion corrections from the verified 1664×936 capture. */
+@media(min-width:1181px){
+  .game{padding:10px 28px 10px}
+  .hero-art{width:39%;right:-2px}
+  .hero h1{font-size:50px;max-width:72%}
+  .hero p{max-width:70%}
+}
+#toast{visibility:hidden;opacity:0;pointer-events:none}
+#toast.show{visibility:visible;opacity:1}
+@media(max-width:800px){
+  .game{padding:8px!important}
+  .hero-art{width:43%;right:-4px}
+  .hero h1{max-width:70%}
+}
