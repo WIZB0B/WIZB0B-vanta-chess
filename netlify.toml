@@ -1,0 +1,19 @@
+[build]
+command = "npm run build"
+publish = "dist"
+[build.environment]
+NODE_VERSION = "20.19.0"
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+[[headers]]
+for = "/*"
+[headers.values]
+Content-Security-Policy = "default-src 'self'; connect-src 'self' https://ubjldcfiwrwiouwgmduo.supabase.co wss://ubjldcfiwrwiouwgmduo.supabase.co; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+X-Content-Type-Options = "nosniff"
+X-Frame-Options = "DENY"
+Referrer-Policy = "no-referrer"
+Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+Cross-Origin-Opener-Policy = "same-origin"
