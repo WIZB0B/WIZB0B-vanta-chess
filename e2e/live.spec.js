@@ -13,6 +13,7 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await b.goto(roomUrl);
   await expect(a.locator('body')).toHaveAttribute('data-seat','w');
   await expect(b.locator('body')).toHaveAttribute('data-seat','b');
+  await a.waitForTimeout(1200);
 
   await a.locator('[data-sq="e2"]').click();await a.locator('[data-sq="e4"]').click();
   await expect(b.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
