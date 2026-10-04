@@ -31,21 +31,27 @@ const app=$('#app');
 app.innerHTML=`
 <div class="shell">
   <header class="topbar">
-    <a class="brand" href="#" aria-label="Vanta Chess home"><span class="mark">V</span><b>VANTA<br>CHESS</b></a>
+    <a class="brand" href="#" aria-label="Vanta Chess home">
+      <span class="mark" aria-hidden="true">V</span>
+      <span class="wordmark"><span>VANTA</span><span>CHESS</span></span>
+    </a>
     <nav class="main-nav" aria-label="Primary">
-      <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m6 3 12 12M14 3h7v7M10 21H3v-7M3 21l7-7M21 3l-7 7"/></svg></span>Play</button>
-      <button data-nav="arena"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a4 4 0 0 0 4 4M17 6h3v2a4 4 0 0 1-4 4"/></svg></span>Arena</button>
-      <button data-nav="puzzles"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 3h4v4h4V3h5v6h-4v4h4v8h-8v-4H9v4H3v-8h4V9H3V3h5Z"/></svg></span>Puzzles</button>
-      <button data-nav="learn"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v18H7.5A3.5 3.5 0 0 0 4 23V5.5ZM20 5.5A3.5 3.5 0 0 0 16.5 2H13v18h3.5A3.5 3.5 0 0 1 20 23V5.5Z"/></svg></span>Learn</button>
-      <button data-nav="openings"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 4h3v3h4V4h3v3h2v4l-2 2v6H7v-6l-2-2V7h2V4ZM5 21h14"/></svg></span>Openings</button>
-      <button data-nav="famous"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m7 16 4-4 3 3 3-3 3 3M8 8h.01"/></svg></span>Famous Games</button>
-      <button data-nav="review"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 12 3 3 7-7"/></svg></span>Review</button>
+      <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg></span>Play</button>
+      <button data-nav="arena"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>Arena</button>
+      <button data-nav="puzzles"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v4.2a2.8 2.8 0 1 0 4 0V4h6v6h-4.2a2.8 2.8 0 1 0 0 4H20v6h-6v-4.2a2.8 2.8 0 1 0-4 0V20H4v-6h4.2a2.8 2.8 0 1 0 0-4H4V4Z"/></svg></span>Puzzles</button>
+      <button data-nav="learn"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A3.5 3.5 0 0 1 7 2h4v18H7a3.5 3.5 0 0 0-3.5 3V5.5ZM20.5 5.5A3.5 3.5 0 0 0 17 2h-4v18h4a3.5 3.5 0 0 1 3.5 3V5.5Z"/></svg></span>Learn</button>
+      <button data-nav="openings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h3v3h2V3h3v3h2v4l-2 2v5H8v-5l-2-2V6h2V3ZM6 20h12M8 17h8"/></svg></span>Openings</button>
+      <button data-nav="famous"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18M12 8h4M12 12h4M12 16h3"/></svg></span>Famous Games</button>
+      <button data-nav="review"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg></span>Review</button>
     </nav>
     <div class="header-actions">
-      <button id="searchBtn" class="icon-btn" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
-      <button id="installBtn" class="install-btn">⇩ <span>Install App</span></button>
-      <button id="notifyBtn" class="icon-btn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button>
-      <button id="accountBtn" class="user" type="button" aria-label="Account"><i></i><span>${guestName}</span><small>1200 rating</small></button>
+      <button id="searchBtn" class="icon-btn search-btn" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.7" cy="10.7" r="6.3"/><path d="m16 16 4.2 4.2"/></svg></button>
+      <button id="installBtn" class="install-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M5 18v2h14v-2"/></svg><span>Install App</span></button>
+      <button id="notifyBtn" class="icon-btn bell-btn" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 5-2 6.5-3 8h18c-1-1.5-3-3-3-8M10 21h4"/></svg></button>
+      <button id="accountBtn" class="user" type="button" aria-label="Account">
+        <i aria-hidden="true"></i><span>${guestName}</span><small>1200 rating</small>
+        <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+      </button>
     </div>
   </header>
 
