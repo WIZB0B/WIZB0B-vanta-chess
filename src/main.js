@@ -351,24 +351,24 @@ function renderStudy(kind,title,moves,meta=''){
     $('#studyBoardSlot').innerHTML=studyBoardHtml(states[index].fen);
     $('#studyPly').textContent=index?states[index].san:'Start position';
     $('#studyCount').textContent=`${index} / ${states.length-1}`;
-    $('.study-moves button').forEach((b,i)=>b.classList.toggle('current',i+1===index));
+    $$('.study-moves button').forEach((b,i)=>b.classList.toggle('current',i+1===index));
   };
   $('#studyFirst').onclick=()=>{index=0;update()};
   $('#studyPrev').onclick=()=>{index=Math.max(0,index-1);update()};
   $('#studyNext').onclick=()=>{index=Math.min(states.length-1,index+1);update()};
   $('#studyLast').onclick=()=>{index=states.length-1;update()};
-  $('.study-moves button').forEach(b=>b.onclick=()=>{index=Math.min(states.length-1,Number(b.dataset.ply));update()});
+  $$('.study-moves button').forEach(b=>b.onclick=()=>{index=Math.min(states.length-1,Number(b.dataset.ply));update()});
 }
 function renderOpenings(){
   const current=detectOpening(currentHistory());
   setDynamicView('openings','Opening Explorer',`
     ${current?`<article class="current-opening"><small>CURRENT POSITION</small><h4>${escapeHtml(current.name)} <span>${current.eco}</span></h4><p>${escapeHtml(current.idea)}</p></article>`:''}
     <div class="library-list">${OPENINGS.map((o,i)=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p><button class="library-action" data-opening="${i}">Study this line</button></article>`).join('')}</div>`);
-  $('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
+  $$('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }
 function renderFamous(){
   setDynamicView('famous','Famous Games',`<div class="library-list famous-list">${FAMOUS_GAMES.map((g,i)=>`<article><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.players)} · ${g.place} ${g.year}</small></div><p><strong>${g.result}</strong> · ${escapeHtml(g.opening)} — ${escapeHtml(g.lesson)}</p><button class="library-action" data-famous="${i}">Replay game</button></article>`).join('')}</div>`);
-  $('#dynamicView [data-famous]').forEach(b=>b.onclick=()=>{const g=FAMOUS_GAMES[Number(b.dataset.famous)];renderStudy('famous',g.title,g.moves,`${g.players} · ${g.year} · ${g.result}`)});
+  $$('#dynamicView [data-famous]').forEach(b=>b.onclick=()=>{const g=FAMOUS_GAMES[Number(b.dataset.famous)];renderStudy('famous',g.title,g.moves,`${g.players} · ${g.year} · ${g.result}`)});
 }
 function renderLesson(index){
   const lesson=LESSONS[index];
@@ -378,7 +378,7 @@ function renderLesson(index){
 }
 function renderLearn(){
   setDynamicView('learn','Practice & Learn',`<div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button>`);
-  $('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
+  $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
 }
 function renderReview(){
