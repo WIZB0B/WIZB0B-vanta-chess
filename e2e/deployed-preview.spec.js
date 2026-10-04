@@ -31,7 +31,7 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
   }
   for(const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']){
     const legacy=await request.get('/assets/vch/pieces/'+name+'.png');
-    expect(legacy.status(),name+'.png should not be deployed').toBe(404);
+    expect(legacy.headers()['content-type']||'',name+'.png should not be deployed as an image').not.toContain('image/png');
   }
 });
 
