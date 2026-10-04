@@ -330,24 +330,63 @@ function setDynamicView(kind,title,html){
   target.querySelector('.back-view').onclick=showMovesView;
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
 }
+function studyBoardHtml(fen){
+  const position=new Chess(fen),pieces=position.board().flat();
+  return `<div class="study-board">${pieces.map((p,i)=>{
+    const r=Math.floor(i/8),f=i%8;
+    return `<div class="study-square ${(r+f)%2?'dark':'light'}">${p?`<span class="piece ${p.color} piece-${p.type}" aria-hidden="true"></span>`:''}</div>`;
+  }).join('')}</div>`;
+}
+function legalStudyPositions(moves=[]){
+  const position=new Chess(),states=[{fen:position.fen(),san:'Start'}];
+  for(const san of moves){
+    try{const move=position.move(san);if(!move)break;states.push({fen:position.fen(),san:move.san})}catch{break}
+  }
+  return states;
+}
+function renderStudy(kind,title,moves,meta=''){
+  const states=legalStudyPositions(moves);let index=0;
+  setDynamicView(kind,title,`<div class="study-shell"><div id="studyBoardSlot">${studyBoardHtml(states[0].fen)}</div><div class="study-meta"><small>${escapeHtml(meta)}</small><b id="studyPly">Start position</b><span id="studyCount">0 / ${Math.max(0,states.length-1)}</span></div><div class="study-controls"><button id="studyFirst">|←</button><button id="studyPrev">← Previous</button><button id="studyNext">Next →</button><button id="studyLast">→|</button></div><div class="study-moves">${moves.map((m,i)=>`<button data-ply="${i+1}">${i%2===0?Math.floor(i/2)+1+'. ':''}${escapeHtml(m)}</button>`).join('')}</div></div>`);
+  const update=()=>{
+    $('#studyBoardSlot').innerHTML=studyBoardHtml(states[index].fen);
+    $('#studyPly').textContent=index?states[index].san:'Start position';
+    $('#studyCount').textContent=`${index} / ${states.length-1}`;
+    $('.study-moves button').forEach((b,i)=>b.classList.toggle('current',i+1===index));
+  };
+  $('#studyFirst').onclick=()=>{index=0;update()};
+  $('#studyPrev').onclick=()=>{index=Math.max(0,index-1);update()};
+  $('#studyNext').onclick=()=>{index=Math.min(states.length-1,index+1);update()};
+  $('#studyLast').onclick=()=>{index=states.length-1;update()};
+  $('.study-moves button').forEach(b=>b.onclick=()=>{index=Math.min(states.length-1,Number(b.dataset.ply));update()});
+}
 function renderOpenings(){
   const current=detectOpening(currentHistory());
   setDynamicView('openings','Opening Explorer',`
     ${current?`<article class="current-opening"><small>CURRENT POSITION</small><h4>${escapeHtml(current.name)} <span>${current.eco}</span></h4><p>${escapeHtml(current.idea)}</p></article>`:''}
-    <div class="library-list">${OPENINGS.map(o=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p></article>`).join('')}</div>`);
+    <div class="library-list">${OPENINGS.map((o,i)=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p><button class="library-action" data-opening="${i}">Study this line</button></article>`).join('')}</div>`);
+  $('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }
 function renderFamous(){
-  setDynamicView('famous','Famous Games',`<div class="library-list famous-list">${FAMOUS_GAMES.map(g=>`<article><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.players)} · ${g.place} ${g.year}</small></div><p><strong>${g.result}</strong> · ${escapeHtml(g.opening)} — ${escapeHtml(g.lesson)}</p></article>`).join('')}</div>`);
+  setDynamicView('famous','Famous Games',`<div class="library-list famous-list">${FAMOUS_GAMES.map((g,i)=>`<article><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.players)} · ${g.place} ${g.year}</small></div><p><strong>${g.result}</strong> · ${escapeHtml(g.opening)} — ${escapeHtml(g.lesson)}</p><button class="library-action" data-famous="${i}">Replay game</button></article>`).join('')}</div>`);
+  $('#dynamicView [data-famous]').forEach(b=>b.onclick=()=>{const g=FAMOUS_GAMES[Number(b.dataset.famous)];renderStudy('famous',g.title,g.moves,`${g.players} · ${g.year} · ${g.result}`)});
+}
+function renderLesson(index){
+  const lesson=LESSONS[index];
+  setDynamicView('learn',lesson.title,`<article class="lesson-detail"><small>${escapeHtml(lesson.level)}</small><h4>${escapeHtml(lesson.title)}</h4><p>${escapeHtml(lesson.body)}</p><div class="lesson-checklist"><b>Training focus</b><span>✓ Identify the position goal before calculating.</span><span>✓ Compare forcing moves: checks, captures and threats.</span><span>✓ Explain the move in words before playing it.</span></div><button class="primary-action start-puzzle">Practice with a live puzzle</button><button class="secondary-action all-lessons">Back to lessons</button></article>`);
+  $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
+  $('#dynamicView .all-lessons').onclick=renderLearn;
 }
 function renderLearn(){
   setDynamicView('learn','Practice & Learn',`<div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button>`);
+  $('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
 }
 function renderReview(){
-  const records=serverGame?.move_history||[],captures=records.filter(x=>x.captured).length,checks=records.filter(x=>String(x.san||'').includes('+')).length;
-  const opening=detectOpening(records.map(x=>x.san||x.lan||''));
-  setDynamicView('review','Post-Game Review',`<div class="review-summary"><div><b>${records.length}</b><small>plies played</small></div><div><b>${captures}</b><small>captures</small></div><div><b>${checks}</b><small>checks</small></div><div><b>${analysisScore>=0?'+':''}${analysisScore.toFixed(1)}</b><small>current eval</small></div></div><article class="review-note"><h4>${opening?escapeHtml(opening.name):'Unclassified opening'}</h4><p>${opening?escapeHtml(opening.idea):'Play a few moves to identify the opening family.'}</p></article><button class="primary-action analyze-now">Analyze current position</button>`);
+  const records=serverGame?.move_history||[],sans=records.map(x=>x.san||x.lan||'').filter(Boolean),captures=records.filter(x=>x.captured).length,checks=records.filter(x=>String(x.san||'').includes('+')).length;
+  const opening=detectOpening(sans);
+  setDynamicView('review','Post-Game Review',`<div class="review-summary"><div><b>${records.length}</b><small>plies played</small></div><div><b>${captures}</b><small>captures</small></div><div><b>${checks}</b><small>checks</small></div><div><b>${analysisScore>=0?'+':''}${analysisScore.toFixed(1)}</b><small>current eval</small></div></div><article class="review-note"><h4>${opening?escapeHtml(opening.name):'Unclassified opening'}</h4><p>${opening?escapeHtml(opening.idea):'Play a few moves to identify the opening family.'}</p></article><button class="primary-action analyze-now">Analyze current position</button>${sans.length?'<button class="secondary-action replay-review">Replay every move</button>':''}`);
   $('#dynamicView .analyze-now').onclick=()=>{showMovesView();scheduleAnalysis()};
+  const replay=$('#dynamicView .replay-review');if(replay)replay.onclick=()=>renderStudy('review','Game Replay',sans,opening?opening.name:'Current game');
 }
 async function showBackendView(kind){
   if(kind==='puzzle'){
