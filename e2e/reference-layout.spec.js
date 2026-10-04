@@ -11,7 +11,7 @@ async function mockApi(page){
 test('desktop geometry is locked to the supplied 1672x941 reference', async ({ browser })=>{
   test.skip(!!process.env.CI, 'pixel-geometry test is not stable in CI');
   const ctx=await browser.newContext({viewport:{width:1672,height:941},deviceScaleFactor:1});
-  const page=await ctx.newPage();await mockApi(page);await page.goto('/');
+  const page=await ctx.newPage();await mockApi(page);await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));await page.goto('/');
   await expect(page.locator('.square')).toHaveCount(64);
   const boxes=await page.evaluate(()=>{
     const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}};
@@ -24,5 +24,8 @@ test('desktop geometry is locked to the supplied 1672x941 reference', async ({ b
   near(boxes.right.x,1175,15); near(boxes.right.y,102,5); near(boxes.right.w,449,18);
   near(boxes.board.x,526,14); near(boxes.board.y,168,14); near(boxes.board.w,600,20);
   near(boxes.board.h,boxes.board.w,2);
+  const viewport=await page.evaluate(()=>({inner:innerHeight,scroll:document.documentElement.scrollHeight,screen:document.body.dataset.screen}));
+  expect(viewport.screen).toBe('game');
+  expect(viewport.scroll).toBeLessThanOrEqual(viewport.inner);
   await ctx.close();
 });
