@@ -55,28 +55,35 @@ app.innerHTML=`
   </header>
 
   <section id="mainMenu" class="main-menu" aria-labelledby="mainMenuTitle">
-    <div class="main-menu-copy">
-      <p class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</p>
-      <h1 id="mainMenuTitle">Play Better Chess</h1>
-      <p class="main-menu-subtext">Competitive games. Real progress. A community that thinks ahead.</p>
-      <button id="joinNow" class="join-now" type="button">Join Now <span aria-hidden="true">↗</span></button>
+    <div class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</div>
+    <div class="main-menu-hero">
+      <div class="main-menu-copy">
+        <div class="main-menu-eyebrow">VCH</div>
+        <h1 id="mainMenuTitle">Play Better<br>Chess</h1>
+        <p class="main-menu-subtext">Competitive games. Real progress. A community that thinks ahead.</p>
+        <button id="joinNow" class="join-now" type="button"><span>Join Now</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10M13 8l4 4-4 4"/></svg></button>
+      </div>
+      <div class="main-menu-art" aria-hidden="true">
+        <div class="main-menu-art-glow"></div>
+        <img src="/assets/vch/pieces/bk.webp" alt="">
+      </div>
     </div>
     <div class="main-menu-tiles" aria-label="VCH features">
       <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2M8 3h8"/></svg></span>
-        <div><small>PLAY</small><h2>Rapid &amp; Blitz</h2><p>Fast pairings, focused clocks, serious games.</p></div>
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 6 13h5l-1 9 8-12h-5l0-8Z"/></svg></span>
+        <div><h2>Rapid &amp; Blitz</h2></div>
       </article>
       <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>
-        <div><small>COMPETE</small><h2>Tournaments</h2><p>Enter arenas, climb standings, play for position.</p></div>
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8"/></svg></span>
+        <div><h2>Tournaments</h2></div>
       </article>
       <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18V9M10 18V5M15 18v-7M20 18V3"/></svg></span>
-        <div><small>PROGRESS</small><h2>Ratings</h2><p>Track your level and make every game count.</p></div>
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18V10M10 18V6M15 18v-5M20 18V3"/></svg></span>
+        <div><h2>Ratings</h2></div>
       </article>
       <article class="menu-tile">
         <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM16 11a3 3 0 1 0 0-6M2 20c0-4 2.7-6 6-6s6 2 6 6M14 14c4 0 7 1.8 7 6"/></svg></span>
-        <div><small>CONNECT</small><h2>Community</h2><p>Meet players who care about thoughtful improvement.</p></div>
+        <div><h2>Community</h2></div>
       </article>
     </div>
   </section>
