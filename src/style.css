@@ -118,3 +118,126 @@
 .rpanel .feature-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 @media(max-width:1200px){.rpanel .feature-card,.rpanel .feature-content{min-height:112px}}
 @media(max-width:800px){.rpanel .feature-cards{grid-template-columns:1fr}.rpanel .feature-card,.rpanel .feature-content{min-height:104px}.rpanel .feature-content{grid-template-columns:30px minmax(0,1fr) 20px;padding:13px}.rpanel .feature-copy b{font-size:12px}.rpanel .feature-copy small{font-size:9px}}
+
+/* Full-page reference fidelity pass — visual corrections only */
+body{
+  background:
+    linear-gradient(180deg,#02070624 0,#0207064d 70%,#02070666 100%),
+    url("https://ubjldcfiwrwiouwgmduo.supabase.co/functions/v1/vanta-web/assets/ui/background-desktop.webp") center top/cover fixed no-repeat,
+    #07100f;
+}
+body:before{
+  background:radial-gradient(circle at 50% 34%,transparent 0 52%,#01050442 77%,#0103029c 100%);
+  opacity:1;
+}
+.shell{width:min(1576px,calc(100vw - 48px));max-width:none;margin:24px auto 18px;padding:0}
+header{height:64px;padding:7px 12px;border-color:#6b7c754d;background:#0a1416db;backdrop-filter:blur(18px);box-shadow:0 16px 44px #0008,inset 0 1px 0 #ffffff08}
+.brand{width:305px;gap:13px}
+.mark{width:48px;height:48px;border-radius:10px;background:linear-gradient(145deg,#f1f2e9,#d9e0d7);box-shadow:inset 0 1px 0 #fff,0 4px 14px #0005}
+.brand b{font-size:14px;letter-spacing:4.6px;line-height:1.42}
+nav{align-items:center;gap:4px;min-width:0}
+nav button{padding:10px 12px;font-size:11px;white-space:nowrap}
+nav button.active{border-color:#75d8a3;background:#18352a;box-shadow:0 0 18px #55d68a2e,inset 0 1px 0 #ffffff0b}
+.nav-visual{display:inline-flex;align-items:center;gap:6px;padding:10px 9px;color:#c9d1ce;font-size:11px;white-space:nowrap}
+.nav-visual b{font-weight:500}
+.header-actions{display:flex;align-items:center;gap:8px;margin:0 12px 0 8px}
+.head-icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid #53625d;border-radius:50%;background:#0c1717b8;color:#d3dcda;font-size:16px}
+.install-visual{height:36px;display:flex;align-items:center;gap:8px;padding:0 14px;border:1px solid #d4b978;border-radius:9px;background:#241f16d6;color:#f0dfb5;font-size:11px;white-space:nowrap}
+.install-visual b{font-weight:700}
+.user{grid-template-columns:38px minmax(86px,1fr);min-width:144px;align-items:center}
+.user i{width:38px;height:38px;border-color:#709083}
+.user span{font-size:11px;font-weight:700}
+.user small{font-size:9px}
+main{grid-template-columns:430px 648px 450px;gap:24px;margin-top:16px}
+.panel,.game{border-color:#68797059;background:#071214e8;backdrop-filter:blur(14px);box-shadow:0 20px 54px #000b,inset 0 1px 0 #ffffff06}
+
+/* Match the reference left-column vertical rhythm */
+.lpanel{padding:14px}
+.lpanel .hero,.lpanel .hero-copy{min-height:224px}
+.lpanel .hero-knight{right:-6px;bottom:-5px;width:64%;height:100%;opacity:.98}
+.lpanel .hero-shade{background:linear-gradient(90deg,#081211f6 0,#081211e2 43%,#08121170 70%,transparent 100%),linear-gradient(0deg,#07100fb8 0,transparent 45%)}
+.lpanel .hero-copy{justify-content:flex-start;padding:25px 18px 16px}
+.lpanel .live-label{margin-bottom:12px}
+.lpanel .hero h1{max-width:330px;font-size:56px;line-height:.93;letter-spacing:-2px}
+.lpanel .hero p{max-width:315px;margin-top:13px;font-size:12px;line-height:1.48}
+.lpanel .modes{margin-top:10px}
+.lpanel .private-card{margin-top:10px}
+.lpanel .tiny{margin-top:12px}
+.lpanel .gold{margin-top:10px}
+.lpanel .divider{margin:12px 0 10px}
+.lpanel .room{margin-top:10px}
+
+/* Center column proportions */
+.game{padding:8px;border-radius:14px}
+.player{min-height:60px;grid-template-columns:42px minmax(0,1fr) 116px;gap:10px;padding:5px 6px}
+.player.top{margin-bottom:4px}
+.player.bottom{margin-top:4px}
+.avatar{width:42px;height:42px}
+.player-name-row b{font-size:14px}
+.player-meta{margin-top:3px}
+.player-clock{width:116px;height:46px;font-size:27px;border-radius:8px}
+.board-shell{grid-template-columns:18px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 18px}
+.rank-coords,.file-coords{font-size:9px;color:#aab4af}
+.board{border-width:2px;border-radius:7px;border-color:#7a847c}
+.square.light{
+  background-color:var(--light);
+  background-image:repeating-linear-gradient(135deg,#ffffff0d 0 1px,transparent 1px 7px);
+}
+.square.dark{
+  background-color:var(--dark);
+  background-image:repeating-linear-gradient(135deg,#ffffff08 0 1px,transparent 1px 8px);
+}
+.square.light.last-move{background-image:linear-gradient(#c7d34f99,#c7d34f99),repeating-linear-gradient(135deg,#ffffff0d 0 1px,transparent 1px 7px)}
+.square.dark.last-move{background-image:linear-gradient(#c7d34f88,#c7d34f88),repeating-linear-gradient(135deg,#ffffff08 0 1px,transparent 1px 8px)}
+.tools{height:46px;gap:6px;padding-top:6px}
+.tools button{height:40px;border-radius:8px}
+
+/* Match the reference right-column stack */
+.rpanel{padding:14px}
+.rpanel .status{min-height:94px;margin-top:10px}
+.rpanel .status-copy{min-height:94px;padding:14px 156px 14px 14px}
+.rpanel .status h2{margin:6px 0 4px;font-size:22px}
+.rpanel .status-art{width:168px;background:linear-gradient(90deg,#111a19 0,transparent 34%),url("https://ubjldcfiwrwiouwgmduo.supabase.co/functions/v1/vanta-web/assets/ui/background-desktop.webp") 76% 42%/340% auto no-repeat;opacity:.84}
+.rpanel .moves{height:150px;margin-top:9px}
+.rpanel .moves .move-head{min-height:29px}
+.rpanel .moves .move-row{min-height:34px}
+.rpanel .analysis{margin-top:9px;padding:13px}
+.rpanel .analysis-body{margin-top:11px}
+.rpanel .analysis h2{font-size:36px}
+.rpanel .pv{margin-top:10px;padding-top:9px}
+.rpanel .chat{display:none}
+.rpanel .feature-cards{gap:10px;margin-top:12px}
+.rpanel .feature-card,.rpanel .feature-content{min-height:128px}
+.rpanel .feature-content{padding:14px 13px 12px}
+.rpanel .feature-art{opacity:.82}
+.rpanel .feature-shade{background:linear-gradient(90deg,#081211f6 0,#081211db 44%,#08121161 72%,#08121118 100%),linear-gradient(0deg,#06100fc5 0,transparent 58%)}
+
+/* Preserve the exact desktop reference width, then degrade gracefully. */
+@media(max-width:1624px){
+  .shell{width:calc(100vw - 36px);margin-top:18px}
+  main{grid-template-columns:minmax(340px,.92fr) minmax(560px,1.38fr) minmax(360px,.98fr);gap:18px}
+  .brand{width:235px}
+  nav button,.nav-visual{padding-inline:8px}
+  .header-actions{margin-inline:6px}
+  .install-visual{padding-inline:10px}
+}
+@media(max-width:1320px){
+  .nav-visual,.header-actions{display:none}
+  .brand{width:220px}
+}
+@media(max-width:1200px){
+  .shell{width:calc(100vw - 24px);margin:12px auto}
+  main{grid-template-columns:330px minmax(0,1fr);gap:16px}
+  .rpanel{grid-column:1/-1}
+}
+@media(max-width:800px){
+  .shell{width:calc(100vw - 16px);margin:8px auto}
+  header{height:56px}
+  .lpanel .hero,.lpanel .hero-copy{min-height:230px}
+  .lpanel .hero h1{font-size:42px}
+  .lpanel .hero p{max-width:270px}
+  .player{grid-template-columns:40px minmax(0,1fr) 104px}
+  .avatar{width:40px;height:40px}
+  .player-clock{width:104px;height:44px;font-size:25px}
+  .board-shell{grid-template-columns:16px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 16px}
+}
