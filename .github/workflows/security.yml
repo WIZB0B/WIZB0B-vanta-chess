@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -19,30 +19,6 @@ jobs:
         with:
           node-version: 20.19.0
           cache: npm
-      - name: Generate VCH 512 app icon
-        run: |
-          if [ ! -f public/icon-512.png ]; then
-            python3 -m pip install --quiet cairosvg pillow
-            python3 <<'PY'
-          from io import BytesIO
-          from pathlib import Path
-          from PIL import Image
-          import cairosvg
-          size=512
-          inner=round(size*.90)
-          svg=Path('public/assets/vch/brand/vch-logo-light.svg').read_bytes()
-          raw=cairosvg.svg2png(bytestring=svg,output_height=inner)
-          mark=Image.open(BytesIO(raw)).convert('RGBA')
-          canvas=Image.new('RGBA',(size,size),(0,0,0,0))
-          canvas.alpha_composite(mark,((size-mark.width)//2,(size-mark.height)//2))
-          canvas.save('public/icon-512.png',optimize=True)
-          PY
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add public/icon-512.png
-            git commit -m 'Generate VCH 512 app icon'
-            git push origin HEAD:codex/set-up-vch-repository-and-implement-chess-game
-          fi
       - name: Verify project files
         run: |
           pwd
