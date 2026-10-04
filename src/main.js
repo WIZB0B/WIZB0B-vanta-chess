@@ -106,13 +106,30 @@ app.innerHTML=`
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
     <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
-      <div class="player top"><span class="avatar">GU</span><div><b>Waiting for opponent</b><small>☆ 1200</small></div><i class="signal" id="topSignal">▥ live</i><time id="blackClock">10:00</time></div>
+      <div class="player top" data-player-bar="opponent">
+        <span class="avatar" id="topAvatar">OP</span>
+        <div class="player-info">
+          <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag is-placeholder" id="topFlag" aria-label="Country unavailable">--</span></div>
+          <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span></div>
+        </div>
+        <time id="blackClock">10:00</time>
+      </div>
       <div class="board-shell">
         <div id="rankCoords" class="board-coords board-ranks" aria-hidden="true"></div>
         <div id="board" class="board" aria-label="Chess board"></div>
         <div id="fileCoords" class="board-coords board-files" aria-hidden="true"></div>
       </div>
-      <div class="player bottom"><span class="avatar light">GU</span><div><b>You · ${guestName}</b><small>☆ 1200</small></div><i class="signal" id="bottomSignal">▥ connecting…</i><time id="whiteClock">10:00</time></div>
+      <div class="player bottom" data-player-bar="local">
+        <span class="avatar light" id="bottomAvatar">GU</span>
+        <div class="player-info">
+          <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag is-placeholder" id="bottomFlag" aria-label="Country unavailable">--</span></div>
+          <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span></div>
+        </div>
+        <div class="player-connection hidden" id="bottomConnection" aria-label="Network latency">
+          <span class="ping-bars" id="bottomPingBars" aria-hidden="true"><i></i><i></i><i></i></span><span id="bottomPing">-- ms</span>
+        </div>
+        <time id="whiteClock">10:00</time>
+      </div>
       <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button></div>
     </section>
 
@@ -319,8 +336,8 @@ async function activateLeftMode(next){
   if(previous==='computer'&&next!=='computer'&&computerStarted){
     computerStarted=false;localClockState=null;localGameOver=false;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;game.reset();render();updateMoves();
   }
-  mode=next;
-  $$('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
+  mode=next;syncPlayerBars();
+  $('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
   $$('.mode-view').forEach(view=>{const active=view.dataset.modeView===next;view.classList.toggle('active',active);view.setAttribute('aria-hidden',String(!active))});
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   if(next==='room'&&serverGameId)startPolling();
@@ -379,20 +396,65 @@ function animateLastServerMove(state,previousVersion){
     ep?.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.5)'}],{duration:150});
   }
 }
+function playerInitials(value,fallback='GU'){
+  const words=String(value||'').replace(/^You ·\s*/,'').trim().split(/\s+/).filter(Boolean);
+  if(!words.length)return fallback;
+  return words.slice(0,2).map(word=>word[0]).join('').toUpperCase();
+}
+function setPlayerFlag(element,code){
+  if(!element)return;
+  const normalized=/^[a-z]{2}$/i.test(String(code||''))?String(code).toUpperCase():'';
+  element.textContent=normalized||'--';
+  element.classList.toggle('is-placeholder',!normalized);
+  element.setAttribute('aria-label',normalized?`Country ${normalized}`:'Country unavailable');
+}
+function setPresence(element,label,online=false){
+  if(!element)return;
+  element.classList.toggle('online',online);
+  const text=element.querySelector('span');if(text)text.textContent=label;
+}
+function syncConnectionUi(){
+  const online=!!serverGameId&&mode!=='computer';
+  const connection=$('#bottomConnection');
+  if(connection)connection.classList.toggle('hidden',!online);
+  const ping=$('#bottomPing'),bars=$('#bottomPingBars');
+  if(!online){if(ping)ping.textContent='-- ms';if(bars)bars.dataset.quality='';return}
+  if(Number.isFinite(latencyMs)){
+    if(ping)ping.textContent=`${latencyMs} ms`;
+    if(bars)bars.dataset.quality=latencyMs<=100?'good':latencyMs<=250?'fair':'poor';
+  }else{
+    if(ping)ping.textContent='connecting';
+    if(bars)bars.dataset.quality='pending';
+  }
+}
+function syncPlayerBars(){
+  const opponentId=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
+  const opponentName=serverGame&&(myColor==='w'?serverGame.black_name:serverGame.white_name);
+  const topName=currentBot?.display_name||currentBot?.name||(mode==='computer'?'Choose an opponent':opponentName||(opponentId?'Opponent connected':'Waiting for opponent'));
+  const ownName=(currentProfile?.account&&(currentProfile.username||currentProfile.display_name))||guestName;
+  const opponentRating=myColor==='w'?serverGame?.black_rating_before:serverGame?.white_rating_before;
+  const topRating=currentBot?.elo||opponentRating||1200;
+  const pool=serverGame?.pool||'rapid';
+  $('#topPlayerName').textContent=topName;
+  $('#bottomPlayerName').textContent=`You · ${ownName}`;
+  $('#topRating').textContent=`${topRating} rating`;
+  $('#bottomRating').textContent=`${ratingFor(pool)} rating`;
+  $('#topAvatar').textContent=playerInitials(topName,'OP');
+  $('#bottomAvatar').textContent=playerInitials(ownName,'GU');
+  const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
+  setPlayerFlag($('#topFlag'),opponentColor?serverGame?.[`${opponentColor}_country_code`]:null);
+  setPlayerFlag($('#bottomFlag'),currentProfile?.country_code||(ownColor?serverGame?.[`${ownColor}_country_code`]:null));
+  const online=!!serverGameId&&mode!=='computer';
+  setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
+  setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
+  syncConnectionUi();
+}
 function syncRoomUi(){
   const code=serverGame?.invite_code||room;
   $('.room-created')?.classList.toggle('hidden',!roomCreated);
   const strong=$('.room strong');if(strong)strong.textContent=code||'—';
   if(code)$('#share').value=`${location.origin}${location.pathname}?game=${encodeURIComponent(code)}`;
-  const opponentId=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
-  const opponentName=serverGame&&(myColor==='w'?serverGame.black_name:serverGame.white_name);
-  const topName=currentBot?.display_name||currentBot?.name||opponentName||(opponentId?'Opponent connected':'Waiting for opponent');
-  $('.player.top b').textContent=topName;
-  const ownName=(currentProfile?.account&&(currentProfile.username||currentProfile.display_name))||guestName;
-  $('.player.bottom b').textContent=`You · ${ownName}`;
-  const opponentRating=myColor==='w'?serverGame?.black_rating_before:serverGame?.white_rating_before;
-  const topRating=$('.player.top small');if(topRating)topRating.textContent='☆ '+(currentBot?.elo||opponentRating||1200);
-  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ '+ratingFor(serverGame?.pool||'rapid');
+  syncPlayerBars();
 }
 function applyServerState(payload){
   const state=payload.game||payload;if(!state)return;
@@ -434,8 +496,11 @@ function syncIdentityUI(){
   const name=signed?(currentProfile.username||currentProfile.display_name||'Player'):guestName;
   const rating=ratingFor('rapid');
   const user=$('#accountBtn');if(user){user.querySelector('span').textContent=name;user.querySelector('small').textContent=rating+' rating'}
-  const bottom=$('.player.bottom b');if(bottom)bottom.textContent='You · '+name;
-  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ '+rating;
+  const bottom=$('#bottomPlayerName');if(bottom)bottom.textContent='You · '+name;
+  const bottomRating=$('#bottomRating');if(bottomRating)bottomRating.textContent=rating+' rating';
+  const bottomAvatar=$('#bottomAvatar');if(bottomAvatar)bottomAvatar.textContent=playerInitials(name,'GU');
+  setPlayerFlag($('#bottomFlag'),currentProfile?.country_code);
+  syncPlayerBars();
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
@@ -453,17 +518,20 @@ async function loadProfile(){
 function openAccount(){syncIdentityUI();$('#accountDialog').showModal()}
 async function connect(){try{await loadProfile();if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`);startPolling()}}catch(error){toast(error.message)}}
 function startPolling(){
-  clearInterval(pollTimer);pollCount=0;let inFlight=false;
+  clearInterval(pollTimer);pollCount=0;latencyMs=null;syncConnectionUi();let inFlight=false;
   pollTimer=setInterval(async()=>{
     if(document.hidden||!serverGameId||inFlight)return;inFlight=true;
     const started=performance.now();
     try{
       const payload=await api.heartbeat(serverGameId);
       latencyMs=Math.max(1,Math.round(performance.now()-started));
-      const signal=$('#bottomSignal');if(signal)signal.textContent='▥ '+latencyMs+' ms';
+      syncConnectionUi();
       applyServerState(payload);
       if(++pollCount%4===0)await loadChat();
-    }catch{const signal=$('#bottomSignal');if(signal)signal.textContent='▥ reconnecting…'}
+    }catch{
+      latencyMs=null;syncConnectionUi();
+      const ping=$('#bottomPing');if(ping&&serverGameId)ping.textContent='reconnecting';
+    }
     finally{inFlight=false}
   },450)
 }

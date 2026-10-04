@@ -1436,3 +1436,128 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .mode-stage{min-height:0}
   .time-chips{grid-template-columns:repeat(3,1fr)}
 }
+
+
+/* Batch 4: board piece depth, player bars, and reference-strength last-move color. */
+.player{
+  height:58px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:4px 5px;
+  min-width:0;
+}
+.player .avatar{
+  width:44px;height:44px;flex:0 0 44px;
+  border:1px solid rgba(124,215,174,.62);
+  background:radial-gradient(circle at 34% 26%,#294b40,#0b1715 68%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.035),0 5px 14px rgba(0,0,0,.28);
+  color:#e7efe9;font-size:12px;font-weight:750;letter-spacing:.04em;
+}
+.player .avatar.light{
+  background:radial-gradient(circle at 35% 25%,#f3f1e7,#c8cec5 72%);
+  color:#16241f;border-color:#cdd7cf;
+}
+.player-info{min-width:0;flex:1}
+.player-name-row{display:flex;align-items:center;gap:7px;min-width:0}
+.player-name-row b{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;line-height:1.15;color:#f0f3ed;
+}
+.player-flag{
+  width:29px;height:18px;flex:0 0 29px;
+  display:grid;place-items:center;
+  border:1px solid rgba(225,231,222,.28);border-radius:3px;
+  background:
+    linear-gradient(180deg,rgba(226,231,222,.14) 0 33%,rgba(105,141,128,.18) 33% 66%,rgba(226,231,222,.10) 66%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);
+  color:#d9e0dc;font:700 7px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.04em;
+}
+.player-flag.is-placeholder{color:#7f8d89;filter:saturate(.25)}
+.player-meta{display:flex;align-items:center;gap:9px;margin-top:4px;min-width:0}
+.player-rating{color:#a9b4b0;font-size:9px;white-space:nowrap}
+.player-presence{
+  display:inline-flex;align-items:center;gap:5px;
+  color:#7e908a;font-size:8px;font-weight:750;letter-spacing:.08em;
+}
+.live-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#687b74;box-shadow:0 0 0 2px rgba(104,123,116,.10);
+}
+.player-presence.online{color:#d4ddd9}
+.player-presence.online .live-dot{
+  background:#df5454;
+  box-shadow:0 0 0 2px rgba(223,84,84,.12),0 0 8px rgba(223,84,84,.42);
+}
+.player-connection{
+  display:flex;align-items:center;gap:6px;flex:0 0 auto;
+  color:#aeb9b5;font-size:9px;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.player-connection.hidden{display:none}
+.ping-bars{height:13px;display:inline-flex;align-items:flex-end;gap:2px}
+.ping-bars i{
+  width:3px;border-radius:2px;background:#6f817b;opacity:.58;
+}
+.ping-bars i:nth-child(1){height:5px}.ping-bars i:nth-child(2){height:9px}.ping-bars i:nth-child(3){height:13px}
+.ping-bars[data-quality="good"] i{background:#79dca9;opacity:1}
+.ping-bars[data-quality="fair"] i:nth-child(-n+2){background:#d8bd70;opacity:1}
+.ping-bars[data-quality="poor"] i:first-child{background:#dc6d62;opacity:1}
+.ping-bars[data-quality="pending"] i:first-child{opacity:1;animation:pingPending 1s ease-in-out infinite}
+@keyframes pingPending{50%{opacity:.25}}
+.player time{
+  margin-left:3px;flex:0 0 auto;
+  min-width:105px;text-align:center;
+  font-size:28px;line-height:1;
+  padding:8px 12px;border:1px solid rgba(202,207,199,.58);
+  border-radius:9px;background:linear-gradient(180deg,#080d0e,#030708);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 5px 14px rgba(0,0,0,.32);
+}
+
+/* The generated sprites are intentionally about 85% of each square. */
+.board .piece{
+  width:85%;
+  height:85%;
+  z-index:1;
+  background-size:contain;
+  background-position:center;
+  background-repeat:no-repeat;
+  filter:
+    drop-shadow(0 8px 3px rgba(0,0,0,.35))
+    drop-shadow(0 2px 1px rgba(0,0,0,.42));
+  transform:translateY(-1%);
+}
+.board .square:has(.piece)::before{
+  content:"";
+  position:absolute;
+  left:24%;bottom:9%;
+  width:52%;height:11%;
+  border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,0,0,.42) 0%,rgba(0,0,0,.20) 48%,transparent 76%);
+  filter:blur(2px);
+  pointer-events:none;
+}
+.board .square.legal:after{z-index:2}
+.board .square:hover .piece{transform:translateY(-4%) scale(1.015)}
+.board .square.selected .piece,.board .piece.dragging{transform:translateY(-5%) scale(1.025)}
+
+/* Stronger yellow-green last-move wash, preserving the underlying light/dark square. */
+.board .square.last-move{
+  box-shadow:inset 0 0 0 999px rgba(200,216,61,.56);
+}
+.board .square.last-move.selected{
+  box-shadow:
+    inset 0 0 0 4px rgba(239,243,113,.92),
+    inset 0 0 0 999px rgba(200,216,61,.48);
+}
+
+@media(max-width:800px){
+  .player{height:54px;gap:7px}
+  .player .avatar{width:40px;height:40px;flex-basis:40px}
+  .player time{min-width:88px;font-size:24px;padding:8px 9px}
+  .player-name-row b{font-size:12px}
+  .player-flag{width:26px;height:16px;flex-basis:26px}
+  .player-connection{font-size:8px}
+  .board .piece{width:85%;height:85%}
+}
+@media(prefers-reduced-motion:reduce){.ping-bars[data-quality="pending"] i:first-child{animation:none}}
