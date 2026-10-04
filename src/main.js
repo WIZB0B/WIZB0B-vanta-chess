@@ -10,6 +10,10 @@ const params=new URLSearchParams(location.search), generatedRoom=Math.random().t
 let room=normalizeRoomId(params.get('game'),generatedRoom);
 const playerToken=stableGuestToken();
 const api=new VchApi({token:playerToken});
+const SUPABASE_URL='https://ubjldcfiwrwiouwgmduo.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_q3KU0sdaVKOeMcLND2D15Q_Qsu2X5pN';
+let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
+if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false;
 const stockfish=new Worker('/stockfish.worker.js');
@@ -41,7 +45,7 @@ app.innerHTML=`
       <button id="searchBtn" class="icon-btn" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
       <button id="installBtn" class="install-btn">⇩ <span>Install App</span></button>
       <button id="notifyBtn" class="icon-btn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button>
-      <div class="user"><i></i><span>${guestName}</span><small>1200 rating</small></div>
+      <button id="accountBtn" class="user" type="button" aria-label="Account"><i></i><span>${guestName}</span><small>1200 rating</small></button>
     </div>
   </header>
 
@@ -121,6 +125,25 @@ app.innerHTML=`
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
 <dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme">Done</button></dialog>
+
+
+<dialog id="accountDialog" class="account-dialog">
+  <form method="dialog"><button class="account-close" aria-label="Close">×</button></form>
+  <div class="account-head"><small>VANTA CHESS ACCOUNT</small><h2>Save your rating and record</h2><p>Guest games stay instant. Sign in only when you want rated play, tournaments, and a persistent profile.</p></div>
+  <div id="accountGuest">
+    <div class="auth-tabs"><button type="button" class="on" data-auth="signin">Sign in</button><button type="button" data-auth="signup">Create account</button></div>
+    <label id="usernameField" class="hidden">Username<input id="authUsername" autocomplete="username" maxlength="20" placeholder="3–20 letters, numbers or _"></label>
+    <label>Email<input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
+    <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="••••••••"></label>
+    <button id="authSubmit" class="primary-action" type="button">Sign in</button>
+    <p id="authMessage" class="auth-message"></p>
+  </div>
+  <div id="accountSigned" class="hidden">
+    <div class="profile-card"><span class="avatar light">VC</span><div><b id="profileName">Player</b><small id="profileRating">1200 rapid</small></div></div>
+    <div class="rating-grid"><div><small>Bullet</small><b id="ratingBullet">1200</b></div><div><small>Blitz</small><b id="ratingBlitz">1200</b></div><div><small>Rapid</small><b id="ratingRapid">1200</b></div><div><small>Classical</small><b id="ratingClassical">1200</b></div></div>
+    <button id="signOutBtn" class="secondary-action" type="button">Sign out</button>
+  </div>
+</dialog>
 
 <dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><h2>Search Vanta Chess</h2><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
 `
@@ -249,9 +272,10 @@ function syncRoomUi(){
   const opponentConnected=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
   const topName=currentBot?.display_name||currentBot?.name||(opponentConnected?'Opponent connected':'Waiting for opponent');
   $('.player.top b').textContent=topName;
-  $('.player.bottom b').textContent=`You · ${guestName}`;
+  const ownName=(currentProfile?.account&&(currentProfile.username||currentProfile.display_name))||guestName;
+  $('.player.bottom b').textContent=`You · ${ownName}`;
   const topRating=$('.player.top small');if(topRating)topRating.textContent='☆ '+(currentBot?.elo||1200);
-  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ 1200';
+  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ '+ratingFor('rapid');
 }
 function applyServerState(payload){
   const state=payload.game||payload;if(!state)return;
@@ -272,7 +296,45 @@ function applyServerState(payload){
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
-async function connect(){try{await api.profile(guestName);if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`);startPolling()}}catch(error){toast(error.message)}}
+function saveAuthSession(session){
+  authSession=session||null;
+  if(authSession)localStorage.setItem('vanta.auth-session',JSON.stringify(authSession));else localStorage.removeItem('vanta.auth-session');
+  api.accessToken=authSession?.access_token||undefined;
+}
+async function authFetch(path,body,token){
+  const response=await fetch(SUPABASE_URL+path,{method:'POST',headers:{'content-type':'application/json',apikey:SUPABASE_PUBLISHABLE_KEY,...(token?{authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.msg||data.message||data.error_description||data.error||'Account request failed');
+  return data;
+}
+async function refreshAuthSession(){
+  if(!authSession?.refresh_token)return false;
+  try{const next=await authFetch('/auth/v1/token?grant_type=refresh_token',{refresh_token:authSession.refresh_token});saveAuthSession(next);return true}catch{saveAuthSession(null);return false}
+}
+function ratingFor(pool='rapid'){return Number(currentProfile?.ratings?.[pool]??currentProfile?.rating??1200)}
+function syncIdentityUI(){
+  const signed=!!authSession?.access_token&&!!currentProfile?.account;
+  const name=signed?(currentProfile.username||currentProfile.display_name||'Player'):guestName;
+  const rating=ratingFor('rapid');
+  const user=$('#accountBtn');if(user){user.querySelector('span').textContent=name;user.querySelector('small').textContent=rating+' rating'}
+  const bottom=$('.player.bottom b');if(bottom)bottom.textContent='You · '+name;
+  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ '+rating;
+  $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
+  if(signed){
+    $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
+    for(const pool of ['bullet','blitz','rapid','classical']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
+  }
+}
+async function loadProfile(){
+  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
+  catch(error){
+    if(error.status===401&&authSession&&await refreshAuthSession()){const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
+    if(error.status===401&&authSession){saveAuthSession(null);currentProfile=null;syncIdentityUI()}
+    throw error
+  }
+}
+function openAccount(){syncIdentityUI();$('#accountDialog').showModal()}
+async function connect(){try{await loadProfile();if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`);startPolling()}}catch(error){toast(error.message)}}
 function startPolling(){
   clearInterval(pollTimer);pollCount=0;
   pollTimer=setInterval(async()=>{
@@ -299,18 +361,20 @@ $$('.modes button').forEach(b=>b.onclick=async()=>{
   if(mode==='room'){currentBot=null;localClockState=null;localGameOver=false;toast('Private-room mode ready')}
   if(mode==='match'){
     try{
-      searching=true;await api.queueJoin({seconds:Number($('#time').value),increment:0,rated:false});toast('Searching for a player…');
+      const rated=$('#level').value==='rated';
+      if(rated&&!authSession?.access_token){openAccount();throw new Error('Sign in to start rated matchmaking')}
+      searching=true;await api.queueJoin({seconds:Number($('#time').value),increment:0,rated});toast(rated?'Searching for a rated opponent…':'Searching for a player…');
       const started=Date.now();
       matchTimer=setInterval(async()=>{
         try{
-          const state=await api.queueStatus(false);
+          const state=await api.queueStatus($('#level').value==='rated');
           if(state.game||state.matched){clearInterval(matchTimer);matchTimer=null;searching=false;applyServerState(state);startPolling();showMovesView();toast(Date.now()-started>=15000?'Closest Elo engine matched':'Player matched')}
         }catch(error){clearInterval(matchTimer);matchTimer=null;searching=false;toast(error.message)}
       },1000);
     }catch(error){searching=false;toast(error.message)}
   }
 });
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#level').value==='rated')return toast('Sign in is required for rated games');try{const state=await api.create({name:guestName,seconds:Number($('#time').value),increment:0,rated:false});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer'){currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};syncRoomUi();toast('Engine strength updated')}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer'){currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};syncRoomUi();toast('Engine strength updated')}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));if(mode==='computer')resetLocalClock();else{$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)}};
 render();startClock();connect();
 
@@ -467,6 +531,26 @@ $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.datase
 $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){showMovesView();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
 $('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
 $('#closeChat').onclick=()=>{$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')};
+$('#accountBtn').onclick=openAccount;
+$('[data-auth]').forEach(button=>button.onclick=()=>{
+  authMode=button.dataset.auth;$('[data-auth]').forEach(x=>x.classList.toggle('on',x===button));
+  $('#usernameField').classList.toggle('hidden',authMode!=='signup');$('#authSubmit').textContent=authMode==='signup'?'Create account':'Sign in';$('#authMessage').textContent='';
+});
+$('#authSubmit').onclick=async()=>{
+  const email=$('#authEmail').value.trim(),password=$('#authPassword').value,username=$('#authUsername').value.trim(),message=$('#authMessage');
+  message.textContent='';if(!email||password.length<6){message.textContent='Enter a valid email and a password of at least 6 characters.';return}
+  try{
+    let session;
+    if(authMode==='signup'){
+      if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){message.textContent='Username must be 3–20 letters, numbers, or underscores.';return}
+      const made=await authFetch('/auth/v1/signup',{email,password,data:{username}});
+      session=made.access_token?made:null;
+      if(!session){message.textContent='Account created. Confirm your email, then sign in.';return}
+    }else session=await authFetch('/auth/v1/token?grant_type=password',{email,password});
+    saveAuthSession(session);await loadProfile();syncIdentityUI();message.textContent='Signed in.';setTimeout(()=>$('#accountDialog').close(),450);
+  }catch(error){message.textContent=error.message}
+};
+$('#signOutBtn').onclick=async()=>{try{if(authSession?.access_token)await authFetch('/auth/v1/logout',null,authSession.access_token)}catch{}saveAuthSession(null);currentProfile=null;await loadProfile().catch(()=>{});syncIdentityUI();$('#accountDialog').close();toast('Signed out')};
 $('#searchBtn').onclick=()=>{$('#searchDialog').showModal();$('#searchInput').focus()};
 $('#searchInput').oninput=e=>{
   const q=e.target.value.trim().toLowerCase(),target=$('#searchResults');if(!q){target.innerHTML='';return}
