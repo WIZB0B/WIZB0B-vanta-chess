@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+async function enterGameOnFirstVisit(page){await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'))}
+
 async function mockProfile(page){
   await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', async route=>{
     let body={};try{body=route.request().postDataJSON()}catch{}
@@ -9,7 +11,7 @@ async function mockProfile(page){
 }
 
 test('primary menus and study controls are not dead buttons',async({page})=>{
-  await mockProfile(page);await page.goto('/');
+  await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await expect(page.locator('.square')).toHaveCount(64);
 
   await page.locator('[data-nav="openings"]').click();
@@ -43,7 +45,7 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
 
 test('board controls, theme studio, and local Stockfish computer game work',async({page})=>{
   test.setTimeout(45000);
-  await mockProfile(page);await page.goto('/');
+  await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
 
   const before=await page.locator('.square').first().getAttribute('data-sq');
   await page.locator('#flip').click();
@@ -73,7 +75,7 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
 });
 
 test('right-panel feature cards open their real destinations',async({page})=>{
-  await mockProfile(page);await page.goto('/');
+  await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await page.locator('.feature-card.opening').click();await expect(page.locator('#dynamicView')).toContainText('Opening Explorer');
   await page.locator('[data-nav="play"]').click();
   await page.locator('.feature-card.famous').click();await expect(page.locator('#dynamicView')).toContainText('Famous Games');
@@ -85,7 +87,7 @@ test('right-panel feature cards open their real destinations',async({page})=>{
 
 
 test('rated play is account-gated while guest play remains instant',async({page})=>{
-  await mockProfile(page);await page.goto('/');
+  await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await page.locator('#level').selectOption('rated');
   await page.locator('#create').click();
   await expect(page.locator('#accountDialog')).toBeVisible();
