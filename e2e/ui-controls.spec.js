@@ -63,7 +63,8 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
 
   await page.locator('[data-mode="computer"]').click();
   await page.locator('#level').selectOption('1500');
-  await page.locator('[data-sq="e2"]').click();await page.locator('[data-sq="e4"]').click();
+  await page.locator('[data-sq="e2"] .piece').dragTo(page.locator('[data-sq="e4"]'));
+  await expect(page.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible();
   await expect.poll(async()=>page.locator('#moves .move-row').count(),{timeout:10000}).toBeGreaterThanOrEqual(2);
   await expect(page.locator('#depth')).not.toHaveText('—',{timeout:10000});
 });
@@ -77,4 +78,16 @@ test('right-panel feature cards open their real destinations',async({page})=>{
   await page.locator('.feature-card.practice').click();await expect(page.locator('#dynamicView')).toContainText('Practice & Learn');
   await page.locator('[data-nav="play"]').click();
   await page.locator('.feature-card.review').click();await expect(page.locator('#dynamicView')).toContainText('Post-Game Review');
+});
+
+
+test('rated play is account-gated while guest play remains instant',async({page})=>{
+  await mockProfile(page);await page.goto('/');
+  await page.locator('#level').selectOption('rated');
+  await page.locator('#create').click();
+  await expect(page.locator('#accountDialog')).toBeVisible();
+  await expect(page.locator('#accountDialog')).toContainText('Save your rating and record');
+  await page.locator('.account-close').click();
+  await page.locator('#level').selectOption('casual');
+  await expect(page.locator('#create')).toBeEnabled();
 });
