@@ -2,10 +2,13 @@ import { test, expect } from '@playwright/test';
 
 test.skip(!process.env.VCH_LIVE_E2E, 'live Supabase acceptance is opt-in');
 
+async function enterGameOnFirstVisit(page){await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'))}
+
 test('two browsers share an authoritative game, chat, reconnect, arena and puzzle', async ({ browser }) => {
   test.setTimeout(90000);
   const aCtx=await browser.newContext(),bCtx=await browser.newContext();
   const a=await aCtx.newPage(),b=await bCtx.newPage();
+  await enterGameOnFirstVisit(a);
   await a.goto('/');
   await a.locator('#create').click();
   await expect.poll(()=>new URL(a.url()).searchParams.get('game')).not.toBeNull();
@@ -57,6 +60,7 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
 test('casual queue falls back to a Stockfish bot after fifteen seconds', async ({ browser }) => {
   test.setTimeout(50000);
   const ctx=await browser.newContext(),page=await ctx.newPage();
+  await enterGameOnFirstVisit(page);
   await page.goto('/');
   await page.evaluate(()=>{const s=document.querySelector('#time');const o=document.createElement('option');o.value='75';o.textContent='75+0 Acceptance';s.append(o);s.value='75'});
   await page.locator('[data-mode="match"]').click();
@@ -69,6 +73,7 @@ test('casual queue falls back to a Stockfish bot after fifteen seconds', async (
 
 test('mobile layout has no horizontal overflow', async ({ browser }) => {
   const ctx=await browser.newContext({viewport:{width:390,height:844}}),page=await ctx.newPage();
+  await enterGameOnFirstVisit(page);
   await page.goto('/');
   const widths=await page.evaluate(()=>({inner:innerWidth,scroll:document.documentElement.scrollWidth,board:Math.round(document.querySelector('.board').getBoundingClientRect().width)}));
   expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
