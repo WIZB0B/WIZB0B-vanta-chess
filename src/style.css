@@ -363,3 +363,13 @@ main{
   .hero-art{width:112px!important;height:154px!important}
   .hero-art img{width:1492.857%;height:611.039%;left:-308.036%;top:-64.935%}
 }
+
+
+/* Board theme controls must affect the actual playing board. */
+.square.light,.study-square.light{background:var(--light)}
+.square.dark,.study-square.dark{background:var(--dark)}
+.square.drag-selected{box-shadow:inset 0 0 0 4px rgba(225,231,100,.84)}
+.square.drag-legal:after{
+  content:"";position:absolute;width:18%;aspect-ratio:1;border-radius:50%;
+  background:rgba(204,218,75,.72);box-shadow:0 0 0 4px rgba(255,255,255,.05);z-index:4
+}
