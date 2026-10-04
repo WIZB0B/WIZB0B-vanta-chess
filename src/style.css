@@ -199,3 +199,41 @@ main{
   .hero-art{width:43%;right:-4px}
   .hero h1{max-width:70%}
 }
+
+
+/* === REFERENCE LOCK: target image geometry ===
+   Calibrated against the supplied 1672×941 Vanta Chess reference.
+   At 1672px viewport: shell≈1576px, columns≈427/660/449, board≈600px. */
+@media(min-width:1181px){
+  .shell{
+    width:calc(100vw - 96px);
+    max-width:none;
+    padding:28px 0 24px;
+  }
+  main{
+    grid-template-columns:minmax(390px,.95fr) minmax(600px,1.47fr) minmax(410px,1fr);
+    gap:20px;
+  }
+  .game{
+    padding:10px clamp(28px,1.8vw,38px) 10px;
+  }
+  .hero-art{
+    width:31%;
+    right:0;
+    top:-3px;
+    height:112%;
+    background-position:center;
+  }
+  .hero h1{
+    max-width:72%;
+    font-size:52px;
+    line-height:.98;
+  }
+  .hero p{max-width:72%}
+  .rpanel{padding:14px}
+  .topbar{padding-left:12px;padding-right:13px}
+}
+@media(min-width:1700px){
+  .hero h1{font-size:54px}
+  .lpanel{padding:16px 18px}
+}
