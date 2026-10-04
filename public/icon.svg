@@ -1,1 +1,13 @@
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 112" role="img" aria-labelledby="title">
+  <title id="title">VCH</title>
+  <defs>
+    <mask id="horse-cutout">
+      <rect width="96" height="82" fill="black"/>
+      <path d="M48 5 87 18 75 66 48 82 21 66 9 18Z" fill="white"/>
+      <path d="M58.5 19.8c-7.4-2.2-14.5-.5-19.5 4.7-4.2 4.3-5.8 9.8-5 15.3-3.9 3.6-6.3 8.6-6.6 14.4 4.8-4.4 9.6-6.1 14.6-5.4l-4.8 10.6h10.9l7.7-11.8c2.1-3.2 5.6-5.2 9.4-5.4l5.2-.3-4.1-6.3c-2.1-3.2-3-6.9-2.4-10.7l1.4-8.2-6.8 3.1Zm-5.4 8.6c2.2 0 4 1.8 4 4s-1.8 4-4 4-4-1.8-4-4 1.8-4 4-4Z" fill="black"/>
+    </mask>
+  </defs>
+  <path d="M48 5 87 18 75 66 48 82 21 66 9 18Z" fill="#060706" stroke="#b89a5f" stroke-opacity=".45" stroke-width="1.5" mask="url(#horse-cutout)"/>
+  <path d="M58.5 19.8c-7.4-2.2-14.5-.5-19.5 4.7-4.2 4.3-5.8 9.8-5 15.3-3.9 3.6-6.3 8.6-6.6 14.4 4.8-4.4 9.6-6.1 14.6-5.4l-4.8 10.6h10.9l7.7-11.8c2.1-3.2 5.6-5.2 9.4-5.4l5.2-.3-4.1-6.3c-2.1-3.2-3-6.9-2.4-10.7l1.4-8.2-6.8 3.1Zm-5.4 8.6c2.2 0 4 1.8 4 4s-1.8 4-4 4-4-1.8-4-4 1.8-4 4-4Z" fill="#f1ecdf"/>
+  <text x="48" y="103" text-anchor="middle" fill="#f1ecdf" font-family="Georgia, 'Times New Roman', serif" font-size="16" font-weight="600" letter-spacing="7">VCH</text>
+</svg>

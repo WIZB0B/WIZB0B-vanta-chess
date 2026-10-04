@@ -31,9 +31,8 @@ const app=$('#app');
 app.innerHTML=`
 <div class="shell">
   <header class="topbar">
-    <a class="brand" href="#" aria-label="Vanta Chess home">
-      <span class="mark" aria-hidden="true">V</span>
-      <span class="wordmark"><span>VANTA</span><span>CHESS</span></span>
+    <a class="brand vch-brand" href="#" aria-label="VCH home">
+      <img class="vch-brand-logo" src="/icon.svg" alt="VCH">
     </a>
     <nav class="main-nav" aria-label="Primary">
       <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg></span>Play</button>
@@ -55,7 +54,34 @@ app.innerHTML=`
     </div>
   </header>
 
-  <main>
+  <section id="mainMenu" class="main-menu" aria-labelledby="mainMenuTitle">
+    <div class="main-menu-copy">
+      <p class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</p>
+      <h1 id="mainMenuTitle">Play Better Chess</h1>
+      <p class="main-menu-subtext">Competitive games. Real progress. A community that thinks ahead.</p>
+      <button id="joinNow" class="join-now" type="button">Join Now <span aria-hidden="true">↗</span></button>
+    </div>
+    <div class="main-menu-tiles" aria-label="VCH features">
+      <article class="menu-tile">
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2M8 3h8"/></svg></span>
+        <div><small>PLAY</small><h2>Rapid &amp; Blitz</h2><p>Fast pairings, focused clocks, serious games.</p></div>
+      </article>
+      <article class="menu-tile">
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>
+        <div><small>COMPETE</small><h2>Tournaments</h2><p>Enter arenas, climb standings, play for position.</p></div>
+      </article>
+      <article class="menu-tile">
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18V9M10 18V5M15 18v-7M20 18V3"/></svg></span>
+        <div><small>PROGRESS</small><h2>Ratings</h2><p>Track your level and make every game count.</p></div>
+      </article>
+      <article class="menu-tile">
+        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM16 11a3 3 0 1 0 0-6M2 20c0-4 2.7-6 6-6s6 2 6 6M14 14c4 0 7 1.8 7 6"/></svg></span>
+        <div><small>CONNECT</small><h2>Community</h2><p>Meet players who care about thoughtful improvement.</p></div>
+      </article>
+    </div>
+  </section>
+
+  <main id="gameWorkspace">
     <aside class="lpanel panel">
       <div class="hero">
         <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/reference-ui.png" alt=""></div>
@@ -554,7 +580,9 @@ function activateNav(kind){
   if(kind==='famous')renderFamous();
   if(kind==='review')renderReview();
 }
-$$('.main-nav button').forEach(button=>button.onclick=()=>activateNav(button.dataset.nav));
+$('.main-nav button').forEach(button=>button.onclick=()=>{activateNav(button.dataset.nav);document.querySelector('#gameWorkspace')?.scrollIntoView({block:'start'})});
+$('#joinNow').onclick=()=>document.querySelector('#gameWorkspace')?.scrollIntoView({behavior:'smooth',block:'start'});
+if(params.get('game'))$('#mainMenu')?.classList.add('direct-game');
 $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
 $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){showMovesView();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
 $('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
