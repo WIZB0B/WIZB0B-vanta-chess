@@ -1303,3 +1303,17 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .board-files{padding-top:4px}
   .board .piece{width:92%;height:92%}
 }
+
+
+/* Batch 1: intro and play workspace are separate screens, never stacked. */
+.shell.intro-active #gameWorkspace{display:none}
+.shell.game-active #mainMenu{display:none}
+@media(min-width:1181px){
+  body[data-screen="intro"],body[data-screen="game"]{height:100vh;min-height:100vh;overflow:hidden}
+  .shell.intro-active,.shell.game-active{height:100vh;min-height:0}
+  .shell.intro-active .main-menu{
+    height:calc(100vh - 124px);
+    min-height:0;
+    margin-top:14px;
+  }
+}
