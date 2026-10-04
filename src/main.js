@@ -29,18 +29,18 @@ app.innerHTML=`
   <header class="topbar">
     <a class="brand" href="#" aria-label="Vanta Chess home"><span class="mark">V</span><b>VANTA<br>CHESS</b></a>
     <nav class="main-nav" aria-label="Primary">
-      <button class="active" data-nav="play"><span>♞</span>Play</button>
-      <button data-nav="arena"><span>♛</span>Arena</button>
-      <button data-nav="puzzles"><span>♟</span>Puzzles</button>
-      <button data-nav="learn"><span>▤</span>Learn</button>
-      <button data-nav="openings"><span>♜</span>Openings</button>
-      <button data-nav="famous"><span>▣</span>Famous Games</button>
-      <button data-nav="review"><span>☑</span>Review</button>
+      <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m6 3 12 12M14 3h7v7M10 21H3v-7M3 21l7-7M21 3l-7 7"/></svg></span>Play</button>
+      <button data-nav="arena"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a4 4 0 0 0 4 4M17 6h3v2a4 4 0 0 1-4 4"/></svg></span>Arena</button>
+      <button data-nav="puzzles"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 3h4v4h4V3h5v6h-4v4h4v8h-8v-4H9v4H3v-8h4V9H3V3h5Z"/></svg></span>Puzzles</button>
+      <button data-nav="learn"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v18H7.5A3.5 3.5 0 0 0 4 23V5.5ZM20 5.5A3.5 3.5 0 0 0 16.5 2H13v18h3.5A3.5 3.5 0 0 1 20 23V5.5Z"/></svg></span>Learn</button>
+      <button data-nav="openings"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 4h3v3h4V4h3v3h2v4l-2 2v6H7v-6l-2-2V7h2V4ZM5 21h14"/></svg></span>Openings</button>
+      <button data-nav="famous"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m7 16 4-4 3 3 3-3 3 3M8 8h.01"/></svg></span>Famous Games</button>
+      <button data-nav="review"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 12 3 3 7-7"/></svg></span>Review</button>
     </nav>
     <div class="header-actions">
-      <button id="searchBtn" class="icon-btn" aria-label="Search">⌕</button>
+      <button id="searchBtn" class="icon-btn" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
       <button id="installBtn" class="install-btn">⇩ <span>Install App</span></button>
-      <button id="notifyBtn" class="icon-btn" aria-label="Notifications">♧</button>
+      <button id="notifyBtn" class="icon-btn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button>
       <div class="user"><i></i><span>${guestName}</span><small>1200 rating</small></div>
     </div>
   </header>
@@ -99,10 +99,10 @@ app.innerHTML=`
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
           </div>
           <div class="feature-grid">
-            <button class="feature-card opening" data-action="openings"><span class="asset"></span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><i>›</i></button>
-            <button class="feature-card famous" data-action="famous"><span class="asset"></span><b>Famous Games</b><small>Study legendary matches and ideas.</small><i>›</i></button>
-            <button class="feature-card review" data-action="review"><span class="asset"></span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><i>›</i></button>
-            <button class="feature-card practice" data-action="learn"><span class="asset"></span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><i>›</i></button>
+            <button class="feature-card opening" data-action="openings"><span class="asset"></span><span class="feature-icon">▤</span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><i>›</i></button>
+            <button class="feature-card famous" data-action="famous"><span class="asset"></span><span class="feature-icon">♛</span><b>Famous Games</b><small>Study legendary matches and ideas.</small><i>›</i></button>
+            <button class="feature-card review" data-action="review"><span class="asset"></span><span class="feature-icon">▥</span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><i>›</i></button>
+            <button class="feature-card practice" data-action="learn"><span class="asset"></span><span class="feature-icon">◎</span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><i>›</i></button>
           </div>
         </div>
         <div id="dynamicView" class="right-view hidden"></div>
