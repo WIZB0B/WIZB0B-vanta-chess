@@ -270,3 +270,18 @@ main{
 .lesson-detail>small{color:#7fe1ae;font-size:9px}.lesson-detail h4{font-size:19px;margin:6px 0}.lesson-detail p{font-size:11px;color:#aab6b2;line-height:1.6}
 .lesson-checklist{display:grid;gap:7px;margin:14px 0;padding:11px;border-radius:8px;background:#0b1715;border:1px solid #263a35}
 .lesson-checklist b{font-size:11px}.lesson-checklist span{font-size:10px;color:#9eaaa7}
+
+.nav-icon{width:18px;height:18px;display:grid;place-items:center;color:#aeb9b6}
+.nav-icon svg,.icon-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.main-nav button.active .nav-icon{color:#dff7ea}
+.icon-btn{color:#d5dfdc}
+.feature-card .feature-icon{
+  position:absolute;z-index:3;left:12px;top:10px;width:42px;height:42px;
+  display:grid;place-items:center;border-radius:9px;font:700 24px/1 Georgia,serif;
+  border:1px solid rgba(255,255,255,.11);box-shadow:0 6px 18px rgba(0,0,0,.28)
+}
+.feature-card.opening .feature-icon{background:rgba(117,88,49,.72);color:#f1db9f}
+.feature-card.famous .feature-icon{background:rgba(83,58,34,.76);color:#f0c56d}
+.feature-card.review .feature-icon{background:rgba(42,67,105,.78);color:#98b9ff}
+.feature-card.practice .feature-icon{background:rgba(78,52,96,.8);color:#d9a9ff}
+.feature-card .asset{opacity:.72}
