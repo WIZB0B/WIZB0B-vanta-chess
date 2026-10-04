@@ -11,13 +11,15 @@ async function mockProfile(page){
 }
 
 test('capture desktop and mobile reference renders',async({browser})=>{
-  const desktop=await browser.newContext({viewport:{width:1664,height:936},deviceScaleFactor:1});
-  const d=await desktop.newPage();await mockProfile(d);await d.goto('/');await d.waitForSelector('.board .square:nth-child(64)');
+  const desktop=await browser.newContext({viewport:{width:1672,height:941},deviceScaleFactor:1});
+  const d=await desktop.newPage();await mockProfile(d);await d.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));await d.goto('/');await d.waitForSelector('.board .square:nth-child(64)');
   await expect(d.locator('.board')).toHaveCSS('aspect-ratio','1 / 1');
-  await d.screenshot({path:'test-results/visual/vch-desktop.png',fullPage:true});
+  await expect(d.locator('#mainMenu')).toBeHidden();
+  const size=await d.evaluate(()=>({inner:innerHeight,scroll:document.documentElement.scrollHeight}));expect(size.scroll).toBeLessThanOrEqual(size.inner);
+  await d.screenshot({path:'test-results/visual/batch-1.png',fullPage:false});
 
   const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
-  const m=await mobile.newPage();await mockProfile(m);await m.goto('/');await m.waitForSelector('.board .square:nth-child(64)');
+  const m=await mobile.newPage();await mockProfile(m);await m.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));await m.goto('/');await m.waitForSelector('.board .square:nth-child(64)');
   await m.screenshot({path:'test-results/visual/vch-mobile.png',fullPage:true});
   await desktop.close();await mobile.close();
 });
