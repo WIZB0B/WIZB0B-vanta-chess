@@ -58,7 +58,7 @@ app.innerHTML=`
   <main>
     <aside class="lpanel panel">
       <div class="hero">
-        <div class="hero-art" aria-hidden="true"><img src="/assets/generated/reference-ui.png" alt=""></div>
+        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/reference-ui.png" alt=""></div>
         <label>● &nbsp; LIVE CHESS</label>
         <h1>Play your<br>next game.</h1>
         <p>Guest play is instant. Rated games save your Elo and tournament record.</p>
@@ -94,7 +94,7 @@ app.innerHTML=`
         <button class="on" data-tab="moves">Moves</button><button data-tab="analysis">Analysis</button><button data-tab="openings">Openings</button><button data-tab="famous">Famous Games</button>
       </div>
       <div id="rightWorkspace">
-        <section class="live-card"><span class="live-art" aria-hidden="true"><img src="/assets/generated/reference-ui.png" alt=""></span>
+        <section class="live-card"><span class="live-art" aria-hidden="true"><img src="/assets/vch/ui/reference-ui.png" alt=""></span>
           <div class="live-card-copy"><small>● &nbsp; Live Game</small><h2 id="turn">White to move</h2><p id="state">Real time &nbsp;•&nbsp; Casual game</p></div>
           <div class="live-actions"><button id="draw" class="draw-chip">½ Draw</button><button id="openChat" class="chat-chip">Chat</button></div>
         </section>
@@ -109,10 +109,10 @@ app.innerHTML=`
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
           </div>
           <div class="feature-grid">
-            <button class="feature-card opening" data-action="openings"><span class="asset"><img src="/assets/generated/reference-ui.png" alt=""></span><span class="feature-icon">▤</span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><i>›</i></button>
-            <button class="feature-card famous" data-action="famous"><span class="asset"><img src="/assets/generated/reference-ui.png" alt=""></span><span class="feature-icon">♛</span><b>Famous Games</b><small>Study legendary matches and ideas.</small><i>›</i></button>
-            <button class="feature-card review" data-action="review"><span class="asset"><img src="/assets/generated/reference-ui.png" alt=""></span><span class="feature-icon">▥</span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><i>›</i></button>
-            <button class="feature-card practice" data-action="learn"><span class="asset"><img src="/assets/generated/reference-ui.png" alt=""></span><span class="feature-icon">◎</span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><i>›</i></button>
+            <button class="feature-card opening" data-action="openings"><span class="asset"><img src="/assets/vch/ui/reference-ui.png" alt=""></span><span class="feature-icon">▤</span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><i>›</i></button>
+            <button class="feature-card famous" data-action="famous"><span class="asset"><img src="/assets/vch/ui/reference-ui.png" alt=""></span><span class="feature-icon">♛</span><b>Famous Games</b><small>Study legendary matches and ideas.</small><i>›</i></button>
+            <button class="feature-card review" data-action="review"><span class="asset"><img src="/assets/vch/ui/reference-ui.png" alt=""></span><span class="feature-icon">▥</span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><i>›</i></button>
+            <button class="feature-card practice" data-action="learn"><span class="asset"><img src="/assets/vch/ui/reference-ui.png" alt=""></span><span class="feature-icon">◎</span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><i>›</i></button>
           </div>
         </div>
         <div id="dynamicView" class="right-view hidden"></div>

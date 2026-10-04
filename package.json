@@ -16,8 +16,7 @@
     "prebuild": "npm run prepare:runtime",
     "presecurity": "npm run prepare:runtime",
     "pretest": "npm run prepare:runtime",
-    "prepare:assets": "node scripts/prepare-vch-assets.mjs",
-    "prepare:runtime": "npm run prepare:stockfish && npm run prepare:assets"
+    "prepare:runtime": "npm run prepare:stockfish"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-const ignored = new Set(['.git', 'node_modules', 'dist', 'generated']);
+const ignored = new Set(['.git', 'node_modules', 'dist', 'generated', 'vch']);
 const files = [];
 function walk(directory) { for (const name of readdirSync(directory)) { if (ignored.has(name)) continue; const path = join(directory, name); statSync(path).isDirectory() ? walk(path) : files.push(path); } }
 walk('.');
@@ -19,6 +19,13 @@ for (const asset of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wa
   if (!existsSync(join('public/engines', asset))) failures.push(`prepared Stockfish asset missing: ${asset}`);
 }
 if (existsSync('public/engines/Copying.txt') && !readFileSync('public/engines/Copying.txt', 'utf8').includes('GNU GENERAL PUBLIC LICENSE')) failures.push('prepared Stockfish GPL license is invalid');
-for (const asset of ['wk.png','wq.png','wr.png','wb.png','wn.png','wp.png','bk.png','bq.png','br.png','bb.png','bn.png','bp.png','wallpaper-emerald.webp','wallpaper-cobalt.webp','wallpaper-burgundy.webp','wallpaper-ivory.webp','hero-knight.png','opening-card.png','famous-card.png','review-card.png','practice-card.png','live-banner.png','reference-ui.png']) if (!existsSync(join('public/assets/generated', asset))) failures.push(`prepared VCH visual asset missing: ${asset}`);
+const vchAssets = [
+  'pieces/wk.png','pieces/wq.png','pieces/wr.png','pieces/wb.png','pieces/wn.png','pieces/wp.png',
+  'pieces/bk.png','pieces/bq.png','pieces/br.png','pieces/bb.png','pieces/bn.png','pieces/bp.png',
+  'pieces/atlas/atlas-white.png','pieces/atlas/atlas-black.png',
+  'wallpapers/wallpaper-emerald.webp','wallpapers/wallpaper-cobalt.webp','wallpapers/wallpaper-burgundy.webp','wallpapers/wallpaper-ivory.webp',
+  'ui/hero-knight.png','ui/live-banner.png','ui/opening-card.png','ui/famous-card.png','ui/review-card.png','ui/practice-card.png','ui/reference-ui.png'
+];
+for (const asset of vchAssets) if (!existsSync(join('public/assets/vch', asset))) failures.push(`committed VCH visual asset missing: ${asset}`);
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`security-check: ${files.length} files inspected`);
