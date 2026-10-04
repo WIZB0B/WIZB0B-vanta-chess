@@ -24,9 +24,11 @@ const vchAssets = [
   'pieces/bk.webp','pieces/bq.webp','pieces/br.webp','pieces/bb.webp','pieces/bn.webp','pieces/bp.webp',
   'pieces/atlas/atlas-white.png','pieces/atlas/atlas-black.png',
   'wallpapers/wallpaper-emerald.webp','wallpapers/wallpaper-cobalt.webp','wallpapers/wallpaper-burgundy.webp','wallpapers/wallpaper-ivory.webp',
-  'ui/hero-knight.png','ui/live-banner.png','ui/opening-card.png','ui/famous-card.png','ui/review-card.png','ui/practice-card.png','ui/reference-ui.png'
+  'ui/hero-knight.webp','ui/live-banner.webp','ui/opening-card.webp','ui/famous-card.webp','ui/review-card.webp','ui/practice-card.webp'
 ];
 for (const asset of vchAssets) if (!existsSync(join('public/assets/vch', asset))) failures.push(`committed VCH visual asset missing: ${asset}`);
+for (const name of ['hero-knight','live-banner','opening-card','famous-card','review-card','practice-card']) if (existsSync(join('public/assets/vch/ui', name + '.png'))) failures.push(`source UI PNG must not be deployed: ${name}.png`);
+if (!existsSync(join('e2e/fixtures/reference-ui.png'))) failures.push('reference-ui.png must remain test-only under e2e/fixtures');
 for (const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']) if (existsSync(join('public/assets/vch/pieces', name + '.png'))) failures.push(`source PNG must not be deployed: ${name}.png`);
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`security-check: ${files.length} files inspected`);

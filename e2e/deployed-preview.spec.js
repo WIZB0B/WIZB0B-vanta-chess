@@ -20,9 +20,9 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
   const runtimeAssets=[
     '/manifest.webmanifest','/sw.js','/stockfish.worker.js',
     '/engines/stockfish-19-lite-single.js','/engines/stockfish-19-lite-single.wasm','/engines/Copying.txt',
-    '/assets/vch/pieces/wk.webp','/assets/vch/pieces/bq.webp','/assets/vch/ui/hero-knight.png',
-    '/assets/vch/ui/opening-card.png','/assets/vch/ui/famous-card.png','/assets/vch/ui/review-card.png',
-    '/assets/vch/ui/practice-card.png','/assets/vch/ui/live-banner.png','/assets/vch/ui/reference-ui.png','/assets/vch/wallpapers/wallpaper-emerald.webp'
+    '/assets/vch/pieces/wk.webp','/assets/vch/pieces/bq.webp','/assets/vch/ui/hero-knight.webp',
+    '/assets/vch/ui/opening-card.webp','/assets/vch/ui/famous-card.webp','/assets/vch/ui/review-card.webp',
+    '/assets/vch/ui/practice-card.webp','/assets/vch/ui/live-banner.webp','/assets/vch/wallpapers/wallpaper-emerald.webp'
   ];
   for(const asset of runtimeAssets){
     const r=await request.get(asset);

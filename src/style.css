@@ -82,7 +82,7 @@ main{
   background:linear-gradient(90deg,rgba(7,17,18,.96) 0%,rgba(7,17,18,.88) 55%,rgba(7,17,18,.12) 100%)
 }
 .hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(7,17,18,.92));pointer-events:none}
-.hero-art{position:absolute;right:-7px;top:-4px;width:48%;height:112%;background:url('/assets/vch/ui/hero-knight.png') center/cover no-repeat;filter:saturate(.88) contrast(1.05);opacity:.98}
+.hero-art{position:absolute;right:-7px;top:-4px;width:48%;height:112%;background:url('/assets/vch/ui/hero-knight.webp') center/cover no-repeat;filter:saturate(.88) contrast(1.05);opacity:.98}
 .hero label,.hero h1,.hero p{position:relative;z-index:2}
 .hero label{display:block;color:#83e7b3;font-size:11px;font-weight:700;letter-spacing:2px}
 .hero h1{font:700 52px/.98 Georgia,'Times New Roman',serif;margin:12px 0 13px;letter-spacing:-1.7px;text-shadow:0 2px 18px rgba(0,0,0,.6)}
@@ -123,7 +123,7 @@ main{
 .tabs button{padding:8px 11px;font-size:11px;white-space:nowrap}.tabs .on{background:linear-gradient(180deg,#34463d,#263831);border-color:#cdb374;color:white}
 .live-card{
   min-height:92px;margin-top:10px;padding:13px 15px;position:relative;overflow:hidden;border-radius:8px;border:1px solid var(--line);
-  background:linear-gradient(90deg,rgba(9,21,21,.98) 0%,rgba(9,21,21,.86) 54%,rgba(9,21,21,.22)),url('/assets/vch/ui/live-banner.png') right center/55% cover no-repeat
+  background:linear-gradient(90deg,rgba(9,21,21,.98) 0%,rgba(9,21,21,.86) 54%,rgba(9,21,21,.22)),url('/assets/vch/ui/live-banner.webp') right center/55% cover no-repeat
 }
 .live-card-copy{position:relative;z-index:2}.live-card small{color:#73e1ad;font-size:10px;font-weight:700}.live-card h2{font-size:19px;margin:10px 0 3px}.live-card p{margin:0;color:#a2aeaa;font-size:11px}
 .live-actions{position:absolute;right:9px;top:9px;z-index:3;display:flex;gap:5px}
@@ -137,7 +137,7 @@ main{
 .feature-card{position:relative;min-height:104px;text-align:left;padding:48px 12px 11px;overflow:hidden;border:1px solid #2e403d;border-radius:9px;background:#0b1616;color:white}
 .feature-card .asset{position:absolute;inset:0 0 auto 0;height:53px;background-position:center;background-size:cover;opacity:.6;filter:saturate(.8) contrast(1.05)}
 .feature-card:after{content:"";position:absolute;inset:25px 0 auto;height:35px;background:linear-gradient(transparent,#0b1616)}
-.feature-card b,.feature-card small,.feature-card i{position:relative;z-index:2}.feature-card b{display:block;font-size:12px;margin-top:1px}.feature-card small{display:block;color:#9eaaa7;font-size:9px;line-height:1.4;margin-top:4px;padding-right:12px}.feature-card i{position:absolute;right:10px;bottom:12px;font-style:normal;font-size:20px}.feature-card.opening .asset{background-image:url('/assets/vch/ui/opening-card.png')}.feature-card.famous .asset{background-image:url('/assets/vch/ui/famous-card.png')}.feature-card.review .asset{background-image:url('/assets/vch/ui/review-card.png')}.feature-card.practice .asset{background-image:url('/assets/vch/ui/practice-card.png')}
+.feature-card b,.feature-card small,.feature-card i{position:relative;z-index:2}.feature-card b{display:block;font-size:12px;margin-top:1px}.feature-card small{display:block;color:#9eaaa7;font-size:9px;line-height:1.4;margin-top:4px;padding-right:12px}.feature-card i{position:absolute;right:10px;bottom:12px;font-style:normal;font-size:20px}.feature-card.opening .asset{background-image:url('/assets/vch/ui/opening-card.webp')}.feature-card.famous .asset{background-image:url('/assets/vch/ui/famous-card.webp')}.feature-card.review .asset{background-image:url('/assets/vch/ui/review-card.webp')}.feature-card.practice .asset{background-image:url('/assets/vch/ui/practice-card.webp')}
 
 /* Dynamic sections */
 .view-title{display:flex;align-items:center;gap:10px;padding:8px 2px 12px;border-bottom:1px solid var(--line)}.view-title .back-view{width:30px;height:30px;border-radius:7px;background:#15211f}.view-title small{font-size:8px;letter-spacing:1.7px;color:#71dca9}.view-title h3{margin:2px 0 0;font-size:18px}
@@ -325,23 +325,15 @@ main{
 .square.selected .piece,.piece.dragging{transform:translateY(-5%) scale(1.025);filter:drop-shadow(0 9px 7px rgba(0,0,0,.42)) drop-shadow(0 2px 2px rgba(0,0,0,.28))}
 
 
-/* Exact artwork crops from the user-supplied visual source of truth.
-   One local reference sprite is bundled at build time; each surface crops the
-   corresponding source pixels so these assets no longer drift from the target. */
+/* Dedicated VCH artwork assets sized for their display surfaces. */
 .hero-art{
   width:127px!important;height:174px!important;right:0!important;top:0!important;
   overflow:hidden;background:none!important;opacity:1!important;filter:none!important
 }
-.hero-art img{
-  position:absolute;max-width:none;width:1316.535%;height:540.805%;
-  left:-271.654%;top:-57.471%;display:block
-}
+.hero-art img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}
 .live-card{background:linear-gradient(90deg,rgba(9,21,21,.98) 0%,rgba(9,21,21,.86) 56%,rgba(9,21,21,.18) 100%)!important}
 .live-art{position:absolute;z-index:0;right:0;top:0;height:100%;aspect-ratio:215/88;overflow:hidden}
-.live-art img{
-  position:absolute;max-width:none;width:777.674%;height:1069.318%;
-  left:-646.512%;top:-188.636%;display:block
-}
+.live-art img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}
 .live-card-copy,.live-actions{position:relative;z-index:2}
 .feature-card{min-height:128px;padding-top:64px}
 .feature-card .asset{
@@ -349,20 +341,10 @@ main{
   opacity:1!important;filter:none!important
 }
 .feature-card .asset:after{display:none}
-.feature-card .asset img{
-  position:absolute;max-width:none;width:796.190%;height:1594.915%;display:block
-}
-.feature-card.opening .asset img{left:-565.714%;top:-1005.085%}
-.feature-card.famous .asset img{left:-670%;top:-1005.085%}
-.feature-card.review .asset img{left:-565.714%;top:-1242.373%}
-.feature-card.practice .asset img{left:-670%;top:-1242.373%}
+.feature-card .asset img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}
 .feature-card .feature-icon{display:none}
 .feature-card:after{inset:34px 0 auto;height:38px}
-@media(max-width:800px){
-  .hero-art{width:112px!important;height:154px!important}
-  .hero-art img{width:1492.857%;height:611.039%;left:-308.036%;top:-64.935%}
-}
-
+@media(max-width:800px){.hero-art{width:112px!important;height:154px!important}}
 
 /* Board theme controls must affect the actual playing board. */
 .square.light,.study-square.light{background:var(--light)}
