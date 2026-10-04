@@ -4,6 +4,7 @@ import { VchApi, stableGuestToken } from './vch-api.js';
 import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
+import { REVIEW_DEPTH, CLASSIFICATION_META, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -29,9 +30,12 @@ const DEFAULT_COMPUTER_BOTS=[
   {slug:'legend',display_name:'Legend',elo:2700,portrait:'bp'}
 ];
 let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
-let moveEvalByPly=[];
+let moveEvalByPly=[],moveTimeByPly=[];
+let reviewState={running:false,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
+let reviewPending=null;
 const stockfish=new Worker('/stockfish.worker.js');
 const analysisWorker=new Worker('/stockfish.worker.js');
+const reviewWorker=new Worker('/stockfish.worker.js');
 stockfish.onmessage=({data})=>{
   if(data.type==='uci'&&String(data.line||'').startsWith('bestmove ')&&enginePending){const u=String(data.line).split(' ')[1];enginePending(u);enginePending=null}
   if(data.type==='unavailable'&&enginePending){enginePending(null);enginePending=null}
@@ -39,6 +43,25 @@ stockfish.onmessage=({data})=>{
 analysisWorker.onmessage=({data})=>{
   if(data.type==='uci'&&String(data.line||'').startsWith('info '))updateAnalysisFromUci(String(data.line));
   if(data.type==='unavailable'){const line=$('#line');if(line)line.textContent='Stockfish 19 unavailable in this browser.'}
+};
+reviewWorker.onmessage=({data})=>{
+  if(!reviewPending||data.requestId!==reviewPending.id)return;
+  const line=String(data.line||'');
+  if(data.type==='uci'&&line.startsWith('info ')){
+    const parsed=parseReviewInfo(line,reviewPending.fen);
+    if(parsed)reviewPending.latest=parsed;
+    return;
+  }
+  if(data.type==='uci'&&line.startsWith('bestmove ')){
+    const pending=reviewPending;reviewPending=null;clearTimeout(pending.timer);
+    const bestMove=line.split(/\s+/)[1]||pending.latest?.bestMove||'';
+    pending.resolve({...pending.latest,bestMove});
+    return;
+  }
+  if(data.type==='unavailable'){
+    const pending=reviewPending;reviewPending=null;clearTimeout(pending.timer);
+    pending.reject(new Error(data.message||'Stockfish 19 is unavailable'));
+  }
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const app=$('#app');
@@ -147,10 +170,12 @@ app.innerHTML=`
           <div class="moves-head"><span>#</span><span>White</span><span>Black</span></div>
           <div id="moves" class="moves"><span>Game ready — make a move.</span></div>
           <div class="analysis">
-            <header><b>▣ Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
+            <header><b><img class="analysis-title-icon" src="/assets/vch/icons/review.svg" alt="">Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
+            <div id="reviewProgress" class="review-progress hidden" aria-live="polite"><span><b id="reviewProgressLabel">Analyzing game</b><em id="reviewProgressCount">0 / 0</em></span><div><i id="reviewProgressFill"></i></div></div>
             <div class="analysis-row"><h2 id="score">+0.0</h2><div class="meter"><i id="meterFill"></i></div></div>
             <p id="advantage">Equal position</p>
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
+            <button id="reviewGame" class="review-game hidden" type="button"><img src="/assets/vch/icons/review.svg" alt="">Review game</button>
           </div>
           <div class="feature-grid">
             <button class="feature-card opening" data-action="openings"><span class="asset"><img src="/assets/vch/ui/opening-card.webp" alt=""></span><span class="feature-icon-tile"><img src="/assets/vch/icons/opening.svg" alt=""></span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><span class="feature-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>
@@ -222,6 +247,8 @@ function render(){
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
     if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
+    const boardReview=reviewResultForCurrentLastMove(lastMove);
+    if(boardReview&&lastMove?.to===sq)el.insertAdjacentHTML('beforeend',reviewBadgeMarkup(boardReview,'board-review-badge'));
     el.onclick=()=>clickSquare(sq,p); board.append(el);
   });
   board.classList.toggle('mate',game.isCheckmate());
@@ -237,6 +264,7 @@ function render(){
   }
   document.body.dataset.seat=myColor||'';
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
+  const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
   updateOpeningLabel();scheduleAnalysis();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
@@ -278,7 +306,7 @@ async function beginMatchSearch(){
   if(searching){await cancelMatchSearch();return}
   if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
   clearInterval(pollTimer);pollTimer=null;
-  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;moveEvalByPly=[];
+  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   game.reset();render();updateMoves();setMatchSearching(true);
   const started=Date.now();
   try{
@@ -322,7 +350,7 @@ function selectedComputerSide(){
 }
 function startComputerGame(){
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
-  clearInterval(pollTimer);pollTimer=null;serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];
+  clearInterval(pollTimer);pollTimer=null;serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
@@ -347,7 +375,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
-  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made;try{if(mode==='computer')settleLocalClock();made=game.move(move)}catch{return}if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -365,29 +393,32 @@ function recordEval(record,index){
   const cached=moveEvalByPly[index];
   return Number.isFinite(cached)?(cached>=0?'+':'')+cached.toFixed(1):'—';
 }
-function recordTime(record){
-  const raw=record?.elapsed_ms??record?.move_time_ms??record?.time_ms;
-  const ms=Number(raw);
-  if(!Number.isFinite(ms)||ms<=0)return '—';
-  if(ms<1000)return `${Math.round(ms)}ms`;
-  return `${(ms/1000).toFixed(ms<10000?1:0)}s`;
+function recordTime(record,index){
+  const raw=record?.elapsed_ms??record?.move_time_ms??record?.time_ms??moveTimeByPly[index];
+  return formatMoveDuration(raw)||'0s';
 }
-function moveCell(record,index,records){
+function reviewBadgeMarkup(result,className='classification-badge'){
+  if(!result?.classification)return '';
+  const meta=CLASSIFICATION_META[result.classification]||CLASSIFICATION_META.good;
+  return `<span class="${className} classification-${result.classification}" title="${escapeHtml(meta.label)}"><img src="${classificationAsset(result.classification)}" alt="${escapeHtml(meta.label)}"></span>`;
+}
+function moveCell(record,index,records,signature){
   if(!record)return '<span class="move-cell empty" aria-hidden="true"></span>';
-  const san=escapeHtml(record.san||record.lan||'');
-  const book=isBookMove(records,index)?'<img class="book-icon" src="/assets/vch/icons/book.svg" alt="Book move">':'';
-  return `<span class="move-cell"><span class="move-san">${book}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record)}</time></span></span>`;
+  const san=escapeHtml(record.san||record.lan||''),reviewResult=reviewState.signature===signature?reviewState.results[index]:null;
+  const bookMove=isBookMove(records,index),book=bookMove&&reviewResult?.classification!=='book'?'<img class="book-icon" src="/assets/vch/icons/book.svg" alt="Book move">':'';
+  const badge=reviewResult?reviewBadgeMarkup(reviewResult):bookMove?'<span class="classification-badge classification-book" title="Book"><img src="/assets/vch/icons/book.svg" alt="Book"></span>':'';
+  return `<span class="move-cell"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
 function updateMoves(){
-  const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history().map((san,index)=>({san,color:index%2?'b':'w'}));
+  const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true});
   const target=$('#moves');if(!target)return;
-  if(!records.length){target.innerHTML='<span class="moves-empty">Game ready — make a move.</span>';return}
-  const rows=[];
+  if(!records.length){target.innerHTML='<span class="moves-empty">Game ready — make a move.</span>';target.scrollTop=0;return}
+  const signature=moveRecordSignature(records),rows=[];
   for(let i=0;i<records.length;i+=2){
-    rows.push(`<div class="move-pair-row"><span class="move-number">${Math.floor(i/2)+1}</span>${moveCell(records[i],i,records)}${moveCell(records[i+1],i+1,records)}</div>`);
+    rows.push(`<div class="move-pair-row"><span class="move-number">${Math.floor(i/2)+1}</span>${moveCell(records[i],i,records,signature)}${moveCell(records[i+1],i+1,records,signature)}</div>`);
   }
   target.innerHTML=rows.join('');
-  target.scrollTop=target.scrollHeight;
+  target.scrollTop=0;
 }
 async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
@@ -495,8 +526,9 @@ function syncRoomUi(){
 }
 function applyServerState(payload){
   const state=payload.game||payload;if(!state)return;
-  const previousVersion=serverVersion,previousGameId=serverGameId;
-  if(state.id&&state.id!==previousGameId)moveEvalByPly=[];
+  const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
+  if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];resetReviewState()}
+  syncServerMoveTimes(previousState,state);
   animateLastServerMove(state,previousGameId===state.id?previousVersion:0);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
@@ -618,6 +650,119 @@ render();startClock();connect();
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
 
 function escapeHtml(value=''){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function moveRecordSignature(records=[]){return records.map(record=>`${record.from||''}${record.to||''}${record.promotion||''}:${normalizedSan(record.san||record.lan||'')}`).join('|')}
+function currentReviewRecords(){return serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
+function resetReviewState(){
+  const nextToken=reviewState.token+1;
+  if(reviewPending){
+    const pending=reviewPending;reviewPending=null;clearTimeout(pending.timer);reviewWorker.postMessage({action:'stop'});
+    pending.reject(new Error('Review cancelled'));
+  }
+  reviewState={running:false,signature:'',token:nextToken,positions:[],moves:[],evaluations:[],results:[]};
+  const progress=$('#reviewProgress');progress?.classList.add('hidden');
+}
+function isGameFinishedForReview(){
+  if(localGameOver||game.isGameOver())return true;
+  return !!(serverGame&&serverGameId&&!['active','playing','in_progress','waiting'].includes(serverGame.status));
+}
+function parseReviewInfo(line,fen){
+  const score=line.match(/\bscore (cp|mate) (-?\d+)/);if(!score)return null;
+  let cp=score[1]==='mate'?(Number(score[2])>0?100000:-100000):Number(score[2]);
+  if(String(fen).split(' ')[1]==='b')cp=-cp;
+  const depth=Number(line.match(/\bdepth (\d+)/)?.[1]||0),pv=line.match(/\bpv (.+)$/)?.[1]||'';
+  return {cp,depth,pv,bestMove:pv.split(/\s+/)[0]||''};
+}
+function analyzeReviewFen(fen,index,token){
+  return new Promise((resolve,reject)=>{
+    const id=`review-${token}-${index}`;
+    const timer=setTimeout(()=>{if(reviewPending?.id===id){reviewPending=null;reviewWorker.postMessage({action:'stop'});reject(new Error('Game review timed out'))}},30000);
+    reviewPending={id,fen,latest:{cp:0,depth:0,pv:'',bestMove:''},resolve,reject,timer};
+    reviewWorker.postMessage({fen,elo:3190,depth:REVIEW_DEPTH,requestId:id});
+  });
+}
+function buildReviewGame(records=currentReviewRecords()){
+  const position=new Chess(),positions=[position.fen()],moves=[];
+  for(const record of records){
+    let made=null;
+    try{made=record?.from&&record?.to?position.move({from:record.from,to:record.to,promotion:record.promotion||undefined}):position.move(record.san||record.lan||'')}catch{}
+    if(!made)break;
+    moves.push({...record,from:made.from,to:made.to,san:made.san,lan:made.lan,color:made.color,piece:made.piece,captured:made.captured||record.captured||null,promotion:made.promotion||record.promotion||null});
+    positions.push(position.fen());
+  }
+  return {records:moves,positions,signature:moveRecordSignature(moves)};
+}
+function isReviewSacrifice(move,beforeFen){
+  const values={p:1,n:3,b:3,r:5,q:9,k:99},pieceValue=values[move?.piece]||0,capturedValue=values[move?.captured]||0;
+  if(!['n','b','r','q'].includes(move?.piece)||pieceValue<=capturedValue+1)return false;
+  try{
+    const position=new Chess(beforeFen);position.move({from:move.from,to:move.to,promotion:move.promotion||undefined});
+    const opponent=move.color==='w'?'b':'w';
+    return typeof position.isAttacked==='function'?position.isAttacked(move.to,opponent):true;
+  }catch{return false}
+}
+function setReviewProgress(done,total,label='Analyzing game'){
+  const wrap=$('#reviewProgress'),fill=$('#reviewProgressFill'),count=$('#reviewProgressCount'),title=$('#reviewProgressLabel');
+  if(!wrap)return;
+  wrap.classList.remove('hidden');if(title)title.textContent=label;if(count)count.textContent=`${done} / ${total}`;if(fill)fill.style.width=`${total?Math.round(100*done/total):0}%`;
+}
+function reviewResultForCurrentLastMove(lastMove){
+  if(!lastMove)return null;
+  const records=currentReviewRecords(),signature=moveRecordSignature(records);
+  if(reviewState.signature!==signature)return null;
+  const index=records.length-1,result=reviewState.results[index];
+  return result&&result.to===lastMove.to?result:null;
+}
+async function startGameReview(){
+  const built=buildReviewGame();
+  if(!built.records.length)return toast('Play at least one move before starting review');
+  showMovesView();
+  $$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.tab==='analysis'));
+  if(reviewState.signature===built.signature&&!reviewState.running&&reviewState.results.length===built.records.length){
+    setReviewProgress(built.positions.length,built.positions.length,'Review complete');updateMoves();render();return;
+  }
+  const token=reviewState.token+1;
+  reviewState={running:true,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[]};
+  setReviewProgress(0,built.positions.length,'Analyzing every position');
+  try{
+    for(let index=0;index<built.positions.length;index++){
+      const evaluation=await analyzeReviewFen(built.positions[index],index,token);
+      if(reviewState.token!==token){reviewState.running=false;return}
+      reviewState.evaluations[index]=evaluation;
+      setReviewProgress(index+1,built.positions.length,'Analyzing every position');
+    }
+    reviewState.results=built.records.map((move,index)=>{
+      const before=reviewState.evaluations[index]||{cp:0,bestMove:''},after=reviewState.evaluations[index+1]||before;
+      const actual=`${move.from}${move.to}${move.promotion||''}`.toLowerCase(),best=String(before.bestMove||'').toLowerCase();
+      const isBest=!!best&&actual===best,isBook=isBookMove(built.records,index),isSacrifice=isReviewSacrifice(move,built.positions[index]);
+      const classification=classifyMove({beforeCp:before.cp,afterCp:after.cp,color:move.color,isBook,isBest,isSacrifice});
+      return {classification,from:move.from,to:move.to,beforeCp:before.cp,afterCp:after.cp,loss:winPercentageLoss(before.cp,after.cp,move.color),bestMove:before.bestMove||''};
+    });
+    reviewState.running=false;
+    moveEvalByPly=reviewState.results.map(result=>result.afterCp/100);
+    setReviewProgress(built.positions.length,built.positions.length,'Review complete');
+    updateMoves();render();
+  }catch(error){
+    if(reviewState.token!==token)return;
+    reviewState.running=false;setReviewProgress(reviewState.evaluations.length,built.positions.length,'Review unavailable');toast(error.message);
+  }
+}
+function syncServerMoveTimes(previous,state){
+  const records=Array.isArray(state?.move_history)?state.move_history:[],previousRecords=Array.isArray(previous?.move_history)?previous.move_history:[];
+  const increment=Math.max(0,Number(state?.increment_seconds||0))*1000;
+  if(previous?.id&&state?.id===previous.id&&records.length===previousRecords.length+1){
+    const index=records.length-1,move=records[index],before=Number(move?.color==='b'?previous.black_time_ms:previous.white_time_ms),after=Number(move?.color==='b'?state.black_time_ms:state.white_time_ms);
+    const elapsed=before+increment-after;if(Number.isFinite(elapsed)&&elapsed>=0)moveTimeByPly[index]=elapsed;
+  }
+  const base=Math.max(0,Number(state?.base_seconds||0))*1000;
+  if(base>0){
+    for(const color of ['w','b']){
+      const indices=records.map((record,index)=>record?.color===color?index:-1).filter(index=>index>=0),remaining=Number(color==='w'?state.white_time_ms:state.black_time_ms);
+      if(!indices.length||!Number.isFinite(remaining))continue;
+      const total=Math.max(0,base+increment*indices.length-remaining),average=indices.length?total/indices.length:0;
+      for(const index of indices)if(!Number.isFinite(moveTimeByPly[index]))moveTimeByPly[index]=average;
+    }
+  }
+}
 function currentHistory(){return serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.map(x=>x.san||x.lan||''):game.history()}
 function updateOpeningLabel(){
   const opening=detectOpening(currentHistory());
@@ -779,7 +924,8 @@ document.body.dataset.screen=startsInGame?'game':'intro';
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
 $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};
 $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
-$$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){showMovesView();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
+$$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){startGameReview();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
+$('#reviewGame').onclick=startGameReview;
 $('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
 $('#closeChat').onclick=()=>{$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')};
 $('#accountBtn').onclick=openAccount;

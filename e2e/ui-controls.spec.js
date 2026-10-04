@@ -90,9 +90,9 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
   await page.locator('#computerStart').click();
   await page.locator('[data-sq="e2"] .piece').dragTo(page.locator('[data-sq="e4"]'));
   await expect(page.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible();
-  await expect.poll(async()=>page.locator('#moves .move-row').count(),{timeout:12000}).toBe(2);
+  await expect.poll(async()=>page.locator('#moves .move-pair-row').count(),{timeout:12000}).toBe(1);
   await page.waitForTimeout(800);
-  await expect(page.locator('#moves .move-row')).toHaveCount(2);
+  await expect(page.locator('#moves .move-pair-row')).toHaveCount(1);
   await expect(page.locator('#turn')).toContainText('White to move');
   await expect(page.locator('#depth')).not.toHaveText('—',{timeout:10000});
 });

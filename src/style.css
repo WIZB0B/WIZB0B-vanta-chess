@@ -1653,3 +1653,59 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 }
 .feature-card .feature-arrow svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .feature-card .feature-icon{display:none!important}
+
+
+/* Batch 6: review progress and move-classification badges. */
+.moves{
+  padding-top:4px;
+  scroll-padding-top:4px;
+}
+.move-pair-row:first-child{margin-top:0}
+.move-san{min-height:18px}
+.classification-badge{
+  width:18px;height:18px;flex:0 0 18px;
+  display:inline-grid;place-items:center;
+  border-radius:6px;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.28));
+}
+.classification-badge img{display:block;width:18px;height:18px;object-fit:contain}
+.board-review-badge{
+  position:absolute;z-index:6;right:4px;top:4px;
+  width:24px;height:24px;display:grid;place-items:center;
+  border-radius:7px;
+  box-shadow:0 4px 10px rgba(0,0,0,.34);
+  pointer-events:none;
+}
+.board-review-badge img{display:block;width:24px;height:24px}
+.analysis-title-icon{width:16px;height:16px;object-fit:contain;margin-right:7px;vertical-align:-3px}
+.review-progress{
+  margin:10px 0 2px;padding:9px 10px;
+  border:1px solid rgba(117,152,139,.20);border-radius:8px;
+  background:rgba(5,14,14,.58)
+}
+.review-progress>span{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.review-progress b{font-size:9px;color:#c9d4cf}
+.review-progress em{font-style:normal;font-size:8px;color:#81918c;font-variant-numeric:tabular-nums}
+.review-progress>div{
+  height:7px;margin-top:7px;overflow:hidden;border-radius:999px;
+  background:#17231f;box-shadow:inset 0 1px 3px rgba(0,0,0,.45)
+}
+.review-progress>div i{
+  display:block;width:0;height:100%;border-radius:inherit;
+  background:linear-gradient(90deg,#4fa777,#83dbad);
+  box-shadow:0 0 10px rgba(116,218,169,.34);
+  transition:width .18s ease
+}
+.review-game{
+  width:100%;margin-top:9px;padding:9px 12px;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  border:1px solid rgba(213,188,126,.48);border-radius:8px;
+  background:linear-gradient(180deg,#2b281d,#1b1e19);
+  color:#ead8a8;font-size:10px;font-weight:750
+}
+.review-game img{width:16px;height:16px}
+@media(max-width:800px){
+  .board-review-badge{right:3px;top:3px;width:20px;height:20px}
+  .board-review-badge img{width:20px;height:20px}
+}
+@media(prefers-reduced-motion:reduce){.review-progress>div i{transition:none}}
