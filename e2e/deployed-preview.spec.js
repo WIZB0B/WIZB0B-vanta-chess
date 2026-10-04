@@ -20,7 +20,7 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
   const runtimeAssets=[
     '/manifest.webmanifest','/sw.js','/stockfish.worker.js',
     '/engines/stockfish-19-lite-single.js','/engines/stockfish-19-lite-single.wasm','/engines/Copying.txt',
-    '/assets/vch/pieces/wk.png','/assets/vch/pieces/bq.png','/assets/vch/pieces/atlas/atlas-white.png','/assets/vch/pieces/atlas/atlas-black.png','/assets/vch/ui/hero-knight.png',
+    '/assets/vch/pieces/wk.webp','/assets/vch/pieces/bq.webp','/assets/vch/ui/hero-knight.png',
     '/assets/vch/ui/opening-card.png','/assets/vch/ui/famous-card.png','/assets/vch/ui/review-card.png',
     '/assets/vch/ui/practice-card.png','/assets/vch/ui/live-banner.png','/assets/vch/ui/reference-ui.png','/assets/vch/wallpapers/wallpaper-emerald.webp'
   ];
@@ -28,6 +28,10 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
     const r=await request.get(asset);
     expect(r.ok(),asset+' should be served').toBeTruthy();
     expect(Number(r.headers()['content-length']||1)).toBeGreaterThan(0);
+  }
+  for(const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']){
+    const legacy=await request.get('/assets/vch/pieces/'+name+'.png');
+    expect(legacy.status(),name+'.png should not be deployed').toBe(404);
   }
 });
 

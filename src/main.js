@@ -421,7 +421,7 @@ function paintDragTargets(square){
 boardEl.addEventListener('dragstart',event=>{
   const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
   const p=game.get(square);if(!p||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&game.turn()!=='w')||p.color!==game.turn()){event.preventDefault();return}
-  selected=square;paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
+  selected=square;piece.classList.add('dragging');paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
 });
 boardEl.addEventListener('dragover',event=>{
   const to=event.target.closest?.('.square')?.dataset.sq;if(selected&&to&&game.moves({square:selected,verbose:true}).some(m=>m.to===to)){event.preventDefault();event.dataTransfer.dropEffect='move'}
@@ -429,7 +429,7 @@ boardEl.addEventListener('dragover',event=>{
 boardEl.addEventListener('drop',event=>{
   const to=event.target.closest?.('.square')?.dataset.sq;if(!selected||!to)return;event.preventDefault();clearDragTargets();clickSquare(to,game.get(to));
 });
-boardEl.addEventListener('dragend',()=>{clearDragTargets();if(selected){selected=null;render()}});
+boardEl.addEventListener('dragend',()=>{boardEl.querySelectorAll('.piece.dragging').forEach(piece=>piece.classList.remove('dragging'));clearDragTargets();if(selected){selected=null;render()}});
 render();startClock();connect();
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));

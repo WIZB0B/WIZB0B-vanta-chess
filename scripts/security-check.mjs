@@ -20,12 +20,13 @@ for (const asset of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wa
 }
 if (existsSync('public/engines/Copying.txt') && !readFileSync('public/engines/Copying.txt', 'utf8').includes('GNU GENERAL PUBLIC LICENSE')) failures.push('prepared Stockfish GPL license is invalid');
 const vchAssets = [
-  'pieces/wk.png','pieces/wq.png','pieces/wr.png','pieces/wb.png','pieces/wn.png','pieces/wp.png',
-  'pieces/bk.png','pieces/bq.png','pieces/br.png','pieces/bb.png','pieces/bn.png','pieces/bp.png',
+  'pieces/wk.webp','pieces/wq.webp','pieces/wr.webp','pieces/wb.webp','pieces/wn.webp','pieces/wp.webp',
+  'pieces/bk.webp','pieces/bq.webp','pieces/br.webp','pieces/bb.webp','pieces/bn.webp','pieces/bp.webp',
   'pieces/atlas/atlas-white.png','pieces/atlas/atlas-black.png',
   'wallpapers/wallpaper-emerald.webp','wallpapers/wallpaper-cobalt.webp','wallpapers/wallpaper-burgundy.webp','wallpapers/wallpaper-ivory.webp',
   'ui/hero-knight.png','ui/live-banner.png','ui/opening-card.png','ui/famous-card.png','ui/review-card.png','ui/practice-card.png','ui/reference-ui.png'
 ];
 for (const asset of vchAssets) if (!existsSync(join('public/assets/vch', asset))) failures.push(`committed VCH visual asset missing: ${asset}`);
+for (const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']) if (existsSync(join('public/assets/vch/pieces', name + '.png'))) failures.push(`source PNG must not be deployed: ${name}.png`);
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`security-check: ${files.length} files inspected`);

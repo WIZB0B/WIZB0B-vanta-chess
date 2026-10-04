@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -19,6 +19,48 @@ jobs:
         with:
           node-version: 20.19.0
           cache: npm
+      - name: Optimize VCH board pieces
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import shutil
+
+          names=['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']
+          public=Path('public/assets/vch/pieces')
+          source=Path('assets-source/vch/pieces')
+          source.mkdir(parents=True,exist_ok=True)
+
+          for name in names:
+              public_png=public/f'{name}.png'
+              source_png=source/f'{name}.png'
+              output=public/f'{name}.webp'
+              if public_png.exists() and not source_png.exists():
+                  shutil.move(public_png,source_png)
+              if not source_png.exists():
+                  if not output.exists():
+                      raise SystemExit(f'missing source piece {name}.png')
+                  continue
+              with Image.open(source_png) as original:
+                  image=original.convert('RGBA')
+                  width=max(1,round(image.width*(256/image.height)))
+                  image=image.resize((width,256),Image.Resampling.LANCZOS)
+                  image.save(output,'WEBP',lossless=True,method=6,exact=True)
+              with Image.open(output) as check:
+                  if check.height != 256:
+                      raise SystemExit(f'{name}.webp is not 256px tall')
+                  if check.mode not in ('RGBA','LA'):
+                      raise SystemExit(f'{name}.webp lost alpha channel')
+          print('Optimized VCH piece WebPs:',sum((public/f'{n}.webp').stat().st_size for n in names),'bytes')
+          PY
+      - name: Verify optimized piece assets
+        run: |
+          for f in wk wq wr wb wn wp bk bq br bb bn bp; do
+            test -s "public/assets/vch/pieces/$f.webp"
+            test ! -e "public/assets/vch/pieces/$f.png"
+            test -s "assets-source/vch/pieces/$f.png"
+          done
       - name: Verify project files
         run: |
           pwd
@@ -32,6 +74,17 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      - name: Commit optimized VCH pieces
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/assets/vch/pieces assets-source/vch/pieces
+          if git diff --cached --quiet; then
+            echo "Optimized VCH pieces already committed"
+          else
+            git commit -m 'Optimize VCH board piece assets'
+            git push origin HEAD:codex/set-up-vch-repository-and-implement-chess-game
+          fi
       - name: Upload Playwright test results on failure
         if: failure()
         uses: actions/upload-artifact@v4
