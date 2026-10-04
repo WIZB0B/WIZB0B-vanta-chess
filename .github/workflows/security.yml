@@ -53,18 +53,9 @@ jobs:
                   image=ImageOps.fit(im.convert('RGB'),size,method=Image.Resampling.LANCZOS,centering=(0.5,0.5))
                   image.save(out/f'{name}.webp','WEBP',quality=86,method=6)
           PY
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-          p=Path('.github/workflows/security.yml')
-          text=p.read_text()
-          text=text.replace('permissions:\n  contents: write','permissions:\n  contents: read')
-          text=re.sub(r'      # VCH_UI_ART_CONVERT_BEGIN\n.*?      # VCH_UI_ART_CONVERT_END\n','',text,flags=re.S)
-          p.write_text(text)
-          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add public/assets/vch/ui assets-source/vch/ui e2e/fixtures/reference-ui.png .github/workflows/security.yml
+          git add public/assets/vch/ui assets-source/vch/ui e2e/fixtures/reference-ui.png
           git commit -m 'Optimize dedicated VCH UI artwork'
           git push origin HEAD:codex/set-up-vch-repository-and-implement-chess-game
       # VCH_UI_ART_CONVERT_END
