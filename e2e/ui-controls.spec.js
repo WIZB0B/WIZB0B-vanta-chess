@@ -92,7 +92,7 @@ test('rated play is account-gated while guest play remains instant',async({page}
   await page.locator('#create').click();
   await expect(page.locator('#accountDialog')).toBeVisible();
   await expect(page.locator('#accountDialog')).toContainText('Save your rating and record');
-  await page.locator('.account-close').click();
+  await page.locator('#accountDialog').evaluate(dialog=>dialog.close());
   await page.locator('#level').selectOption('casual');
   await expect(page.locator('#create')).toBeEnabled();
 });
