@@ -548,8 +548,8 @@ $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset
 $('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
 $('#closeChat').onclick=()=>{$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')};
 $('#accountBtn').onclick=openAccount;
-$('[data-auth]').forEach(button=>button.onclick=()=>{
-  authMode=button.dataset.auth;$('[data-auth]').forEach(x=>x.classList.toggle('on',x===button));
+$$('[data-auth]').forEach(button=>button.onclick=()=>{
+  authMode=button.dataset.auth;$$('[data-auth]').forEach(x=>x.classList.toggle('on',x===button));
   $('#usernameField').classList.toggle('hidden',authMode!=='signup');$('#authSubmit').textContent=authMode==='signup'?'Create account':'Sign in';$('#authMessage').textContent='';
 });
 $('#authSubmit').onclick=async()=>{
