@@ -7,6 +7,9 @@ import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
+const directGame=Boolean(params.get('game'));
+const introSeen=localStorage.getItem('vch.intro-seen')==='1';
+const startsInGame=directGame||introSeen;
 let room=normalizeRoomId(params.get('game'),generatedRoom);
 const playerToken=stableGuestToken();
 const api=new VchApi({token:playerToken});
@@ -32,7 +35,7 @@ app.innerHTML=`
 <div id="brandSplash" class="brand-splash" aria-hidden="true">
   <div class="brand-splash-wordmark"><img src="/assets/vch/brand/vch-metal.svg" alt=""></div>
 </div>
-<div class="shell">
+<div class="shell ${startsInGame?'game-active':'intro-active'}">
   <header class="topbar">
     <a class="brand vch-brand" href="#" aria-label="VCH home">
       <img class="vch-wordmark vch-wordmark-top" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
@@ -57,7 +60,7 @@ app.innerHTML=`
     </div>
   </header>
 
-  <section id="mainMenu" class="main-menu" aria-labelledby="mainMenuTitle">
+  <section id="mainMenu" class="main-menu" aria-labelledby="mainMenuTitle" aria-hidden="${startsInGame?'true':'false'}">
     <div class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</div>
     <div class="main-menu-hero">
       <div class="main-menu-copy">
@@ -91,7 +94,7 @@ app.innerHTML=`
     </div>
   </section>
 
-  <main id="gameWorkspace">
+  <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
     <aside class="lpanel panel">
       <div class="hero">
         <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>
@@ -602,9 +605,17 @@ function activateNav(kind){
   if(kind==='famous')renderFamous();
   if(kind==='review')renderReview();
 }
-$$('.main-nav button').forEach(button=>button.onclick=()=>{activateNav(button.dataset.nav);document.querySelector('#gameWorkspace')?.scrollIntoView({block:'start'})});
-$('#joinNow').onclick=()=>document.querySelector('#gameWorkspace')?.scrollIntoView({behavior:'smooth',block:'start'});
-if(params.get('game'))$('#mainMenu')?.classList.add('direct-game');
+function setPrimaryScreen(screen,{remember=false}={}){
+  const shell=$('.shell'),menu=$('#mainMenu'),workspace=$('#gameWorkspace'),showGame=screen==='game';
+  shell?.classList.toggle('game-active',showGame);shell?.classList.toggle('intro-active',!showGame);
+  menu?.setAttribute('aria-hidden',String(showGame));workspace?.setAttribute('aria-hidden',String(!showGame));
+  document.body.dataset.screen=showGame?'game':'intro';
+  if(showGame&&remember)localStorage.setItem('vch.intro-seen','1');
+  window.scrollTo(0,0);
+}
+document.body.dataset.screen=startsInGame?'game':'intro';
+$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
+$('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};
 $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
 $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){showMovesView();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
 $('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
