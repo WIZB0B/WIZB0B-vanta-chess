@@ -217,7 +217,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
-  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made;try{if(mode==='computer')settleLocalClock();made=game.move(move)}catch{return}if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made;try{if(mode==='computer')settleLocalClock();made=game.move(move)}catch{return}if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function updateMoves(){
   const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history().map((san,index)=>({san,color:index%2?'b':'w'}));
   const target=$('#moves');if(!target)return;
@@ -380,18 +380,23 @@ $$('.modes button').forEach(b=>b.onclick=async()=>{
 $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer'){currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};syncRoomUi();toast('Engine strength updated')}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));if(mode==='computer')resetLocalClock();else{$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)}};
 const boardEl=$('#board');
+function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
+function paintDragTargets(square){
+  clearDragTargets();boardEl.querySelector(`[data-sq="${square}"]`)?.classList.add('drag-selected');
+  for(const move of game.moves({square,verbose:true}))boardEl.querySelector(`[data-sq="${move.to}"]`)?.classList.add('drag-legal');
+}
 boardEl.addEventListener('dragstart',event=>{
   const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
   const p=game.get(square);if(!p||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&game.turn()!=='w')||p.color!==game.turn()){event.preventDefault();return}
-  selected=square;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);render();
+  selected=square;paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
 });
 boardEl.addEventListener('dragover',event=>{
   const to=event.target.closest?.('.square')?.dataset.sq;if(selected&&to&&game.moves({square:selected,verbose:true}).some(m=>m.to===to)){event.preventDefault();event.dataTransfer.dropEffect='move'}
 });
 boardEl.addEventListener('drop',event=>{
-  const to=event.target.closest?.('.square')?.dataset.sq;if(!selected||!to)return;event.preventDefault();clickSquare(to,game.get(to));
+  const to=event.target.closest?.('.square')?.dataset.sq;if(!selected||!to)return;event.preventDefault();clearDragTargets();clickSquare(to,game.get(to));
 });
-boardEl.addEventListener('dragend',()=>{if(selected){selected=null;render()}});
+boardEl.addEventListener('dragend',()=>{clearDragTargets();if(selected){selected=null;render()}});
 render();startClock();connect();
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
