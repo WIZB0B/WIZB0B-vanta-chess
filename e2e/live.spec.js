@@ -62,8 +62,10 @@ test('casual queue falls back to a Stockfish bot after fifteen seconds', async (
   const ctx=await browser.newContext(),page=await ctx.newPage();
   await enterGameOnFirstVisit(page);
   await page.goto('/');
-  await page.evaluate(()=>{const s=document.querySelector('#time');const o=document.createElement('option');o.value='75';o.textContent='75+0 Acceptance';s.append(o);s.value='75'});
   await page.locator('[data-mode="match"]').click();
+  await page.locator('[data-match-time="60-0"]').click();
+  await page.locator('#findOpponent').click();
+  await expect(page.locator('#matchSearch')).toBeVisible();
   await expect(page.locator('body')).toHaveAttribute('data-bot-game','true',{timeout:26000});
   const seat=await page.locator('body').getAttribute('data-seat');
   if(seat==='w'){await page.locator('[data-sq="e2"]').click();await page.locator('[data-sq="e4"]').click()}

@@ -18,7 +18,17 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_q3KU0sdaVKOeMcLND2D15Q_Qsu2X5pN';
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false;
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+let matchSelection={seconds:600,increment:0,rated:false};
+const DEFAULT_COMPUTER_BOTS=[
+  {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
+  {slug:'forge',display_name:'Forge',elo:1200,portrait:'bb'},
+  {slug:'gambit',display_name:'Gambit',elo:1500,portrait:'br'},
+  {slug:'cipher',display_name:'Cipher',elo:1800,portrait:'bq'},
+  {slug:'oracle',display_name:'Oracle',elo:2200,portrait:'bk'},
+  {slug:'legend',display_name:'Legend',elo:2700,portrait:'bp'}
+];
+let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
 const stockfish=new Worker('/stockfish.worker.js');
 const analysisWorker=new Worker('/stockfish.worker.js');
 stockfish.onmessage=({data})=>{
@@ -95,33 +105,7 @@ app.innerHTML=`
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">
-      <div class="hero">
-        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>
-        <label>● &nbsp; LIVE CHESS</label>
-        <h1>Play your<br>next game.</h1>
-        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>
-      </div>
-
-      <div class="modes">
-        <button data-mode="match">⚡<span>Match</span></button>
-        <button data-mode="room" class="on">♟<span>Room</span></button>
-        <button data-mode="computer">▣<span>Computer</span></button>
-      </div>
-
-      <section class="private-card"><span class="link-icon">↗</span><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div><b>›</b></section>
-      <label class="tiny">GAME SETTINGS</label>
-      <div class="settings">
-        <label><span>Time control</span><select id="time"><option value="600">◷ 10+0 Rapid</option><option value="300">◷ 5+0 Blitz</option><option value="180">◷ 3+0 Blitz</option></select></label>
-        <label><span id="secondarySettingLabel">Room type</span><select id="level"><option value="casual">♟ Casual – Guest OK</option><option value="rated">Rated – Account required</option></select></label>
-      </div>
-      <button class="gold" id="create"><span>Create room & get link</span><b>＋</b></button>
-      <div class="divider">or join an existing room</div>
-      <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>
-      <div class="room"><small>ROOM CODE</small><strong>${room}</strong><em>● Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">▣</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>
-    </aside>
-
-    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="player top"><span class="avatar">GU</span><div><b>Waiting for opponent</b><small>☆ 1200</small></div><i class="signal" id="topSignal">▥ live</i><time id="blackClock">10:00</time></div>
       <div class="board-shell">
         <div id="rankCoords" class="board-coords board-ranks" aria-hidden="true"></div>
@@ -239,10 +223,11 @@ function render(){
   updateOpeningLabel();scheduleAnalysis();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
-async function clickSquare(sq,p){if(localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&game.turn()!=='w'))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
+async function clickSquare(sq,p){if(localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
 function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');d.showModal();$$('#promotion button').forEach(b=>b.onclick=()=>{d.close();resolve(b.dataset.piece)})})}
 function resetLocalClock(){
-  clocks=initialClocks(Number($('#time').value));
+  const seconds=mode==='computer'?600:Number($('#time').value);
+  clocks=initialClocks(seconds);
   localClockState={w:clocks.w,b:clocks.b,active:game.turn(),startedAt:performance.now()};
   $('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b);
 }
@@ -256,15 +241,89 @@ function switchLocalClock(){
   if(!localClockState)return;
   settleLocalClock();localClockState.active=game.turn();localClockState.startedAt=performance.now();
 }
-function setModeSettings(next){
-  const label=$('#secondarySettingLabel'),select=$('#level');if(!label||!select)return;
-  if(next==='computer'){
-    label.textContent='Computer strength';
-    select.innerHTML='<option value="900">Easy · 900</option><option value="1200">Medium · 1200</option><option value="1500" selected>Hard · 1500</option><option value="1800">Advanced · 1800</option><option value="2200">Expert · 2200</option><option value="2700">Legend · 2700</option>';
-  }else{
-    label.textContent='Room type';
-    select.innerHTML='<option value="casual">♟ Casual – Guest OK</option><option value="rated">Rated – Account required</option>';
+function updateOnlineCount(value){
+  const el=$('#playersOnline');if(el)el.textContent=String(value??'—');
+}
+function setMatchSearching(active){
+  searching=active;
+  $('#matchSearch')?.classList.toggle('hidden',!active);
+  const label=$('#findOpponentLabel');if(label)label.textContent=active?'Cancel search':'Find opponent';
+  $('#findOpponent')?.classList.toggle('searching',active);
+  updateOnlineCount(serverGameId?'2':active?'1+':'—');
+}
+async function cancelMatchSearch({announce=true}={}){
+  if(matchTimer){clearInterval(matchTimer);matchTimer=null}
+  const wasSearching=searching;setMatchSearching(false);
+  if(wasSearching){try{await api.queueLeave()}catch{}}
+  if(announce&&wasSearching)toast('Search cancelled');
+}
+async function beginMatchSearch(){
+  if(searching){await cancelMatchSearch();return}
+  if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
+  clearInterval(pollTimer);pollTimer=null;
+  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;
+  game.reset();render();updateMoves();setMatchSearching(true);
+  const started=Date.now();
+  try{
+    const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated});
+    if(first.game||first.matched){setMatchSearching(false);updateOnlineCount(2);applyServerState(first);startPolling();showMovesView();toast('Player matched');return}
+    matchTimer=setInterval(async()=>{
+      try{
+        const state=await api.queueStatus(matchSelection.rated);
+        if(state.game||state.matched){
+          clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);updateOnlineCount(2);
+          applyServerState(state);startPolling();showMovesView();
+          toast(state.botFallback||Date.now()-started>=15000?'Closest Elo engine matched':'Player matched');
+        }
+      }catch(error){clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);toast(error.message)}
+    },1000);
+  }catch(error){setMatchSearching(false);toast(error.message)}
+}
+function renderComputerBots(){
+  const grid=$('#botGrid');if(!grid)return;
+  if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=computerBots.find(bot=>Number(bot.elo)===1500)?.slug||computerBots[0]?.slug||'';
+  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="/assets/vch/pieces/${escapeHtml(bot.portrait||'bn')}.webp" alt=""></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
+  $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;renderComputerBots()});
+}
+async function loadComputerBots(){
+  if(botsLoaded)return;botsLoaded=true;
+  try{
+    const data=await api.bots(),remote=(data.bots||[]).filter(bot=>Number(bot.elo)>=900&&Number(bot.elo)<=2700).sort((a,b)=>Number(a.elo)-Number(b.elo));
+    if(remote.length){
+      const portraits=['bn','bb','br','bq','bk','bp'];
+      computerBots=DEFAULT_COMPUTER_BOTS.map((fallback,index)=>{
+        const bot=remote[index]||fallback;
+        return {...fallback,...bot,slug:bot.slug||fallback.slug,portrait:portraits[index]};
+      });
+    }
+  }catch{}
+  renderComputerBots();
+}
+function selectedComputerSide(){
+  if(computerSideChoice==='random')return crypto.getRandomValues(new Uint8Array(1))[0]%2?'b':'w';
+  return computerSideChoice;
+}
+function startComputerGame(){
+  const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
+  clearInterval(pollTimer);pollTimer=null;serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;
+  currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();
+  myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
+  const label=$('#computerStart span');if(label)label.textContent='Restart game';
+  toast(`Computer game started · You are ${computerSide==='w'?'White':'Black'}`);
+  if(game.turn()!==computerSide)setTimeout(engineMove,280);
+}
+async function activateLeftMode(next){
+  if(!['match','room','computer'].includes(next))return;
+  const previous=mode;
+  if(searching&&next!=='match')await cancelMatchSearch({announce:false});
+  if(previous==='computer'&&next!=='computer'&&computerStarted){
+    computerStarted=false;localClockState=null;localGameOver=false;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;game.reset();render();updateMoves();
   }
+  mode=next;
+  $$('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
+  $$('.mode-view').forEach(view=>{const active=view.dataset.modeView===next;view.classList.toggle('active',active);view.setAttribute('aria-hidden',String(!active))});
+  if(next==='computer'){renderComputerBots();loadComputerBots()}
+  if(next==='room'&&serverGameId)startPolling();
 }
 async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
   game.move(move);puzzleSession.played.push(uci);puzzleSession.index++;render();
@@ -283,8 +342,8 @@ function updateMoves(){
   }).join('');
   target.scrollTop=target.scrollHeight;
 }
-async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||$('#level').value||1200);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
-async function engineMove(){const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
+async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
+async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 function playTone(){if($('#sound').dataset.off)return;const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1)}
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
 function startClock(){clearInterval(ticking);ticking=setInterval(()=>{
@@ -322,6 +381,7 @@ function animateLastServerMove(state,previousVersion){
 }
 function syncRoomUi(){
   const code=serverGame?.invite_code||room;
+  $('.room-created')?.classList.toggle('hidden',!roomCreated);
   const strong=$('.room strong');if(strong)strong.textContent=code||'—';
   if(code)$('#share').value=`${location.origin}${location.pathname}?game=${encodeURIComponent(code)}`;
   const opponentId=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
@@ -410,30 +470,25 @@ function startPolling(){
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
 async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
 $('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
-$$('.modes button').forEach(b=>b.onclick=async()=>{
-  const next=b.dataset.mode;
-  if(matchTimer){clearInterval(matchTimer);matchTimer=null}
-  if(searching&&next!=='match'){searching=false;try{await api.queueLeave()}catch{}}
-  $$('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=next;setModeSettings(mode);
-  if(mode==='computer'){serverGameId=null;serverGame=null;clockSnapshot=null;localGameOver=false;currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};myColor='w';orientationSet=true;flipped=false;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();toast('Computer mode ready')}
-  if(mode==='room'){currentBot=null;localClockState=null;localGameOver=false;toast('Private-room mode ready')}
-  if(mode==='match'){
-    try{
-      const rated=$('#level').value==='rated';
-      if(rated&&!authSession?.access_token){openAccount();throw new Error('Sign in to start rated matchmaking')}
-      searching=true;await api.queueJoin({seconds:Number($('#time').value),increment:0,rated});toast(rated?'Searching for a rated opponent…':'Searching for a player…');
-      const started=Date.now();
-      matchTimer=setInterval(async()=>{
-        try{
-          const state=await api.queueStatus($('#level').value==='rated');
-          if(state.game||state.matched){clearInterval(matchTimer);matchTimer=null;searching=false;applyServerState(state);startPolling();showMovesView();toast(Date.now()-started>=15000?'Closest Elo engine matched':'Player matched')}
-        }catch(error){clearInterval(matchTimer);matchTimer=null;searching=false;toast(error.message)}
-      },1000);
-    }catch(error){searching=false;toast(error.message)}
-  }
+$$('.modes button').forEach(button=>button.onclick=()=>activateLeftMode(button.dataset.mode));
+$$('[data-match-time]').forEach(button=>button.onclick=()=>{
+  const [seconds,increment]=button.dataset.matchTime.split('-').map(Number);
+  matchSelection={...matchSelection,seconds,increment};
+  $$('[data-match-time]').forEach(item=>item.classList.toggle('on',item===button));
 });
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer'){currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};syncRoomUi();toast('Engine strength updated')}};
-$('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));if(mode==='computer')resetLocalClock();else{$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)}};
+$$('[data-match-rated]').forEach(button=>button.onclick=()=>{
+  matchSelection={...matchSelection,rated:button.dataset.matchRated==='true'};
+  $$('[data-match-rated]').forEach(item=>item.classList.toggle('on',item===button));
+});
+$$('[data-computer-side]').forEach(button=>button.onclick=()=>{
+  computerSideChoice=button.dataset.computerSide;
+  $$('[data-computer-side]').forEach(item=>item.classList.toggle('on',item===button));
+});
+$('#findOpponent').onclick=beginMatchSearch;
+$('#computerStart').onclick=startComputerGame;
+renderComputerBots();
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)};
 const boardEl=$('#board');
 function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
 function paintDragTargets(square){
@@ -442,7 +497,7 @@ function paintDragTargets(square){
 }
 boardEl.addEventListener('dragstart',event=>{
   const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
-  const p=game.get(square);if(!p||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&game.turn()!=='w')||p.color!==game.turn()){event.preventDefault();return}
+  const p=game.get(square);if(!p||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn()){event.preventDefault();return}
   selected=square;piece.classList.add('dragging');paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
 });
 boardEl.addEventListener('dragover',event=>{

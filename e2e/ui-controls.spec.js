@@ -43,6 +43,27 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
   await expect(page.locator('#dynamicView')).toContainText('Opening Explorer');
 });
 
+test('left panel switches between three distinct play-mode views',async({page})=>{
+  await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
+  await expect(page.locator('[data-mode-view="room"]')).toBeVisible();
+  await expect(page.locator('.room-created')).toBeHidden();
+
+  await page.locator('[data-mode="match"]').click();
+  await expect(page.locator('[data-mode-view="match"]')).toBeVisible();
+  await expect(page.locator('[data-mode-view="room"]')).toBeHidden();
+  await expect(page.locator('[data-match-time]')).toHaveCount(5);
+  await expect(page.locator('#findOpponent')).toBeVisible();
+
+  await page.locator('[data-mode="computer"]').click();
+  await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
+  await expect(page.locator('#botGrid .bot-card')).toHaveCount(6);
+  await expect(page.locator('[data-computer-side]')).toHaveCount(3);
+  await expect(page.locator('#computerStart')).toBeVisible();
+
+  await page.locator('[data-mode="room"]').click();
+  await expect(page.locator('[data-mode-view="room"]')).toBeVisible();
+});
+
 test('board controls, theme studio, and local Stockfish computer game work',async({page})=>{
   test.setTimeout(45000);
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
@@ -64,7 +85,9 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
   await page.locator('#closeTheme').click();
 
   await page.locator('[data-mode="computer"]').click();
-  await page.locator('#level').selectOption('1500');
+  await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
+  await page.locator('[data-bot-slug="gambit"]').click();
+  await page.locator('#computerStart').click();
   await page.locator('[data-sq="e2"] .piece').dragTo(page.locator('[data-sq="e4"]'));
   await expect(page.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible();
   await expect.poll(async()=>page.locator('#moves .move-row').count(),{timeout:12000}).toBe(2);
