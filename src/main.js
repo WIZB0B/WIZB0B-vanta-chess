@@ -339,18 +339,19 @@ async function loadProfile(){
 function openAccount(){syncIdentityUI();$('#accountDialog').showModal()}
 async function connect(){try{await loadProfile();if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`);startPolling()}}catch(error){toast(error.message)}}
 function startPolling(){
-  clearInterval(pollTimer);pollCount=0;
+  clearInterval(pollTimer);pollCount=0;let inFlight=false;
   pollTimer=setInterval(async()=>{
-    if(document.hidden||!serverGameId)return;
+    if(document.hidden||!serverGameId||inFlight)return;inFlight=true;
     const started=performance.now();
     try{
       const payload=await api.heartbeat(serverGameId);
       latencyMs=Math.max(1,Math.round(performance.now()-started));
       const signal=$('#bottomSignal');if(signal)signal.textContent='▥ '+latencyMs+' ms';
       applyServerState(payload);
-      if(++pollCount%2===0)await loadChat();
+      if(++pollCount%4===0)await loadChat();
     }catch{const signal=$('#bottomSignal');if(signal)signal.textContent='▥ reconnecting…'}
-  },1000)
+    finally{inFlight=false}
+  },450)
 }
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
 async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
