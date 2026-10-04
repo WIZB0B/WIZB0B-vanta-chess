@@ -7,6 +7,22 @@ async function mockApi(page) {
   });
 }
 
+
+test('first visit shows a separate intro and Join Now enters the one-screen game workspace', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/');
+  await expect(page.locator('#mainMenu')).toBeVisible();
+  await expect(page.locator('#gameWorkspace')).toBeHidden();
+  await page.locator('#joinNow').click();
+  await expect(page.locator('#mainMenu')).toBeHidden();
+  await expect(page.locator('#gameWorkspace')).toBeVisible();
+  await expect(page.locator('body')).toHaveAttribute('data-screen','game');
+  expect(await page.evaluate(()=>localStorage.getItem('vch.intro-seen'))).toBe('1');
+  await page.reload();
+  await expect(page.locator('#mainMenu')).toBeHidden();
+  await expect(page.locator('#gameWorkspace')).toBeVisible();
+});
+
 test('renders an exact 8x8 board without room-code injection', async ({ page }) => {
   await mockApi(page);
   await page.goto('/?game=%3Cimg%20src=x%20onerror=alert(1)%3E');
