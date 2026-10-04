@@ -10,6 +10,6 @@ test('DOM collection handlers use selector-all helper',async()=>{
 
 test('reference artwork stays local in runtime markup',async()=>{
   const source=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
-  assert.match(source,/\/assets\/generated\/reference-ui\.png/);
+  assert.match(source,/\/assets\/vch\/ui\/reference-ui\.png/);
   assert.doesNotMatch(source,/d2ol7oe51mr4n9\.cloudfront\.net/);
 });
