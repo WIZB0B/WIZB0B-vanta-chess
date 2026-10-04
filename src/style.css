@@ -237,3 +237,36 @@ main{
   .hero h1{font-size:54px}
   .lpanel{padding:16px 18px}
 }
+
+
+/* Interactive study surfaces: Opening Explorer, Famous Games, Learn and Review. */
+.library-action,.secondary-action{
+  margin-top:9px;padding:8px 10px;border:1px solid #3b504a;border-radius:7px;
+  background:#13231f;color:#dce6e2;font-size:10px;font-weight:650
+}
+.secondary-action{width:100%;background:#111b1a}
+.study-shell{display:grid;gap:9px}
+.study-board{
+  width:min(100%,320px);aspect-ratio:1;margin:0 auto;
+  display:grid;grid-template-columns:repeat(8,1fr);
+  overflow:hidden;border:2px solid #52645d;border-radius:8px;
+  box-shadow:0 12px 26px rgba(0,0,0,.35)
+}
+.study-square{position:relative;display:grid;place-items:center}
+.study-square.light{background:linear-gradient(135deg,#dfd6bb,#d4c9aa)}
+.study-square.dark{background:linear-gradient(135deg,#2d4b40,#27443a)}
+.study-board .piece{width:96%;height:96%;transform:none}
+.study-meta{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:0 2px}
+.study-meta small{grid-column:1/-1;color:#8d9b97;font-size:9px}
+.study-meta b{font-size:12px}.study-meta span{font-size:9px;color:#7f8e8a;align-self:center}
+.study-controls{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px}
+.study-controls button{
+  padding:8px;border:1px solid #334742;border-radius:7px;background:#13211f;font-size:10px
+}
+.study-moves{display:flex;flex-wrap:wrap;gap:4px;max-height:126px;overflow:auto;padding:7px;border:1px solid #263936;border-radius:8px;background:#071211}
+.study-moves button{padding:5px 7px;border-radius:5px;background:#101e1b;font-size:9px;color:#b8c3c0}
+.study-moves button.current{background:#335548;color:white;box-shadow:0 0 0 1px #73d8a7}
+.lesson-detail{padding:15px;border:1px solid #2d403b;border-radius:9px;background:linear-gradient(135deg,#152520,#0c1716)}
+.lesson-detail>small{color:#7fe1ae;font-size:9px}.lesson-detail h4{font-size:19px;margin:6px 0}.lesson-detail p{font-size:11px;color:#aab6b2;line-height:1.6}
+.lesson-checklist{display:grid;gap:7px;margin:14px 0;padding:11px;border-radius:8px;background:#0b1715;border:1px solid #263a35}
+.lesson-checklist b{font-size:11px}.lesson-checklist span{font-size:10px;color:#9eaaa7}
