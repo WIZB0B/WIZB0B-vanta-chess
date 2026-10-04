@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -19,46 +19,6 @@ jobs:
         with:
           node-version: 20.19.0
           cache: npm
-      # VCH_UI_ART_CONVERT_BEGIN
-      - name: Convert dedicated VCH UI art
-        run: |
-          python3 -m pip install --quiet pillow
-          mkdir -p assets-source/vch/ui e2e/fixtures
-          for f in hero-knight live-banner opening-card famous-card review-card practice-card; do
-            if [ -f "public/assets/vch/ui/$f.png" ]; then
-              git mv "public/assets/vch/ui/$f.png" "assets-source/vch/ui/$f.png"
-            fi
-          done
-          if [ -f public/assets/vch/ui/reference-ui.png ]; then
-            git mv public/assets/vch/ui/reference-ui.png e2e/fixtures/reference-ui.png
-          fi
-          python3 <<'PY'
-          from pathlib import Path
-          from PIL import Image, ImageOps
-          source=Path('assets-source/vch/ui')
-          out=Path('public/assets/vch/ui')
-          targets={
-            'hero-knight':(256,348),
-            'live-banner':(430,176),
-            'opening-card':(420,118),
-            'famous-card':(420,118),
-            'review-card':(420,118),
-            'practice-card':(420,118),
-          }
-          for name,size in targets.items():
-              src=source/f'{name}.png'
-              if not src.exists():
-                  raise SystemExit(f'missing source UI art: {src}')
-              with Image.open(src) as im:
-                  image=ImageOps.fit(im.convert('RGB'),size,method=Image.Resampling.LANCZOS,centering=(0.5,0.5))
-                  image.save(out/f'{name}.webp','WEBP',quality=86,method=6)
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add public/assets/vch/ui assets-source/vch/ui e2e/fixtures/reference-ui.png
-          git commit -m 'Optimize dedicated VCH UI artwork'
-          git push origin HEAD:codex/set-up-vch-repository-and-implement-chess-game
-      # VCH_UI_ART_CONVERT_END
       - name: Verify project files
         run: |
           pwd
