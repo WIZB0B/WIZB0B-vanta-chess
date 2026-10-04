@@ -2,8 +2,11 @@ import { test, expect } from '@playwright/test';
 
 test.skip(!process.env.VCH_DEPLOYED_PREVIEW, 'deployed Netlify verification is opt-in');
 
+async function enterGameOnFirstVisit(page){await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'))}
+
 test('Netlify preview serves hardened VCH runtime and local assets', async ({ page, request }) => {
   test.setTimeout(60000);
+  await enterGameOnFirstVisit(page);
   const response=await page.goto('/');
   expect(response?.ok()).toBeTruthy();
   const headers=response.headers();
@@ -39,6 +42,7 @@ test('Netlify preview supports a real two-browser room and authoritative move', 
   test.setTimeout(60000);
   const first=await browser.newContext(),second=await browser.newContext();
   const a=await first.newPage(),b=await second.newPage();
+  await enterGameOnFirstVisit(a);
   await a.goto('/');
   await a.locator('#create').click();
   await expect.poll(()=>new URL(a.url()).searchParams.get('game'),{timeout:10000}).toBeTruthy();
