@@ -20,6 +20,7 @@ const assets={
   'famous-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232840_37ea61f2-7b60-4c32-bcd2-b6662947e1f1.png',
   'review-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232839_ff9a7250-062b-4407-810b-e9ca7d8fb1c2.png',
   'practice-card.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232839_1474bd74-fe3f-4ae6-9324-b6023785aebb.png',
+  'reference-ui.png':'https://d2ol7oe51mr4n9.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/eefca0ec-252c-4500-8921-1ba0773b9bf1.png',
   'live-banner.png':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_232838_f5cd8889-7db2-4257-9f3b-0f818f144f0a.png',
   'wallpaper-emerald.webp':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_013747_49b6077d-96e1-40c8-bf40-954f106c63d6_min.webp',
   'wallpaper-cobalt.webp':'https://d8j0ntlcm91z4.cloudfront.net/user_3Jebk1qbWpRhC07VOrvPmXEiz8E/hf_20261003_013747_18f6bf9f-2e8c-4a65-bdda-d4353ce87a75_min.webp',
