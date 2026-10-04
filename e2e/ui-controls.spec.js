@@ -12,27 +12,26 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
   await mockProfile(page);await page.goto('/');
   await expect(page.locator('.square')).toHaveCount(64);
 
-  const mobile=page.viewportSize().width<800;
-  await page.locator(mobile?'.feature-card.opening':'[data-nav="openings"]').click();
+  await page.locator('[data-nav="openings"]').click();
   await expect(page.locator('#dynamicView')).toContainText('Opening Explorer');
   await page.locator('[data-opening="0"]').click();
   await expect(page.locator('.study-board .study-square')).toHaveCount(64);
   await page.locator('#studyNext').click();
   await expect(page.locator('#studyCount')).toContainText('1 /');
 
-  await page.locator(mobile?'.feature-card.famous':'[data-nav="famous"]').click();
+  await page.locator('[data-nav="famous"]').click();
   await expect(page.locator('[data-famous="0"]')).toBeVisible();
   await page.locator('[data-famous="0"]').click();
   await expect(page.locator('.study-board .study-square')).toHaveCount(64);
   await page.locator('#studyLast').click();
   await expect(page.locator('#studyCount')).not.toContainText('0 /');
 
-  await page.locator(mobile?'.feature-card.practice':'[data-nav="learn"]').click();
+  await page.locator('[data-nav="learn"]').click();
   await page.locator('[data-lesson="0"]').click();
   await expect(page.locator('.lesson-detail')).toContainText('Training focus');
   await expect(page.locator('.start-puzzle')).toBeVisible();
 
-  await page.locator(mobile?'.feature-card.review':'[data-nav="review"]').click();
+  await page.locator('[data-nav="review"]').click();
   await expect(page.locator('#dynamicView')).toContainText('Post-Game Review');
 
   await page.locator('#searchBtn').click();
