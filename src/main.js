@@ -294,7 +294,7 @@ $$('.modes button').forEach(b=>b.onclick=async()=>{
   const next=b.dataset.mode;
   if(matchTimer){clearInterval(matchTimer);matchTimer=null}
   if(searching&&next!=='match'){searching=false;try{await api.queueLeave()}catch{}}
-  $('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=next;setModeSettings(mode);
+  $$('.modes button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=next;setModeSettings(mode);
   if(mode==='computer'){serverGameId=null;serverGame=null;clockSnapshot=null;localGameOver=false;currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};myColor='w';orientationSet=true;flipped=false;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();toast('Computer mode ready')}
   if(mode==='room'){currentBot=null;localClockState=null;localGameOver=false;toast('Private-room mode ready')}
   if(mode==='match'){
