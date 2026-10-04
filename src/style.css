@@ -297,3 +297,8 @@ main{
   .header-actions{flex:0 0 auto;gap:4px}
   .header-actions .install-btn{display:none}
 }
+
+@media(max-width:800px){
+  #searchBtn{display:grid;flex:0 0 34px;width:34px;height:34px}
+  #notifyBtn{display:none}
+}
