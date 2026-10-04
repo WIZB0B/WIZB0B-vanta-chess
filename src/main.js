@@ -153,6 +153,7 @@ function render(){
   const board=$('#board'), order=flipped?[...Array(64).keys()].reverse():[...Array(64).keys()];
   board.innerHTML='';
   const pos=game.board().flat(), legal=selected?game.moves({square:selected,verbose:true}):[];
+  const localLast=game.history({verbose:true}).at(-1),serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null,lastMove=serverLast||localLast;
   let checked=-1;
   if(game.inCheck()){
     const checkedColor=game.turn();
@@ -160,10 +161,10 @@ function render(){
   }
   order.forEach(i=>{
     const r=Math.floor(i/8),f=i%8,sq='abcdefgh'[f]+(8-r),p=pos[i],el=document.createElement('button');
-    el.className=`square ${(r+f)%2?'dark':'light'} ${selected===sq?'selected':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''}`;
+    el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''}`;
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
-    if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" aria-hidden="true"></span>`;
+    if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
     if(f===(flipped?7:0))el.insertAdjacentHTML('beforeend',`<small class="rank">${8-r}</small>`);
     if(r===(flipped?0:7))el.insertAdjacentHTML('beforeend',`<small class="file">${'abcdefgh'[f]}</small>`);
     el.onclick=()=>clickSquare(sq,p); board.append(el);
@@ -269,13 +270,15 @@ function syncRoomUi(){
   const code=serverGame?.invite_code||room;
   const strong=$('.room strong');if(strong)strong.textContent=code||'—';
   if(code)$('#share').value=`${location.origin}${location.pathname}?game=${encodeURIComponent(code)}`;
-  const opponentConnected=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
-  const topName=currentBot?.display_name||currentBot?.name||(opponentConnected?'Opponent connected':'Waiting for opponent');
+  const opponentId=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
+  const opponentName=serverGame&&(myColor==='w'?serverGame.black_name:serverGame.white_name);
+  const topName=currentBot?.display_name||currentBot?.name||opponentName||(opponentId?'Opponent connected':'Waiting for opponent');
   $('.player.top b').textContent=topName;
   const ownName=(currentProfile?.account&&(currentProfile.username||currentProfile.display_name))||guestName;
   $('.player.bottom b').textContent=`You · ${ownName}`;
-  const topRating=$('.player.top small');if(topRating)topRating.textContent='☆ '+(currentBot?.elo||1200);
-  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ '+ratingFor('rapid');
+  const opponentRating=myColor==='w'?serverGame?.black_rating_before:serverGame?.white_rating_before;
+  const topRating=$('.player.top small');if(topRating)topRating.textContent='☆ '+(currentBot?.elo||opponentRating||1200);
+  const bottomRating=$('.player.bottom small');if(bottomRating)bottomRating.textContent='☆ '+ratingFor(serverGame?.pool||'rapid');
 }
 function applyServerState(payload){
   const state=payload.game||payload;if(!state)return;
@@ -376,6 +379,19 @@ $$('.modes button').forEach(b=>b.onclick=async()=>{
 });
 $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};$('#level').onchange=()=>{if(mode==='computer'){currentBot={display_name:'Stockfish 19',elo:Number($('#level').value)||1500};syncRoomUi();toast('Engine strength updated')}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));if(mode==='computer')resetLocalClock();else{$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)}};
+const boardEl=$('#board');
+boardEl.addEventListener('dragstart',event=>{
+  const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
+  const p=game.get(square);if(!p||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&game.turn()!=='w')||p.color!==game.turn()){event.preventDefault();return}
+  selected=square;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);render();
+});
+boardEl.addEventListener('dragover',event=>{
+  const to=event.target.closest?.('.square')?.dataset.sq;if(selected&&to&&game.moves({square:selected,verbose:true}).some(m=>m.to===to)){event.preventDefault();event.dataTransfer.dropEffect='move'}
+});
+boardEl.addEventListener('drop',event=>{
+  const to=event.target.closest?.('.square')?.dataset.sq;if(!selected||!to)return;event.preventDefault();clickSquare(to,game.get(to));
+});
+boardEl.addEventListener('dragend',()=>{if(selected){selected=null;render()}});
 render();startClock();connect();
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
