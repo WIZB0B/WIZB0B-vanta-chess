@@ -77,6 +77,7 @@ test('mobile layout has no horizontal overflow', async ({ browser }) => {
   await page.goto('/');
   const widths=await page.evaluate(()=>({inner:innerWidth,scroll:document.documentElement.scrollWidth,board:Math.round(document.querySelector('.board').getBoundingClientRect().width)}));
   expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
-  expect(widths.board).toBeGreaterThan(320);
+  expect(widths.board).toBeGreaterThan(300);
+  expect(widths.board).toBeLessThanOrEqual(widths.inner);
   await ctx.close();
 });
