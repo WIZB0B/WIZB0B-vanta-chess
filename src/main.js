@@ -120,7 +120,11 @@ app.innerHTML=`
 
     <section class="game">
       <div class="player top"><span class="avatar">GU</span><div><b>Waiting for opponent</b><small>☆ 1200</small></div><i class="signal" id="topSignal">▥ live</i><time id="blackClock">10:00</time></div>
-      <div id="board" class="board" aria-label="Chess board"></div>
+      <div class="board-shell">
+        <div id="rankCoords" class="board-coords board-ranks" aria-hidden="true"></div>
+        <div id="board" class="board" aria-label="Chess board"></div>
+        <div id="fileCoords" class="board-coords board-files" aria-hidden="true"></div>
+      </div>
       <div class="player bottom"><span class="avatar light">GU</span><div><b>You · ${guestName}</b><small>☆ 1200</small></div><i class="signal" id="bottomSignal">▥ connecting…</i><time id="whiteClock">10:00</time></div>
       <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button></div>
     </section>
@@ -198,6 +202,9 @@ let clocks=initialClocks(Number($('#time').value));
 function render(){
   const board=$('#board'), order=flipped?[...Array(64).keys()].reverse():[...Array(64).keys()];
   board.innerHTML='';
+  const rankCoords=$('#rankCoords'),fileCoords=$('#fileCoords');
+  if(rankCoords)rankCoords.innerHTML=(flipped?['1','2','3','4','5','6','7','8']:['8','7','6','5','4','3','2','1']).map(value=>`<span>${value}</span>`).join('');
+  if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map(value=>`<span>${value}</span>`).join('');
   const pos=game.board().flat(), legal=selected?game.moves({square:selected,verbose:true}):[];
   const localLast=game.history({verbose:true}).at(-1),serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null,lastMove=serverLast||localLast;
   let checked=-1;
@@ -211,8 +218,6 @@ function render(){
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
     if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
-    if(f===(flipped?7:0))el.insertAdjacentHTML('beforeend',`<small class="rank">${8-r}</small>`);
-    if(r===(flipped?0:7))el.insertAdjacentHTML('beforeend',`<small class="file">${'abcdefgh'[f]}</small>`);
     el.onclick=()=>clickSquare(sq,p); board.append(el);
   });
   board.classList.toggle('mate',game.isCheckmate());
