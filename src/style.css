@@ -285,3 +285,15 @@ main{
 .feature-card.review .feature-icon{background:rgba(42,67,105,.78);color:#98b9ff}
 .feature-card.practice .feature-icon{background:rgba(78,52,96,.8);color:#d9a9ff}
 .feature-card .asset{opacity:.72}
+
+/* Mobile navigation keeps every product surface reachable. */
+@media(max-width:800px){
+  .topbar{gap:5px}
+  .brand{flex:0 0 42px}
+  .main-nav{display:flex;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;justify-content:flex-start;gap:1px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .main-nav::-webkit-scrollbar{display:none}
+  .main-nav button,.main-nav button:nth-child(n+5){display:flex;flex:0 0 36px;width:36px;height:38px;padding:8px;font-size:0;justify-content:center}
+  .main-nav button .nav-icon{width:18px;height:18px}
+  .header-actions{flex:0 0 auto;gap:4px}
+  .header-actions .install-btn{display:none}
+}
