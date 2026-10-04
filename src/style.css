@@ -677,3 +677,29 @@ html{background:#06100f}
 @media(max-width:800px){
   .wordmark{display:none}
 }
+
+
+/* Keep the top bar collision-free on narrower desktop test/view widths without changing the 1672px reference lock. */
+@media(min-width:1181px) and (max-width:1499px){
+  .topbar{padding-left:18px;padding-right:10px}
+  .brand{flex-basis:232px;width:232px;gap:11px}
+  .mark{width:42px;height:42px;flex-basis:42px;font-size:25px}
+  .wordmark{font-size:12px;letter-spacing:3.2px}
+  .main-nav{gap:2px}
+  .main-nav button{height:36px;gap:5px;padding:0 7px;font-size:11.5px}
+  .nav-icon{width:15px;height:15px;flex-basis:15px}
+  .nav-icon svg{width:15px;height:15px}
+  .header-actions{gap:6px}
+  .icon-btn{width:34px;height:34px;flex-basis:34px}
+  .install-btn{height:36px;min-width:103px;padding:0 10px;gap:6px;font-size:11px}
+  .bell-btn{width:30px;flex-basis:30px}
+  .user{
+    min-width:132px;height:40px;
+    grid-template-columns:34px minmax(69px,1fr) 12px;
+    grid-template-rows:19px 15px;
+    column-gap:7px;
+  }
+  .user i{width:34px;height:34px}
+  .user span{font-size:11px}
+  .user small{font-size:8.5px}
+}
