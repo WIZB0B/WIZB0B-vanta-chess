@@ -378,3 +378,109 @@ main{
 /* The reference environment must remain visible behind the glass shell. */
 #app{background:transparent!important}
 html{background:#06100f}
+
+
+/* === PAGE SKELETON LOCK — supplied 1672×941 desktop reference ===
+   Scope: top bar + left/center/right column geometry + major glass surfaces + page background only. */
+@media (min-width:1181px){
+  html,body,#app{min-width:1181px}
+  body{
+    min-height:100vh;
+    background-color:#050d0e;
+    background-image:
+      linear-gradient(90deg,
+        rgba(2,8,9,.44) 0%,
+        rgba(2,8,9,.24) 17%,
+        rgba(3,11,12,.36) 49%,
+        rgba(2,8,9,.24) 82%,
+        rgba(2,8,9,.44) 100%),
+      url('/assets/generated/wallpaper-emerald.webp');
+    background-position:center top;
+    background-size:cover;
+    background-repeat:no-repeat;
+    background-attachment:fixed;
+  }
+
+  .shell{
+    width:calc(100vw - 96px);
+    max-width:none;
+    margin:0 auto;
+    padding:30px 0 28px;
+  }
+
+  .topbar{
+    width:100%;
+    height:56px;
+    min-height:56px;
+    padding:6px 13px 6px 12px;
+    border-radius:14px;
+    background:
+      linear-gradient(180deg,rgba(9,21,23,.92),rgba(6,16,18,.89));
+    border:1px solid rgba(154,184,175,.24);
+    box-shadow:
+      0 16px 38px rgba(0,0,0,.48),
+      inset 0 1px 0 rgba(255,255,255,.025);
+    backdrop-filter:blur(18px) saturate(116%);
+    -webkit-backdrop-filter:blur(18px) saturate(116%);
+  }
+
+  main{
+    width:100%;
+    display:grid;
+    grid-template-columns:425px 660px 447px;
+    column-gap:22px;
+    row-gap:0;
+    margin-top:14px;
+    align-items:start;
+  }
+
+  .lpanel{
+    width:425px;
+    min-width:0;
+    min-height:780px;
+  }
+
+  .game{
+    width:660px;
+    min-width:0;
+    min-height:790px;
+    padding-left:29px;
+    padding-right:29px;
+  }
+
+  .rpanel{
+    width:447px;
+    min-width:0;
+    min-height:780px;
+  }
+
+  .panel,.game{
+    border-radius:14px;
+    background:
+      linear-gradient(180deg,rgba(8,19,21,.88),rgba(5,15,17,.84));
+    border:1px solid rgba(139,169,160,.34);
+    box-shadow:
+      0 22px 56px rgba(0,0,0,.50),
+      inset 0 1px 0 rgba(255,255,255,.025);
+    backdrop-filter:blur(18px) saturate(112%);
+    -webkit-backdrop-filter:blur(18px) saturate(112%);
+  }
+}
+
+@media (min-width:1181px) and (max-width:1671px){
+  .shell{
+    width:calc(100vw - 48px);
+  }
+  main{
+    grid-template-columns:
+      minmax(340px,425fr)
+      minmax(560px,660fr)
+      minmax(360px,447fr);
+    gap:18px;
+  }
+  .lpanel,.game,.rpanel{width:auto}
+  .game{
+    padding-left:clamp(22px,1.75vw,29px);
+    padding-right:clamp(22px,1.75vw,29px);
+  }
+}
