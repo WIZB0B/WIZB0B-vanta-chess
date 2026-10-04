@@ -29,6 +29,7 @@ const DEFAULT_COMPUTER_BOTS=[
   {slug:'legend',display_name:'Legend',elo:2700,portrait:'bp'}
 ];
 let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
+let moveEvalByPly=[];
 const stockfish=new Worker('/stockfish.worker.js');
 const analysisWorker=new Worker('/stockfish.worker.js');
 stockfish.onmessage=({data})=>{
@@ -109,7 +110,7 @@ app.innerHTML=`
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
         <div class="player-info">
-          <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag is-placeholder" id="topFlag" aria-label="Country unavailable">--</span></div>
+          <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag hidden" id="topFlag" aria-hidden="true"></span></div>
           <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span></div>
         </div>
         <time id="blackClock">10:00</time>
@@ -122,7 +123,7 @@ app.innerHTML=`
       <div class="player bottom" data-player-bar="local">
         <span class="avatar light" id="bottomAvatar">GU</span>
         <div class="player-info">
-          <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag is-placeholder" id="bottomFlag" aria-label="Country unavailable">--</span></div>
+          <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag hidden" id="bottomFlag" aria-hidden="true"></span></div>
           <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span></div>
         </div>
         <div class="player-connection hidden" id="bottomConnection" aria-label="Network latency">
@@ -130,7 +131,7 @@ app.innerHTML=`
         </div>
         <time id="whiteClock">10:00</time>
       </div>
-      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button></div>
+      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat</button></div></details></div>
     </section>
 
     <aside class="rpanel panel">
@@ -140,11 +141,10 @@ app.innerHTML=`
       <div id="rightWorkspace">
         <section class="live-card"><span class="live-art" aria-hidden="true"><img src="/assets/vch/ui/live-banner.webp" alt=""></span>
           <div class="live-card-copy"><small>● &nbsp; Live Game</small><h2 id="turn">White to move</h2><p id="state">Real time &nbsp;•&nbsp; Casual game</p></div>
-          <div class="live-actions"><button id="draw" class="draw-chip">½ Draw</button><button id="openChat" class="chat-chip">Chat</button></div>
         </section>
 
         <div id="movesView" class="right-view">
-          <div class="moves-head"><span>Move</span><span>Eval</span><span>Time</span></div>
+          <div class="moves-head"><span>#</span><span>White</span><span>Black</span></div>
           <div id="moves" class="moves"><span>Game ready — make a move.</span></div>
           <div class="analysis">
             <header><b>▣ Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
@@ -153,10 +153,10 @@ app.innerHTML=`
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
           </div>
           <div class="feature-grid">
-            <button class="feature-card opening" data-action="openings"><span class="asset"><img src="/assets/vch/ui/opening-card.webp" alt=""></span><span class="feature-icon">▤</span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><i>›</i></button>
-            <button class="feature-card famous" data-action="famous"><span class="asset"><img src="/assets/vch/ui/famous-card.webp" alt=""></span><span class="feature-icon">♛</span><b>Famous Games</b><small>Study legendary matches and ideas.</small><i>›</i></button>
-            <button class="feature-card review" data-action="review"><span class="asset"><img src="/assets/vch/ui/review-card.webp" alt=""></span><span class="feature-icon">▥</span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><i>›</i></button>
-            <button class="feature-card practice" data-action="learn"><span class="asset"><img src="/assets/vch/ui/practice-card.webp" alt=""></span><span class="feature-icon">◎</span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><i>›</i></button>
+            <button class="feature-card opening" data-action="openings"><span class="asset"><img src="/assets/vch/ui/opening-card.webp" alt=""></span><span class="feature-icon-tile"><img src="/assets/vch/icons/opening.svg" alt=""></span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><span class="feature-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>
+            <button class="feature-card famous" data-action="famous"><span class="asset"><img src="/assets/vch/ui/famous-card.webp" alt=""></span><span class="feature-icon-tile"><img src="/assets/vch/icons/famous.svg" alt=""></span><b>Famous Games</b><small>Study legendary matches and ideas.</small><span class="feature-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>
+            <button class="feature-card review" data-action="review"><span class="asset"><img src="/assets/vch/ui/review-card.webp" alt=""></span><span class="feature-icon-tile"><img src="/assets/vch/icons/review.svg" alt=""></span><b>Post-Game Review</b><small>Deep engine analysis and game insights.</small><span class="feature-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>
+            <button class="feature-card practice" data-action="learn"><span class="asset"><img src="/assets/vch/ui/practice-card.webp" alt=""></span><span class="feature-icon-tile"><img src="/assets/vch/icons/learn.svg" alt=""></span><b>Practice & Learn</b><small>Puzzles, lessons and structured training.</small><span class="feature-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>
           </div>
         </div>
         <div id="dynamicView" class="right-view hidden"></div>
@@ -278,7 +278,7 @@ async function beginMatchSearch(){
   if(searching){await cancelMatchSearch();return}
   if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
   clearInterval(pollTimer);pollTimer=null;
-  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;
+  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;moveEvalByPly=[];
   game.reset();render();updateMoves();setMatchSearching(true);
   const started=Date.now();
   try{
@@ -322,7 +322,7 @@ function selectedComputerSide(){
 }
 function startComputerGame(){
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
-  clearInterval(pollTimer);pollTimer=null;serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;
+  clearInterval(pollTimer);pollTimer=null;serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];
   currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
@@ -337,7 +337,7 @@ async function activateLeftMode(next){
     computerStarted=false;localClockState=null;localGameOver=false;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;game.reset();render();updateMoves();
   }
   mode=next;syncPlayerBars();
-  $('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
+  $$('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
   $$('.mode-view').forEach(view=>{const active=view.dataset.modeView===next;view.classList.toggle('active',active);view.setAttribute('aria-hidden',String(!active))});
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   if(next==='room'&&serverGameId)startPolling();
@@ -348,15 +348,45 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   const reply=puzzleSession.solution[puzzleSession.index];
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made;try{if(mode==='computer')settleLocalClock();made=game.move(move)}catch{return}if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
+function isBookMove(records,index){
+  const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
+  return OPENINGS.some(opening=>index<opening.line.length&&sans.every((san,ply)=>san===normalizedSan(opening.line[ply])));
+}
+function recordEval(record,index){
+  const raw=record?.eval??record?.evaluation??record?.eval_cp??record?.score_cp;
+  if(raw!==undefined&&raw!==null&&raw!==''){
+    let value=Number(raw);
+    if(Number.isFinite(value)){
+      if((record.eval_cp!==undefined||record.score_cp!==undefined)&&Math.abs(value)>20)value/=100;
+      return (value>=0?'+':'')+value.toFixed(1);
+    }
+  }
+  const cached=moveEvalByPly[index];
+  return Number.isFinite(cached)?(cached>=0?'+':'')+cached.toFixed(1):'—';
+}
+function recordTime(record){
+  const raw=record?.elapsed_ms??record?.move_time_ms??record?.time_ms;
+  const ms=Number(raw);
+  if(!Number.isFinite(ms)||ms<=0)return '—';
+  if(ms<1000)return `${Math.round(ms)}ms`;
+  return `${(ms/1000).toFixed(ms<10000?1:0)}s`;
+}
+function moveCell(record,index,records){
+  if(!record)return '<span class="move-cell empty" aria-hidden="true"></span>';
+  const san=escapeHtml(record.san||record.lan||'');
+  const book=isBookMove(records,index)?'<img class="book-icon" src="/assets/vch/icons/book.svg" alt="Book move">':'';
+  return `<span class="move-cell"><span class="move-san">${book}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record)}</time></span></span>`;
+}
 function updateMoves(){
   const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history().map((san,index)=>({san,color:index%2?'b':'w'}));
   const target=$('#moves');if(!target)return;
-  if(!records.length){target.innerHTML='<span>Game ready — make a move.</span>';return}
-  target.innerHTML=records.map((record,index)=>{
-    const color=record.color||(index%2?'b':'w'),moveNo=Math.floor(index/2)+1,prefix=color==='w'?moveNo+'.':moveNo+'...';
-    const isLast=index===records.length-1,evalText=isLast?(analysisScore>=0?'+':'')+analysisScore.toFixed(1):'';
-    return `<div class="move-row"><span><b>${prefix}</b> ${escapeHtml(record.san||record.lan||'')}</span><span>${evalText}</span><span>${record.elapsed_ms?Math.max(1,Math.round(record.elapsed_ms/1000))+'s':''}</span></div>`;
-  }).join('');
+  if(!records.length){target.innerHTML='<span class="moves-empty">Game ready — make a move.</span>';return}
+  const rows=[];
+  for(let i=0;i<records.length;i+=2){
+    rows.push(`<div class="move-pair-row"><span class="move-number">${Math.floor(i/2)+1}</span>${moveCell(records[i],i,records)}${moveCell(records[i+1],i+1,records)}</div>`);
+  }
+  target.innerHTML=rows.join('');
   target.scrollTop=target.scrollHeight;
 }
 async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
@@ -404,9 +434,16 @@ function playerInitials(value,fallback='GU'){
 function setPlayerFlag(element,code){
   if(!element)return;
   const normalized=/^[a-z]{2}$/i.test(String(code||''))?String(code).toUpperCase():'';
-  element.textContent=normalized||'--';
-  element.classList.toggle('is-placeholder',!normalized);
-  element.setAttribute('aria-label',normalized?`Country ${normalized}`:'Country unavailable');
+  const flagSrc=normalized==='US'?'/assets/vch/flags/us.svg':'';
+  element.classList.toggle('hidden',!flagSrc);
+  element.toggleAttribute('aria-hidden',!flagSrc);
+  if(flagSrc){
+    element.innerHTML=`<img src="${flagSrc}" alt="">`;
+    element.setAttribute('aria-label','United States flag');
+  }else{
+    element.replaceChildren();
+    element.removeAttribute('aria-label');
+  }
 }
 function setPresence(element,label,online=false){
   if(!element)return;
@@ -459,6 +496,7 @@ function syncRoomUi(){
 function applyServerState(payload){
   const state=payload.game||payload;if(!state)return;
   const previousVersion=serverVersion,previousGameId=serverGameId;
+  if(state.id&&state.id!==previousGameId)moveEvalByPly=[];
   animateLastServerMove(state,previousGameId===state.id?previousVersion:0);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
@@ -605,6 +643,7 @@ function updateAnalysisFromUci(text){
     let score=scoreMatch[1]==='mate'?(Number(scoreMatch[2])>0?99:-99):Number(scoreMatch[2])/100;
     if(game.turn()==='b')score=-score;
     analysisScore=Math.max(-99,Math.min(99,score));
+    const analyzedPly=currentHistory().length;if(analyzedPly)moveEvalByPly[analyzedPly-1]=analysisScore;
     const scoreEl=$('#score');if(scoreEl)scoreEl.textContent=(analysisScore>=0?'+':'')+(Math.abs(analysisScore)>=90?'M'+Math.abs(Number(scoreMatch[2])||1):analysisScore.toFixed(1));
     const fill=$('#meterFill');if(fill)fill.style.width=(50+Math.max(-45,Math.min(45,analysisScore*8)))+'%';
     const advantage=$('#advantage');if(advantage)advantage.textContent=Math.abs(analysisScore)<.2?'Equal position':analysisScore>0?'Advantage for White':'Advantage for Black';

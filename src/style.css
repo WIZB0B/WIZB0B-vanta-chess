@@ -1561,3 +1561,95 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .board .piece{width:85%;height:85%}
 }
 @media(prefers-reduced-motion:reduce){.ping-bars[data-quality="pending"] i:first-child{animation:none}}
+
+
+/* Batch 5 + requested regressions: coordinates, flags, move table, Live Game cleanup, feature icon tiles. */
+.board-coords{font-size:11px;font-weight:760;color:rgba(236,240,231,.82)}
+@media(max-width:800px){.board-coords{font-size:10px;font-weight:750}}
+
+.player-flag{
+  width:29px;height:18px;flex:0 0 29px;display:grid;place-items:center;
+  overflow:hidden;border:1px solid rgba(225,231,222,.24);border-radius:3px;
+  background:transparent;box-shadow:0 2px 6px rgba(0,0,0,.22)
+}
+.player-flag.hidden{display:none}
+.player-flag img{display:block;width:100%;height:100%;object-fit:cover}
+
+.tools{grid-template-columns:repeat(4,minmax(0,1fr)) 40px}
+.game-more{position:relative;height:100%;min-width:0}
+.game-more>summary{
+  width:100%;height:100%;display:grid;place-items:center;cursor:pointer;
+  border:1px solid rgba(255,255,255,.06);border-radius:8px;
+  background:linear-gradient(180deg,#182221,#121b1b);color:#b9c4c0;list-style:none
+}
+.game-more>summary::-webkit-details-marker{display:none}
+.game-more>summary svg{width:18px;height:18px;fill:currentColor}
+.game-more-menu{
+  position:absolute;z-index:15;right:0;bottom:calc(100% + 7px);width:128px;
+  display:grid;gap:5px;padding:6px;border:1px solid #344a43;border-radius:9px;
+  background:rgba(7,17,17,.98);box-shadow:0 14px 34px rgba(0,0,0,.52)
+}
+.game-more:not([open]) .game-more-menu{display:none}
+.game-more-menu button{height:34px!important;padding:0 10px!important;text-align:left;font-size:10px!important}
+
+.live-card-copy{max-width:61%}
+.live-card .live-actions{display:none!important}
+
+.moves-head{
+  display:grid;grid-template-columns:30px minmax(0,1fr) minmax(0,1fr);
+  gap:0;padding:0 8px 6px;color:#6f807c;font-size:8px;text-transform:uppercase;letter-spacing:.8px
+}
+.moves-head span:not(:first-child){padding-left:8px}
+.moves{height:150px;margin-top:0;overflow:auto;background:rgba(6,14,15,.52);border-color:#243532}
+.moves-empty{display:block;padding:16px;color:#82918d;font-size:10px}
+.move-pair-row{
+  display:grid!important;grid-template-columns:30px minmax(0,1fr) minmax(0,1fr)!important;
+  align-items:stretch;min-height:42px;padding:0!important;border-bottom:1px solid rgba(255,255,255,.055)
+}
+.move-pair-row:last-child{border-bottom:0}
+.move-number{
+  display:grid;place-items:center;color:#667873;font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  border-right:1px solid rgba(255,255,255,.045)
+}
+.move-cell{
+  min-width:0;display:grid;align-content:center;gap:4px;padding:6px 8px;
+  border-right:1px solid rgba(255,255,255,.04)
+}
+.move-cell:last-child{border-right:0}
+.move-cell.empty{opacity:.35}
+.move-san{display:flex;align-items:center;gap:5px;min-width:0}
+.move-san b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e3e8e4;font-size:10px}
+.book-icon{width:12px;height:12px;flex:0 0 12px;opacity:.82}
+.move-meta{display:flex;align-items:center;gap:7px;color:#758680;font-size:8px}
+.move-meta em{font-style:normal;color:#9eb0aa;font-variant-numeric:tabular-nums}
+.move-meta time{font:inherit;color:#6f807b}
+
+.feature-grid{gap:9px}
+.feature-card{
+  min-height:126px!important;padding:60px 38px 12px 64px!important;
+  isolation:isolate;background:#0a1414!important
+}
+.feature-card .asset{
+  position:absolute!important;inset:0!important;width:100%!important;height:100%!important;
+  aspect-ratio:auto!important;opacity:.46!important;filter:saturate(.82) contrast(1.05)!important
+}
+.feature-card .asset img{width:100%;height:100%;object-fit:cover}
+.feature-card:after{
+  content:"";position:absolute!important;z-index:1!important;inset:0!important;height:auto!important;
+  background:linear-gradient(90deg,rgba(5,14,14,.96) 0 38%,rgba(5,14,14,.70) 61%,rgba(5,14,14,.30) 100%),linear-gradient(0deg,rgba(5,14,14,.92),transparent 68%)!important
+}
+.feature-card .feature-icon-tile{
+  position:absolute;z-index:3;left:12px;top:13px;width:42px;height:42px;
+  display:grid;place-items:center;border:1px solid rgba(229,193,124,.38);border-radius:9px;
+  background:linear-gradient(145deg,rgba(57,52,38,.96),rgba(25,29,26,.94));
+  box-shadow:0 7px 18px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.05)
+}
+.feature-card .feature-icon-tile img{width:22px;height:22px;object-fit:contain}
+.feature-card b,.feature-card small,.feature-card .feature-arrow{position:relative;z-index:3}
+.feature-card b{display:block;font-size:12px;margin:0}
+.feature-card small{display:block;margin-top:5px;padding:0;color:#a5b0ac;font-size:9px;line-height:1.35}
+.feature-card .feature-arrow{
+  position:absolute;right:11px;bottom:11px;width:18px;height:18px;display:grid;place-items:center;color:#e2ca92
+}
+.feature-card .feature-arrow svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.feature-card .feature-icon{display:none!important}

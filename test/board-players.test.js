@@ -15,10 +15,11 @@ test('player bars expose avatar, flag, rating, live state, clock, and online-onl
   assert.match(main,/setPresence\(\$\('#topPresence'\),currentBot\?'ENGINE'/);
 });
 
-test('country slots stay neutral when no country code exists',()=>{
-  assert.match(main,/class="player-flag is-placeholder"/);
-  assert.match(main,/element\.textContent=normalized\|\|'--'/);
-  assert.match(main,/Country unavailable/);
+test('player flags use a real SVG and disappear when no supported country is set',()=>{
+  assert.match(main,/\/assets\/vch\/flags\/us\.svg/);
+  assert.match(main,/element\.classList\.toggle\('hidden',!flagSrc\)/);
+  assert.doesNotMatch(main,/class="player-flag is-placeholder"/);
+  assert.doesNotMatch(main,/element\.textContent=normalized\|\|'--'/);
 });
 
 test('board uses reference-scale pieces, contact shadows, and stronger last-move color',()=>{
