@@ -18,7 +18,7 @@ const pieceBase='https://ubjldcfiwrwiouwgmduo.supabase.co/functions/v1/vanta-web
 const pieceUrl=p=>`${pieceBase}/${p.color}${pieceFile[p.type]}.webp`;
 const app=$('#app');
 app.innerHTML=`
-<div class="shell"><header><a class="brand"><span class="mark">V</span><b>VANTA<br>CHESS</b></a><nav><button class="active">♞ <span>Play</span></button><button>♛ <span>Arena</span></button><button>♟ <span>Puzzles</span></button><button>▤ <span>Learn</span></button><button>♜ <span>Openings</span></button></nav><div class="user"><i></i><span>Guest-${room.slice(-4)}</span><small>1200 rating</small></div></header>
+<div class="shell"><header><a class="brand"><span class="mark">V</span><b>VANTA<br>CHESS</b></a><nav><button class="active">♞ <span>Play</span></button><button>♛ <span>Arena</span></button><button>♟ <span>Puzzles</span></button><button>▤ <span>Learn</span></button><button>♜ <span>Openings</span></button><span class="nav-visual">▣ <b>Famous Games</b></span><span class="nav-visual">✓ <b>Review</b></span></nav><div class="header-actions" aria-hidden="true"><span class="head-icon">⌕</span><span class="install-visual">⇩ <b>Install App</b></span><span class="head-icon">♢</span></div><div class="user"><i></i><span>Guest-${room.slice(-4)}</span><small>1200 rating</small></div></header>
 <main><aside class="lpanel panel">
   <div class="hero">
     <div class="hero-knight" aria-hidden="true"></div>
