@@ -19,6 +19,6 @@ for (const asset of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wa
   if (!existsSync(join('public/engines', asset))) failures.push(`prepared Stockfish asset missing: ${asset}`);
 }
 if (existsSync('public/engines/Copying.txt') && !readFileSync('public/engines/Copying.txt', 'utf8').includes('GNU GENERAL PUBLIC LICENSE')) failures.push('prepared Stockfish GPL license is invalid');
-for (const asset of ['wk.png','wq.png','wr.png','wb.png','wn.png','wp.png','bk.png','bq.png','br.png','bb.png','bn.png','bp.png','wallpaper-emerald.webp','wallpaper-cobalt.webp','wallpaper-burgundy.webp','wallpaper-ivory.webp','hero-knight.png','opening-card.png','famous-card.png','review-card.png','practice-card.png','live-banner.png']) if (!existsSync(join('public/assets/generated', asset))) failures.push(`prepared VCH visual asset missing: ${asset}`);
+for (const asset of ['wk.png','wq.png','wr.png','wb.png','wn.png','wp.png','bk.png','bq.png','br.png','bb.png','bn.png','bp.png','wallpaper-emerald.webp','wallpaper-cobalt.webp','wallpaper-burgundy.webp','wallpaper-ivory.webp','hero-knight.png','opening-card.png','famous-card.png','review-card.png','practice-card.png','live-banner.png','reference-ui.png']) if (!existsSync(join('public/assets/generated', asset))) failures.push(`prepared VCH visual asset missing: ${asset}`);
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`security-check: ${files.length} files inspected`);
