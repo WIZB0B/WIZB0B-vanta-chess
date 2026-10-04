@@ -580,7 +580,7 @@ function activateNav(kind){
   if(kind==='famous')renderFamous();
   if(kind==='review')renderReview();
 }
-$('.main-nav button').forEach(button=>button.onclick=()=>{activateNav(button.dataset.nav);document.querySelector('#gameWorkspace')?.scrollIntoView({block:'start'})});
+$$('.main-nav button').forEach(button=>button.onclick=()=>{activateNav(button.dataset.nav);document.querySelector('#gameWorkspace')?.scrollIntoView({block:'start'})});
 $('#joinNow').onclick=()=>document.querySelector('#gameWorkspace')?.scrollIntoView({behavior:'smooth',block:'start'});
 if(params.get('game'))$('#mainMenu')?.classList.add('direct-game');
 $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
