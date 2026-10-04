@@ -1185,3 +1185,45 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .menu-tile:nth-child(2){border-right:0}
   .menu-tile h2{font-size:12px}
 }
+
+
+/* === COMMITTED VCH BRAND ASSETS === */
+.vch-wordmark,.main-menu-wordmark,.account-wordmark,.view-wordmark,.search-wordmark,.brand-loading img,.brand-splash-wordmark img{
+  display:block;width:auto;min-height:20px;object-fit:contain
+}
+.vch-wordmark-top{height:24px;max-width:118px}
+.main-menu-wordmark{height:32px;margin:0 0 27px}
+.account-wordmark{height:27px;margin:0 0 10px}
+.view-wordmark{height:20px;margin:0 0 3px}
+.search-title{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.search-title h2{margin:0}.search-wordmark{height:20px}
+.brand-loading{display:grid;justify-items:start;gap:8px}
+.brand-loading img{height:24px}.brand-loading span{display:block}
+.brand-splash{
+  position:fixed;inset:0;z-index:10000;display:grid;place-items:center;pointer-events:none;
+  opacity:1;transition:opacity .45s ease;
+  background:
+    linear-gradient(180deg,rgba(3,8,6,.80),rgba(2,7,5,.94)),
+    linear-gradient(90deg,rgba(0,0,0,.48),transparent 55%,rgba(0,0,0,.30)),
+    url('/assets/vch/brand/brand-atmosphere.png') center/cover no-repeat,#080b0a
+}
+.brand-splash.done{opacity:0}
+.brand-splash-wordmark{position:relative;overflow:hidden;padding:18px 22px}
+.brand-splash-wordmark img{height:clamp(74px,8vw,118px);max-width:min(72vw,760px)}
+.brand-splash-wordmark::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.50) 49%,transparent 63%);
+  background-size:320% 100%;background-position:120% 0;
+  -webkit-mask:url('/assets/vch/brand/vch-metal.svg') center/contain no-repeat;
+  mask:url('/assets/vch/brand/vch-metal.svg') center/contain no-repeat;
+  animation:vchWordmarkShine 2s ease-in-out .05s 1
+}
+@keyframes vchWordmarkShine{0%{background-position:120% 0}100%{background-position:-120% 0}}
+.account-dialog{
+  background:
+    linear-gradient(180deg,rgba(5,12,10,.84),rgba(5,12,10,.97)),
+    url('/assets/vch/brand/brand-atmosphere.png') center/cover no-repeat!important
+}
+.account-head{position:relative;z-index:1}
+@media(max-width:800px){.vch-wordmark-top{height:20px;max-width:none}.main-menu-wordmark{height:27px}}
+@media(prefers-reduced-motion:reduce){.brand-splash-wordmark::after{animation:none}}

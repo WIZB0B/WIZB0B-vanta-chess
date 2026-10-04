@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-98 -784 2636 904" role="img" aria-label="VCH">
+<defs>
+<linearGradient id="chrome" gradientUnits="userSpaceOnUse" x1="0" y1="-714" x2="0" y2="20">
+ <stop offset="0" stop-color="#ffffff"/><stop offset=".18" stop-color="#ecebe6"/>
+ <stop offset=".40" stop-color="#a7a39a"/><stop offset=".47" stop-color="#3d3a35"/>
+ <stop offset=".52" stop-color="#5e5a52"/><stop offset=".70" stop-color="#b9ad93"/>
+ <stop offset=".88" stop-color="#e9dcbc"/><stop offset="1" stop-color="#9c8d6c"/>
+</linearGradient>
+<linearGradient id="rim" gradientUnits="userSpaceOnUse" x1="0" y1="-714" x2="0" y2="20">
+ <stop offset="0" stop-color="#fffef8"/><stop offset=".47" stop-color="#2a2824"/><stop offset="1" stop-color="#d9c79d"/>
+</linearGradient>
+<linearGradient id="sheen" gradientUnits="userSpaceOnUse" x1="-28" y1="-714" x2="2468" y2="20">
+ <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".40" stop-color="#fff" stop-opacity="0"/>
+ <stop offset=".48" stop-color="#fff" stop-opacity=".45"/><stop offset=".52" stop-color="#fff" stop-opacity=".45"/>
+ <stop offset=".60" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+</linearGradient>
+<filter id="shadow" x="-10%" y="-20%" width="120%" height="160%"><feGaussianBlur stdDeviation="16"/></filter>
+<filter id="inner"><feOffset dy="5"/><feGaussianBlur stdDeviation="3" result="o"/><feComposite in="SourceAlpha" in2="o" operator="out" result="i"/><feFlood flood-color="#fff" flood-opacity=".7"/><feComposite in2="i" operator="in"/></filter>
+<path id="w" d="M368 20 68 -627Q52 -661 27.5 -675.5Q3 -690 -20 -690H-28V-700H290V-690H281Q262 -690 247.5 -673.5Q233 -657 244 -627L413 -214L589 -627Q602 -657 586.0 -673.5Q570 -690 551 -690H542V-700H756V-690H747Q725 -690 700.5 -675.5Q676 -661 660 -627H659L426 -111Q424 -105 416.5 -88.5Q409 -72 400.0 -51.0Q391 -30 384.5 -10.5Q378 9 377 20ZM1520 -292 1529 -120Q1507 -83 1470.0 -53.0Q1433 -23 1378.0 -4.5Q1323 14 1248 14Q1126 13 1034.5 -30.5Q943 -74 893.0 -155.0Q843 -236 843 -351Q843 -463 892.0 -544.5Q941 -626 1032.5 -670.0Q1124 -714 1251 -714Q1331 -714 1394.5 -698.0Q1458 -682 1501 -659L1502 -488H1493Q1466 -587 1405.0 -629.5Q1344 -672 1262 -672Q1182 -672 1125.0 -633.0Q1068 -594 1037.0 -523.0Q1006 -452 1006 -353Q1006 -254 1035.5 -182.0Q1065 -110 1119.5 -70.0Q1174 -30 1248 -28Q1325 -28 1378.0 -53.0Q1431 -78 1463.5 -136.0Q1496 -194 1512 -292ZM1767 -73V-627Q1766 -653 1747.5 -671.5Q1729 -690 1703 -690H1690V-700H1994V-690H1981Q1955 -690 1936.5 -671.5Q1918 -653 1917 -627V-370H2241V-627Q2241 -653 2222.0 -671.5Q2203 -690 2177 -690H2164V-700H2468V-690H2455Q2429 -690 2410.5 -671.5Q2392 -653 2391 -627V-73Q2392 -47 2410.5 -28.5Q2429 -10 2455 -10H2468V0H2164V-10H2177Q2203 -10 2222.0 -28.5Q2241 -47 2241 -73V-327H1917V-73Q1918 -47 1936.5 -28.5Q1955 -10 1981 -10H1994V0H1690V-10H1703Q1729 -10 1747.5 -28.5Q1766 -47 1767 -73Z"/>
+</defs>
+
+<use href="#w" fill="#000" opacity=".6" transform="translate(0,22)" filter="url(#shadow)"/>
+<use href="#w" fill="none" stroke="url(#rim)" stroke-width="16" stroke-linejoin="round"/>
+<use href="#w" fill="url(#chrome)"/>
+<use href="#w" fill="url(#sheen)"/>
+
+</svg>

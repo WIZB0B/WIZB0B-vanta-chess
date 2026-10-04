@@ -18,7 +18,7 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
   await expect(page.locator('.board')).toHaveCSS('aspect-ratio','1 / 1');
 
   const runtimeAssets=[
-    '/manifest.webmanifest','/sw.js','/stockfish.worker.js',
+    '/manifest.webmanifest','/sw.js','/icon.svg','/icon-192.png','/icon-512.png','/assets/vch/brand/vch-metal.svg','/assets/vch/brand/vch-logo-light.svg','/assets/vch/brand/brand-atmosphere.png','/stockfish.worker.js',
     '/engines/stockfish-19-lite-single.js','/engines/stockfish-19-lite-single.wasm','/engines/Copying.txt',
     '/assets/vch/pieces/wk.webp','/assets/vch/pieces/bq.webp','/assets/vch/ui/hero-knight.webp',
     '/assets/vch/ui/opening-card.webp','/assets/vch/ui/famous-card.webp','/assets/vch/ui/review-card.webp',

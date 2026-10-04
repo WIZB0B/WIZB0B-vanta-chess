@@ -29,10 +29,13 @@ analysisWorker.onmessage=({data})=>{
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const app=$('#app');
 app.innerHTML=`
+<div id="brandSplash" class="brand-splash" aria-hidden="true">
+  <div class="brand-splash-wordmark"><img src="/assets/vch/brand/vch-metal.svg" alt=""></div>
+</div>
 <div class="shell">
   <header class="topbar">
     <a class="brand vch-brand" href="#" aria-label="VCH home">
-      <img class="vch-brand-logo" src="/icon.svg" alt="VCH">
+      <img class="vch-wordmark vch-wordmark-top" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
     </a>
     <nav class="main-nav" aria-label="Primary">
       <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg></span>Play</button>
@@ -58,7 +61,7 @@ app.innerHTML=`
     <div class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</div>
     <div class="main-menu-hero">
       <div class="main-menu-copy">
-        <div class="main-menu-eyebrow">VCH</div>
+        <img class="main-menu-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
         <h1 id="mainMenuTitle">Play Better<br>Chess</h1>
         <p class="main-menu-subtext">Competitive games. Real progress. A community that thinks ahead.</p>
         <button id="joinNow" class="join-now" type="button"><span>Join Now</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10M13 8l4 4-4 4"/></svg></button>
@@ -168,7 +171,7 @@ app.innerHTML=`
 
 <dialog id="accountDialog" class="account-dialog">
   <form method="dialog"><button class="account-close" aria-label="Close">×</button></form>
-  <div class="account-head"><small>VANTA CHESS ACCOUNT</small><h2>Save your rating and record</h2><p>Guest games stay instant. Sign in only when you want rated play, tournaments, and a persistent profile.</p></div>
+  <div class="account-head"><img class="account-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h2>Save your rating and record</h2><p>Guest games stay instant. Sign in only when you want rated play, tournaments, and a persistent profile.</p></div>
   <div id="accountGuest">
     <div class="auth-tabs"><button type="button" class="on" data-auth="signin">Sign in</button><button type="button" data-auth="signup">Create account</button></div>
     <label id="usernameField" class="hidden">Username<input id="authUsername" autocomplete="username" maxlength="20" placeholder="3–20 letters, numbers or _"></label>
@@ -184,8 +187,12 @@ app.innerHTML=`
   </div>
 </dialog>
 
-<dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><h2>Search Vanta Chess</h2><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
+<dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><div class="search-title"><img class="search-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h2>Search</h2></div><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
 `
+
+const brandSplash=$('#brandSplash');
+setTimeout(()=>brandSplash?.classList.add('done'),2050);
+setTimeout(()=>brandSplash?.remove(),2550);
 
 let clocks=initialClocks(Number($('#time').value));
 function render(){
@@ -488,7 +495,7 @@ function showMovesView(){
 function setDynamicView(kind,title,html){
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
-  const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><small>VANTA CHESS</small><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
+  const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
   target.querySelector('.back-view').onclick=showMovesView;
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
 }
@@ -550,9 +557,12 @@ function renderReview(){
   $('#dynamicView .analyze-now').onclick=()=>{showMovesView();scheduleAnalysis()};
   const replay=$('#dynamicView .replay-review');if(replay)replay.onclick=()=>renderStudy('review','Game Replay',sans,opening?opening.name:'Current game');
 }
+function brandLoading(label){
+  return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
+}
 async function showBackendView(kind){
   if(kind==='puzzle'){
-    setDynamicView('puzzles','Puzzle Training','<div class="loading-card">Loading a real tactical position…</div>');
+    setDynamicView('puzzles','Puzzle Training',brandLoading('Loading a real tactical position…'));
     try{
       const data=await api.puzzleNext('normal',1400),puzzle=data.puzzle||data;
       game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;
@@ -564,7 +574,7 @@ async function showBackendView(kind){
     return;
   }
   if(kind==='arena'){
-    setDynamicView('arena','Arena','<div class="loading-card">Loading live Vanta tournaments…</div>');
+    setDynamicView('arena','Arena',brandLoading('Loading live tournaments…'));
     try{
       const data=await api.tournaments(),events=data.tournaments||data.events||[];
       const target=$('#dynamicView .view-content');
@@ -626,7 +636,7 @@ $('#searchInput').oninput=e=>{
   [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{$('#searchDialog').close();activateNav(results[i].action)});
 };
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.add('ready')});
-$('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install Vanta Chess')};
+$('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
 $('#notifyBtn').onclick=()=>toast('Game notifications will appear here');
 const savedTheme=JSON.parse(localStorage.getItem('vanta.theme')||'{}');document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece||'#f0d9a4');document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint??.18));
 for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else document.documentElement.style.setProperty(key,value)}

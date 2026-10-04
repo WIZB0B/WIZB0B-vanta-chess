@@ -27,6 +27,9 @@ const vchAssets = [
   'ui/hero-knight.webp','ui/live-banner.webp','ui/opening-card.webp','ui/famous-card.webp','ui/review-card.webp','ui/practice-card.webp'
 ];
 for (const asset of vchAssets) if (!existsSync(join('public/assets/vch', asset))) failures.push(`committed VCH visual asset missing: ${asset}`);
+for (const asset of ['vch-metal.svg','vch-logo-light.svg','brand-atmosphere.png']) if (!existsSync(join('public/assets/vch/brand', asset))) failures.push(`committed VCH brand asset missing: ${asset}`);
+for (const icon of ['icon.svg','icon-192.png','icon-512.png']) if (!existsSync(join('public', icon))) failures.push(`VCH app icon missing: ${icon}`);
+if (existsSync('public/icon.svg') && existsSync('public/assets/vch/brand/vch-logo-light.svg') && readFileSync('public/icon.svg','utf8') !== readFileSync('public/assets/vch/brand/vch-logo-light.svg','utf8')) failures.push('public/icon.svg must exactly match vch-logo-light.svg');
 for (const name of ['hero-knight','live-banner','opening-card','famous-card','review-card','practice-card']) if (existsSync(join('public/assets/vch/ui', name + '.png'))) failures.push(`source UI PNG must not be deployed: ${name}.png`);
 if (!existsSync(join('e2e/fixtures/reference-ui.png'))) failures.push('reference-ui.png must remain test-only under e2e/fixtures');
 for (const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']) if (existsSync(join('public/assets/vch/pieces', name + '.png'))) failures.push(`source PNG must not be deployed: ${name}.png`);
