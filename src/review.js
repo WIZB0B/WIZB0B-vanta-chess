@@ -46,6 +46,13 @@ export function classifyMove({beforeCp=0,afterCp=0,color='w',isBook=false,isBest
   return 'good';
 }
 
+export function accuracyFromLosses(losses=[]){
+  const values=losses.map(finite).filter(value=>value>=0);
+  if(!values.length)return 100;
+  const average=values.reduce((sum,value)=>sum+value,0)/values.length;
+  return clamp(100*Math.exp(-0.04*average),0,100);
+}
+
 export function classificationAsset(key){
   const meta=CLASSIFICATION_META[key]||CLASSIFICATION_META.good;
   if(key==='book')return '/assets/vch/icons/book.svg';

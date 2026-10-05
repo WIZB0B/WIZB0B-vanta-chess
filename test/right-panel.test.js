@@ -40,7 +40,7 @@ test('board coordinates are larger than the old 9px treatment',()=>{
 test('move row 1 stays visible and move times render as seconds',()=>{
   assert.match(main,/target\.scrollTop=0/);
   assert.doesNotMatch(main,/target\.scrollTop=target\.scrollHeight/);
-  assert.match(main,/return formatMoveDuration\(raw\)\|\|'0s'/);
+  assert.match(main,/return formatMoveDuration\(raw\)\|\|'1s'/);
   const batch=css.slice(css.lastIndexOf('/* Batch 6:'));
   assert.match(batch,/\.moves\{\s*padding-top:4px/);
 });

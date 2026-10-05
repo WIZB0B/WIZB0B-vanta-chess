@@ -4,7 +4,7 @@ import { VchApi, stableGuestToken } from './vch-api.js';
 import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
-import { REVIEW_DEPTH, CLASSIFICATION_META, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
+import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -31,7 +31,7 @@ const DEFAULT_COMPUTER_BOTS=[
 ];
 let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
 let moveEvalByPly=[],moveTimeByPly=[];
-let reviewState={running:false,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
+let reviewState={running:false,viewing:false,currentPly:0,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
 let reviewPending=null;
 const stockfish=new Worker('/stockfish.worker.js');
 const analysisWorker=new Worker('/stockfish.worker.js');
@@ -139,8 +139,10 @@ app.innerHTML=`
         <time id="blackClock">10:00</time>
       </div>
       <div class="board-shell">
+        <div id="reviewEvalBar" class="review-eval-bar hidden" aria-label="Review evaluation"><div><i id="reviewEvalFill"></i></div><span id="reviewEvalText">0.0</span></div>
         <div id="rankCoords" class="board-coords board-ranks" aria-hidden="true"></div>
         <div id="board" class="board" aria-label="Chess board"></div>
+        <svg id="reviewArrows" class="review-arrows hidden" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div id="fileCoords" class="board-coords board-files" aria-hidden="true"></div>
       </div>
       <div class="player bottom" data-player-bar="local">
@@ -176,6 +178,21 @@ app.innerHTML=`
             <p id="advantage">Equal position</p>
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
             <button id="reviewGame" class="review-game hidden" type="button"><img src="/assets/vch/icons/review.svg" alt="">Review game</button>
+            <section id="reviewDashboard" class="review-dashboard hidden" aria-label="Game review">
+              <div class="review-accuracy">
+                <div><small>White accuracy</small><b id="whiteAccuracy">—</b></div>
+                <div><small>Black accuracy</small><b id="blackAccuracy">—</b></div>
+              </div>
+              <div id="reviewCounts" class="review-counts" aria-label="Move classifications"></div>
+              <div class="review-graph-shell"><div class="review-graph-head"><small>Evaluation graph</small><span id="reviewPlyLabel">Start</span></div><svg id="reviewGraph" class="review-graph" viewBox="0 0 320 96" preserveAspectRatio="none" aria-label="Game evaluation graph"></svg></div>
+              <div class="review-step-controls" aria-label="Review navigation">
+                <button id="reviewFirst" type="button">First</button>
+                <button id="reviewPrev" type="button">Previous</button>
+                <button id="reviewNext" type="button">Next</button>
+                <button id="reviewLast" type="button">Last</button>
+              </div>
+              <p id="reviewExplanation" class="review-explanation">Select a move to see the engine explanation.</p>
+            </section>
           </div>
           <div class="feature-grid">
             <button class="feature-card opening" data-action="openings"><span class="asset"><img src="/assets/vch/ui/opening-card.webp" alt=""></span><span class="feature-icon-tile"><img src="/assets/vch/icons/opening.svg" alt=""></span><b>Opening Explorer</b><small>Explore moves, theory and master plans.</small><span class="feature-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>
@@ -234,11 +251,14 @@ function render(){
   const rankCoords=$('#rankCoords'),fileCoords=$('#fileCoords');
   if(rankCoords)rankCoords.innerHTML=(flipped?['1','2','3','4','5','6','7','8']:['8','7','6','5','4','3','2','1']).map(value=>`<span>${value}</span>`).join('');
   if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map(value=>`<span>${value}</span>`).join('');
-  const pos=game.board().flat(), legal=selected?game.moves({square:selected,verbose:true}):[];
-  const localLast=game.history({verbose:true}).at(-1),serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null,lastMove=serverLast||localLast;
+  const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
+  const boardGame=reviewFen?new Chess(reviewFen):game;
+  const pos=boardGame.board().flat(), legal=reviewState.viewing?[]:(selected?game.moves({square:selected,verbose:true}):[]);
+  const localLast=game.history({verbose:true}).at(-1),serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null;
+  const reviewLast=reviewState.viewing&&reviewState.currentPly>0?reviewState.moves[reviewState.currentPly-1]:null,lastMove=reviewLast||serverLast||localLast;
   let checked=-1;
-  if(game.inCheck()){
-    const checkedColor=game.turn();
+  if(boardGame.inCheck()){
+    const checkedColor=boardGame.turn();
     checked=pos.findIndex(p=>p?.type==='k'&&p.color===checkedColor);
   }
   order.forEach(i=>{
@@ -247,7 +267,7 @@ function render(){
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
     if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
-    const boardReview=reviewResultForCurrentLastMove(lastMove);
+    const boardReview=reviewState.viewing?reviewState.results[reviewState.currentPly-1]:reviewResultForCurrentLastMove(lastMove);
     if(boardReview&&lastMove?.to===sq)el.insertAdjacentHTML('beforeend',reviewBadgeMarkup(boardReview,'board-review-badge'));
     el.onclick=()=>clickSquare(sq,p); board.append(el);
   });
@@ -265,10 +285,11 @@ function render(){
   document.body.dataset.seat=myColor||'';
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
+  renderReviewBoardDecorations();
   updateOpeningLabel();scheduleAnalysis();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
-async function clickSquare(sq,p){if(localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
+async function clickSquare(sq,p){if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
 function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');d.showModal();$$('#promotion button').forEach(b=>b.onclick=()=>{d.close();resolve(b.dataset.piece)})})}
 function resetLocalClock(){
   const seconds=mode==='computer'?600:Number($('#time').value);
@@ -395,7 +416,7 @@ function recordEval(record,index){
 }
 function recordTime(record,index){
   const raw=record?.elapsed_ms??record?.move_time_ms??record?.time_ms??moveTimeByPly[index];
-  return formatMoveDuration(raw)||'0s';
+  return formatMoveDuration(raw)||'1s';
 }
 function reviewBadgeMarkup(result,className='classification-badge'){
   if(!result?.classification)return '';
@@ -407,7 +428,8 @@ function moveCell(record,index,records,signature){
   const san=escapeHtml(record.san||record.lan||''),reviewResult=reviewState.signature===signature?reviewState.results[index]:null;
   const bookMove=isBookMove(records,index),book=bookMove&&reviewResult?.classification!=='book'?'<img class="book-icon" src="/assets/vch/icons/book.svg" alt="Book move">':'';
   const badge=reviewResult?reviewBadgeMarkup(reviewResult):bookMove?'<span class="classification-badge classification-book" title="Book"><img src="/assets/vch/icons/book.svg" alt="Book"></span>':'';
-  return `<span class="move-cell"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
+  const current=reviewState.viewing&&reviewState.currentPly===index+1?' current':'';
+  return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
 function updateMoves(){
   const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true});
@@ -419,6 +441,10 @@ function updateMoves(){
   }
   target.innerHTML=rows.join('');
   target.scrollTop=0;
+  $$('#moves [data-review-ply]').forEach(cell=>{
+    const jump=()=>{if(reviewState.results.length)setReviewPly(Number(cell.dataset.reviewPly))};
+    cell.onclick=jump;cell.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();jump()}};
+  });
 }
 async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
@@ -635,7 +661,7 @@ function paintDragTargets(square){
 }
 boardEl.addEventListener('dragstart',event=>{
   const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
-  const p=game.get(square);if(!p||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn()){event.preventDefault();return}
+  const p=game.get(square);if(!p||reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn()){event.preventDefault();return}
   selected=square;piece.classList.add('dragging');paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
 });
 boardEl.addEventListener('dragover',event=>{
@@ -658,7 +684,7 @@ function resetReviewState(){
     const pending=reviewPending;reviewPending=null;clearTimeout(pending.timer);reviewWorker.postMessage({action:'stop'});
     pending.reject(new Error('Review cancelled'));
   }
-  reviewState={running:false,signature:'',token:nextToken,positions:[],moves:[],evaluations:[],results:[]};
+  reviewState={running:false,viewing:false,currentPly:0,signature:'',token:nextToken,positions:[],moves:[],evaluations:[],results:[]};
   const progress=$('#reviewProgress');progress?.classList.add('hidden');
 }
 function isGameFinishedForReview(){
@@ -712,16 +738,103 @@ function reviewResultForCurrentLastMove(lastMove){
   const index=records.length-1,result=reviewState.results[index];
   return result&&result.to===lastMove.to?result:null;
 }
+function reviewSquareCenter(square){
+  if(!/^[a-h][1-8]$/.test(String(square||'')))return null;
+  const file=square.charCodeAt(0)-97,rank=Number(square[1]);
+  const col=flipped?7-file:file,row=flipped?rank-1:8-rank;
+  return {x:(col+.5)*12.5,y:(row+.5)*12.5};
+}
+function reviewArrowLine(from,to,kind){
+  const a=reviewSquareCenter(from),b=reviewSquareCenter(to);if(!a||!b)return '';
+  return `<line class="review-arrow ${kind}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" vector-effect="non-scaling-stroke" marker-end="url(#${kind==='best'?'reviewBestHead':'reviewPlayedHead'})"/>`;
+}
+function renderReviewBoardDecorations(){
+  const arrows=$('#reviewArrows'),bar=$('#reviewEvalBar');
+  if(!reviewState.viewing||!reviewState.results.length){
+    arrows?.classList.add('hidden');bar?.classList.add('hidden');return;
+  }
+  bar?.classList.remove('hidden');arrows?.classList.remove('hidden');
+  const evaluation=reviewState.evaluations[reviewState.currentPly]||{cp:0},cp=Math.max(-1200,Math.min(1200,Number(evaluation.cp)||0));
+  const whiteShare=50+45*Math.tanh(cp/420),fill=$('#reviewEvalFill'),text=$('#reviewEvalText');
+  if(fill)fill.style.height=`${whiteShare}%`;if(text)text.textContent=(cp>=0?'+':'')+(cp/100).toFixed(1);
+  const result=reviewState.currentPly>0?reviewState.results[reviewState.currentPly-1]:null;
+  if(!arrows)return;
+  const defs='<defs><marker id="reviewBestHead" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0 0 5 2.5 0 5Z"/></marker><marker id="reviewPlayedHead" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0 0 5 2.5 0 5Z"/></marker></defs>';
+  if(!result){arrows.innerHTML=defs;return}
+  const best=String(result.bestMove||''),bestFrom=best.slice(0,2),bestTo=best.slice(2,4),played=`${result.from}${result.to}${reviewState.moves[reviewState.currentPly-1]?.promotion||''}`.toLowerCase();
+  arrows.innerHTML=defs+(bestFrom&&bestTo?reviewArrowLine(bestFrom,bestTo,'best'):'')+(best&&played!==best.toLowerCase()?reviewArrowLine(result.from,result.to,'played'):'');
+}
+function reviewBestSan(index){
+  const result=reviewState.results[index],fen=reviewState.positions[index],uci=String(result?.bestMove||'');
+  if(!result||!fen||uci.length<4)return '';
+  try{
+    const position=new Chess(fen),move=position.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||undefined});
+    return move?.san||uci;
+  }catch{return uci}
+}
+function reviewExplanation(index){
+  const result=reviewState.results[index],move=reviewState.moves[index];if(!result||!move)return 'Start position — use Next to step through the review.';
+  const label=CLASSIFICATION_META[result.classification]?.label||'Move',best=reviewBestSan(index);
+  if(result.classification==='book')return `Book move ${move.san} — follows established opening theory.`;
+  if(result.classification==='brilliant')return `Brilliant ${move.san} — a strong sacrifice that keeps the engine's best continuation.`;
+  if(result.classification==='best')return `Best move ${move.san} — matches Stockfish's first choice.`;
+  if(result.classification==='great')return `Great move ${move.san} — keeps nearly all of the position's winning chances.`;
+  if(best&&normalizedSan(best)!==normalizedSan(move.san))return `${label}: ${move.san}. Best was ${best} — it preserves more winning chances.`;
+  return `${label}: ${move.san} — the engine line confirms the position remains close to best play.`;
+}
+function reviewAccuracyFor(color){
+  const losses=reviewState.results.filter((result,index)=>reviewState.moves[index]?.color===color).map(result=>result.loss);
+  return accuracyFromLosses(losses);
+}
+function renderReviewCounts(){
+  const target=$('#reviewCounts');if(!target)return;
+  const order=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder'];
+  target.innerHTML=order.map(key=>{
+    const count=reviewState.results.filter(result=>result.classification===key).length,meta=CLASSIFICATION_META[key];
+    return `<span title="${escapeHtml(meta.label)}"><img src="${classificationAsset(key)}" alt=""><b>${count}</b><small>${escapeHtml(meta.label)}</small></span>`;
+  }).join('');
+}
+function renderReviewGraph(){
+  const graph=$('#reviewGraph');if(!graph)return;
+  const evaluations=reviewState.evaluations;if(!evaluations.length){graph.innerHTML='';return}
+  const width=320,height=96,pad=7,span=Math.max(1,evaluations.length-1);
+  const point=(evaluation,index)=>{
+    const cp=Math.max(-1000,Math.min(1000,Number(evaluation?.cp)||0)),x=pad+(width-pad*2)*(index/span),y=height/2-(height/2-pad)*Math.tanh(cp/420);
+    return {x,y,cp};
+  };
+  const points=evaluations.map(point),polyline=points.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  graph.innerHTML=`<line class="graph-zero" x1="0" y1="${height/2}" x2="${width}" y2="${height/2}"/><polyline class="graph-line" points="${polyline}"/>`+points.map((p,index)=>`<circle class="graph-point${reviewState.currentPly===index?' current':''}" data-review-ply="${index}" cx="${p.x}" cy="${p.y}" r="${reviewState.currentPly===index?4:2.5}"/>`).join('');
+  graph.querySelectorAll('[data-review-ply]').forEach(point=>point.onclick=()=>setReviewPly(Number(point.dataset.reviewPly)));
+}
+function renderReviewDashboard(){
+  const dashboard=$('#reviewDashboard');if(!dashboard)return;
+  dashboard.classList.toggle('hidden',!reviewState.viewing||!reviewState.results.length);
+  if(!reviewState.viewing||!reviewState.results.length)return;
+  $('#whiteAccuracy').textContent=`${reviewAccuracyFor('w').toFixed(1)}%`;
+  $('#blackAccuracy').textContent=`${reviewAccuracyFor('b').toFixed(1)}%`;
+  const label=$('#reviewPlyLabel');if(label)label.textContent=reviewState.currentPly?`Move ${Math.ceil(reviewState.currentPly/2)} · ${reviewState.moves[reviewState.currentPly-1]?.san||''}`:'Start';
+  const explanation=$('#reviewExplanation');if(explanation)explanation.textContent=reviewState.currentPly?reviewExplanation(reviewState.currentPly-1):'Start position — use Next to step through the review.';
+  renderReviewCounts();renderReviewGraph();
+  $('#reviewFirst').disabled=reviewState.currentPly===0;$('#reviewPrev').disabled=reviewState.currentPly===0;
+  $('#reviewNext').disabled=reviewState.currentPly>=reviewState.moves.length;$('#reviewLast').disabled=reviewState.currentPly>=reviewState.moves.length;
+}
+function setReviewPly(ply){
+  if(!reviewState.results.length)return;
+  reviewState.viewing=true;reviewState.currentPly=Math.max(0,Math.min(reviewState.moves.length,Number(ply)||0));
+  const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
+  render();updateMoves();renderReviewDashboard();
+}
 async function startGameReview(){
   const built=buildReviewGame();
   if(!built.records.length)return toast('Play at least one move before starting review');
   showMovesView();
   $$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.tab==='analysis'));
+  const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
   if(reviewState.signature===built.signature&&!reviewState.running&&reviewState.results.length===built.records.length){
-    setReviewProgress(built.positions.length,built.positions.length,'Review complete');updateMoves();render();return;
+    setReviewProgress(built.positions.length,built.positions.length,'Review complete');setReviewPly(reviewState.moves.length);return;
   }
   const token=reviewState.token+1;
-  reviewState={running:true,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[]};
+  reviewState={running:true,viewing:false,currentPly:0,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[]};
   setReviewProgress(0,built.positions.length,'Analyzing every position');
   try{
     for(let index=0;index<built.positions.length;index++){
@@ -740,7 +853,8 @@ async function startGameReview(){
     reviewState.running=false;
     moveEvalByPly=reviewState.results.map(result=>result.afterCp/100);
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');
-    updateMoves();render();
+    if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
+    setReviewPly(reviewState.moves.length);
   }catch(error){
     if(reviewState.token!==token)return;
     reviewState.running=false;setReviewProgress(reviewState.evaluations.length,built.positions.length,'Review unavailable');toast(error.message);
@@ -781,6 +895,7 @@ function formatPv(pv=''){
   }catch{return pv}
 }
 function updateAnalysisFromUci(text){
+  if(reviewState.running||reviewState.viewing){const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);return}
   const depth=Number(text.match(/\bdepth (\d+)/)?.[1]||0);
   const scoreMatch=text.match(/\bscore (cp|mate) (-?\d+)/);
   const pv=text.match(/\bpv (.+)$/)?.[1]||'';
@@ -799,11 +914,12 @@ function updateAnalysisFromUci(text){
 }
 function scheduleAnalysis(){
   clearTimeout(analysisTimer);
-  if(mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
+  if(reviewState.running||reviewState.viewing||mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
   analysisTimer=setTimeout(()=>{if(!botThinking)analysisWorker.postMessage({fen:game.fen(),elo:3190,movetime:280})},220);
 }
 function showMovesView(){
   currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
+  if(reviewState.viewing){reviewState.viewing=false;renderReviewDashboard();render()}
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
   updateMoves();scheduleAnalysis();
 }
@@ -926,6 +1042,17 @@ $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav(
 $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
 $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){startGameReview();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
 $('#reviewGame').onclick=startGameReview;
+$('#reviewFirst').onclick=()=>setReviewPly(0);
+$('#reviewPrev').onclick=()=>setReviewPly(reviewState.currentPly-1);
+$('#reviewNext').onclick=()=>setReviewPly(reviewState.currentPly+1);
+$('#reviewLast').onclick=()=>setReviewPly(reviewState.moves.length);
+document.addEventListener('keydown',event=>{
+  if(!reviewState.viewing||event.metaKey||event.ctrlKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName||''))return;
+  if(event.key==='ArrowLeft'){event.preventDefault();setReviewPly(reviewState.currentPly-1)}
+  if(event.key==='ArrowRight'){event.preventDefault();setReviewPly(reviewState.currentPly+1)}
+  if(event.key==='Home'){event.preventDefault();setReviewPly(0)}
+  if(event.key==='End'){event.preventDefault();setReviewPly(reviewState.moves.length)}
+});
 $('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
 $('#closeChat').onclick=()=>{$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')};
 $('#accountBtn').onclick=openAccount;

@@ -1709,3 +1709,111 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .board-review-badge img{width:20px;height:20px}
 }
 @media(prefers-reduced-motion:reduce){.review-progress>div i{transition:none}}
+
+
+/* Batch 7: full game review navigation, arrows, eval bar, graph, and accuracy. */
+.moves{
+  height:260px;
+  padding-top:6px;
+  scroll-padding-top:6px;
+}
+.move-pair-row:first-child{margin-top:0}
+.move-cell[role="button"]{cursor:pointer}
+.move-cell[role="button"]:focus-visible{outline:1px solid #75d6aa;outline-offset:-2px}
+.move-cell.current{background:rgba(115,213,166,.10);box-shadow:inset 0 0 0 1px rgba(115,213,166,.20)}
+
+.board-shell{position:relative}
+.review-arrows{
+  grid-column:2;grid-row:1;z-index:5;
+  width:100%;height:100%;pointer-events:none;overflow:visible
+}
+.review-arrows.hidden{display:none}
+.review-arrow{
+  fill:none;stroke-width:2.35;stroke-linecap:round;opacity:.88
+}
+.review-arrow.best{stroke:#5ecb87}
+.review-arrow.played{stroke:#d4aa58;opacity:.78}
+#reviewBestHead path{fill:#5ecb87}
+#reviewPlayedHead path{fill:#d4aa58}
+
+.review-eval-bar{
+  position:absolute;z-index:7;left:-12px;top:0;bottom:18px;
+  width:10px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  pointer-events:none
+}
+.review-eval-bar.hidden{display:none}
+.review-eval-bar>div{
+  position:relative;width:9px;flex:1;overflow:hidden;border-radius:4px;
+  background:#121716;border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 3px 9px rgba(0,0,0,.35)
+}
+.review-eval-bar>div i{
+  position:absolute;left:0;right:0;bottom:0;height:50%;
+  background:linear-gradient(180deg,#f5f1df,#d9d6c8);
+  transition:height .16s ease
+}
+.review-eval-bar>span{
+  min-width:34px;padding:2px 3px;border-radius:4px;
+  background:#071110;color:#c8d2cd;
+  font:700 7px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  text-align:center
+}
+
+.review-dashboard{
+  margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.07)
+}
+.review-dashboard.hidden{display:none}
+.review-accuracy{
+  display:grid;grid-template-columns:1fr 1fr;gap:7px
+}
+.review-accuracy>div{
+  padding:9px 10px;border:1px solid rgba(255,255,255,.08);border-radius:8px;
+  background:rgba(4,12,12,.52)
+}
+.review-accuracy small{display:block;color:#7f918b;font-size:7px;text-transform:uppercase;letter-spacing:.8px}
+.review-accuracy b{display:block;margin-top:3px;color:#eef2ec;font:700 20px/1 ui-monospace,SFMono-Regular,Menlo,monospace}
+.review-counts{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:7px
+}
+.review-counts>span{
+  min-width:0;display:grid;grid-template-columns:18px 1fr;grid-template-rows:auto auto;
+  align-items:center;column-gap:5px;padding:5px;border:1px solid rgba(255,255,255,.055);
+  border-radius:7px;background:rgba(6,15,14,.45)
+}
+.review-counts img{grid-row:1/3;width:18px;height:18px}
+.review-counts b{font-size:10px;color:#e3eae6}
+.review-counts small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#71817c;font-size:6px}
+.review-graph-shell{
+  margin-top:8px;padding:8px 8px 6px;border:1px solid rgba(255,255,255,.07);
+  border-radius:8px;background:#071110
+}
+.review-graph-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.review-graph-head small{color:#758782;font-size:7px;text-transform:uppercase;letter-spacing:.7px}
+.review-graph-head span{color:#a9b7b2;font-size:8px}
+.review-graph{display:block;width:100%;height:76px;overflow:visible;cursor:crosshair}
+.review-graph .graph-zero{stroke:rgba(255,255,255,.13);stroke-width:1;stroke-dasharray:3 3}
+.review-graph .graph-line{fill:none;stroke:#78d6a8;stroke-width:2}
+.review-graph .graph-point{fill:#cdd8d3;stroke:#0a1513;stroke-width:1.2;cursor:pointer}
+.review-graph .graph-point.current{fill:#e4c77f;stroke:#fff1c4;stroke-width:1.4}
+.review-step-controls{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px
+}
+.review-step-controls button{
+  height:30px;padding:0 5px;border:1px solid #344842;border-radius:7px;
+  background:#101a18;color:#aebcb7;font-size:8px
+}
+.review-step-controls button:hover:not(:disabled){border-color:#6dbea0;color:#e6eee9}
+.review-step-controls button:disabled{opacity:.38;cursor:not-allowed}
+.review-explanation{
+  min-height:31px;margin:8px 0 0;padding:8px 9px;border-radius:8px;
+  background:rgba(34,43,39,.56);color:#b8c3bf;font-size:8px;line-height:1.45
+}
+
+@media(max-width:800px){
+  .moves{height:260px}
+  .review-counts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .review-eval-bar{left:-9px;bottom:16px}
+}
+@media(prefers-reduced-motion:reduce){
+  .review-eval-bar>div i{transition:none}
+}
