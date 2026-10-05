@@ -6,7 +6,7 @@ const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
 
 test('player bars expose avatar, flag, rating, live state, clock, and online-only ping',()=>{
-  for(const id of ['topAvatar','topPlayerName','topFlag','topRating','topPresence','blackClock','bottomAvatar','bottomPlayerName','bottomFlag','bottomRating','bottomPresence','bottomConnection','bottomPingBars','bottomPing','whiteClock']){
+  for(const id of ['topAvatar','topPlayerName','topFlag','topRating','topPresence','topClock','bottomAvatar','bottomPlayerName','bottomFlag','bottomRating','bottomPresence','bottomConnection','bottomPingBars','bottomPing','bottomClock']){
     assert.match(main,new RegExp(`id="${id}"`),`missing player-bar element #${id}`);
   }
   assert.match(main,/const online=!!serverGameId&&mode!=='computer'/);
