@@ -136,7 +136,7 @@ app.innerHTML=`
           <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag hidden" id="topFlag" aria-hidden="true"></span></div>
           <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span></div>
         </div>
-        <time id="blackClock">10:00</time>
+        <time id="topClock" data-color="b">10:00</time>
       </div>
       <div class="board-shell">
         <div id="reviewEvalBar" class="review-eval-bar hidden" aria-label="Review evaluation"><div><i id="reviewEvalFill"></i></div><span id="reviewEvalText">0.0</span></div>
@@ -154,7 +154,7 @@ app.innerHTML=`
         <div class="player-connection hidden" id="bottomConnection" aria-label="Network latency">
           <span class="ping-bars" id="bottomPingBars" aria-hidden="true"><i></i><i></i><i></i></span><span id="bottomPing">-- ms</span>
         </div>
-        <time id="whiteClock">10:00</time>
+        <time id="bottomClock" data-color="w">10:00</time>
       </div>
       <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat</button></div></details></div>
     </section>
@@ -285,7 +285,7 @@ function render(){
   document.body.dataset.seat=myColor||'';
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
-  renderReviewBoardDecorations();
+  renderReviewBoardDecorations();syncClockBars();
   updateOpeningLabel();scheduleAnalysis();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
@@ -295,7 +295,7 @@ function resetLocalClock(){
   const seconds=mode==='computer'?600:Number($('#time').value);
   clocks=initialClocks(seconds);
   localClockState={w:clocks.w,b:clocks.b,active:game.turn(),startedAt:performance.now()};
-  $('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b);
+  syncClockBars(clocks,localClockState.active);
 }
 function settleLocalClock(){
   if(!localClockState)return;
@@ -450,16 +450,43 @@ async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 function playTone(){if($('#sound').dataset.off)return;const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1)}
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
-function startClock(){clearInterval(ticking);ticking=setInterval(()=>{
+function playerBarClockColors(){
+  const bottom=myColor==='b'?'b':'w';
+  return {top:bottom==='w'?'b':'w',bottom};
+}
+function activeClockColor(){
+  if(reviewState.viewing||localGameOver||game.isGameOver())return null;
+  if(mode==='computer')return computerStarted?game.turn():null;
+  return serverGameId&&['active','playing','in_progress'].includes(serverGame?.status)?game.turn():null;
+}
+function currentClockSeconds(){
   if(clockSnapshot){
-    const value=projectedClocks(clockSnapshot);$('#whiteClock').textContent=clockText(Math.ceil(value.w/1000));$('#blackClock').textContent=clockText(Math.ceil(value.b/1000));return;
+    const value=projectedClocks(clockSnapshot);
+    return {w:Math.max(0,value.w/1000),b:Math.max(0,value.b/1000)};
   }
-  if(mode==='computer'&&localClockState&&!localGameOver&&!game.isGameOver()){
+  if(mode==='computer'&&localClockState){
     const elapsed=(performance.now()-localClockState.startedAt)/1000;
-    const w=localClockState.w-(localClockState.active==='w'?elapsed:0),b=localClockState.b-(localClockState.active==='b'?elapsed:0);
-    $('#whiteClock').textContent=clockText(Math.max(0,Math.ceil(w)));$('#blackClock').textContent=clockText(Math.max(0,Math.ceil(b)));
+    return {
+      w:Math.max(0,localClockState.w-(localClockState.active==='w'?elapsed:0)),
+      b:Math.max(0,localClockState.b-(localClockState.active==='b'?elapsed:0))
+    };
   }
-},250)}
+  return {w:Math.max(0,clocks.w),b:Math.max(0,clocks.b)};
+}
+function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
+  const colors=playerBarClockColors(),top=$('#topClock'),bottom=$('#bottomClock');
+  const apply=(element,color)=>{
+    if(!element)return;
+    element.dataset.color=color;
+    element.textContent=clockText(Math.max(0,Math.ceil(Number(values?.[color])||0)));
+    element.classList.toggle('running',active===color);
+  };
+  apply(top,colors.top);apply(bottom,colors.bottom);
+  const topBar=$('.player.top'),bottomBar=$('.player.bottom');
+  if(topBar)topBar.dataset.color=colors.top;
+  if(bottomBar)bottomBar.dataset.color=colors.bottom;
+}
+function startClock(){clearInterval(ticking);ticking=setInterval(()=>syncClockBars(),250)}
 function toast(s){$('#toast').textContent=s;$('#toast').className='show';setTimeout(()=>$('#toast').className='',1800)}
 function animateGhost(from,to){
   const source=$(`.square[data-sq="${from}"] .piece`),target=$(`.square[data-sq="${to}"]`);
@@ -541,7 +568,7 @@ function syncPlayerBars(){
   const online=!!serverGameId&&mode!=='computer';
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
-  syncConnectionUi();
+  syncConnectionUi();syncClockBars();
 }
 function syncRoomUi(){
   const code=serverGame?.invite_code||room;
@@ -652,7 +679,7 @@ $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
 renderComputerBots();
 $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
-$('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));$('#whiteClock').textContent=clockText(clocks.w);$('#blackClock').textContent=clockText(clocks.b)};
+$('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
 function paintDragTargets(square){

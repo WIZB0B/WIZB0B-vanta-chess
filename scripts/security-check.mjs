@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { securityHeaders } from './security-headers.mjs';
 const ignored = new Set(['.git', 'node_modules', 'dist', 'generated', 'vch']);
 const files = [];
 function walk(directory) { for (const name of readdirSync(directory)) { if (ignored.has(name)) continue; const path = join(directory, name); statSync(path).isDirectory() ? walk(path) : files.push(path); } }
@@ -11,6 +12,10 @@ if (/Access-Control-Allow-Origin\s*[:=]\s*["']?\*/i.test(source)) failures.push(
 if (/-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(source)) failures.push('private key found');
 const netlify = readFileSync('netlify.toml', 'utf8');
 for (const header of ['Content-Security-Policy', 'Strict-Transport-Security', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy']) if (!netlify.includes(header)) failures.push(`missing ${header}`);
+const csp=securityHeaders['Content-Security-Policy']||'';
+const scriptSrc=csp.split(';').map(value=>value.trim()).find(value=>value.startsWith('script-src '))?.split(/\s+/).slice(1)||[];
+if(!scriptSrc.includes("'wasm-unsafe-eval'"))failures.push("script-src must allow 'wasm-unsafe-eval' for Stockfish WebAssembly");
+if(scriptSrc.includes("'unsafe-eval'"))failures.push("script-src must not allow 'unsafe-eval'");
 const worker = readFileSync('public/sw.js', 'utf8');
 if (!worker.includes("url.origin !== self.location.origin") || !worker.includes("event.request.method !== 'GET'")) failures.push('service worker may cache private traffic');
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));

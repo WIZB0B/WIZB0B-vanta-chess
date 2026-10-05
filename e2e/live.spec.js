@@ -16,6 +16,10 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await b.goto(roomUrl);
   await expect(a.locator('body')).toHaveAttribute('data-seat','w');
   await expect(b.locator('body')).toHaveAttribute('data-seat','b');
+  await expect(a.locator('.player.top')).toHaveAttribute('data-color','b');
+  await expect(a.locator('.player.bottom')).toHaveAttribute('data-color','w');
+  await expect(b.locator('.player.top')).toHaveAttribute('data-color','w');
+  await expect(b.locator('.player.bottom')).toHaveAttribute('data-color','b');
   await a.waitForTimeout(1200);
 
   await a.locator('[data-sq="e2"]').click();await a.locator('[data-sq="e4"]').click();
@@ -23,9 +27,9 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await b.locator('[data-sq="e7"]').click();await b.locator('[data-sq="e5"]').click();
   await expect(a.locator('[data-sq="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
 
-  const before=await a.locator('#whiteClock').textContent();
+  const before=await a.locator('#bottomClock').textContent();
   await a.waitForTimeout(1200);
-  const after=await a.locator('#whiteClock').textContent();
+  const after=await a.locator('#bottomClock').textContent();
   expect(after).not.toBe(before);
 
   await a.locator('#openChat').click();

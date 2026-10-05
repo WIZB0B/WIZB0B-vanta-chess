@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { securityHeaders } from './scripts/security-headers.mjs';
 
 export default defineConfig({
   build: {
@@ -7,5 +8,8 @@ export default defineConfig({
   },
   server: {
     strictPort: true,
+  },
+  preview: {
+    headers: securityHeaders,
   },
 });

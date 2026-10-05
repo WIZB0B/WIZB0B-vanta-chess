@@ -97,6 +97,36 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
   await expect(page.locator('#depth')).not.toHaveText('—',{timeout:10000});
 });
 
+test('preview CSP runs Stockfish WebAssembly and Black-side clocks follow player colors',async({page})=>{
+  test.setTimeout(30000);
+  await mockProfile(page);await enterGameOnFirstVisit(page);
+  const response=await page.goto('/');
+  const csp=response.headers()['content-security-policy']||'';
+  expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'");
+  expect(csp).not.toMatch(/(?:^|\s)'unsafe-eval'(?:\s|;|$)/);
+
+  await page.locator('[data-mode="computer"]').click();
+  await page.locator('[data-computer-side="b"]').click();
+  await page.locator('#computerStart').click();
+
+  await expect.poll(async()=>page.locator('#moves .move-pair-row').count(),{timeout:15000}).toBeGreaterThan(0);
+  await expect(page.locator('#turn')).toContainText('Black to move');
+  await expect(page.locator('.player.top')).toHaveAttribute('data-color','w');
+  await expect(page.locator('.player.bottom')).toHaveAttribute('data-color','b');
+  await expect(page.locator('#topClock')).toHaveAttribute('data-color','w');
+  await expect(page.locator('#bottomClock')).toHaveAttribute('data-color','b');
+  await expect(page.locator('#bottomClock')).toHaveClass(/running/);
+  await expect(page.locator('#topClock')).not.toHaveClass(/running/);
+
+  const topBefore=await page.locator('#topClock').textContent();
+  const bottomBefore=await page.locator('#bottomClock').textContent();
+  await page.waitForTimeout(1300);
+  const topAfter=await page.locator('#topClock').textContent();
+  const bottomAfter=await page.locator('#bottomClock').textContent();
+  expect(topAfter).toBe(topBefore);
+  expect(bottomAfter).not.toBe(bottomBefore);
+});
+
 test('right-panel feature cards open their real destinations',async({page})=>{
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await page.locator('.feature-card.opening').click();await expect(page.locator('#dynamicView')).toContainText('Opening Explorer');
