@@ -21,7 +21,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -328,6 +328,11 @@ function switchLocalClock(){
   if(!localClockState)return;
   settleLocalClock();localClockState.active=game.turn();localClockState.startedAt=performance.now();
 }
+function switchOnlineClockOptimistically(){
+  if(!clockSnapshot)return;
+  const clientNow=Date.now(),value=projectedClocks(clockSnapshot,clientNow);
+  clockSnapshot={...clockSnapshot,whiteMs:value.w,blackMs:value.b,active:game.turn(),lastMoveAt:clientNow+Number(clockSnapshot.serverOffset||0)};
+}
 function updateOnlineCount(value){
   const el=$('#playersOnline');if(el)el.textContent=String(value??'—');
 }
@@ -412,12 +417,36 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
+async function makeMove(move,remote=false){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
   const made=game.move(move),moveAnimation=captureMoveAnimation(made);puzzleSession.played.push(uci);puzzleSession.index++;render();playMoveAnimation(moveAnimation);
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}),moveAnimation=captureMoveAnimation(made);puzzleSession.played.push(reply);puzzleSession.index++;render();playMoveAnimation(moveAnimation);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
-  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||serverGameId;broadcastMoved(movedGameId,incomingVersion);if(incomingVersion>serverVersion){applyServerState(state);playTone()}}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}const moveAnimation=captureMoveAnimation(made);if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();playMoveAnimation(moveAnimation);updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}if(serverGameId&&!remote){
+  if(onlineMovePending)return;
+  let legalMove;
+  try{
+    const requestedPromotion=move.promotion||'q';
+    legalMove=game.moves({square:move.from,verbose:true}).find(candidate=>candidate.to===move.to&&(!candidate.promotion||candidate.promotion===requestedPromotion));
+  }catch{return}
+  if(!legalMove)return;
+  const moveGameId=serverGameId,expectedVersion=serverVersion,clientMoveAt=serverAlignedNowIso();
+  let made;
+  try{made=game.move({from:move.from,to:move.to,...(legalMove.promotion?{promotion:move.promotion||legalMove.promotion}:{})})}catch{return}
+  onlineMovePending=true;
+  const moveAnimation=captureMoveAnimation(made);
+  selected=null;switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone();
+  try{
+    const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
+    const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
+    broadcastMoved(movedGameId,incomingVersion);
+    if(moveGameId===serverGameId&&incomingVersion>serverVersion)applyServerState(state,{animateMove:false});
+  }catch{
+    if(moveGameId===serverGameId){
+      await refreshServerState();render();toast('Move not accepted');
+    }
+  }finally{onlineMovePending=false}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}const moveAnimation=captureMoveAnimation(made);if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();playMoveAnimation(moveAnimation);updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -638,12 +667,12 @@ function syncRoomUi(){
   if(code)$('#share').value=`${location.origin}${location.pathname}?game=${encodeURIComponent(code)}`;
   syncPlayerBars();
 }
-function applyServerState(payload){
+function applyServerState(payload,{animateMove=true}={}){
   const state=payload.game||payload;if(!state)return;
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];resetReviewState()}
   syncServerMoveTimes(previousState,state);
-  const moveAnimation=captureLastServerMove(state,previousGameId===state.id?previousVersion:0);
+  const moveAnimation=animateMove?captureLastServerMove(state,previousGameId===state.id?previousVersion:0):null;
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
   myColor=seatFromEnvelope(payload,myColor);

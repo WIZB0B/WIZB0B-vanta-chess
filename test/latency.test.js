@@ -17,11 +17,28 @@ test('online games use one Realtime channel and a 5s heartbeat fallback',()=>{
   assert.match(main,/const authoritative=await api\.heartbeat\(requestedGameId\)/);
   assert.match(main,/if\(authoritativeVersion>serverVersion\)\{applyServerState\(authoritative\);playTone\(\)\}/);
   assert.doesNotMatch(main,/\.on\('broadcast',\{event:'state'\},message=>\{[\s\S]{0,400}applyServerState\(/);
-  assert.match(main,/broadcastMoved\(movedGameId,incomingVersion\);if\(incomingVersion>serverVersion\)\{applyServerState\(state\);playTone\(\)\}/);
+  assert.match(main,/broadcastMoved\(movedGameId,incomingVersion\);[\s\S]{0,180}if\(moveGameId===serverGameId&&incomingVersion>serverVersion\)applyServerState\(state,\{animateMove:false\}\)/);
   assert.match(main,/setInterval\(async\(\)=>\{[\s\S]*?api\.heartbeat\(serverGameId\)[\s\S]*?\},5000\)/);
   assert.match(main,/realtimeReady=false;latencyMs=null;realtimeRefreshPromise=null/);
   assert.match(main,/function stopOnlineSync\(\)/);
   assert.match(main,/if\(!isOnlineGame\(\)\)\{stopOnlineSync\(\);return\}/);
+});
+
+test('online moves apply locally before waiting for the authoritative response',()=>{
+  const start=main.indexOf('if(serverGameId&&!remote){'),end=main.indexOf('return}let made,localElapsedMs=null',start),body=main.slice(start,end);
+  const validate=body.indexOf("game.moves({square:move.from,verbose:true}).find");
+  const apply=body.indexOf('made=game.move(');
+  const render=body.indexOf('switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone()');
+  const request=body.indexOf('const state=await api.move(');
+  assert.ok(validate>=0&&apply>validate&&render>apply&&request>render,'online move must validate, apply/render locally, then await the server');
+  assert.match(body,/if\(onlineMovePending\)return/);
+  assert.match(body,/onlineMovePending=true/);
+  assert.match(body,/finally\{onlineMovePending=false\}/);
+});
+
+test('rejected optimistic moves roll back to the server state and show a short toast',()=>{
+  const start=main.indexOf('if(serverGameId&&!remote){'),end=main.indexOf('return}let made,localElapsedMs=null',start),body=main.slice(start,end);
+  assert.match(body,/catch\{\s*if\(moveGameId===serverGameId\)\{\s*await refreshServerState\(\);render\(\);toast\('Move not accepted'\);\s*\}\s*\}/);
 });
 
 test('ping is measured only from a Realtime self echo',()=>{
