@@ -3,7 +3,7 @@
 :root{--glass:.94;--motion:.14s}.panel,.game,header{background-color:rgb(8 19 21 / var(--glass))}.piece{transition-duration:var(--motion)}body[data-wallpaper="forest"]{background:radial-gradient(circle at 60% 10%,#31543b,#07100f 65%)}body[data-wallpaper="midnight"]{background:radial-gradient(circle at 70% 10%,#293553,#05070d 65%)}#themeStudio{width:min(420px,90vw)}#themeStudio label{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:14px 0}#themeStudio select{padding:8px;background:#0a1514;color:white;border:1px solid #53605d;border-radius:6px}#themeStudio>button{width:100%;padding:12px;background:var(--gold);color:#172019;border-radius:8px}
 
 /* VCH visual assets: committed local repository files. */
-:root{--white-piece:#f0d9a4;--black-piece:#342019;--piece-tint:.18}
+:root{--white-piece:#f0d9a4;--black-piece:#342019;--piece-tint:0}
 body{background-image:linear-gradient(rgb(2 7 8 / .42),rgb(2 7 8 / .52)),url('/assets/vch/wallpapers/wallpaper-emerald.webp');background-position:center top;background-size:cover;background-attachment:fixed}
 body[data-wallpaper="classic"]{background-image:linear-gradient(rgb(2 7 8 / .42),rgb(2 7 8 / .52)),url('/assets/vch/wallpapers/wallpaper-emerald.webp')}
 body[data-wallpaper="cobalt"]{background-image:linear-gradient(rgb(2 7 8 / .46),rgb(2 7 8 / .55)),url('/assets/vch/wallpapers/wallpaper-cobalt.webp')}
@@ -19,11 +19,11 @@ body[data-wallpaper="ivory"]{background-image:linear-gradient(rgb(2 7 8 / .38),r
 .quick-actions{display:flex;justify-content:flex-end;margin-top:8px}.quick-actions button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#111d1c;font-size:11px}
 @media(max-width:800px){body{background-attachment:scroll}.piece{width:100%;height:100%}}
 
-/* Optimized individual VCH piece assets. Piece atlases remain intentionally unused. */
-.piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}.piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}.piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}.piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}.piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}.piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
-.piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}.piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}.piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}.piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}.piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}.piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
-:root[data-piece-style="2d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/2d/wk.webp')}:root[data-piece-style="2d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/2d/wq.webp')}:root[data-piece-style="2d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/2d/wr.webp')}:root[data-piece-style="2d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/2d/wb.webp')}:root[data-piece-style="2d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/2d/wn.webp')}:root[data-piece-style="2d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/2d/wp.webp')}
-:root[data-piece-style="2d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/2d/bk.webp')}:root[data-piece-style="2d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/2d/bq.webp')}:root[data-piece-style="2d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/2d/br.webp')}:root[data-piece-style="2d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/2d/bb.webp')}:root[data-piece-style="2d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/2d/bn.webp')}:root[data-piece-style="2d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/2d/bp.webp')}
+/* Staunton piece assets remain available as the alternate board styles. */
+:root[data-piece-style="staunton-3d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
+:root[data-piece-style="staunton-3d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
+:root[data-piece-style="staunton-2d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/2d/wk.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/2d/wq.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/2d/wr.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/2d/wb.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/2d/wn.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/2d/wp.webp')}
+:root[data-piece-style="staunton-2d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/2d/bk.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/2d/bq.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/2d/br.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/2d/bb.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/2d/bn.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/2d/bp.webp')}
 
 
 /* === VCH reference-match rebuild === */
@@ -31,7 +31,7 @@ body[data-wallpaper="ivory"]{background-image:linear-gradient(rgb(2 7 8 / .38),r
   --bg:#07100f;--panel:#081315;--panel-2:#0d1718;--line:rgba(203,225,218,.16);
   --line-strong:rgba(192,218,209,.30);--mint:#79e7b0;--gold:#e5c17c;
   --light:#d8cfb1;--dark:#29483d;--text:#eef3ef;--muted:#9ba8a5;
-  --glass:.94;--motion:.14s;--white-piece:#f0d9a4;--black-piece:#342019;--piece-tint:.18
+  --glass:.94;--motion:.14s;--white-piece:#f0d9a4;--black-piece:#342019;--piece-tint:0
 }
 html,body,#app{min-height:100%;background:#06100f}
 html{background:#06100f}
@@ -1829,16 +1829,42 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px rgba(123,216,170,.12),0 0 18px rgba(85,207,151,.18);
 }
 
-/* Piece style: 3D keeps board depth; 2D stays flat with a subtle visibility shadow. */
-:root[data-piece-style="2d"] .board .square:has(.piece)::before{display:none}
-:root[data-piece-style="2d"] .board .piece,
-:root[data-piece-style="2d"] .study-board .piece{
-  filter:drop-shadow(0 1px 0 rgba(0,0,0,.55));
+/* Vanta sprite styles use the uploaded 960x640 sheet: 6 columns x 4 rows. */
+:root[data-piece-style="vanta-3d"] .piece,
+:root[data-piece-style="vanta-2d"] .piece{
+  --piece-image:url('/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png');
+  background-image:var(--piece-image);
+  background-size:600% 400%;
+  background-position:var(--piece-x) var(--piece-y);
+  background-repeat:no-repeat;
+}
+:root[data-piece-style^="vanta-"] .piece-k{--piece-x:0%}
+:root[data-piece-style^="vanta-"] .piece-q{--piece-x:20%}
+:root[data-piece-style^="vanta-"] .piece-r{--piece-x:40%}
+:root[data-piece-style^="vanta-"] .piece-b{--piece-x:60%}
+:root[data-piece-style^="vanta-"] .piece-n{--piece-x:80%}
+:root[data-piece-style^="vanta-"] .piece-p{--piece-x:100%}
+:root[data-piece-style="vanta-3d"] .piece.w{--piece-y:0%}
+:root[data-piece-style="vanta-3d"] .piece.b{--piece-y:33.3333%}
+:root[data-piece-style="vanta-2d"] .piece.w{--piece-y:66.6666%}
+:root[data-piece-style="vanta-2d"] .piece.b{--piece-y:99.9999%}
+
+/* 3D styles keep the existing contact shadow and lift; both 2D styles stay flat. */
+:root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before,
+:root[data-piece-style="staunton-2d"] .board .square:has(.piece)::before{display:none}
+:root[data-piece-style="vanta-2d"] .board .piece,
+:root[data-piece-style="vanta-2d"] .study-board .piece,
+:root[data-piece-style="staunton-2d"] .board .piece,
+:root[data-piece-style="staunton-2d"] .study-board .piece{
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.48));
   transform:none;
 }
-:root[data-piece-style="2d"] .board .square:hover .piece,
-:root[data-piece-style="2d"] .board .square.selected .piece,
-:root[data-piece-style="2d"] .board .piece.dragging{
-  filter:drop-shadow(0 1px 0 rgba(0,0,0,.55));
+:root[data-piece-style="vanta-2d"] .board .square:hover .piece,
+:root[data-piece-style="vanta-2d"] .board .square.selected .piece,
+:root[data-piece-style="vanta-2d"] .board .piece.dragging,
+:root[data-piece-style="staunton-2d"] .board .square:hover .piece,
+:root[data-piece-style="staunton-2d"] .board .square.selected .piece,
+:root[data-piece-style="staunton-2d"] .board .piece.dragging{
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.48));
   transform:none;
 }
