@@ -792,10 +792,12 @@ function animateRenderedPiece(from,to,duration){
   const a=origin.getBoundingClientRect(),b=destination.getBoundingClientRect();
   piece.style.transitionDuration='0ms';
   piece.style.transform=`translate(${a.left-b.left}px,${a.top-b.top}px)`;
+  destination.classList.add('piece-arriving');
   piece.getBoundingClientRect();
   piece.style.transitionDuration='var(--motion)';
   requestAnimationFrame(()=>{
     piece.style.removeProperty('transform');
+    setTimeout(()=>destination.classList.remove('piece-arriving'),duration*.6);
     setTimeout(()=>piece.style.removeProperty('transition-duration'),duration+40);
   });
 }

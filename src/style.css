@@ -2006,3 +2006,102 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
    260px move list is for stacked layouts only; on wide screens it pushed the right
    panel past the viewport. The list scrolls internally instead. */
 @media(min-width:1181px){.moves{height:140px}}
+
+
+/* Backlog task 5: pieces rest on their squares.
+   - No filter/drop-shadow halo on board pieces; depth comes from a contact shadow instead.
+   - Every piece's base footprint is centred and sits on one baseline (90% of the square).
+     Offsets below are measured from the artwork's alpha (base-footprint centre and lowest
+     opaque row) and applied with `translate`, which composes with the lift/slide transforms.
+   - 3D styles get an elliptical contact shadow at the baseline (60% x 12%, ~.35 opacity,
+     slightly blurred). Lifting a piece (hover, selected, dragging) raises it and softens the
+     shadow. 2D styles stay flat, as before.
+   - Durations follow the Motion slider (--motion) and drop to 0 for prefers-reduced-motion. */
+.board .square{--piece-baseline:90%}
+.board .piece,
+:root[data-piece-style] .board .piece{
+  filter:none;
+  transform:none;
+  transition-property:transform,opacity;
+  transition-duration:calc(var(--motion) * .4);
+  transition-timing-function:cubic-bezier(.2,.7,.3,1);
+}
+:root[data-piece-style] .board .square:hover .piece{transform:translateY(-2%)}
+:root[data-piece-style] .board .square.selected .piece,
+:root[data-piece-style] .board .piece.dragging{transform:translateY(-6%) scale(1.03)}
+.board .square:has(.piece)::before{
+  content:"";
+  position:absolute;
+  left:20%;width:60%;
+  top:calc(var(--piece-baseline) - 6%);height:12%;
+  bottom:auto;
+  border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,.35) 0%,rgba(0,0,0,.24) 38%,rgba(0,0,0,.08) 62%,transparent 72%);
+  filter:blur(1.5px);
+  opacity:1;
+  transform:none;
+  pointer-events:none;
+  z-index:0;
+  transition:transform calc(var(--motion) * .4) ease,opacity calc(var(--motion) * .4) ease,filter calc(var(--motion) * .4) ease;
+}
+.board .square:hover:has(.piece)::before{transform:scale(.94);opacity:.85}
+.board .square.selected:has(.piece)::before,
+.board .square:has(.piece.dragging)::before{transform:scale(.8);opacity:.5;filter:blur(3px)}
+.board .square.piece-arriving::before{opacity:0;transition-duration:0ms}
+:root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before,
+:root[data-piece-style="staunton-2d"] .board .square:has(.piece)::before{display:none}
+:root[data-piece-style$="-2d"] .board .square .piece,
+:root[data-piece-style$="-2d"] .board .square:hover .piece,
+:root[data-piece-style$="-2d"] .board .square.selected .piece,
+:root[data-piece-style$="-2d"] .board .square .piece.dragging{transform:none}
+@media(prefers-reduced-motion:reduce){
+  .board .piece,.board .square::before{transition-duration:0ms!important}
+}
+:root[data-piece-style="vanta-3d"] .board .piece.w.piece-k{translate:0% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.w.piece-q{translate:-0.9% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.w.piece-r{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.w.piece-b{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.w.piece-n{translate:-4.4% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.w.piece-p{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.b.piece-k{translate:0% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.b.piece-q{translate:-0.9% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.b.piece-r{translate:0% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.b.piece-b{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.b.piece-n{translate:-4.7% -5.6%}
+:root[data-piece-style="vanta-3d"] .board .piece.b.piece-p{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-2d"] .board .piece.w.piece-k{translate:0% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.w.piece-q{translate:-0.9% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.w.piece-r{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.w.piece-b{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.w.piece-n{translate:-4.4% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.w.piece-p{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.b.piece-k{translate:0% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.b.piece-q{translate:-0.9% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.b.piece-r{translate:0% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.b.piece-b{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.b.piece-n{translate:-4.4% -6.2%}
+:root[data-piece-style="vanta-2d"] .board .piece.b.piece-p{translate:0.3% -6.2%}
+:root[data-piece-style="staunton-3d"] .board .piece.w.piece-k{translate:5% -5.6%}
+:root[data-piece-style="staunton-3d"] .board .piece.w.piece-q{translate:12.2% -6.2%}
+:root[data-piece-style="staunton-3d"] .board .piece.w.piece-r{translate:0.3% -5.6%}
+:root[data-piece-style="staunton-3d"] .board .piece.w.piece-b{translate:2.2% -6.2%}
+:root[data-piece-style="staunton-3d"] .board .piece.w.piece-n{translate:0.9% -6.2%}
+:root[data-piece-style="staunton-3d"] .board .piece.w.piece-p{translate:1.2% -4.4%}
+:root[data-piece-style="staunton-3d"] .board .piece.b.piece-k{translate:5% -6.9%}
+:root[data-piece-style="staunton-3d"] .board .piece.b.piece-q{translate:2.8% -5.6%}
+:root[data-piece-style="staunton-3d"] .board .piece.b.piece-r{translate:2.2% -6.2%}
+:root[data-piece-style="staunton-3d"] .board .piece.b.piece-b{translate:0% -5.6%}
+:root[data-piece-style="staunton-3d"] .board .piece.b.piece-n{translate:4.7% -6.2%}
+:root[data-piece-style="staunton-3d"] .board .piece.b.piece-p{translate:4.1% -5%}
+:root[data-piece-style="staunton-2d"] .board .piece.w.piece-k{translate:8.4% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.w.piece-q{translate:1.6% -5.6%}
+:root[data-piece-style="staunton-2d"] .board .piece.w.piece-r{translate:3.8% -6.9%}
+:root[data-piece-style="staunton-2d"] .board .piece.w.piece-b{translate:-0.9% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.w.piece-n{translate:-0.3% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.w.piece-p{translate:4.4% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.b.piece-k{translate:1.9% -6.9%}
+:root[data-piece-style="staunton-2d"] .board .piece.b.piece-q{translate:4.7% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.b.piece-r{translate:3.1% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.b.piece-b{translate:4.1% -6.2%}
+:root[data-piece-style="staunton-2d"] .board .piece.b.piece-n{translate:1.9% -6.9%}
+:root[data-piece-style="staunton-2d"] .board .piece.b.piece-p{translate:2.2% -6.2%}
