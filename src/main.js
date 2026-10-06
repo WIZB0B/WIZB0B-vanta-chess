@@ -237,7 +237,7 @@ app.innerHTML=`
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle"><option value="vanta-3d">Vanta 3D</option><option value="vanta-2d">Vanta 2D</option><option value="staunton-3d">Staunton 3D</option><option value="staunton-2d">Staunton 2D</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle"><option value="vanta-3d">Vanta 3D</option><option value="vanta-2d">Vanta 2D</option><option value="staunton-3d">Staunton 3D</option><option value="staunton-2d">Staunton 2D</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -413,11 +413,11 @@ async function activateLeftMode(next){
   syncOnlineTransport();
 }
 async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
-  game.move(move);puzzleSession.played.push(uci);puzzleSession.index++;render();
+  const made=game.move(move),moveAnimation=captureMoveAnimation(made);puzzleSession.played.push(uci);puzzleSession.index++;render();playMoveAnimation(moveAnimation);
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
-  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
-  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||serverGameId;broadcastMoved(movedGameId,incomingVersion);if(incomingVersion>serverVersion){applyServerState(state);playTone()}}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}),moveAnimation=captureMoveAnimation(made);puzzleSession.played.push(reply);puzzleSession.index++;render();playMoveAnimation(moveAnimation);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
+  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||serverGameId;broadcastMoved(movedGameId,incomingVersion);if(incomingVersion>serverVersion){applyServerState(state);playTone()}}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}const moveAnimation=captureMoveAnimation(made);if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();playMoveAnimation(moveAnimation);updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -509,27 +509,60 @@ function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
 }
 function startClock(){clearInterval(ticking);ticking=setInterval(()=>syncClockBars(),250)}
 function toast(s){$('#toast').textContent=s;$('#toast').className='show';setTimeout(()=>$('#toast').className='',1800)}
-function animateGhost(from,to){
-  const source=$(`.square[data-sq="${from}"] .piece`),target=$(`.square[data-sq="${to}"]`);
-  if(!source||!target)return;
-  const a=source.getBoundingClientRect(),b=target.getBoundingClientRect(),ghost=source.cloneNode(true);
-  ghost.classList.add('piece-ghost');Object.assign(ghost.style,{position:'fixed',left:a.left+'px',top:a.top+'px',width:a.width+'px',height:a.height+'px',zIndex:99,pointerEvents:'none'});
-  document.body.append(ghost);
-  ghost.animate([{transform:'translate(0,0)'},{transform:`translate(${b.left-a.left}px,${b.top-a.top}px)`}],{duration:180,easing:'cubic-bezier(.2,.8,.2,1)'}).finished.finally(()=>ghost.remove());
+function prefersReducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true}
+function motionDurationMs(){
+  if(prefersReducedMotion())return 0;
+  const raw=getComputedStyle(document.documentElement).getPropertyValue('--motion').trim(),amount=parseFloat(raw);
+  if(!Number.isFinite(amount))return 400;
+  const milliseconds=raw.endsWith('s')&&!raw.endsWith('ms')?amount*1000:amount;
+  return Math.max(0,Math.min(400,milliseconds));
 }
-function animateLastServerMove(state,previousVersion){
-  if(!previousVersion||Number(state.version)<=previousVersion)return;
-  const last=state.move_history?.at?.(-1);if(!last?.from||!last?.to)return;
-  animateGhost(last.from,last.to);
-  if(last.piece==='k'&&Math.abs(last.from.charCodeAt(0)-last.to.charCodeAt(0))===2){
-    const rank=last.from[1],kingSide=last.to[0]==='g';animateGhost((kingSide?'h':'a')+rank,(kingSide?'f':'d')+rank);
+function captureMoveAnimation(move){
+  if(reviewState.viewing||!move?.from||!move?.to)return null;
+  let capturedPiece=$(`.square[data-sq="${move.to}"] .piece`),captureSquare=move.to;
+  const enPassant=move.isEnPassant?.()||String(move.flags||'').includes('e')||(move.captured&&move.piece==='p'&&move.from[0]!==move.to[0]&&!capturedPiece);
+  if(move.captured&&enPassant){
+    captureSquare=move.to[0]+move.from[1];
+    capturedPiece=$(`.square[data-sq="${captureSquare}"] .piece`);
   }
-  const targetPiece=$(`.square[data-sq="${last.to}"] .piece`);
-  if(last.captured&&targetPiece)targetPiece.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.55) rotate(7deg)'}],{duration:150,easing:'ease-in'});
-  if(last.captured&&last.piece==='p'&&!targetPiece){
-    const ep=$(`.square[data-sq="${last.to[0]+last.from[1]}"] .piece`);
-    ep?.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.5)'}],{duration:150});
+  const captured=move.captured&&capturedPiece?{node:capturedPiece.cloneNode(true),rect:capturedPiece.getBoundingClientRect(),square:captureSquare}:null;
+  return {move:{from:move.from,to:move.to,piece:move.piece,captured:move.captured||null},captured};
+}
+function animateRenderedPiece(from,to,duration){
+  const origin=$(`.square[data-sq="${from}"]`),destination=$(`.square[data-sq="${to}"]`),piece=destination?.querySelector('.piece');
+  if(!origin||!destination||!piece||duration<=0)return;
+  const a=origin.getBoundingClientRect(),b=destination.getBoundingClientRect();
+  piece.style.transitionDuration='0ms';
+  piece.style.transform=`translate(${a.left-b.left}px,${a.top-b.top}px)`;
+  piece.getBoundingClientRect();
+  piece.style.transitionDuration='var(--motion)';
+  requestAnimationFrame(()=>{
+    piece.style.removeProperty('transform');
+    setTimeout(()=>piece.style.removeProperty('transition-duration'),duration+40);
+  });
+}
+function fadeCapturedPiece(captured,duration){
+  if(!captured?.node||duration<=0)return;
+  const ghost=captured.node,r=captured.rect;
+  ghost.classList.add('piece-ghost');
+  Object.assign(ghost.style,{position:'fixed',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',zIndex:99,pointerEvents:'none',opacity:'1',transition:'opacity var(--motion) ease, transform var(--motion) ease'});
+  document.body.append(ghost);ghost.getBoundingClientRect();
+  requestAnimationFrame(()=>{ghost.style.opacity='0';ghost.style.transform='scale(.62)'});
+  setTimeout(()=>ghost.remove(),duration+50);
+}
+function playMoveAnimation(snapshot){
+  const duration=motionDurationMs();if(!snapshot||duration<=0)return;
+  const move=snapshot.move;
+  animateRenderedPiece(move.from,move.to,duration);
+  if(move.piece==='k'&&Math.abs(move.from.charCodeAt(0)-move.to.charCodeAt(0))===2){
+    const rank=move.from[1],kingSide=move.to[0]==='g';
+    animateRenderedPiece((kingSide?'h':'a')+rank,(kingSide?'f':'d')+rank,duration);
   }
+  fadeCapturedPiece(snapshot.captured,duration);
+}
+function captureLastServerMove(state,previousVersion){
+  if(!previousVersion||Number(state.version)<=previousVersion)return null;
+  return captureMoveAnimation(state.move_history?.at?.(-1));
 }
 function playerInitials(value,fallback='GU'){
   const words=String(value||'').replace(/^You ·\s*/,'').trim().split(/\s+/).filter(Boolean);
@@ -610,14 +643,14 @@ function applyServerState(payload){
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];resetReviewState()}
   syncServerMoveTimes(previousState,state);
-  animateLastServerMove(state,previousGameId===state.id?previousVersion:0);
+  const moveAnimation=captureLastServerMove(state,previousGameId===state.id?previousVersion:0);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
   myColor=seatFromEnvelope(payload,myColor);
   if(myColor&&!orientationSet){flipped=myColor==='b';orientationSet=true}
   clockSnapshot=createClockSnapshot(payload);
   if(state.fen){try{game.load(state.fen)}catch{}}
-  syncRoomUi();render();updateMoves();syncOnlineTransport();
+  syncRoomUi();render();playMoveAnimation(moveAnimation);updateMoves();syncOnlineTransport();
   if(state.draw_offer_by&&currentPlayerId&&state.draw_offer_by!==currentPlayerId&&lastDrawOffer!==state.draw_offer_by&&['active','playing','in_progress'].includes(state.status)){
     lastDrawOffer=state.draw_offer_by;
     setTimeout(async()=>{const accept=confirm('Your opponent offered a draw. Accept?');try{applyServerState(await api.drawRespond(serverGameId,accept))}catch(error){toast(error.message)}},60);
@@ -1227,12 +1260,28 @@ window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();ins
 $('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
 $('#notifyBtn').onclick=()=>toast('Game notifications will appear here');
 const savedTheme=JSON.parse(localStorage.getItem('vanta.theme')||'{}');
+const clamp=(value,min,max,fallback)=>{const number=Number(value);return Number.isFinite(number)?Math.max(min,Math.min(max,number)):fallback};
+const motionCssValue=value=>`${Math.round(clamp(value,0,100,100)*4)}ms`;
+const normalizeMotionCss=value=>{
+  const raw=String(value||'').trim(),amount=parseFloat(raw);
+  if(!Number.isFinite(amount))return '400ms';
+  const milliseconds=raw.endsWith('s')&&!raw.endsWith('ms')?amount*1000:amount;
+  return `${Math.round(clamp(milliseconds,0,400,400))}ms`;
+};
 savedTheme.pieceTint=0;
+savedTheme['--glass']=String(clamp(savedTheme['--glass'],.35,1,.94));
+savedTheme['--motion']=normalizeMotionCss(savedTheme['--motion']);
 document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece||'#f0d9a4');
 document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');
 document.documentElement.style.setProperty('--piece-tint','0');
 for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else if(key!=='pieceStyle'&&key!=='pieceTint')document.documentElement.style.setProperty(key,value)}
-$$('[data-theme]').forEach(input=>input.oninput=()=>{const value=input.type==='range'?(input.dataset.theme==='--glass'?`${input.value/100}`:`${input.value/100}s`):input.value;document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))});
+const glassControl=$('[data-theme="--glass"]'),motionControl=$('[data-theme="--motion"]');
+if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'])*100));
+if(motionControl)motionControl.value=String(Math.round(parseFloat(savedTheme['--motion'])/4));
+$$('[data-theme]').forEach(input=>input.oninput=()=>{
+  const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.35,1,.94)):motionCssValue(input.value);
+  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+});
 savedTheme.pieceStyle=applyPieceStyle(savedTheme.pieceStyle);
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
