@@ -6,6 +6,7 @@ import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
+import { PremoveQueue, consumeLegalPremove } from './premove.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -21,7 +22,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); const premoves=new PremoveQueue(); let selected=null, dragPremove=false, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -284,7 +285,7 @@ function render(){
   }
   order.forEach(i=>{
     const r=Math.floor(i/8),f=i%8,sq='abcdefgh'[f]+(8-r),p=pos[i],el=document.createElement('button');
-    el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''}`;
+    el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${premoves.selected===sq?'premove-selecting':''} ${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?'premove':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''}`;
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
     if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
@@ -310,7 +311,47 @@ function render(){
   updateOpeningLabel();scheduleAnalysis();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
-async function clickSquare(sq,p){if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;if(!selected){if(p?.color===game.turn()){selected=sq;render()}return} if(p?.color===game.turn()){selected=sq;render();return} const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(!candidates.length){selected=null;render();return}let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;}
+function premovePlayerColor(){if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
+function premoveBlocked(){return !!puzzleSession||mode==='puzzle'||reviewState.running||reviewState.viewing||currentRightView==='review'}
+function canQueuePremove(){
+  const color=premovePlayerColor();
+  if(!color||premoveBlocked()||localGameOver||game.isGameOver())return false;
+  if(serverGameId&&!['active','playing','in_progress'].includes(serverGame?.status||'active'))return false;
+  return game.turn()!==color;
+}
+function cancelPremove(renderBoard=true){
+  if(!premoves.move&&!premoves.selected)return false;
+  premoves.cancel();dragPremove=false;if(renderBoard)render();return true;
+}
+function playQueuedPremove(){
+  const color=premovePlayerColor(),queued=premoves.move;
+  if(!queued)return null;
+  if(!color||premoveBlocked()||localGameOver||game.isGameOver()){premoves.cancel();render();return null}
+  if(game.turn()!==color)return null;
+  const move=consumeLegalPremove(premoves,game);
+  if(!move){render();return null}
+  return makeMove(move);
+}
+async function clickSquare(sq,p){
+  if(premoves.move?.from===sq){cancelPremove();return}
+  if(canQueuePremove()){
+    const color=premovePlayerColor();
+    if(!premoves.selected){
+      if(p?.color===color){premoves.select(sq);selected=null;render()}
+      return
+    }
+    if(sq===premoves.selected){cancelPremove();return}
+    premoves.queue(sq,'q');selected=null;render();return
+  }
+  if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;
+  premoves.cancel();
+  if(!selected){if(p?.color===game.turn()){selected=sq;render()}return}
+  if(p?.color===game.turn()){selected=sq;render();return}
+  const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);
+  if(!candidates.length){selected=null;render();return}
+  let promotion;if(candidates.some(m=>m.promotion))promotion=await choosePromotion();
+  makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;
+}
 function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');d.showModal();$$('#promotion button').forEach(b=>b.onclick=()=>{d.close();resolve(b.dataset.piece)})})}
 function resetLocalClock(){
   const seconds=mode==='computer'?600:Number($('#time').value);
@@ -353,7 +394,7 @@ async function beginMatchSearch(){
   if(searching){await cancelMatchSearch();return}
   if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
   stopOnlineSync();
-  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
+  serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   game.reset();render();updateMoves();setMatchSearching(true);
   const started=Date.now();
   try{
@@ -398,7 +439,7 @@ function selectedComputerSide(){
 function startComputerGame(){
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
-  currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();
+  currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();premoves.cancel();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
   toast(`Computer game started · You are ${computerSide==='w'?'White':'Black'}`);
@@ -409,7 +450,7 @@ async function activateLeftMode(next){
   const previous=mode;
   if(searching&&next!=='match')await cancelMatchSearch({announce:false});
   if(previous==='computer'&&next!=='computer'&&computerStarted){
-    computerStarted=false;localClockState=null;localGameOver=false;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;game.reset();render();updateMoves();
+    computerStarted=false;localClockState=null;localGameOver=false;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;premoves.cancel();game.reset();render();updateMoves();
   }
   mode=next;syncPlayerBars();
   $$('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
@@ -449,7 +490,7 @@ async function makeMove(move,remote=false){if(puzzleSession&&!remote){const uci=
       await refreshServerState();render();toast('Move not accepted');
     }
   }finally{onlineMovePending=false}
-  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}const moveAnimation=captureMoveAnimation(made);if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();playMoveAnimation(moveAnimation);updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}const moveAnimation=captureMoveAnimation(made);if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();playMoveAnimation(moveAnimation);updateMoves();playTone();if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -673,7 +714,7 @@ function syncRoomUi(){
 function applyServerState(payload,{animateMove=true}={}){
   const state=payload.game||payload;if(!state)return;
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
-  if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];resetReviewState()}
+  if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();resetReviewState()}
   syncServerMoveTimes(previousState,state);
   const moveAnimation=animateMove?captureLastServerMove(state,previousGameId===state.id?previousVersion:0):null;
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
@@ -687,7 +728,7 @@ function applyServerState(payload,{animateMove=true}={}){
     lastDrawOffer=state.draw_offer_by;
     setTimeout(async()=>{const accept=confirm('Your opponent offered a draw. Accept?');try{applyServerState(await api.drawRespond(serverGameId,accept))}catch(error){toast(error.message)}},60);
   }
-  maybePlayBot();
+  playQueuedPremove();maybePlayBot();
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
@@ -807,7 +848,8 @@ function applyRealtimeMove(incoming){
   try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
   const moveAnimation=captureMoveAnimation(made);
   serverVersion=incoming.version;selected=null;switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone();
-  void refreshServerState();
+  const premoveResult=playQueuedPremove();
+  if(premoveResult)void Promise.resolve(premoveResult).finally(()=>refreshServerState());else void refreshServerState();
   return true;
 }
 async function refreshFromRealtime(message){
@@ -902,22 +944,32 @@ $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.cur
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
-function paintDragTargets(square){
+function paintDragTargets(square,{premove=false}={}){
   clearDragTargets();boardEl.querySelector(`[data-sq="${square}"]`)?.classList.add('drag-selected');
+  if(premove)return;
   for(const move of game.moves({square,verbose:true}))boardEl.querySelector(`[data-sq="${move.to}"]`)?.classList.add('drag-legal');
 }
 boardEl.addEventListener('dragstart',event=>{
   const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
-  const p=game.get(square);if(!p||reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn()){event.preventDefault();return}
-  selected=square;piece.classList.add('dragging');paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
+  const p=game.get(square);
+  if(p&&canQueuePremove()&&p.color===premovePlayerColor()){
+    premoves.select(square);selected=null;dragPremove=true;piece.classList.add('dragging');paintDragTargets(square,{premove:true});event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);return
+  }
+  if(!p||reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn()){event.preventDefault();return}
+  dragPremove=false;selected=square;piece.classList.add('dragging');paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
 });
 boardEl.addEventListener('dragover',event=>{
-  const to=event.target.closest?.('.square')?.dataset.sq;if(selected&&to&&game.moves({square:selected,verbose:true}).some(m=>m.to===to)){event.preventDefault();event.dataTransfer.dropEffect='move'}
+  const to=event.target.closest?.('.square')?.dataset.sq;
+  if(dragPremove&&premoves.selected&&to&&to!==premoves.selected){event.preventDefault();event.dataTransfer.dropEffect='move';return}
+  if(selected&&to&&game.moves({square:selected,verbose:true}).some(m=>m.to===to)){event.preventDefault();event.dataTransfer.dropEffect='move'}
 });
 boardEl.addEventListener('drop',event=>{
-  const to=event.target.closest?.('.square')?.dataset.sq;if(!selected||!to)return;event.preventDefault();clearDragTargets();clickSquare(to,game.get(to));
+  const to=event.target.closest?.('.square')?.dataset.sq;
+  if(dragPremove&&premoves.selected&&to){event.preventDefault();clearDragTargets();dragPremove=false;premoves.queue(to,'q');render();return}
+  if(!selected||!to)return;event.preventDefault();clearDragTargets();clickSquare(to,game.get(to));
 });
-boardEl.addEventListener('dragend',()=>{boardEl.querySelectorAll('.piece.dragging').forEach(piece=>piece.classList.remove('dragging'));clearDragTargets();if(selected){selected=null;render()}});
+boardEl.addEventListener('dragend',()=>{boardEl.querySelectorAll('.piece.dragging').forEach(piece=>piece.classList.remove('dragging'));clearDragTargets();if(dragPremove){dragPremove=false;premoves.cancel();render();return}if(selected){selected=null;render()}});
+boardEl.addEventListener('contextmenu',event=>{if(cancelPremove()){event.preventDefault()}});
 render();startClock();connect();
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
@@ -1072,6 +1124,7 @@ function setReviewPly(ply){
   render();updateMoves();renderReviewDashboard();
 }
 async function startGameReview(){
+  cancelPremove(false);
   const built=buildReviewGame();
   if(!built.records.length)return toast('Play at least one move before starting review');
   showMovesView();
@@ -1229,6 +1282,7 @@ function renderLearn(){
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
 }
 function renderReview(){
+  cancelPremove(false);
   const records=serverGame?.move_history||[],sans=records.map(x=>x.san||x.lan||'').filter(Boolean),captures=records.filter(x=>x.captured).length,checks=records.filter(x=>String(x.san||'').includes('+')).length;
   const opening=detectOpening(sans);
   setDynamicView('review','Post-Game Review',`<div class="review-summary"><div><b>${records.length}</b><small>plies played</small></div><div><b>${captures}</b><small>captures</small></div><div><b>${checks}</b><small>checks</small></div><div><b>${analysisScore>=0?'+':''}${analysisScore.toFixed(1)}</b><small>current eval</small></div></div><article class="review-note"><h4>${opening?escapeHtml(opening.name):'Unclassified opening'}</h4><p>${opening?escapeHtml(opening.idea):'Play a few moves to identify the opening family.'}</p></article><button class="primary-action analyze-now">Analyze current position</button>${sans.length?'<button class="secondary-action replay-review">Replay every move</button>':''}`);
@@ -1240,6 +1294,7 @@ function brandLoading(label){
 }
 async function showBackendView(kind){
   if(kind==='puzzle'){
+    cancelPremove(false);
     setDynamicView('puzzles','Puzzle Training',brandLoading('Loading a real tactical position…'));
     try{
       const data=await api.puzzleNext('normal',1400),puzzle=data.puzzle||data;
@@ -1294,6 +1349,7 @@ $('#reviewPrev').onclick=()=>setReviewPly(reviewState.currentPly-1);
 $('#reviewNext').onclick=()=>setReviewPly(reviewState.currentPly+1);
 $('#reviewLast').onclick=()=>setReviewPly(reviewState.moves.length);
 document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&cancelPremove()){event.preventDefault();return}
   if(!reviewState.viewing||event.metaKey||event.ctrlKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName||''))return;
   if(event.key==='ArrowLeft'){event.preventDefault();setReviewPly(reviewState.currentPly-1)}
   if(event.key==='ArrowRight'){event.preventDefault();setReviewPly(reviewState.currentPly+1)}

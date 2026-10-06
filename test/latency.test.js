@@ -38,7 +38,12 @@ test('online moves apply locally before waiting for the authoritative response',
 
 test('rejected optimistic moves roll back to the server state and show a short toast',()=>{
   const start=main.indexOf('if(serverGameId&&!remote){'),end=main.indexOf('return}let made,localElapsedMs=null',start),body=main.slice(start,end);
-  assert.match(body,/catch\{\s*if\(moveGameId===serverGameId\)\{\s*await refreshServerState\(\);render\(\);toast\('Move not accepted'\);\s*\}\s*\}/);
+  const request=body.indexOf('const state=await api.move('),catchStart=body.indexOf('catch{',request),finallyStart=body.indexOf('finally{',catchStart);
+  const rejection=body.slice(catchStart,finallyStart);
+  assert.ok(catchStart>request&&finallyStart>catchStart,'online move has a rejection path');
+  assert.ok(rejection.includes('await refreshServerState()'),'rejection refreshes authoritative state');
+  assert.ok(rejection.includes('render()'),'rejection re-renders the restored board');
+  assert.ok(rejection.includes("toast('Move not accepted')"),'rejection shows the short move-not-accepted toast');
 });
 
 test('valid remote move is applied instantly before server confirmation',()=>{

@@ -1893,3 +1893,12 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 @media(prefers-reduced-motion:reduce){
   .piece,.piece-ghost{transition-duration:0ms!important;animation-duration:0ms!important}
 }
+
+/* Premove queue: distinct red-violet source and destination markers. */
+.board .square.premove,
+.board .square.premove.last-move{
+  box-shadow:inset 0 0 0 999px rgba(166,28,104,.46),inset 0 0 0 4px rgba(247,70,170,.96);
+}
+.board .square.premove-selecting{
+  box-shadow:inset 0 0 0 5px rgba(226,58,151,.88);
+}
