@@ -64,6 +64,16 @@ reviewWorker.onmessage=({data})=>{
   }
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
+function normalizePieceStyle(value){return value==='2d'?'2d':'3d'}
+function pieceAsset(name){return `/assets/vch/pieces/${normalizePieceStyle(document.documentElement.dataset.pieceStyle)}/${name}.webp`}
+function applyPieceStyle(value){
+  const style=normalizePieceStyle(value);
+  document.documentElement.dataset.pieceStyle=style;
+  const control=$('#pieceStyle');if(control)control.value=style;
+  const menuPiece=$('.main-menu-art img');if(menuPiece)menuPiece.src=pieceAsset('bk');
+  renderComputerBots();
+  return style;
+}
 const app=$('#app');
 app.innerHTML=`
 <div id="brandSplash" class="brand-splash" aria-hidden="true">
@@ -105,7 +115,7 @@ app.innerHTML=`
       </div>
       <div class="main-menu-art" aria-hidden="true">
         <div class="main-menu-art-glow"></div>
-        <img src="/assets/vch/pieces/bk.webp" alt="">
+        <img src="/assets/vch/pieces/3d/bk.webp" alt="">
       </div>
     </div>
     <div class="main-menu-tiles" aria-label="VCH features">
@@ -216,7 +226,7 @@ app.innerHTML=`
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle"><option value="3d">3D</option><option value="2d">2D</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -348,7 +358,7 @@ async function beginMatchSearch(){
 function renderComputerBots(){
   const grid=$('#botGrid');if(!grid)return;
   if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=computerBots.find(bot=>Number(bot.elo)===1500)?.slug||computerBots[0]?.slug||'';
-  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="/assets/vch/pieces/${escapeHtml(bot.portrait||'bn')}.webp" alt=""></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
+  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt=""></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
   $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;renderComputerBots()});
 }
 async function loadComputerBots(){
@@ -1117,7 +1127,7 @@ window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();ins
 $('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
 $('#notifyBtn').onclick=()=>toast('Game notifications will appear here');
 const savedTheme=JSON.parse(localStorage.getItem('vanta.theme')||'{}');document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece||'#f0d9a4');document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint??.18));
-for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else document.documentElement.style.setProperty(key,value)}
+for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else if(key!=='pieceStyle')document.documentElement.style.setProperty(key,value)}
 $$('[data-theme]').forEach(input=>input.oninput=()=>{const value=input.type==='range'?(input.dataset.theme==='--glass'?`${input.value/100}`:`${input.value/100}s`):input.value;document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))});
-$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round((savedTheme.pieceTint??.18)*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
+savedTheme.pieceStyle=applyPieceStyle(savedTheme.pieceStyle);$('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round((savedTheme.pieceTint??.18)*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>$('#themeStudio').close();
