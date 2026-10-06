@@ -19,6 +19,7 @@
     "prepare:runtime": "npm run prepare:stockfish"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.109.0",
     "chess.js": "^1.4.0",
     "stockfish": "19.0.0"
   },

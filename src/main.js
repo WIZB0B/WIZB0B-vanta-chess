@@ -1,5 +1,6 @@
 import './style.css';
 import { Chess } from 'chess.js';
+import { createClient } from '@supabase/supabase-js';
 import { VchApi, stableGuestToken } from './vch-api.js';
 import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
@@ -16,10 +17,11 @@ const playerToken=stableGuestToken();
 const api=new VchApi({token:playerToken});
 const SUPABASE_URL='https://ubjldcfiwrwiouwgmduo.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_q3KU0sdaVKOeMcLND2D15Q_Qsu2X5pN';
+const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -345,19 +347,19 @@ async function cancelMatchSearch({announce=true}={}){
 async function beginMatchSearch(){
   if(searching){await cancelMatchSearch();return}
   if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
-  clearInterval(pollTimer);pollTimer=null;
+  stopOnlineSync();
   serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   game.reset();render();updateMoves();setMatchSearching(true);
   const started=Date.now();
   try{
     const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated});
-    if(first.game||first.matched){setMatchSearching(false);updateOnlineCount(2);applyServerState(first);startPolling();showMovesView();toast('Player matched');return}
+    if(first.game||first.matched){setMatchSearching(false);updateOnlineCount(2);applyServerState(first);showMovesView();toast('Player matched');return}
     matchTimer=setInterval(async()=>{
       try{
         const state=await api.queueStatus(matchSelection.rated);
         if(state.game||state.matched){
           clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);updateOnlineCount(2);
-          applyServerState(state);startPolling();showMovesView();
+          applyServerState(state);showMovesView();
           toast(state.botFallback||Date.now()-started>=15000?'Closest Elo engine matched':'Player matched');
         }
       }catch(error){clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);toast(error.message)}
@@ -390,7 +392,7 @@ function selectedComputerSide(){
 }
 function startComputerGame(){
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
-  clearInterval(pollTimer);pollTimer=null;serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
+  stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
@@ -408,14 +410,14 @@ async function activateLeftMode(next){
   $$('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
   $$('.mode-view').forEach(view=>{const active=view.dataset.modeView===next;view.classList.toggle('active',active);view.setAttribute('aria-hidden',String(!active))});
   if(next==='computer'){renderComputerBots();loadComputerBots()}
-  if(next==='room'&&serverGameId)startPolling();
+  syncOnlineTransport();
 }
 async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
   game.move(move);puzzleSession.played.push(uci);puzzleSession.index++;render();
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
-  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion});applyServerState(state);playTone()}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});const incomingVersion=Number((state.game||state)?.version??0);if(incomingVersion>serverVersion){applyServerState(state);playTone()}}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -553,8 +555,15 @@ function setPresence(element,label,online=false){
   element.classList.toggle('online',online);
   const text=element.querySelector('span');if(text)text.textContent=label;
 }
+function isOnlineGame(){
+  return !!serverGameId&&mode!=='computer'&&(mode==='match'||mode==='room')&&(!serverGame||['waiting','active','playing','in_progress'].includes(serverGame.status));
+}
+function serverAlignedNowIso(){
+  const offset=Number(clockSnapshot?.serverOffset)||0;
+  return new Date(Date.now()+offset).toISOString();
+}
 function syncConnectionUi(){
-  const online=!!serverGameId&&mode!=='computer';
+  const online=isOnlineGame();
   const connection=$('#bottomConnection');
   if(connection)connection.classList.toggle('hidden',!online);
   const ping=$('#bottomPing'),bars=$('#bottomPingBars');
@@ -563,8 +572,8 @@ function syncConnectionUi(){
     if(ping)ping.textContent=`${latencyMs} ms`;
     if(bars)bars.dataset.quality=latencyMs<=100?'good':latencyMs<=250?'fair':'poor';
   }else{
-    if(ping)ping.textContent='connecting';
-    if(bars)bars.dataset.quality='pending';
+    if(ping)ping.textContent='-- ms';
+    if(bars)bars.dataset.quality=realtimeReady?'pending':'';
   }
 }
 function syncPlayerBars(){
@@ -584,7 +593,7 @@ function syncPlayerBars(){
   const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
   setPlayerFlag($('#topFlag'),opponentColor?serverGame?.[`${opponentColor}_country_code`]:null);
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code||(ownColor?serverGame?.[`${ownColor}_country_code`]:null));
-  const online=!!serverGameId&&mode!=='computer';
+  const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
   syncConnectionUi();syncClockBars();
@@ -608,7 +617,7 @@ function applyServerState(payload){
   if(myColor&&!orientationSet){flipped=myColor==='b';orientationSet=true}
   clockSnapshot=createClockSnapshot(payload);
   if(state.fen){try{game.load(state.fen)}catch{}}
-  syncRoomUi();render();updateMoves();
+  syncRoomUi();render();updateMoves();syncOnlineTransport();
   if(state.draw_offer_by&&currentPlayerId&&state.draw_offer_by!==currentPlayerId&&lastDrawOffer!==state.draw_offer_by&&['active','playing','in_progress'].includes(state.status)){
     lastDrawOffer=state.draw_offer_by;
     setTimeout(async()=>{const accept=confirm('Your opponent offered a draw. Accept?');try{applyServerState(await api.drawRespond(serverGameId,accept))}catch(error){toast(error.message)}},60);
@@ -658,24 +667,87 @@ async function loadProfile(){
   }
 }
 function openAccount(){syncIdentityUI();$('#accountDialog').showModal()}
-async function connect(){try{await loadProfile();if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`);startPolling()}}catch(error){toast(error.message)}}
+async function connect(){try{await loadProfile();if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`)}}catch(error){toast(error.message)}}
+function stopPolling(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null}
+  pollCount=0;
+}
+function clearPingProbe(){
+  if(pingProbe?.timeout)clearTimeout(pingProbe.timeout);
+  pingProbe=null;
+}
+function stopRealtime(){
+  if(realtimePingTimer){clearInterval(realtimePingTimer);realtimePingTimer=null}
+  clearPingProbe();realtimeReady=false;latencyMs=null;
+  if(realtimeChannel){
+    const channel=realtimeChannel;realtimeChannel=null;realtimeGameId=null;
+    realtimeClient.removeChannel(channel).catch(()=>{});
+  }else realtimeGameId=null;
+}
+function stopOnlineSync(){
+  stopPolling();stopRealtime();syncConnectionUi();
+}
+function sendRealtimePing(){
+  if(!isOnlineGame()||!realtimeChannel||!realtimeReady||pingProbe)return;
+  const nonce=crypto.randomUUID(),started=performance.now();
+  const timeout=setTimeout(()=>{
+    if(pingProbe?.nonce!==nonce)return;
+    pingProbe=null;latencyMs=null;syncConnectionUi();
+  },3000);
+  pingProbe={nonce,started,timeout};
+  realtimeChannel.send({type:'broadcast',event:'ping',payload:{nonce}}).catch(()=>{
+    if(pingProbe?.nonce===nonce){clearPingProbe();latencyMs=null;syncConnectionUi()}
+  });
+}
+function startRealtime(){
+  if(!isOnlineGame()){stopRealtime();return}
+  if(realtimeChannel&&realtimeGameId===serverGameId)return;
+  stopRealtime();
+  const gameId=serverGameId;
+  realtimeGameId=gameId;latencyMs=null;syncConnectionUi();
+  realtimeChannel=realtimeClient
+    .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
+    .on('broadcast',{event:'state'},message=>{
+      const payload=message?.payload||{},state=payload.game||payload;
+      if(!isOnlineGame()||state?.id!==serverGameId)return;
+      const incomingVersion=Number(state.version??0);
+      if(incomingVersion<=serverVersion)return;
+      applyServerState(payload);playTone();
+    })
+    .on('broadcast',{event:'ping'},message=>{
+      const nonce=message?.payload?.nonce;
+      if(!pingProbe||nonce!==pingProbe.nonce)return;
+      const started=pingProbe.started;clearPingProbe();
+      latencyMs=Math.max(1,Math.round(performance.now()-started));syncConnectionUi();
+    })
+    .subscribe(status=>{
+      if(realtimeGameId!==gameId)return;
+      realtimeReady=status==='SUBSCRIBED';
+      if(realtimeReady){
+        latencyMs=null;syncConnectionUi();sendRealtimePing();
+        if(!realtimePingTimer)realtimePingTimer=setInterval(sendRealtimePing,5000);
+      }else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
+        latencyMs=null;syncConnectionUi();
+      }
+    });
+}
 function startPolling(){
-  clearInterval(pollTimer);pollCount=0;latencyMs=null;syncConnectionUi();let inFlight=false;
+  if(!isOnlineGame()){stopPolling();return}
+  if(pollTimer)return;
+  pollCount=0;let inFlight=false;
   pollTimer=setInterval(async()=>{
-    if(document.hidden||!serverGameId||inFlight)return;inFlight=true;
-    const started=performance.now();
+    if(document.hidden||!isOnlineGame()||inFlight)return;inFlight=true;
     try{
       const payload=await api.heartbeat(serverGameId);
-      latencyMs=Math.max(1,Math.round(performance.now()-started));
-      syncConnectionUi();
       applyServerState(payload);
-      if(++pollCount%4===0)await loadChat();
-    }catch{
-      latencyMs=null;syncConnectionUi();
-      const ping=$('#bottomPing');if(ping&&serverGameId)ping.textContent='reconnecting';
-    }
+      if(++pollCount%1===0)await loadChat();
+    }catch{}
     finally{inFlight=false}
-  },450)
+  },5000);
+}
+function syncOnlineTransport(){
+  if(!isOnlineGame()){stopOnlineSync();return}
+  startRealtime();startPolling();
 }
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
 async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
@@ -697,7 +769,7 @@ $$('[data-computer-side]').forEach(button=>button.onclick=()=>{
 $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready');startPolling()}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
@@ -1058,7 +1130,7 @@ async function showBackendView(kind){
       target.innerHTML=`<div class="arena-list">${events.map((t,i)=>`<article data-arena="${i}"><div><small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4><p>${Number(t.base_seconds||600)/60}+${t.increment_seconds||0} · ${t.status||'active'}</p></div><div><button class="arena-join">Join</button><button class="arena-standings">Standings</button></div><section class="standings-slot"></section></article>`).join('')}</div>`;
       [...target.querySelectorAll('[data-arena]')].forEach((row,i)=>{
         const t=events[i];
-        row.querySelector('.arena-join').onclick=async()=>{try{await api.tournamentJoin(t.id);await api.queueJoin({seconds:Number(t.base_seconds||600),increment:Number(t.increment_seconds||0),rated:!!t.rated,tournamentId:t.id});mode='match';toast('Arena queue joined');const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);startPolling();showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}};
+        row.querySelector('.arena-join').onclick=async()=>{try{await api.tournamentJoin(t.id);await api.queueJoin({seconds:Number(t.base_seconds||600),increment:Number(t.increment_seconds||0),rated:!!t.rated,tournamentId:t.id});mode='match';toast('Arena queue joined');const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000)}catch(error){toast(error.message)}};
         row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=(result.standings||[]).slice(0,10).map(p=>`<p>${p.rank||'–'}. ${escapeHtml(p.display_name||p.name||'Player')} <b>${p.score||0}</b></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
       });
     }catch(error){toast(error.message);showMovesView()}

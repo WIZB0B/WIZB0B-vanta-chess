@@ -12,10 +12,10 @@ test('move request sends only non-authoritative input and expected version', asy
   };
   try {
     const api = new VchApi({ token: 'a'.repeat(40) });
-    await api.move('game-1', 7, { from: 'e2', to: 'e4', promotion: 'q' });
+    await api.move('game-1', 7, { from: 'e2', to: 'e4', promotion: 'q', clientMoveAt: '2026-10-06T10:00:00.000Z' });
     assert.deepEqual(request.body, {
       action: 'move', token: 'a'.repeat(40), gameId: 'game-1', expectedVersion: 7,
-      from: 'e2', to: 'e4', promotion: 'q',
+      from: 'e2', to: 'e4', promotion: 'q', clientMoveAt: '2026-10-06T10:00:00.000Z',
     });
     for (const forbidden of ['fen', 'san', 'clocks', 'result', 'rating', 'seat']) assert.equal(forbidden in request.body, false);
     assert.equal(request.options.cache, 'no-store');

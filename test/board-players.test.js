@@ -9,7 +9,9 @@ test('player bars expose avatar, flag, rating, live state, clock, and online-onl
   for(const id of ['topAvatar','topPlayerName','topFlag','topRating','topPresence','topClock','bottomAvatar','bottomPlayerName','bottomFlag','bottomRating','bottomPresence','bottomConnection','bottomPingBars','bottomPing','bottomClock']){
     assert.match(main,new RegExp(`id="${id}"`),`missing player-bar element #${id}`);
   }
-  assert.match(main,/const online=!!serverGameId&&mode!=='computer'/);
+  assert.match(main,/function isOnlineGame\(\)/);
+  assert.match(main,/mode!==\'computer\'/);
+  assert.match(main,/const online=isOnlineGame\(\)/);
   assert.match(main,/connection\.classList\.toggle\('hidden',!online\)/);
   assert.match(main,/latencyMs<=100\?'good':latencyMs<=250\?'fair':'poor'/);
   assert.match(main,/setPresence\(\$\('#topPresence'\),currentBot\?'ENGINE'/);
