@@ -1838,6 +1838,14 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   background-position:var(--piece-x) var(--piece-y);
   background-repeat:no-repeat;
 }
+:root[data-piece-style^="vanta-"] .piece::after{
+  -webkit-mask-size:600% 400%;
+  mask-size:600% 400%;
+  -webkit-mask-position:var(--piece-x) var(--piece-y);
+  mask-position:var(--piece-x) var(--piece-y);
+  -webkit-mask-repeat:no-repeat;
+  mask-repeat:no-repeat;
+}
 :root[data-piece-style^="vanta-"] .piece-k{--piece-x:0%}
 :root[data-piece-style^="vanta-"] .piece-q{--piece-x:20%}
 :root[data-piece-style^="vanta-"] .piece-r{--piece-x:40%}

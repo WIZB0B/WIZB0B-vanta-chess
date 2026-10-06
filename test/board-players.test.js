@@ -36,6 +36,13 @@ test('board supports persisted Vanta and Staunton piece styles with baked-in siz
   assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(e\.target\.value\)/);
   assert.ok(css.includes("/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png"));
   assert.ok(css.includes("background-size:600% 400%;"));
+  const vantaTintMask=css.match(/:root\[data-piece-style\^="vanta-"\] \.piece::after\{([\s\S]*?)\}/)?.[1]||'';
+  assert.ok(vantaTintMask.includes('-webkit-mask-size:600% 400%;'));
+  assert.ok(vantaTintMask.includes('mask-size:600% 400%;'));
+  assert.ok(vantaTintMask.includes('-webkit-mask-position:var(--piece-x) var(--piece-y);'));
+  assert.ok(vantaTintMask.includes('mask-position:var(--piece-x) var(--piece-y);'));
+  assert.ok(vantaTintMask.includes('-webkit-mask-repeat:no-repeat;'));
+  assert.ok(vantaTintMask.includes('mask-repeat:no-repeat;'));
   for(const position of ['--piece-x:0%','--piece-x:20%','--piece-x:40%','--piece-x:60%','--piece-x:80%','--piece-x:100%','--piece-y:0%','--piece-y:33.3333%','--piece-y:66.6666%','--piece-y:99.9999%']){
     assert.ok(css.includes(position),`missing sprite position ${position}`);
   }
