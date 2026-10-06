@@ -9,7 +9,12 @@ async function mockApi(page){
 }
 
 test('desktop geometry is locked to the supplied 1672x941 reference', async ({ browser })=>{
-  test.skip(!!process.env.CI, 'pixel-geometry test is not stable in CI');
+  // Pixel-exact geometry against the 1672x941 mockup. It depends on the browser build and
+  // installed fonts (no web fonts are bundled), so it is a local design check, not a CI gate.
+  // CI still enforces the hard rules: 64 squares, aspect-ratio 1, and no page scroll at
+  // 1672x941 (e2e/visual.spec.js). Known local drift: the board sits ~17px right of the
+  // mockup's x=526 since Batch 4 (also at the last green commit 38864cf).
+  test.skip(!!process.env.CI, 'pixel-geometry check is browser/font dependent; run locally');
   const ctx=await browser.newContext({viewport:{width:1672,height:941},deviceScaleFactor:1});
   const page=await ctx.newPage();await mockApi(page);await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));await page.goto('/');
   await expect(page.locator('.square')).toHaveCount(64);

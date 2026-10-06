@@ -2001,3 +2001,8 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .menu-empty{margin:6px 2px 4px;color:#9ca9a5;font-size:12px;line-height:1.5}
 @media(prefers-reduced-motion:no-preference){.header-menu:not([hidden]){animation:vch-menu-in .15s ease-out}}
 @keyframes vch-menu-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* Desktop keeps the one-viewport game layout (1672x941, no page scroll): the Batch 7
+   260px move list is for stacked layouts only; on wide screens it pushed the right
+   panel past the viewport. The list scrolls internally instead. */
+@media(min-width:1181px){.moves{height:140px}}

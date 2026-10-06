@@ -32,6 +32,12 @@ test('menus close on outside click, Escape and when another menu opens',async({p
 
   await page.locator('.game-more>summary').click();
   await expect(more).toHaveAttribute('open','');
+  await page.locator('#openChat').click();
+  await expect(page.locator('#chatDrawer')).toHaveClass(/open/);
+  await expect(more).not.toHaveAttribute('open','');
+  await page.locator('#closeChat').click();
+  await page.locator('.game-more>summary').click();
+  await expect(more).toHaveAttribute('open','');
   await page.locator('#accountBtn').click();
   await expect(profile).toBeVisible();await expect(more).not.toHaveAttribute('open','');
   await page.keyboard.press('Escape');
