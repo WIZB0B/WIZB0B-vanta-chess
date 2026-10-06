@@ -9,6 +9,7 @@ import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAs
 import { PremoveQueue, consumeLegalPremove } from './premove.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
+import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -41,13 +42,18 @@ let reviewPending=null;
 const stockfish=new Worker('/stockfish.worker.js');
 const analysisWorker=new Worker('/stockfish.worker.js');
 const reviewWorker=new Worker('/stockfish.worker.js');
+// Bot moves, live analysis and game review each own a separate Stockfish worker, so the
+// bot and analysis never share one engine.
+let engineRequestSeq=0,analysisRequest=null;
 stockfish.onmessage=({data})=>{
-  if(data.type==='uci'&&String(data.line||'').startsWith('bestmove ')&&enginePending){const u=String(data.line).split(' ')[1];enginePending(u);enginePending=null}
-  if(data.type==='unavailable'&&enginePending){enginePending(null);enginePending=null}
+  if(!enginePending||data.requestId!==enginePending.id)return;
+  if(data.type==='uci'&&String(data.line||'').startsWith('bestmove ')){const u=String(data.line).split(' ')[1];enginePending.resolve(u);enginePending=null}
+  if(data.type==='unavailable'){enginePending.resolve(null);enginePending=null}
 };
 analysisWorker.onmessage=({data})=>{
-  if(data.type==='uci'&&String(data.line||'').startsWith('info '))updateAnalysisFromUci(String(data.line));
-  if(data.type==='unavailable'){const line=$('#line');if(line)line.textContent='Stockfish 19 unavailable in this browser.'}
+  if(data.type==='unavailable'){const line=$('#line');if(line)line.textContent='Stockfish 19 unavailable in this browser.';return}
+  if(!analysisRequest||data.requestId!==analysisRequest.id)return;
+  if(data.type==='uci'&&String(data.line||'').startsWith('info '))updateAnalysisFromUci(String(data.line),analysisRequest);
 };
 reviewWorker.onmessage=({data})=>{
   if(!reviewPending||data.requestId!==reviewPending.id)return;
@@ -690,8 +696,19 @@ function updateMoves(){
     cell.onclick=jump;cell.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();jump()}};
   });
 }
-async function findEngineMove(){const moves=game.moves({verbose:true});if(!moves.length)return null;const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500);const uci=await new Promise(resolve=>{enginePending=resolve;stockfish.postMessage({fen:game.fen(),elo:requestedElo,movetime:350});setTimeout(()=>{if(enginePending){enginePending(null);enginePending=null}},4000)});return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci)}
-async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
+async function findEngineMove(){
+  const moves=game.moves({verbose:true});if(!moves.length)return null;
+  const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`;
+  if(enginePending)enginePending.resolve(null);
+  const uci=await new Promise(resolve=>{
+    enginePending={id,resolve};
+    stockfish.postMessage({mode:'bot',fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id});
+    setTimeout(()=>{if(enginePending?.id===id){enginePending=null;stockfish.postMessage({action:'stop'});resolve(null)}},BOT_MOVE_TIMEOUT_MS);
+  });
+  if(game.fen()!==fen)return undefined; // position changed while searching (new game, takeback): drop the result
+  return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
+}
+async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 function playTone(){if($('#sound').dataset.off)return;const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1)}
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
 function playerBarClockColors(){
@@ -938,7 +955,7 @@ function applyServerState(payload,{animateMove=true}={}){
   playQueuedPremove();maybePlayBot();
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
-async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
+async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(move===undefined)return;if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
 function saveAuthSession(session){
   authSession=session||null;
   if(authSession)localStorage.setItem('vanta.auth-session',JSON.stringify(authSession));else localStorage.removeItem('vanta.auth-session');
@@ -1247,7 +1264,7 @@ function analyzeReviewFen(fen,index,token){
     const id=`review-${token}-${index}`;
     const timer=setTimeout(()=>{if(reviewPending?.id===id){reviewPending=null;reviewWorker.postMessage({action:'stop'});reject(new Error('Game review timed out'))}},30000);
     reviewPending={id,fen,latest:{cp:0,depth:0,pv:'',bestMove:''},resolve,reject,timer};
-    reviewWorker.postMessage({fen,elo:3190,depth:REVIEW_DEPTH,requestId:id});
+    reviewWorker.postMessage({mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id});
   });
 }
 function buildReviewGame(records=currentReviewRecords()){
@@ -1440,34 +1457,44 @@ function formatPv(pv=''){
     return out.join(' ');
   }catch{return pv}
 }
-function updateAnalysisFromUci(text){
+function updateAnalysisFromUci(text,request){
   if(reviewState.running||reviewState.viewing){const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);return}
+  if(!request||request.fen!==game.fen())return;
   const depth=Number(text.match(/\bdepth (\d+)/)?.[1]||0);
   const scoreMatch=text.match(/\bscore (cp|mate) (-?\d+)/);
   const pv=text.match(/\bpv (.+)$/)?.[1]||'';
-  if(scoreMatch){
+  if(!depth||!scoreMatch||text.includes(' lowerbound')||text.includes(' upperbound'))return;
+  if(depth<request.depth)return;
+  request.depth=depth;
+  {
     let score=scoreMatch[1]==='mate'?(Number(scoreMatch[2])>0?99:-99):Number(scoreMatch[2])/100;
-    if(game.turn()==='b')score=-score;
+    if(request.fen.split(' ')[1]==='b')score=-score;
     analysisScore=Math.max(-99,Math.min(99,score));
-    const analyzedPly=currentHistory().length;if(analyzedPly)moveEvalByPly[analyzedPly-1]=analysisScore;
+    if(request.ply)moveEvalByPly[request.ply-1]=analysisScore;
     const scoreEl=$('#score');if(scoreEl)scoreEl.textContent=(analysisScore>=0?'+':'')+(Math.abs(analysisScore)>=90?'M'+Math.abs(Number(scoreMatch[2])||1):analysisScore.toFixed(1));
     const fill=$('#meterFill');if(fill)fill.style.width=(50+Math.max(-45,Math.min(45,analysisScore*8)))+'%';
     const advantage=$('#advantage');if(advantage)advantage.textContent=Math.abs(analysisScore)<.2?'Equal position':analysisScore>0?'Advantage for White':'Advantage for Black';
     updateMoves();
   }
-  const depthEl=$('#depth');if(depthEl&&depth)depthEl.textContent=String(depth);
+  const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(depth);
   const line=$('#line');if(line&&pv)line.textContent=formatPv(pv);
 }
-function scheduleAnalysis(){
+function scheduleAnalysis({force=false}={}){
   clearTimeout(analysisTimer);
   if(reviewState.running||reviewState.viewing||mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
-  analysisTimer=setTimeout(()=>{if(!botThinking)analysisWorker.postMessage({fen:game.fen(),elo:3190,movetime:280})},220);
+  analysisTimer=setTimeout(()=>{
+    if(botThinking)return;
+    const fen=game.fen();
+    if(!force&&analysisRequest?.fen===fen)return;
+    analysisRequest={id:`analysis-${++engineRequestSeq}`,fen,ply:currentHistory().length,depth:0};
+    analysisWorker.postMessage({mode:'analysis',fen,depth:ANALYSIS_MAX_DEPTH,requestId:analysisRequest.id});
+  },220);
 }
 function showMovesView(){
   currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
   if(reviewState.viewing){reviewState.viewing=false;renderReviewDashboard();render()}
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
-  updateMoves();scheduleAnalysis();
+  updateMoves();scheduleAnalysis({force:true});
 }
 function setDynamicView(kind,title,html){
   currentRightView=kind;
@@ -1532,7 +1559,7 @@ function renderReview(){
   const records=serverGame?.move_history||[],sans=records.map(x=>x.san||x.lan||'').filter(Boolean),captures=records.filter(x=>x.captured).length,checks=records.filter(x=>String(x.san||'').includes('+')).length;
   const opening=detectOpening(sans);
   setDynamicView('review','Post-Game Review',`<div class="review-summary"><div><b>${records.length}</b><small>plies played</small></div><div><b>${captures}</b><small>captures</small></div><div><b>${checks}</b><small>checks</small></div><div><b>${analysisScore>=0?'+':''}${analysisScore.toFixed(1)}</b><small>current eval</small></div></div><article class="review-note"><h4>${opening?escapeHtml(opening.name):'Unclassified opening'}</h4><p>${opening?escapeHtml(opening.idea):'Play a few moves to identify the opening family.'}</p></article><button class="primary-action analyze-now">Analyze current position</button>${sans.length?'<button class="secondary-action replay-review">Replay every move</button>':''}`);
-  $('#dynamicView .analyze-now').onclick=()=>{showMovesView();scheduleAnalysis()};
+  $('#dynamicView .analyze-now').onclick=()=>{showMovesView();scheduleAnalysis({force:true})};
   const replay=$('#dynamicView .replay-review');if(replay)replay.onclick=()=>renderStudy('review','Game Replay',sans,opening?opening.name:'Current game');
 }
 function brandLoading(label){
