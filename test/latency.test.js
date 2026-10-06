@@ -38,12 +38,23 @@ test('online moves apply locally before waiting for the authoritative response',
 
 test('rejected optimistic moves roll back to the server state and show a short toast',()=>{
   const start=main.indexOf('if(serverGameId&&!remote){'),end=main.indexOf('return}let made,localElapsedMs=null',start),body=main.slice(start,end);
-  const request=body.indexOf('const state=await api.move('),catchStart=body.indexOf('catch{',request),finallyStart=body.indexOf('finally{',catchStart);
+  const request=body.indexOf('const state=await api.move('),catchStart=body.indexOf('catch(error){',request),finallyStart=body.indexOf('finally{',catchStart);
   const rejection=body.slice(catchStart,finallyStart);
   assert.ok(catchStart>request&&finallyStart>catchStart,'online move has a rejection path');
   assert.ok(rejection.includes('await refreshServerState()'),'rejection refreshes authoritative state');
   assert.ok(rejection.includes('render()'),'rejection re-renders the restored board');
   assert.ok(rejection.includes("toast('Move not accepted')"),'rejection shows the short move-not-accepted toast');
+});
+
+test('stale-version rejections resync and resend the move once',()=>{
+  assert.match(main,/async function makeMove\(move,remote=false,retry=true\)/);
+  const start=main.indexOf('if(serverGameId&&!remote){'),end=main.indexOf('return}let made,localElapsedMs=null',start),body=main.slice(start,end);
+  const catchStart=body.indexOf('catch(error){'),finallyStart=body.indexOf('finally{onlineMovePending=false}',catchStart),rejection=body.slice(catchStart,finallyStart);
+  const refresh=rejection.indexOf('await refreshServerState()'),resendCheck=rejection.indexOf('retry&&error?.status===409&&myColor===game.turn()');
+  assert.ok(refresh>=0&&resendCheck>refresh,'resend is decided only after the authoritative state is reloaded');
+  assert.match(rejection,/game\.moves\(\{square:move\.from,verbose:true\}\)\.some\(candidate=>candidate\.to===move\.to\)\)resendStaleMove=true/);
+  const resend=body.indexOf('if(resendStaleMove)return makeMove(move,false,false)');
+  assert.ok(resend>finallyStart,'resend runs after the pending flag is cleared and never retries twice');
 });
 
 test('valid remote move is applied instantly before server confirmation',()=>{
