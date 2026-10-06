@@ -21,7 +21,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -417,7 +417,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
   if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]});puzzleSession.played.push(reply);puzzleSession.index++;render();if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
-  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});const incomingVersion=Number((state.game||state)?.version??0);if(incomingVersion>serverVersion){applyServerState(state);playTone()}}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}if(serverGameId&&!remote){try{const state=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||serverGameId;broadcastMoved(movedGameId,incomingVersion);if(incomingVersion>serverVersion){applyServerState(state);playTone()}}catch(error){toast(error.message);await refreshServerState();if(retry&&error.status===409&&myColor===game.turn()&&game.moves({square:move.from,verbose:true}).some(x=>x.to===move.to))return makeMove(move,false,false)}return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();updateMoves();playTone();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -678,7 +678,7 @@ function clearPingProbe(){
 }
 function stopRealtime(){
   if(realtimePingTimer){clearInterval(realtimePingTimer);realtimePingTimer=null}
-  clearPingProbe();realtimeReady=false;latencyMs=null;
+  clearPingProbe();realtimeReady=false;latencyMs=null;realtimeRefreshPromise=null;
   if(realtimeChannel){
     const channel=realtimeChannel;realtimeChannel=null;realtimeGameId=null;
     realtimeClient.removeChannel(channel).catch(()=>{});
@@ -699,6 +699,30 @@ function sendRealtimePing(){
     if(pingProbe?.nonce===nonce){clearPingProbe();latencyMs=null;syncConnectionUi()}
   });
 }
+function broadcastMoved(gameId,version){
+  if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId)return;
+  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version)}}).catch(()=>{});
+}
+function realtimeVersion(message){
+  const payload=message?.payload||{},gameState=payload.game||payload;
+  return {gameId:payload.gameId||gameState?.id,version:Number(payload.version??gameState?.version??0)};
+}
+async function refreshFromRealtime(message){
+  const incoming=realtimeVersion(message);
+  if(!isOnlineGame()||incoming.gameId!==serverGameId||incoming.version<=serverVersion)return;
+  if(realtimeRefreshPromise)return realtimeRefreshPromise;
+  const requestedGameId=serverGameId;
+  realtimeRefreshPromise=(async()=>{
+    try{
+      const authoritative=await api.heartbeat(requestedGameId);
+      if(requestedGameId!==serverGameId)return;
+      const authoritativeVersion=Number((authoritative.game||authoritative)?.version??0);
+      if(authoritativeVersion>serverVersion){applyServerState(authoritative);playTone()}
+    }catch{}
+    finally{realtimeRefreshPromise=null}
+  })();
+  return realtimeRefreshPromise;
+}
 function startRealtime(){
   if(!isOnlineGame()){stopRealtime();return}
   if(realtimeChannel&&realtimeGameId===serverGameId)return;
@@ -707,13 +731,8 @@ function startRealtime(){
   realtimeGameId=gameId;latencyMs=null;syncConnectionUi();
   realtimeChannel=realtimeClient
     .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
-    .on('broadcast',{event:'state'},message=>{
-      const payload=message?.payload||{},state=payload.game||payload;
-      if(!isOnlineGame()||state?.id!==serverGameId)return;
-      const incomingVersion=Number(state.version??0);
-      if(incomingVersion<=serverVersion)return;
-      applyServerState(payload);playTone();
-    })
+    .on('broadcast',{event:'state'},message=>{refreshFromRealtime(message)})
+    .on('broadcast',{event:'moved'},message=>{refreshFromRealtime(message)})
     .on('broadcast',{event:'ping'},message=>{
       const nonce=message?.payload?.nonce;
       if(!pingProbe||nonce!==pingProbe.nonce)return;

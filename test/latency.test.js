@@ -11,9 +11,15 @@ test('online games use one Realtime channel and a 5s heartbeat fallback',()=>{
   assert.equal(pkg.dependencies['@supabase/supabase-js'],'2.109.0');
   assert.match(main,/createClient\(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY/);
   assert.match(main,/\.channel\(\`game:\$\{gameId\}\`,\{config:\{broadcast:\{self:true\}\}\}\)/);
-  assert.match(main,/\.on\('broadcast',\{event:'state'\}/);
-  assert.match(main,/applyServerState\(payload\);playTone\(\)/);
+  assert.match(main,/\.on\('broadcast',\{event:'state'\},message=>\{refreshFromRealtime\(message\)\}\)/);
+  assert.match(main,/\.on\('broadcast',\{event:'moved'\},message=>\{refreshFromRealtime\(message\)\}\)/);
+  assert.match(main,/realtimeChannel\.send\(\{type:'broadcast',event:'moved',payload:\{gameId,version:Number\(version\)\}\}\)/);
+  assert.match(main,/const authoritative=await api\.heartbeat\(requestedGameId\)/);
+  assert.match(main,/if\(authoritativeVersion>serverVersion\)\{applyServerState\(authoritative\);playTone\(\)\}/);
+  assert.doesNotMatch(main,/\.on\('broadcast',\{event:'state'\},message=>\{[\s\S]{0,400}applyServerState\(/);
+  assert.match(main,/broadcastMoved\(movedGameId,incomingVersion\);if\(incomingVersion>serverVersion\)\{applyServerState\(state\);playTone\(\)\}/);
   assert.match(main,/setInterval\(async\(\)=>\{[\s\S]*?api\.heartbeat\(serverGameId\)[\s\S]*?\},5000\)/);
+  assert.match(main,/realtimeReady=false;latencyMs=null;realtimeRefreshPromise=null/);
   assert.match(main,/function stopOnlineSync\(\)/);
   assert.match(main,/if\(!isOnlineGame\(\)\)\{stopOnlineSync\(\);return\}/);
 });

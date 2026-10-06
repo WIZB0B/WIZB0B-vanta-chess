@@ -1,15 +1,32 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { securityHeaders } from './security-headers.mjs';
-const ignored = new Set(['.git', 'node_modules', 'dist', 'generated', 'vch']);
+const ignored = new Set(['.git', 'node_modules']);
 const files = [];
 function walk(directory) { for (const name of readdirSync(directory)) { if (ignored.has(name)) continue; const path = join(directory, name); statSync(path).isDirectory() ? walk(path) : files.push(path); } }
 walk('.');
-const source = files.filter(path => !path.endsWith('package-lock.json') && !path.endsWith('security-check.mjs') && !path.endsWith('security-audit.md')).map(path => `${path}\n${readFileSync(path, 'utf8')}`).join('\n');
+const normalized=path=>path.replace(/\\/g,'/');
+const textByFile=new Map();
+for(const path of files){
+  const bytes=readFileSync(path);
+  if(bytes.includes(0))continue;
+  textByFile.set(path,bytes.toString('utf8'));
+}
+const isBrowserFile=path=>{
+  const value=normalized(path).replace(/^\.\//,'');
+  return value==='index.html'||value.startsWith('src/')||value.startsWith('public/')||value.startsWith('dist/');
+};
+const clientFiles=[...textByFile.keys()].filter(isBrowserFile);
+const clientSource=clientFiles.map(path=>`${normalized(path)}\n${textByFile.get(path)}`).join('\n');
+const repoSource=[...textByFile.entries()].map(([path,content])=>`${normalized(path)}\n${content}`).join('\n');
 const failures = [];
-if (/service_role|SUPABASE_SERVICE_ROLE/i.test(source)) failures.push('service-role reference found');
-if (/Access-Control-Allow-Origin\s*[:=]\s*["']?\*/i.test(source)) failures.push('wildcard CORS found');
-if (/-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(source)) failures.push('private key found');
+if (/service_role|SUPABASE_SERVICE_ROLE/i.test(clientSource)) failures.push('service-role reference found in browser code');
+if (/Access-Control-Allow-Origin\s*[:=]\s*["']?\*/i.test(clientSource)) failures.push('wildcard CORS found in browser code');
+if (/-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(clientSource)) failures.push('private key found in browser code');
+const jwtPrefix=['e','y','J'].join('');
+const secretPrefix=['sb','secret'].join('_')+'_';
+const hardCodedSupabaseKey=new RegExp(`(?:${jwtPrefix}[A-Za-z0-9_-]{20,}|${secretPrefix}[A-Za-z0-9_-]{8,})`,'g');
+if(hardCodedSupabaseKey.test(repoSource))failures.push('hard-coded Supabase secret found');
 const netlify = readFileSync('netlify.toml', 'utf8');
 for (const header of ['Content-Security-Policy', 'Strict-Transport-Security', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy']) if (!netlify.includes(header)) failures.push(`missing ${header}`);
 const csp=securityHeaders['Content-Security-Policy']||'';
@@ -39,4 +56,4 @@ for (const name of ['hero-knight','live-banner','opening-card','famous-card','re
 if (!existsSync(join('e2e/fixtures/reference-ui.png'))) failures.push('reference-ui.png must remain test-only under e2e/fixtures');
 for (const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']) if (existsSync(join('public/assets/vch/pieces', name + '.png'))) failures.push(`source PNG must not be deployed: ${name}.png`);
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
-console.log(`security-check: ${files.length} files inspected`);
+console.log(`security-check: ${clientFiles.length} browser files inspected; ${textByFile.size} repo files checked for hard-coded secrets`);

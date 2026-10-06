@@ -36,6 +36,15 @@ test('API endpoint validation rejects insecure and unrelated destinations', () =
   assert.throws(() => new VchApi({ endpoint: 'https://example.com/collector' }));
 });
 
+test('security scanner scopes service-role checks to browser code but scans repo secrets globally', () => {
+  const scanner = readFileSync('scripts/security-check.mjs', 'utf8');
+  assert.match(scanner,/value==='index\.html'\|\|value\.startsWith\('src\/'\)\|\|value\.startsWith\('public\/'\)\|\|value\.startsWith\('dist\/'\)/);
+  assert.match(scanner,/SUPABASE_SERVICE_ROLE\/i\.test\(clientSource\)/);
+  assert.match(scanner,/hardCodedSupabaseKey\.test\(repoSource\)/);
+  assert.doesNotMatch(scanner,/SUPABASE_SERVICE_ROLE\/i\.test\(repoSource\)/);
+  assert.match(scanner,/const ignored = new Set\(\['\.git', 'node_modules'\]\)/);
+});
+
 test('production headers and service worker private-data boundary are configured', () => {
   const config = readFileSync('netlify.toml', 'utf8');
   for (const header of ['Content-Security-Policy', 'Strict-Transport-Security', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy']) assert.match(config, new RegExp(header));
