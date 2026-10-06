@@ -23,7 +23,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); const premoves=new PremoveQueue(); let selected=null, dragPremove=false, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); const premoves=new PremoveQueue(); const realtimeClientId=crypto.randomUUID(); let selected=null, dragPremove=false, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -168,6 +168,10 @@ app.innerHTML=`
         <svg id="reviewArrows" class="review-arrows hidden" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div id="fileCoords" class="board-coords board-files" aria-hidden="true"></div>
       </div>
+      <div id="drawOfferCard" class="draw-offer-card hidden" role="status" aria-live="polite">
+        <div><b>Draw offer</b><small>Your opponent offered a draw · <span id="drawOfferCountdown">10s</span></small></div>
+        <div><button id="declineDrawOffer" type="button">Decline</button><button id="acceptDrawOffer" type="button">Accept</button></div>
+      </div>
       <div class="player bottom" data-player-bar="local">
         <span class="avatar light" id="bottomAvatar">GU</span>
         <div class="player-info">
@@ -179,7 +183,7 @@ app.innerHTML=`
         </div>
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
-      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat</button></div></details></div>
+      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
     </section>
 
     <aside class="rpanel panel">
@@ -319,7 +323,7 @@ function formatTimeControl(seconds,increment=0){
 function playUiSound(kind){
   if($('#sound')?.dataset.off)return;
   const AudioEngine=window.AudioContext||window.webkitAudioContext;if(!AudioEngine)return;
-  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440]},notes=patterns[kind]||[420],audio=new AudioEngine(),gain=audio.createGain();
+  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440],warning:[760,620]},notes=patterns[kind]||[420],audio=new AudioEngine(),gain=audio.createGain();
   gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.055,audio.currentTime+.015);gain.connect(audio.destination);
   notes.forEach((frequency,index)=>{const oscillator=audio.createOscillator(),at=audio.currentTime+index*.12;oscillator.frequency.value=frequency;oscillator.connect(gain);oscillator.start(at);oscillator.stop(at+.11)});
   const end=audio.currentTime+notes.length*.12+.04;gain.gain.exponentialRampToValueAtTime(.0001,end);setTimeout(()=>audio.close().catch(()=>{}),Math.ceil((notes.length*.12+.15)*1000));
@@ -395,30 +399,47 @@ function gameOverTitle(info){
 }
 function gameOverBody(info,title){
   const body=document.createElement('div');body.className='game-over-body';
-  const result=document.createElement('div');result.className='game-over-result';result.innerHTML=`<strong>${escapeHtml(title)}</strong><span>${escapeHtml(info.reason)}</span>`;
+  const result=document.createElement('div');result.className='game-over-result';result.innerHTML=`<strong>${escapeHtml(title)} · ${escapeHtml(info.reason)}</strong>`;
   const players=document.createElement('div');players.className='game-over-players';
-  players.innerHTML=`<div><span>White</span><b>${escapeHtml(info.whiteName)}</b><em>${escapeHtml(info.whiteRating)}</em></div><div><span>Black</span><b>${escapeHtml(info.blackName)}</b><em>${escapeHtml(info.blackRating)}</em></div>`;
+  players.innerHTML=`<div><span class="game-over-avatar">${escapeHtml(playerInitials(info.whiteName,'W'))}</span><span class="game-over-player"><small>White</small><b>${escapeHtml(info.whiteName)}</b></span><em>${escapeHtml(info.whiteRating)}</em></div><div><span class="game-over-avatar">${escapeHtml(playerInitials(info.blackName,'B'))}</span><span class="game-over-player"><small>Black</small><b>${escapeHtml(info.blackName)}</b></span><em>${escapeHtml(info.blackRating)}</em></div>`;
   body.append(result,players);return body;
 }
 async function resetFinishedGame(nextMode=['match','room','computer'].includes(mode)?mode:'room'){
-  stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();roomCreated=false;lastDrawOffer=null;localGameOver=false;localGameOverInfo=null;computerStarted=false;localClockState=null;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();game.reset();history.replaceState(null,'',location.pathname);mode=nextMode;render();updateMoves();await activateLeftMode(nextMode);showMovesView();
+  stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();roomCreated=false;lastDrawOffer=null;clearDrawOfferTimer();drawOfferKey=null;localGameOver=false;localGameOverInfo=null;computerStarted=false;localClockState=null;lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();rematchOfferPending=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();game.reset();history.replaceState(null,'',location.pathname);mode=nextMode;render();updateMoves();await activateLeftMode(nextMode);showMovesView();
+}
+function rematchSettings(){
+  const ended=serverGame||{};
+  return {seconds:Number(ended.time_control_seconds||ended.base_seconds||600),increment:Number(ended.increment_seconds||0),rated:!!ended.rated};
 }
 async function startOnlineRematch(){
-  const ended=serverGame;if(!ended)return;
-  const seconds=Number(ended.time_control_seconds||ended.base_seconds||600),increment=Number(ended.increment_seconds||0),rated=!!ended.rated;
-  if(ended.source==='queue'){
-    matchSelection={seconds,increment,rated};await resetFinishedGame('match');await beginMatchSearch();return
-  }
-  await resetFinishedGame('room');
+  if(!serverGameId||!realtimeChannel||!realtimeReady)return toast('Rematch is unavailable because the game connection has closed');
+  rematchOfferPending=true;broadcastAux('rematch_offer',{from:realtimeClientId,...rematchSettings()});toast('Rematch offered');
+}
+async function acceptRematchOffer(payload){
+  if(!payload?.from||payload.gameId!==serverGameId)return;
+  broadcastAux('rematch_accept',{from:realtimeClientId,to:payload.from});toast('Rematch accepted');
+}
+async function createRematchForPeer(payload){
+  if(!rematchOfferPending||payload?.to!==realtimeClientId||payload.gameId!==serverGameId)return;
+  rematchOfferPending=false;const oldChannel=realtimeChannel,oldGameId=serverGameId,{seconds,increment,rated}=rematchSettings();
   try{
-    const state=await api.create({name:(currentProfile?.username||guestName),seconds,increment,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch room is ready');
+    const state=await api.create({name:(currentProfile?.username||guestName),seconds,increment,rated}),next=state.game||state,code=next.invite_code;
+    if(oldChannel&&realtimeReady)await oldChannel.send({type:'broadcast',event:'rematch_ready',payload:{gameId:oldGameId,from:realtimeClientId,to:payload.from,code}});
+    applyServerState(state);room=code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(code)}`);syncRoomUi();await loadChat();toast('Rematch ready');
+  }catch(error){toast(error.message)}
+}
+async function joinRematchFromPeer(payload){
+  if(payload?.to!==realtimeClientId||payload.gameId!==serverGameId||!payload.code)return;
+  document.querySelector('.vch-dialog-layer .vch-dialog-close')?.click();
+  try{
+    const state=await api.join(payload.code,guestName);applyServerState(state);room=(state.game||state).invite_code||payload.code;roomCreated=false;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
   }catch(error){toast(error.message)}
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
   lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';playUiSound(title==='Draw'?'draw':won?'win':'lose');
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
-  const action=await vchDialog({title,body:gameOverBody(info,title),actions});
+  const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
   if(action==='review')await startGameReview();
   if(action==='rematch')await startOnlineRematch();
   if(action==='new')await resetFinishedGame();
@@ -551,7 +572,7 @@ function selectedComputerSide(){
 function startComputerGame(){
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
-  currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;computerStarted=true;computerSide=selectedComputerSide();premoves.cancel();
+  currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;lowTimeWarned=false;computerStarted=true;computerSide=selectedComputerSide();premoves.cancel();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
   showGameStartBanner(computerSide,600,0,`computer:${Date.now()}`);
@@ -691,6 +712,13 @@ function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
   const topBar=$('.player.top'),bottomBar=$('.player.bottom');
   if(topBar)topBar.dataset.color=colors.top;
   if(bottomBar)bottomBar.dataset.color=colors.bottom;
+  syncLowTimeWarning(values,active);
+}
+function syncLowTimeWarning(values,active){
+  const own=myColor,live=!!own&&((mode==='computer'&&computerStarted&&!localGameOver&&!game.isGameOver())||(serverGameId&&['active','playing','in_progress'].includes(serverGame?.status)));
+  const seconds=live?Number(values?.[own]):Infinity,low=live&&seconds>0&&seconds<10;
+  $('#bottomClock')?.classList.toggle('low-time',low);
+  if(low&&!lowTimeWarned){lowTimeWarned=true;toast('Low time · under 10 seconds');playUiSound('warning')}
 }
 function checkLocalTimeout(){
   if(mode!=='computer'||!computerStarted||localGameOver||game.isGameOver()||!localClockState)return;
@@ -698,7 +726,13 @@ function checkLocalTimeout(){
   localClockState[side]=0;localClockState.startedAt=performance.now();localGameOver=true;localGameOverInfo={result:side==='w'?'0-1':'1-0',reason:'on time'};render();
 }
 function startClock(){clearInterval(ticking);ticking=setInterval(()=>{syncClockBars();checkLocalTimeout()},250)}
-function toast(s){$('#toast').textContent=s;$('#toast').className='show';setTimeout(()=>$('#toast').className='',1800)}
+function toast(s,{duration=1800,onClick=null,actionLabel='',onAction=null}={}){
+  const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.replaceChildren();el.className='show';
+  const text=document.createElement('span');text.className='toast-text';text.textContent=String(s);el.append(text);
+  if(actionLabel&&onAction){const action=document.createElement('button');action.type='button';action.className='toast-action';action.textContent=actionLabel;action.onclick=event=>{event.stopPropagation();el.className='';onAction()};el.append(action)}
+  if(onClick){el.classList.add('actionable');el.onclick=()=>{el.className='';onClick()}}else el.onclick=null;
+  toastTimer=setTimeout(()=>{el.className='';el.onclick=null},duration);
+}
 function prefersReducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true}
 function motionDurationMs(){
   if(prefersReducedMotion())return 0;
@@ -826,12 +860,52 @@ function syncRoomUi(){
   $('.room-created')?.classList.toggle('hidden',!roomCreated);
   const strong=$('.room strong');if(strong)strong.textContent=code||'—';
   if(code)$('#share').value=`${location.origin}${location.pathname}?game=${encodeURIComponent(code)}`;
-  syncPlayerBars();
+  syncPlayerBars();syncDrawOfferUi();
+}
+function clearDrawOfferTimer(){
+  if(drawOfferTimer){clearTimeout(drawOfferTimer);drawOfferTimer=null}
+  if(drawOfferCountdownTimer){clearInterval(drawOfferCountdownTimer);drawOfferCountdownTimer=null}
+}
+function updateDrawOfferCountdown(seconds){const el=$('#drawOfferCountdown');if(el)el.textContent=`${Math.max(0,seconds)}s`}
+function startDrawOfferExpiry(key){
+  clearDrawOfferTimer();let remaining=10;updateDrawOfferCountdown(remaining);
+  drawOfferCountdownTimer=setInterval(()=>{remaining-=1;updateDrawOfferCountdown(remaining)},1000);
+  drawOfferTimer=setTimeout(()=>{if(drawOfferKey===key&&serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)void respondToDrawOffer(false,'expired')},10000);
+}
+function syncDrawOfferUi(){
+  const button=$('#draw'),card=$('#drawOfferCard');if(!button||!card)return;
+  const active=serverGame?.draw_offer_by,own=!!active&&active===currentPlayerId,incoming=!!active&&!own&&['active','playing','in_progress'].includes(serverGame?.status);
+  button.textContent=own?'Draw offered · Cancel':'Offer draw';button.classList.toggle('offered',own);
+  card.classList.toggle('hidden',!incoming);
+  if(incoming){
+    const key=`${serverGame.id}:${active}:${serverGame.updated_at||serverGame.version||0}`;
+    if(drawOfferKey!==key){drawOfferKey=key;startDrawOfferExpiry(key)}
+  }else{clearDrawOfferTimer();if(!active)drawOfferKey=null}
+}
+async function respondToDrawOffer(accept,reason='declined'){
+  const offererId=serverGame?.draw_offer_by;if(!serverGameId||!offererId||offererId===currentPlayerId)return;
+  clearDrawOfferTimer();$('#drawOfferCard')?.classList.add('hidden');
+  try{
+    const state=await api.drawRespond(serverGameId,!!accept);applyServerState(state);
+    broadcastAux('draw_response',{from:realtimeClientId,to:offererId,status:accept?'accepted':reason});broadcastAux('draw_hint',{from:realtimeClientId});
+  }catch(error){if(reason!=='expired')toast(error.message);else void refreshServerState()}
+}
+async function cancelOwnDrawOffer(){
+  if(!serverGameId||serverGame?.draw_offer_by!==currentPlayerId)return;
+  try{const state=await api.drawCancel(serverGameId);applyServerState(state);broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer cancelled')}catch(error){toast(error.message)}
+}
+function syncOpponentConnectionToast(state){
+  if(!state||state.bot_player_id||!currentPlayerId||!myColor||!['active','playing','in_progress'].includes(state.status)){opponentWasConnected=null;return}
+  const opponentId=myColor==='w'?state.black_player_id:state.white_player_id;if(!opponentId)return;
+  const seenAt=myColor==='w'?state.black_last_seen_at:state.white_last_seen_at,parsed=Date.parse(seenAt||''),connected=Number.isFinite(parsed)&&Date.now()-parsed<12000;
+  if(opponentWasConnected===true&&!connected)toast('Opponent disconnected',{duration:2400});
+  if(opponentWasConnected===false&&connected)toast('Opponent reconnected',{duration:2400});
+  opponentWasConnected=connected;
 }
 function applyServerState(payload,{animateMove=true}={}){
   const state=payload.game||payload;if(!state)return;
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
-  if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();resetReviewState()}
+  if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
   const moveAnimation=animateMove?captureLastServerMove(state,previousGameId===state.id?previousVersion:0):null;
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
@@ -841,11 +915,9 @@ function applyServerState(payload,{animateMove=true}={}){
   if(myColor&&['active','playing','in_progress'].includes(state.status)&&(previousState?.status==='waiting'||Number(state.move_count||0)===0))showGameStartBanner(myColor,state.time_control_seconds||state.base_seconds||600,state.increment_seconds||0,`online:${state.id}:${state.started_at||'active'}`);
   clockSnapshot=createClockSnapshot(payload);
   if(state.fen){try{game.load(state.fen)}catch{}}
-  syncRoomUi();render();playMoveAnimation(moveAnimation);updateMoves();syncOnlineTransport();
-  if(state.draw_offer_by&&currentPlayerId&&state.draw_offer_by!==currentPlayerId&&lastDrawOffer!==state.draw_offer_by&&['active','playing','in_progress'].includes(state.status)){
-    lastDrawOffer=state.draw_offer_by;
-    setTimeout(async()=>{const choice=await vchDialog({title:'Draw offer',body:'Your opponent offered a draw.',dismissible:false,actions:[{label:'Decline',value:false},{label:'Accept draw',value:true,primary:true}]});try{applyServerState(await api.drawRespond(serverGameId,choice===true))}catch(error){toast(error.message)}},60);
-  }
+  if(state.id&&state.id!==previousGameId)void loadChat();
+  syncRoomUi();render();playMoveAnimation(moveAnimation);updateMoves();syncOpponentConnectionToast(state);
+  if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
   playQueuedPremove();maybePlayBot();
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
@@ -993,6 +1065,20 @@ function handleRealtimeMessage(message){
   if(applyRealtimeMove(incoming))return;
   refreshFromRealtime(message);
 }
+function broadcastAux(event,payload={}){
+  if(!realtimeChannel||!realtimeReady||realtimeGameId!==serverGameId)return false;
+  realtimeChannel.send({type:'broadcast',event,payload:{gameId:serverGameId,...payload}}).catch(()=>{});return true;
+}
+function handleDrawResponse(message){
+  const payload=message?.payload||{};if(payload.gameId!==serverGameId||payload.from===realtimeClientId||payload.to!==currentPlayerId)return;
+  if(payload.status==='declined')toast('Draw offer declined');if(payload.status==='expired')toast('Draw offer expired');
+}
+function handleRematchOffer(message){
+  const payload=message?.payload||{};if(payload.gameId!==serverGameId||payload.from===realtimeClientId)return;
+  toast('Rematch offered',{duration:8000,actionLabel:'Accept',onAction:()=>acceptRematchOffer(payload)});
+}
+function handleRematchAccept(message){const payload=message?.payload||{};if(payload.from===realtimeClientId)return;void createRematchForPeer(payload)}
+function handleRematchReady(message){const payload=message?.payload||{};if(payload.from===realtimeClientId)return;void joinRematchFromPeer(payload)}
 function startRealtime(){
   if(!isOnlineGame()){stopRealtime();return}
   if(realtimeChannel&&realtimeGameId===serverGameId)return;
@@ -1003,6 +1089,12 @@ function startRealtime(){
     .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
     .on('broadcast',{event:'state'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'moved'},message=>{handleRealtimeMessage(message)})
+    .on('broadcast',{event:'draw_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void refreshServerState()})
+    .on('broadcast',{event:'draw_response'},message=>{handleDrawResponse(message)})
+    .on('broadcast',{event:'chat_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void loadChat()})
+    .on('broadcast',{event:'rematch_offer'},message=>{handleRematchOffer(message)})
+    .on('broadcast',{event:'rematch_accept'},message=>{handleRematchAccept(message)})
+    .on('broadcast',{event:'rematch_ready'},message=>{handleRematchReady(message)})
     .on('broadcast',{event:'ping'},message=>{
       const nonce=message?.payload?.nonce;
       if(!pingProbe||nonce!==pingProbe.nonce)return;
@@ -1039,8 +1131,25 @@ function syncOnlineTransport(){
   startRealtime();startPolling();
 }
 function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
-async function loadChat(){if(!serverGameId)return;const data=await api.chatList(serverGameId);$('#messages').replaceChildren();for(const item of data.messages||[])addMessage(item.body,item.player_id===data.playerId)}
-$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
+function chatIsOpen(){return $('#chatDrawer')?.classList.contains('open')===true}
+function updateChatUnread(){const badge=$('#chatUnread');if(!badge)return;badge.textContent=String(chatUnread);badge.classList.toggle('hidden',chatUnread<=0)}
+function openChatDrawer(){chatUnread=0;updateChatUnread();$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');void loadChat()}
+function closeChatDrawer(){$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')}
+function previewChatMessage(item){
+  const name=String(item?.display_name||'Opponent'),body=String(item?.body||'').slice(0,60);
+  toast(`${name}: ${body}`,{duration:4200,onClick:openChatDrawer});
+}
+async function loadChat(){
+  if(!serverGameId)return;const data=await api.chatList(serverGameId),messages=data.messages||[],previousId=lastChatMessageId;
+  let fresh=[];
+  if(previousId){const index=messages.findIndex(item=>item.id===previousId);if(index>=0)fresh=messages.slice(index+1).filter(item=>item.player_id!==data.playerId)}
+  else fresh=messages.filter(item=>item.player_id!==data.playerId&&Date.parse(item.created_at)>=chatSessionStartedAt-1000);
+  $('#messages').replaceChildren();for(const item of messages)addMessage(item.body,item.player_id===data.playerId);
+  lastChatMessageId=messages.at(-1)?.id||lastChatMessageId;
+  if(fresh.length&&!chatIsOpen()){chatUnread+=fresh.length;updateChatUnread();previewChatMessage(fresh.at(-1))}
+  if(chatIsOpen()){chatUnread=0;updateChatUnread()}
+}
+$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);broadcastAux('chat_hint',{from:realtimeClientId});$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
 $$('.modes button').forEach(button=>button.onclick=()=>activateLeftMode(button.dataset.mode));
 $$('[data-match-time]').forEach(button=>button.onclick=()=>{
   const [seconds,increment]=button.dataset.matchTime.split('-').map(Number);
@@ -1058,7 +1167,7 @@ $$('[data-computer-side]').forEach(button=>button.onclick=()=>{
 $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
@@ -1475,8 +1584,10 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Home'){event.preventDefault();setReviewPly(0)}
   if(event.key==='End'){event.preventDefault();setReviewPly(reviewState.moves.length)}
 });
-$('#openChat').onclick=()=>{$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');loadChat()};
-$('#closeChat').onclick=()=>{$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')};
+$('#acceptDrawOffer').onclick=()=>respondToDrawOffer(true,'accepted');
+$('#declineDrawOffer').onclick=()=>respondToDrawOffer(false,'declined');
+$('#openChat').onclick=openChatDrawer;
+$('#closeChat').onclick=closeChatDrawer;
 $('#accountBtn').onclick=openAccount;
 $$('[data-auth]').forEach(button=>button.onclick=()=>{
   authMode=button.dataset.auth;$$('[data-auth]').forEach(x=>x.classList.toggle('on',x===button));

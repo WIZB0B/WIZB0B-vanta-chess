@@ -38,6 +38,8 @@ test('game over modal covers results, reasons, players, ratings and actions',()=
   assert.match(main,/mated-king/);
   assert.match(css,/\.board \.square\.mated-king/);
   assert.match(main,/playUiSound\(title==='Draw'\?'draw':won\?'win':'lose'\)/);
+  assert.ok(main.includes("vchDialog({title:'Game over',body:gameOverBody(info,title),actions})"));
+  assert.ok(main.includes('class="game-over-avatar"'));
 });
 
 test('game start banner covers computer and online starts for about two seconds',()=>{

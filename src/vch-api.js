@@ -43,6 +43,7 @@ export class VchApi {
   heartbeat(gameId) { return this.request('heartbeat', { gameId }); }
   resign(gameId) { return this.request('resign', { gameId }); }
   drawOffer(gameId) { return this.request('draw_offer', { gameId }); }
+  drawCancel(gameId) { return this.request('draw_cancel', { gameId }); }
   drawRespond(gameId, accept) { return this.request('draw_respond', { gameId, accept }); }
   chatList(gameId, limit = 60) { return this.request('chat_list', { gameId, limit }); }
   chatSend(gameId, message, clientNonce = crypto.randomUUID()) { return this.request('chat_send', { gameId, message, clientNonce }); }

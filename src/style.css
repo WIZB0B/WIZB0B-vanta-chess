@@ -1955,3 +1955,25 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 @media(prefers-reduced-motion:reduce){
   .vch-dialog-layer,.vch-dialog-panel,.game-start-banner{transition-duration:0ms!important}
 }
+/* Task 10 interaction polish: draw offers, chat badges/toasts, avatars and time pressure. */
+.draw-offer-card{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px;padding:10px 12px;border:1px solid rgba(229,193,124,.4);border-radius:11px;background:linear-gradient(180deg,rgba(20,34,31,.96),rgba(8,18,18,.96));box-shadow:0 10px 28px rgba(0,0,0,.28)}
+.draw-offer-card.hidden{display:none}.draw-offer-card b{display:block;color:#f2dfaf}.draw-offer-card small{display:block;margin-top:2px;color:#93a29d}
+.draw-offer-card>div:last-child{display:flex;gap:7px}.draw-offer-card button{padding:8px 12px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:#172522;color:#dfe7e3;font-weight:700}
+#acceptDrawOffer{background:linear-gradient(#efd59d,#d5ad64);color:#10120e!important;border-color:rgba(239,213,157,.72)!important}
+#draw.offered{color:#f0cf8a!important}
+#openChat{position:relative}.chat-unread{display:inline-grid;place-items:center;min-width:17px;height:17px;margin-left:5px;padding:0 4px;border-radius:999px;background:#d54262;color:white;font-size:9px;font-weight:800;line-height:1}
+.chat-unread.hidden{display:none}
+#toast{z-index:270;display:flex;align-items:center;gap:12px;max-width:min(520px,calc(100vw - 24px));pointer-events:none}
+#toast.actionable,#toast:has(.toast-action){pointer-events:auto}
+#toast.actionable{cursor:pointer}
+#toast .toast-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#toast .toast-action{padding:6px 10px;border-radius:7px;background:#172019;color:#f3dda9;font-weight:800}
+.game-over-result{display:block}.game-over-result strong{display:block}
+.game-over-players>div{grid-template-columns:38px minmax(0,1fr) auto}
+.game-over-avatar{width:34px;height:34px!important;border-radius:50%;display:grid!important;place-items:center;background:#1c302b;color:#f0dcae!important;border:1px solid rgba(229,193,124,.35);font-size:10px!important;letter-spacing:.04em!important}
+.game-over-player{display:grid!important;gap:1px;text-transform:none!important;letter-spacing:0!important;font-size:inherit!important}
+.game-over-player small{font-size:8px;color:#80908b;text-transform:uppercase;letter-spacing:.1em}.game-over-player b{font-size:13px;color:#eef2ef}
+#bottomClock.low-time{border-color:#ff5b68!important;color:#ff8a93!important;box-shadow:0 0 0 1px rgba(255,75,88,.32),0 0 18px rgba(255,45,62,.28);animation:vch-low-time-pulse .72s ease-in-out infinite alternate}
+@keyframes vch-low-time-pulse{from{transform:scale(1)}to{transform:scale(1.045);background:#251013}}
+@media(max-width:600px){.draw-offer-card{align-items:flex-start;flex-direction:column}.draw-offer-card>div:last-child{width:100%}.draw-offer-card button{flex:1}}
+@media(prefers-reduced-motion:reduce){#bottomClock.low-time{animation:none!important}}

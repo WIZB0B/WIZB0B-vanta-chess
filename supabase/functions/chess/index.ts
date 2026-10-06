@@ -228,6 +228,14 @@ async function offerDraw(req:Request,b:any){
   const {data,error}=await admin.from("chess_games").update({draw_offer_by:p.id,updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().single();
   if(error)throw error;return {game:data,offered:true}
 }
+async function cancelDraw(req:Request,b:any){
+  const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);
+  if(g.status!=="active")return {game:g,cancelled:false};
+  if(p.id!==g.white_player_id&&p.id!==g.black_player_id)throw fail("Not your game.",403);
+  if(g.draw_offer_by!==p.id)return {game:g,cancelled:false};
+  const {data,error}=await admin.from("chess_games").update({draw_offer_by:null,updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("draw_offer_by",p.id).select().maybeSingle();
+  if(error)throw error;return {game:data||g,cancelled:!!data}
+}
 async function respondDraw(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);
   if(g.status!=="active")return {game:g};
@@ -462,6 +470,7 @@ Deno.serve(async(req)=>{
       case "bot_move":out=await botMove(req,b);break;
       case "resign":out=await resign(req,b);break;
       case "draw_offer":out=await offerDraw(req,b);break;
+      case "draw_cancel":out=await cancelDraw(req,b);break;
       case "draw_respond":out=await respondDraw(req,b);break;
       case "history":out=await gameHistory(req,b);break;
       case "state":out=await gameState(req,b);break;
