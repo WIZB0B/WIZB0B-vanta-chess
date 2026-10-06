@@ -1902,3 +1902,56 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .board .square.premove-selecting{
   box-shadow:inset 0 0 0 5px rgba(226,58,151,.88);
 }
+/* Reusable VCH glass dialog, game-over presentation, and game-start banner. */
+.vch-dialog-layer{
+  position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:20px;
+  background:rgba(1,7,8,.66);backdrop-filter:blur(10px);opacity:0;transition:opacity 180ms ease;
+}
+.vch-dialog-layer.open{opacity:1}
+.vch-dialog-layer.closing{opacity:0;pointer-events:none}
+.vch-dialog-panel{
+  width:min(460px,calc(100vw - 32px));max-height:min(82vh,720px);overflow:auto;
+  border:1px solid rgba(229,193,124,.34);border-radius:18px;
+  background:linear-gradient(180deg,rgb(8 19 21 / var(--glass)),rgb(5 15 17 / calc(var(--glass) - .04)));
+  box-shadow:0 28px 80px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.05);
+  transform:translateY(18px) scale(.975);opacity:.92;transition:transform 180ms ease,opacity 180ms ease;
+}
+.vch-dialog-layer.open .vch-dialog-panel{transform:translateY(0) scale(1);opacity:1}
+.vch-dialog-layer.closing .vch-dialog-panel{transform:translateY(10px) scale(.985);opacity:.7}
+.vch-dialog-panel>header{height:auto;min-height:64px;padding:18px 18px 12px 20px;background:none!important;border:0;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;box-shadow:none;display:flex;align-items:center;gap:12px}
+.vch-dialog-panel h2{margin:0;font:700 26px/1.1 'Playfair Display',serif;color:#f4f1e8;letter-spacing:.01em}
+.vch-dialog-close{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#dfe7e3;font-size:24px;line-height:1;display:grid;place-items:center}
+.vch-dialog-close:hover{background:rgba(255,255,255,.1)}
+.vch-dialog-body{padding:20px;color:#c8d1ce;line-height:1.55}
+.vch-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:0 20px 20px}
+.vch-dialog-action{min-width:104px;padding:11px 16px;border-radius:9px;font-weight:700;border:1px solid rgba(255,255,255,.12)}
+.vch-dialog-action.primary{background:linear-gradient(#efd59d,#d5ad64);color:#10120e;border-color:rgba(239,213,157,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 8px 20px rgba(0,0,0,.24)}
+.vch-dialog-action.secondary{background:linear-gradient(180deg,#1b2927,#111b1a);color:#dce5e1}
+.vch-dialog-action:focus-visible,.vch-dialog-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.game-over-body{display:grid;gap:18px}
+.game-over-result{display:flex;align-items:baseline;gap:9px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.game-over-result strong{font-size:22px;color:#f3dfb0}.game-over-result span{color:#9ca9a5}
+.game-over-players{display:grid;gap:8px}
+.game-over-players>div{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.035)}
+.game-over-players span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8fa09a}
+.game-over-players b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eef2ef}
+.game-over-players em{font-style:normal;color:#d6bd83;font-variant-numeric:tabular-nums}
+.game-start-banner{
+  position:fixed;left:50%;top:88px;z-index:220;max-width:calc(100vw - 28px);padding:12px 18px;
+  border:1px solid rgba(229,193,124,.5);border-radius:999px;
+  background:linear-gradient(180deg,rgba(19,34,31,.96),rgba(8,18,18,.96));color:#f1eadb;font-weight:700;letter-spacing:.01em;
+  box-shadow:0 14px 38px rgba(0,0,0,.45);transform:translate(-50%,-16px) scale(.97);opacity:0;pointer-events:none;
+  transition:opacity 180ms ease,transform 180ms ease;
+}
+.game-start-banner.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.board .square.mated-king,.board .square.mated-king.last-move{
+  box-shadow:inset 0 0 0 999px rgba(177,28,45,.62),inset 0 0 0 4px rgba(255,90,102,.96)!important;
+}
+@media(max-width:600px){
+  .vch-dialog-actions{display:grid;grid-template-columns:1fr}.vch-dialog-action{width:100%}
+  .game-over-players>div{grid-template-columns:46px minmax(0,1fr)}.game-over-players em{grid-column:2}
+  .game-start-banner{top:68px;font-size:12px;text-align:center}
+}
+@media(prefers-reduced-motion:reduce){
+  .vch-dialog-layer,.vch-dialog-panel,.game-start-banner{transition-duration:0ms!important}
+}

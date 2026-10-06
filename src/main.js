@@ -7,6 +7,7 @@ import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 import { PremoveQueue, consumeLegalPremove } from './premove.js';
+import { vchDialog } from './vch-dialog.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -22,7 +23,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); const premoves=new PremoveQueue(); let selected=null, dragPremove=false, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); const premoves=new PremoveQueue(); let selected=null, dragPremove=false, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -285,7 +286,7 @@ function render(){
   }
   order.forEach(i=>{
     const r=Math.floor(i/8),f=i%8,sq='abcdefgh'[f]+(8-r),p=pos[i],el=document.createElement('button');
-    el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${premoves.selected===sq?'premove-selecting':''} ${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?'premove':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''}`;
+    el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${premoves.selected===sq?'premove-selecting':''} ${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?'premove':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''} ${!reviewState.viewing&&boardGame.isCheckmate()&&checked===i?'mated-king':''}`;
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
     if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
@@ -295,7 +296,7 @@ function render(){
   });
   board.classList.toggle('mate',game.isCheckmate());
   if(localGameOver){
-    $('#turn').textContent='Game over · You resigned';
+    $('#turn').textContent=localGameOverInfo?.reason==='on time'?'Game over · Time expired':'Game over · Resignation';
     $('#state').textContent='Computer game finished';
   }else if(serverGameId&&serverGame&&!['active','playing','in_progress','waiting'].includes(serverGame.status)){
     $('#turn').textContent=`Game over · ${serverGame.end_reason||serverGame.result||serverGame.status}`;
@@ -308,9 +309,120 @@ function render(){
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
   renderReviewBoardDecorations();syncClockBars();
-  updateOpeningLabel();scheduleAnalysis();
+  updateOpeningLabel();scheduleAnalysis();void maybeShowGameOver();
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
+function formatTimeControl(seconds,increment=0){
+  const base=Math.max(0,Number(seconds)||0),label=base%60===0?String(base/60):`${base}s`;
+  return `${label}+${Math.max(0,Number(increment)||0)}`;
+}
+function playUiSound(kind){
+  if($('#sound')?.dataset.off)return;
+  const AudioEngine=window.AudioContext||window.webkitAudioContext;if(!AudioEngine)return;
+  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440]},notes=patterns[kind]||[420],audio=new AudioEngine(),gain=audio.createGain();
+  gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.055,audio.currentTime+.015);gain.connect(audio.destination);
+  notes.forEach((frequency,index)=>{const oscillator=audio.createOscillator(),at=audio.currentTime+index*.12;oscillator.frequency.value=frequency;oscillator.connect(gain);oscillator.start(at);oscillator.stop(at+.11)});
+  const end=audio.currentTime+notes.length*.12+.04;gain.gain.exponentialRampToValueAtTime(.0001,end);setTimeout(()=>audio.close().catch(()=>{}),Math.ceil((notes.length*.12+.15)*1000));
+}
+function showGameStartBanner(color,seconds,increment,key){
+  if(!color||!key||lastGameStartKey===key)return;
+  lastGameStartKey=key;
+  let banner=$('#gameStartBanner');
+  if(!banner){banner=document.createElement('div');banner.id='gameStartBanner';banner.className='game-start-banner';banner.setAttribute('role','status');banner.setAttribute('aria-live','polite');document.body.append(banner)}
+  banner.textContent=`Game started · You play ${color==='w'?'White':'Black'} · ${formatTimeControl(seconds,increment)}`;
+  banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');playUiSound('start');
+  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>banner.classList.remove('show'),2100);
+}
+function normalizedEndReason(value=''){
+  const reason=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ');
+  if(!reason)return '';
+  if(reason.includes('checkmate'))return 'by checkmate';
+  if(reason.includes('timeout')||reason.includes('time'))return 'on time';
+  if(reason.includes('resign'))return 'by resignation';
+  if(reason.includes('abandon')||reason.includes('disconnect'))return 'by abandonment';
+  if(reason.includes('stalemate'))return 'by stalemate';
+  if(reason.includes('repetition'))return 'by repetition';
+  if(reason.includes('insufficient'))return 'by insufficient material';
+  if(reason.includes('50')||reason.includes('fifty'))return 'by 50-move rule';
+  if(reason.includes('agreement'))return 'by agreement';
+  return `by ${reason}`;
+}
+function boardDrawReason(){
+  if(game.isStalemate())return 'by stalemate';
+  if(game.isThreefoldRepetition())return 'by repetition';
+  if(game.isInsufficientMaterial())return 'by insufficient material';
+  if(game.isDrawByFiftyMoves?.())return 'by 50-move rule';
+  return 'by agreement';
+}
+function resultFromBoard(){
+  if(game.isCheckmate())return game.turn()==='w'?'0-1':'1-0';
+  if(game.isDraw())return '1/2-1/2';
+  return '*';
+}
+function resultFromState(state){
+  if(['1-0','0-1','1/2-1/2'].includes(state?.result))return state.result;
+  if(state?.status==='white_won')return '1-0';
+  if(state?.status==='black_won')return '0-1';
+  if(String(state?.status||'').includes('draw'))return '1/2-1/2';
+  return resultFromBoard();
+}
+function ownPlayerName(){return (currentProfile?.account&&(currentProfile.username||currentProfile.display_name))||guestName}
+function ratingSummary(state,color){
+  if(!state?.rated)return 'Unrated';
+  const prefix=color==='w'?'white':'black',rawBefore=state?.[`${prefix}_rating_before`],rawDelta=state?.[`${prefix}_rating_delta`],before=Number(rawBefore),delta=Number(rawDelta);
+  if(rawBefore!=null&&rawDelta!=null&&Number.isFinite(before)&&Number.isFinite(delta))return `${before} ${delta>=0?'+':''}${delta} → ${before+delta}`;
+  if(rawBefore!=null&&Number.isFinite(before))return String(before);
+  return 'Rated';
+}
+function gameOverInfo(){
+  if(puzzleSession||reviewState.running||reviewState.viewing)return null;
+  if(mode==='computer'&&computerStarted){
+    const result=localGameOverInfo?.result||resultFromBoard();
+    if(result==='*'&&!localGameOver)return null;
+    const reason=localGameOverInfo?.reason||(game.isCheckmate()?'by checkmate':boardDrawReason()),own=ownPlayerName(),bot=currentBot?.display_name||currentBot?.name||'Computer';
+    return {online:false,key:`computer:${result}:${game.fen()}:${reason}`,result,reason,myColor:computerSide,whiteName:computerSide==='w'?own:bot,blackName:computerSide==='b'?own:bot,whiteRating:'Unrated',blackRating:'Unrated'};
+  }
+  if(!serverGameId||!serverGame||['waiting','active','playing','in_progress'].includes(serverGame.status))return null;
+  const result=resultFromState(serverGame),status=String(serverGame.status||''),timedOut=Number(serverGame.white_time_ms)<=0||Number(serverGame.black_time_ms)<=0,abandoned=serverGame.abandoned_by||serverGame.abandonment_by||serverGame.disconnect_forfeit_by||/abandon|disconnect/i.test(status);
+  let reason=normalizedEndReason(serverGame.end_reason||serverGame.finish_reason||serverGame.termination_reason||serverGame.forfeit_reason);
+  if(!reason)reason=game.isCheckmate()?'by checkmate':timedOut?'on time':abandoned?'by abandonment':result==='1/2-1/2'?boardDrawReason():'by resignation';
+  return {online:true,key:`online:${serverGame.id}:${serverGame.version}:${status}:${result}`,result,reason,myColor,whiteName:serverGame.white_name||(myColor==='w'?ownPlayerName():'White'),blackName:serverGame.black_name||(myColor==='b'?ownPlayerName():'Black'),whiteRating:ratingSummary(serverGame,'w'),blackRating:ratingSummary(serverGame,'b')};
+}
+function gameOverTitle(info){
+  if(info.result==='1/2-1/2')return 'Draw';
+  const won=(info.result==='1-0'&&info.myColor==='w')||(info.result==='0-1'&&info.myColor==='b');
+  return won?'You won':'You lost';
+}
+function gameOverBody(info,title){
+  const body=document.createElement('div');body.className='game-over-body';
+  const result=document.createElement('div');result.className='game-over-result';result.innerHTML=`<strong>${escapeHtml(title)}</strong><span>${escapeHtml(info.reason)}</span>`;
+  const players=document.createElement('div');players.className='game-over-players';
+  players.innerHTML=`<div><span>White</span><b>${escapeHtml(info.whiteName)}</b><em>${escapeHtml(info.whiteRating)}</em></div><div><span>Black</span><b>${escapeHtml(info.blackName)}</b><em>${escapeHtml(info.blackRating)}</em></div>`;
+  body.append(result,players);return body;
+}
+async function resetFinishedGame(nextMode=['match','room','computer'].includes(mode)?mode:'room'){
+  stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();roomCreated=false;lastDrawOffer=null;localGameOver=false;localGameOverInfo=null;computerStarted=false;localClockState=null;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();game.reset();history.replaceState(null,'',location.pathname);mode=nextMode;render();updateMoves();await activateLeftMode(nextMode);showMovesView();
+}
+async function startOnlineRematch(){
+  const ended=serverGame;if(!ended)return;
+  const seconds=Number(ended.time_control_seconds||ended.base_seconds||600),increment=Number(ended.increment_seconds||0),rated=!!ended.rated;
+  if(ended.source==='queue'){
+    matchSelection={seconds,increment,rated};await resetFinishedGame('match');await beginMatchSearch();return
+  }
+  await resetFinishedGame('room');
+  try{
+    const state=await api.create({name:(currentProfile?.username||guestName),seconds,increment,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch room is ready');
+  }catch(error){toast(error.message)}
+}
+async function maybeShowGameOver(){
+  const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
+  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';playUiSound(title==='Draw'?'draw':won?'win':'lose');
+  const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
+  const action=await vchDialog({title,body:gameOverBody(info,title),actions});
+  if(action==='review')await startGameReview();
+  if(action==='rematch')await startOnlineRematch();
+  if(action==='new')await resetFinishedGame();
+}
 function premovePlayerColor(){if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
 function premoveBlocked(){return !!puzzleSession||mode==='puzzle'||reviewState.running||reviewState.viewing||currentRightView==='review'}
 function canQueuePremove(){
@@ -439,10 +551,10 @@ function selectedComputerSide(){
 function startComputerGame(){
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
-  currentBot={...selectedBot};localGameOver=false;computerStarted=true;computerSide=selectedComputerSide();premoves.cancel();
+  currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;computerStarted=true;computerSide=selectedComputerSide();premoves.cancel();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();resetLocalClock();syncRoomUi();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
-  toast(`Computer game started · You are ${computerSide==='w'?'White':'Black'}`);
+  showGameStartBanner(computerSide,600,0,`computer:${Date.now()}`);
   if(game.turn()!==computerSide)setTimeout(engineMove,280);
 }
 async function activateLeftMode(next){
@@ -450,7 +562,7 @@ async function activateLeftMode(next){
   const previous=mode;
   if(searching&&next!=='match')await cancelMatchSearch({announce:false});
   if(previous==='computer'&&next!=='computer'&&computerStarted){
-    computerStarted=false;localClockState=null;localGameOver=false;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;premoves.cancel();game.reset();render();updateMoves();
+    computerStarted=false;localClockState=null;localGameOver=false;localGameOverInfo=null;currentBot=null;myColor=null;orientationSet=false;flipped=false;selected=null;premoves.cancel();game.reset();render();updateMoves();
   }
   mode=next;syncPlayerBars();
   $$('.modes button').forEach(button=>button.classList.toggle('on',button.dataset.mode===next));
@@ -580,7 +692,12 @@ function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
   if(topBar)topBar.dataset.color=colors.top;
   if(bottomBar)bottomBar.dataset.color=colors.bottom;
 }
-function startClock(){clearInterval(ticking);ticking=setInterval(()=>syncClockBars(),250)}
+function checkLocalTimeout(){
+  if(mode!=='computer'||!computerStarted||localGameOver||game.isGameOver()||!localClockState)return;
+  const values=currentClockSeconds(),side=game.turn();if(Number(values[side])>0)return;
+  localClockState[side]=0;localClockState.startedAt=performance.now();localGameOver=true;localGameOverInfo={result:side==='w'?'0-1':'1-0',reason:'on time'};render();
+}
+function startClock(){clearInterval(ticking);ticking=setInterval(()=>{syncClockBars();checkLocalTimeout()},250)}
 function toast(s){$('#toast').textContent=s;$('#toast').className='show';setTimeout(()=>$('#toast').className='',1800)}
 function prefersReducedMotion(){return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true}
 function motionDurationMs(){
@@ -721,12 +838,13 @@ function applyServerState(payload,{animateMove=true}={}){
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
   myColor=seatFromEnvelope(payload,myColor);
   if(myColor&&!orientationSet){flipped=myColor==='b';orientationSet=true}
+  if(myColor&&['active','playing','in_progress'].includes(state.status)&&(previousState?.status==='waiting'||Number(state.move_count||0)===0))showGameStartBanner(myColor,state.time_control_seconds||state.base_seconds||600,state.increment_seconds||0,`online:${state.id}:${state.started_at||'active'}`);
   clockSnapshot=createClockSnapshot(payload);
   if(state.fen){try{game.load(state.fen)}catch{}}
   syncRoomUi();render();playMoveAnimation(moveAnimation);updateMoves();syncOnlineTransport();
   if(state.draw_offer_by&&currentPlayerId&&state.draw_offer_by!==currentPlayerId&&lastDrawOffer!==state.draw_offer_by&&['active','playing','in_progress'].includes(state.status)){
     lastDrawOffer=state.draw_offer_by;
-    setTimeout(async()=>{const accept=confirm('Your opponent offered a draw. Accept?');try{applyServerState(await api.drawRespond(serverGameId,accept))}catch(error){toast(error.message)}},60);
+    setTimeout(async()=>{const choice=await vchDialog({title:'Draw offer',body:'Your opponent offered a draw.',dismissible:false,actions:[{label:'Decline',value:false},{label:'Accept draw',value:true,primary:true}]});try{applyServerState(await api.drawRespond(serverGameId,choice===true))}catch(error){toast(error.message)}},60);
   }
   playQueuedPremove();maybePlayBot();
 }
@@ -940,7 +1058,7 @@ $$('[data-computer-side]').forEach(button=>button.onclick=()=>{
 $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){if(confirm('Resign this computer game?')){settleLocalClock();localGameOver=true;render();toast('You resigned')}}else if(serverGameId&&confirm('Resign this game?')){try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else if(!serverGameId)toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>$('#themeStudio').showModal();$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');try{applyServerState(await api.drawOffer(serverGameId));toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
@@ -1179,6 +1297,7 @@ function syncServerMoveTimes(previous,state){
 }
 function currentHistory(){return serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.map(x=>x.san||x.lan||''):game.history()}
 function updateOpeningLabel(){
+  if(isGameFinishedForReview())return;
   const opening=detectOpening(currentHistory());
   const state=$('#state');if(!state)return;
   const base=game.inCheck()?'Check · Real time':(serverGame?.rated?'Real time · Rated game':'Real time · Casual game');
@@ -1390,7 +1509,7 @@ $('#searchInput').oninput=e=>{
   [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{$('#searchDialog').close();activateNav(results[i].action)});
 };
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.add('ready')});
-$('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
+$('#installBtn').onclick=async()=>{if(installPrompt){installPrompt['prompt']();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
 $('#notifyBtn').onclick=()=>toast('Game notifications will appear here');
 const savedTheme=JSON.parse(localStorage.getItem('vanta.theme')||'{}');
 const clamp=(value,min,max,fallback)=>{const number=Number(value);return Number.isFinite(number)?Math.max(min,Math.min(max,number)):fallback};
