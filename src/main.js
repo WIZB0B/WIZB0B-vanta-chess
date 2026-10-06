@@ -21,7 +21,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
+const game=new Chess(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit';
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -430,18 +430,21 @@ async function makeMove(move,remote=false){if(puzzleSession&&!remote){const uci=
     legalMove=game.moves({square:move.from,verbose:true}).find(candidate=>candidate.to===move.to&&(!candidate.promotion||candidate.promotion===requestedPromotion));
   }catch{return}
   if(!legalMove)return;
-  const moveGameId=serverGameId,expectedVersion=serverVersion,clientMoveAt=serverAlignedNowIso();
+  const moveGameId=serverGameId,expectedVersion=serverVersion,clientMoveAt=serverAlignedNowIso(),fenBefore=game.fen();
   let made;
   try{made=game.move({from:move.from,to:move.to,...(legalMove.promotion?{promotion:move.promotion||legalMove.promotion}:{})})}catch{return}
   onlineMovePending=true;
+  lastLocalRealtimeMove={gameId:moveGameId,version:expectedVersion+1,from:made.from,to:made.to,promotion:made.promotion||null,fenBefore};
   const moveAnimation=captureMoveAnimation(made);
   selected=null;switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone();
   try{
     const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
     const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
-    broadcastMoved(movedGameId,incomingVersion);
+    if(lastLocalRealtimeMove&&lastLocalRealtimeMove.gameId===moveGameId)lastLocalRealtimeMove={...lastLocalRealtimeMove,version:incomingVersion||lastLocalRealtimeMove.version};
+    broadcastMoved(movedGameId,incomingVersion,lastLocalRealtimeMove);
     if(moveGameId===serverGameId&&incomingVersion>serverVersion)applyServerState(state,{animateMove:false});
   }catch{
+    if(lastLocalRealtimeMove?.gameId===moveGameId)lastLocalRealtimeMove=null;
     if(moveGameId===serverGameId){
       await refreshServerState();render();toast('Move not accepted');
     }
@@ -761,16 +764,54 @@ function sendRealtimePing(){
     if(pingProbe?.nonce===nonce){clearPingProbe();latencyMs=null;syncConnectionUi()}
   });
 }
-function broadcastMoved(gameId,version){
+function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={}){
   if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId)return;
-  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version)}}).catch(()=>{});
+  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore}}).catch(()=>{});
 }
-function realtimeVersion(message){
-  const payload=message?.payload||{},gameState=payload.game||payload;
-  return {gameId:payload.gameId||gameState?.id,version:Number(payload.version??gameState?.version??0)};
+function realtimeMove(message){
+  const payload=message?.payload||{},gameState=payload.game||payload,history=Array.isArray(gameState?.move_history)?gameState.move_history:[];
+  const lastMove=payload.move||payload.lastMove||gameState?.last_move||history.at(-1)||{};
+  const incoming={
+    gameId:payload.gameId||gameState?.id,
+    version:Number(payload.version??gameState?.version??0),
+    from:payload.from||lastMove.from,
+    to:payload.to||lastMove.to,
+    promotion:payload.promotion??lastMove.promotion??null,
+    fenBefore:payload.fenBefore||payload.fen_before||lastMove.fenBefore||lastMove.fen_before||gameState?.fenBefore||gameState?.fen_before||''
+  };
+  if(!incoming.fenBefore&&incoming.from&&incoming.to&&gameState?.fen){
+    try{
+      const before=game.fen(),probe=new Chess(before),requestedPromotion=incoming.promotion||'q';
+      const legal=probe.moves({square:incoming.from,verbose:true}).find(candidate=>candidate.to===incoming.to&&(!candidate.promotion||candidate.promotion===requestedPromotion));
+      if(legal){
+        probe.move({from:incoming.from,to:incoming.to,...(legal.promotion?{promotion:requestedPromotion}:{})});
+        if(probe.fen()===gameState.fen)incoming.fenBefore=before;
+      }
+    }catch{}
+  }
+  return incoming;
+}
+function isOwnRealtimeMove(incoming){
+  const own=lastLocalRealtimeMove;
+  return !!own&&incoming.gameId===own.gameId&&incoming.version===own.version&&incoming.from===own.from&&incoming.to===own.to&&(incoming.promotion||null)===(own.promotion||null);
+}
+function applyRealtimeMove(incoming){
+  if(incoming.gameId!==serverGameId||incoming.version!==serverVersion+1||incoming.fenBefore!==game.fen()||!incoming.from||!incoming.to)return false;
+  let legalMove;
+  try{
+    const requestedPromotion=incoming.promotion||'q';
+    legalMove=game.moves({square:incoming.from,verbose:true}).find(candidate=>candidate.to===incoming.to&&(!candidate.promotion||candidate.promotion===requestedPromotion));
+  }catch{return false}
+  if(!legalMove)return false;
+  let made;
+  try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
+  const moveAnimation=captureMoveAnimation(made);
+  serverVersion=incoming.version;selected=null;switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone();
+  void refreshServerState();
+  return true;
 }
 async function refreshFromRealtime(message){
-  const incoming=realtimeVersion(message);
+  const incoming=realtimeMove(message);
   if(!isOnlineGame()||incoming.gameId!==serverGameId||incoming.version<=serverVersion)return;
   if(realtimeRefreshPromise)return realtimeRefreshPromise;
   const requestedGameId=serverGameId;
@@ -785,6 +826,13 @@ async function refreshFromRealtime(message){
   })();
   return realtimeRefreshPromise;
 }
+function handleRealtimeMessage(message){
+  const incoming=realtimeMove(message);
+  if(!isOnlineGame()||incoming.gameId!==serverGameId)return;
+  if(isOwnRealtimeMove(incoming))return;
+  if(applyRealtimeMove(incoming))return;
+  refreshFromRealtime(message);
+}
 function startRealtime(){
   if(!isOnlineGame()){stopRealtime();return}
   if(realtimeChannel&&realtimeGameId===serverGameId)return;
@@ -793,8 +841,8 @@ function startRealtime(){
   realtimeGameId=gameId;latencyMs=null;syncConnectionUi();
   realtimeChannel=realtimeClient
     .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
-    .on('broadcast',{event:'state'},message=>{refreshFromRealtime(message)})
-    .on('broadcast',{event:'moved'},message=>{refreshFromRealtime(message)})
+    .on('broadcast',{event:'state'},message=>{handleRealtimeMessage(message)})
+    .on('broadcast',{event:'moved'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'ping'},message=>{
       const nonce=message?.payload?.nonce;
       if(!pingProbe||nonce!==pingProbe.nonce)return;
