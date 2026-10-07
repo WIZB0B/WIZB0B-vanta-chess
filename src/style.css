@@ -1203,7 +1203,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .brand-loading img{height:24px}.brand-loading span{display:block}
 .brand-splash{
   position:fixed;inset:0;z-index:10000;display:grid;place-items:center;pointer-events:none;
-  opacity:1;transition:opacity .45s ease;
+  opacity:1;transition:opacity var(--splash-fade,.45s) ease;
   background:
     linear-gradient(180deg,rgba(3,8,6,.80),rgba(2,7,5,.94)),
     linear-gradient(90deg,rgba(0,0,0,.48),transparent 55%,rgba(0,0,0,.30)),
