@@ -322,8 +322,8 @@ main{
 
 .square.last-move{box-shadow:inset 0 0 0 999px rgba(214,219,70,.30)}
 .square.last-move.selected{box-shadow:inset 0 0 0 4px rgba(225,231,100,.82),inset 0 0 0 999px rgba(214,219,70,.22)}
-.piece[draggable="true"]{cursor:grab}
-.piece[draggable="true"]:active,.piece.dragging{cursor:grabbing}
+.board .piece{cursor:grab}
+.piece.dragging{cursor:grabbing}
 .square.selected .piece,.piece.dragging{transform:translateY(-5%) scale(1.025);filter:drop-shadow(0 9px 7px rgba(0,0,0,.42)) drop-shadow(0 2px 2px rgba(0,0,0,.28))}
 
 
@@ -2110,3 +2110,27 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .auth-resend-field{display:grid;gap:6px;margin-top:12px;color:#9ba7a4;font-size:11px}
 .auth-resend-field input{width:100%;padding:11px;border:1px solid #354a45;border-radius:8px;background:#071211;color:#fff;font:inherit}
 .auth-resend-field input:focus-visible{outline:2px solid rgba(130,237,186,.55);outline-offset:1px}
+
+
+/* Backlog V1: piece movement. Pieces are picked up with pointer events (mouse, pen, touch),
+   follow the pointer centred under it, and drop onto the square beneath it.
+   - The piece left behind is hidden while its copy is in the air; the square under the
+     pointer gets an outline; legal squares keep their dots, and captures get a ring.
+   - Touching a piece never scrolls the page; empty squares still let the page scroll. */
+.board{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.board .piece{touch-action:none}
+.board .piece.drag-origin{opacity:0;transition:none}
+.board .square:has(.piece.drag-origin)::before{opacity:0}
+.board .square.drag-over{box-shadow:inset 0 0 0 4px rgba(244,246,236,.78)}
+.board .square.legal:has(.piece)::after{
+  width:100%;height:100%;inset:0;border-radius:0;
+  background:radial-gradient(circle,transparent 64%,rgba(204,218,75,.62) 65%);box-shadow:none
+}
+.board .square.legal{cursor:pointer}
+.drag-float{
+  position:fixed;left:0;top:0;z-index:120;margin:0;
+  pointer-events:none;transition:none;will-change:transform;
+  filter:drop-shadow(0 10px 8px rgba(0,0,0,.38))
+}
+:root[data-piece-style$="-2d"] .drag-float{filter:drop-shadow(0 2px 2px rgba(0,0,0,.45))}
+body.board-dragging,body.board-dragging *{cursor:grabbing!important}
