@@ -5,8 +5,8 @@ and every control works. Audited on 2026-10-04 by building the branch and testin
 
 ## Working rules (apply to every task)
 
-1. **One branch only:** `codex/set-up-vch-repository-and-implement-chess-game` (PR #1).
-   Never commit to `...-a878ma` (PR #2). That branch has none of the VCH art; close PR #2.
+1. **One branch only:** `dev` (PRs from `dev` to `main`; merge when CI is green and the owner approves).
+   PR #1 (`codex/set-up-vch-repository-and-implement-chess-game`) is merged; never use `...-a878ma` (PR #2), which has none of the VCH art; close PR #2.
 2. Do **one batch per chat**. Don't start the next batch.
 3. Finish every task with:
    - the branch name and commit hash;

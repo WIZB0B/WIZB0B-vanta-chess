@@ -5,7 +5,8 @@ Work on ONE numbered task per chat, in order, unless the user names a different 
 Every task follows these rules:
 - Make code changes only. Never create, convert or commit image files.
 - Run npm run security, npm test and npm run build. Never push with a failing test.
-- Push ONE commit to `codex/set-up-vch-repository-and-implement-chess-game`.
+- Push ONE commit to `dev` and open (or update) a PR from `dev` to `main`; merge only when
+  CI is green and the owner approves.
 - Don't use the Codex bot, don't poll GitHub Actions, and never edit `.github/workflows`.
 - Reply with the commit hash and stop.
 
