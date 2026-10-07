@@ -16,10 +16,16 @@ Planning docs — read before starting work:
 - `docs/VCH-FIXES.md` — the original UI fix list and batch plan.
 - `AGENTS.md` — contributor rules (security, data minimisation, migrations). Follow it too.
 
-## Branch
+## Branch and pull requests
 
-Work only on `codex/set-up-vch-repository-and-implement-chess-game`. Never commit or push to
-any other branch (in particular not the old `...-a878ma` branch from PR #2).
+- Work only on `dev`. Never commit or push directly to `main` or any other branch.
+  (`codex/set-up-vch-repository-and-implement-chess-game` was merged via PR #1 and is
+  retired; never use the old `...-a878ma` branch from PR #2.)
+- For each batch of work, open a PR from `dev` to `main` (or update the open one) so the
+  change gets a Netlify deploy preview and CI runs on it.
+- Merge only when CI is green on the PR's latest commit **and** the owner has approved.
+  Use a regular merge commit. Merging to `main` deploys production
+  (https://vanta-chess-play.netlify.app).
 
 ## Before every commit
 
