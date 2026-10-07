@@ -57,11 +57,14 @@ Use the current piece images and refine them with CSS only:
 - The lift animation raises the piece and softens the shadow while dragging.
 - Pieces sit on the same baseline in every square, centered horizontally.
 
-## 6. Splash / loading screen
+## 6. Splash / loading screen (done 2026-10-07)
 - Show the splash only when running as an installed app
   (`display-mode: standalone`), or for the first visit if it is under 600ms.
 - On a normal web refresh, render the app immediately.
 - Splash visuals will be redesigned later.
+- **In code:** `src/splash.js` decides (`splashPlan`). Installed launches keep the full
+  splash; a first web visit gets 380ms + 200ms fade, remembered in `localStorage`
+  (`vch.splash-seen`); if storage can't be read or written the splash is skipped.
 
 ## 7. Separate screens + mini live game
 - Each top-nav item (Arena, Puzzles, Learn, Openings, Famous Games, Review) opens its
