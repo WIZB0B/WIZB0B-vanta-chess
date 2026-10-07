@@ -2105,3 +2105,8 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 :root[data-piece-style="staunton-2d"] .board .piece.b.piece-b{translate:4.1% -6.2%}
 :root[data-piece-style="staunton-2d"] .board .piece.b.piece-n{translate:1.9% -6.9%}
 :root[data-piece-style="staunton-2d"] .board .piece.b.piece-p{translate:2.2% -6.2%}
+
+/* Auth link error dialog: email field for "Resend confirmation email". */
+.auth-resend-field{display:grid;gap:6px;margin-top:12px;color:#9ba7a4;font-size:11px}
+.auth-resend-field input{width:100%;padding:11px;border:1px solid #354a45;border-radius:8px;background:#071211;color:#fff;font:inherit}
+.auth-resend-field input:focus-visible{outline:2px solid rgba(130,237,186,.55);outline-offset:1px}

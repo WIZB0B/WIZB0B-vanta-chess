@@ -78,3 +78,28 @@ Use the current piece images and refine them with CSS only:
 ## 9. Server ping floor (needs user input)
 - About 300ms after the fixes suggests the Supabase project is far from the players.
   Check the region (Project Settings → General) before any migration.
+
+## 10. Auth redirects (done 2026-10-07)
+- **Cause:** the email sign-up confirmation sent users to
+  `http://localhost:3000/#access_token=...` because the Supabase Site URL was the default.
+  The owner is fixing Site URL + Redirect URLs in the Supabase dashboard.
+- **In code:**
+  1. Every auth call that sends an email passes a redirect of
+     `window.location.origin + '/auth/callback'`, so production, deploy previews and
+     localhost each return to themselves. Today that is sign-up and the confirmation
+     resend (REST `redirect_to`, which is what supabase-js `emailRedirectTo` sends). Any
+     future password reset, magic link or OAuth call must use `withAuthRedirect()` /
+     `authRedirectUrl()` from `src/auth-callback.js`; a test enforces this.
+  2. `/auth/callback` lets supabase-js read the session from the URL
+     (`detectSessionInUrl`), clears the tokens from the address bar with
+     `history.replaceState`, routes to Home and toasts "Email confirmed, you're signed in".
+  3. Error links (expired/invalid) show a friendly dialog with a
+     "Resend confirmation email" button.
+  4. Tokens are never logged or displayed.
+- **Dashboard (owner):** Authentication → URL Configuration: Site URL
+  `https://vanta-chess-play.netlify.app`; Redirect URLs
+  `https://vanta-chess-play.netlify.app/auth/callback`,
+  `https://deploy-preview-*--vanta-chess-play.netlify.app/auth/callback`,
+  `http://localhost:5173/auth/callback` (and `http://localhost:4173/auth/callback` for
+  `vite preview`). Supabase rejects a `redirect_to` that is not on this list and falls back
+  to the Site URL.

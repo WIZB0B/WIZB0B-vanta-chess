@@ -10,6 +10,7 @@ import { PremoveQueue, consumeLegalPremove } from './premove.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
+import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -1234,7 +1235,45 @@ boardEl.addEventListener('drop',event=>{
 });
 boardEl.addEventListener('dragend',()=>{boardEl.querySelectorAll('.piece.dragging').forEach(piece=>piece.classList.remove('dragging'));clearDragTargets();if(dragPremove){dragPremove=false;premoves.cancel();render();return}if(selected){selected=null;render()}});
 boardEl.addEventListener('contextmenu',event=>{if(cancelPremove()){event.preventDefault()}});
-render();startClock();connect();
+render();startClock();void completeAuthCallback().then(connect);
+// Email-link landing (/auth/callback). supabase-js reads the session from the URL with
+// detectSessionInUrl; a throwaway in-memory client is used so the app's own session store
+// stays the single source of truth. Tokens are never logged or shown.
+async function detectCallbackSession(){
+  const callbackClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:true,flowType:'implicit',storageKey:'vch-auth-callback'}});
+  const {error}=await callbackClient.auth.initialize();
+  if(error)return {session:null,error};
+  const {data}=await callbackClient.auth.getSession();
+  return {session:data?.session||null,error:null};
+}
+async function completeAuthCallback(){
+  try{
+    await handleAuthCallback({
+      location,history,detectSession:detectCallbackSession,
+      onSignedIn:async session=>{
+        saveAuthSession(session);
+        await loadProfile().catch(()=>{});syncIdentityUI();
+        toast("Email confirmed, you're signed in",{duration:3200});
+      },
+      onError:error=>{void showAuthLinkError(error)}
+    });
+  }catch{history.replaceState(null,'','/')}
+}
+async function showAuthLinkError(error){
+  const message=friendlyAuthError(error),body=document.createElement('div'),text=document.createElement('p'),label=document.createElement('label'),input=document.createElement('input');
+  text.textContent=message.body;
+  label.className='auth-resend-field';label.textContent='Email';
+  input.type='email';input.autocomplete='email';input.placeholder='you@example.com';input.maxLength=254;
+  label.append(input);body.append(text,label);
+  for(;;){
+    const choice=await vchDialog({title:message.title,body,actions:[{label:'Close',value:'close'},{label:'Resend confirmation email',value:'resend',primary:true}]});
+    if(choice!=='resend')return;
+    const email=input.value.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Enter the email you signed up with');continue}
+    try{await authFetch(withAuthRedirect('/auth/v1/resend'),{type:'signup',email});toast('Confirmation email sent. Check your inbox.',{duration:3200});return}
+    catch(resendError){toast(resendError.message||'Could not resend the email. Try again in a minute.')}
+  }
+}
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
 
@@ -1676,7 +1715,7 @@ $('#authSubmit').onclick=async()=>{
     let session;
     if(authMode==='signup'){
       if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){message.textContent='Username must be 3–20 letters, numbers, or underscores.';return}
-      const made=await authFetch('/auth/v1/signup',{email,password,data:{username}});
+      const made=await authFetch(withAuthRedirect('/auth/v1/signup'),{email,password,data:{username}});
       session=made.access_token?made:null;
       if(!session){message.textContent='Account created. Confirm your email, then sign in.';return}
     }else session=await authFetch('/auth/v1/token?grant_type=password',{email,password});
