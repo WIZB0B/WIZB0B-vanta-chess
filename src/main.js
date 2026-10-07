@@ -11,6 +11,7 @@ import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
 import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
+import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './splash.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -96,10 +97,9 @@ function applyPieceStyle(value){
   return style;
 }
 const app=$('#app');
+const splash=splashPlan({standalone:isStandaloneDisplay(window),storage:window.localStorage});
 app.innerHTML=`
-<div id="brandSplash" class="brand-splash" aria-hidden="true">
-  <div class="brand-splash-wordmark"><img src="/assets/vch/brand/vch-metal.svg" alt=""></div>
-</div>
+${splashMarkup(splash)}
 <div class="shell ${startsInGame?'game-active':'intro-active'}">
   <header class="topbar">
     <a class="brand vch-brand" href="#" aria-label="VCH home">
@@ -287,9 +287,7 @@ app.innerHTML=`
 <dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><div class="search-title"><img class="search-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h2>Search</h2></div><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
 `
 
-const brandSplash=$('#brandSplash');
-setTimeout(()=>brandSplash?.classList.add('done'),2050);
-setTimeout(()=>brandSplash?.remove(),2550);
+dismissSplash($('#brandSplash'),splash);
 
 let clocks=initialClocks(Number($('#time').value));
 function render(){
