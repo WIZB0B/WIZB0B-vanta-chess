@@ -17,14 +17,15 @@ function readSeen(storage){
 }
 
 function markSeen(storage){
-  try{storage?.setItem(SPLASH_SEEN_KEY,'1');}catch{}
+  try{storage.setItem(SPLASH_SEEN_KEY,'1');return true;}
+  catch{return false;}
 }
 
 // Returns null when the app should render immediately, otherwise the splash timing.
 export function splashPlan({standalone,storage}){
   if(standalone)return STANDALONE_SPLASH;
-  if(readSeen(storage))return null;
-  markSeen(storage);
+  // If the visit can't be remembered, skip the splash rather than repeat it on every refresh.
+  if(readSeen(storage)||!markSeen(storage))return null;
   return FIRST_VISIT_SPLASH;
 }
 

@@ -28,6 +28,8 @@ test('a first web visit shows a splash under 600ms, then a refresh renders immed
 test('blocked storage skips the splash rather than showing it on every refresh',()=>{
   const storage={getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}};
   assert.equal(splashPlan({standalone:false,storage}),null);
+  const readOnly={getItem:()=>null,setItem(){throw new Error('quota');}};
+  assert.equal(splashPlan({standalone:false,storage:readOnly}),null,'unwritable storage also skips it');
 });
 
 test('standalone detection covers display-mode media query and iOS home-screen apps',()=>{
