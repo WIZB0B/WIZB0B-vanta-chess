@@ -7,6 +7,7 @@ import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 import { PremoveQueue, consumeLegalPremove } from './premove.js';
+import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -27,7 +28,8 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, dragPremove=false, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false;
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -311,11 +313,13 @@ function render(){
     el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${premoves.selected===sq?'premove-selecting':''} ${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?'premove':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''} ${!reviewState.viewing&&boardGame.isCheckmate()&&checked===i?'mated-king':''}`;
     el.dataset.sq=sq;
     el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
-    if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" draggable="true" aria-hidden="true"></span>`;
+    if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" aria-hidden="true"></span>`;
     const boardReview=reviewState.viewing?reviewState.results[reviewState.currentPly-1]:reviewResultForCurrentLastMove(lastMove);
     if(boardReview&&lastMove?.to===sq)el.insertAdjacentHTML('beforeend',reviewBadgeMarkup(boardReview,'board-review-badge'));
-    el.onclick=()=>clickSquare(sq,p); board.append(el);
+    el.onclick=()=>{if(!suppressBoardClick)clickSquare(sq,p)}; board.append(el);
   });
+  // A re-render mid-drag (clock, opponent, server state) keeps the lifted piece hidden and the hovered square marked.
+  if(pointerDrag?.started){board.querySelector(`[data-sq="${pointerDrag.from}"] .piece`)?.classList.add('drag-origin');if(pointerDrag.over)board.querySelector(`[data-sq="${pointerDrag.over}"]`)?.classList.add('drag-over')}
   board.classList.toggle('mate',game.isCheckmate());
   if(localGameOver){
     $('#turn').textContent=localGameOverInfo?.reason==='on time'?'Game over · Time expired':'Game over · Resignation';
@@ -472,7 +476,7 @@ function canQueuePremove(){
 }
 function cancelPremove(renderBoard=true){
   if(!premoves.move&&!premoves.selected)return false;
-  premoves.cancel();dragPremove=false;if(renderBoard)render();return true;
+  premoves.cancel();if(renderBoard)render();return true;
 }
 function playQueuedPremove(){
   const color=premovePlayerColor(),queued=premoves.move;
@@ -483,7 +487,7 @@ function playQueuedPremove(){
   if(!move){render();return null}
   return makeMove(move);
 }
-async function clickSquare(sq,p){
+async function clickSquare(sq,p,{instant=false}={}){
   if(premoves.move?.from===sq){cancelPremove();return}
   if(canQueuePremove()){
     const color=premovePlayerColor();
@@ -497,11 +501,14 @@ async function clickSquare(sq,p){
   if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;
   premoves.cancel();
   if(!selected){if(p?.color===game.turn()){selected=sq;render()}return}
+  if(sq===selected){selected=null;render();return}
   if(p?.color===game.turn()){selected=sq;render();return}
   const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);
   if(!candidates.length){selected=null;render();return}
   let promotion;if(candidates.some(m=>m.promotion)){promotion=await choosePromotion();if(!promotion){selected=null;render();return}}
-  makeMove({from:selected,to:sq,promotion:promotion||'q'});selected=null;
+  instantMoveAnimation=instant;
+  try{makeMove({from:selected,to:sq,promotion:promotion||'q'})}finally{instantMoveAnimation=false}
+  selected=null;
 }
 function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');let piece=null;d.addEventListener('close',()=>resolve(piece),{once:true});$$('#promotion button').forEach(b=>b.onclick=()=>{piece=b.dataset.piece;menus.close('promotion')});menus.open('promotion')})}
 function resetLocalClock(){
@@ -811,13 +818,13 @@ function fadeCapturedPiece(captured,duration){
 }
 function playMoveAnimation(snapshot){
   const duration=motionDurationMs();if(!snapshot||duration<=0)return;
-  const move=snapshot.move;
-  animateRenderedPiece(move.from,move.to,duration);
+  const move=snapshot.move,dropped=instantMoveAnimation;
+  if(!dropped)animateRenderedPiece(move.from,move.to,duration);
   if(move.piece==='k'&&Math.abs(move.from.charCodeAt(0)-move.to.charCodeAt(0))===2){
     const rank=move.from[1],kingSide=move.to[0]==='g';
     animateRenderedPiece((kingSide?'h':'a')+rank,(kingSide?'f':'d')+rank,duration);
   }
-  fadeCapturedPiece(snapshot.captured,duration);
+  if(!dropped)fadeCapturedPiece(snapshot.captured,duration);
 }
 function captureLastServerMove(state,previousVersion){
   if(!previousVersion||Number(state.version)<=previousVersion)return null;
@@ -1206,32 +1213,113 @@ renderComputerBots();
 $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
-function clearDragTargets(){boardEl.querySelectorAll('.drag-selected,.drag-legal').forEach(el=>el.classList.remove('drag-selected','drag-legal'))}
-function paintDragTargets(square,{premove=false}={}){
-  clearDragTargets();boardEl.querySelector(`[data-sq="${square}"]`)?.classList.add('drag-selected');
-  if(premove)return;
-  for(const move of game.moves({square,verbose:true}))boardEl.querySelector(`[data-sq="${move.to}"]`)?.classList.add('drag-legal');
+function boardPlayArea(){
+  const r=boardEl.getBoundingClientRect();
+  return {left:r.left+boardEl.clientLeft,top:r.top+boardEl.clientTop,width:boardEl.clientWidth,height:boardEl.clientHeight};
 }
-boardEl.addEventListener('dragstart',event=>{
-  const piece=event.target.closest?.('.piece'),square=piece?.closest?.('.square')?.dataset.sq;if(!square)return;
-  const p=game.get(square);
-  if(p&&canQueuePremove()&&p.color===premovePlayerColor()){
-    premoves.select(square);selected=null;dragPremove=true;piece.classList.add('dragging');paintDragTargets(square,{premove:true});event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);return
+// Which kind of drag a press on this square may start: a move, a premove, or none.
+function dragKindFor(square){
+  const p=game.get(square);if(!p)return null;
+  if(canQueuePremove())return p.color===premovePlayerColor()?'premove':null;
+  if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn())return null;
+  return 'move';
+}
+function positionDragFloat(drag,x,y){drag.float.style.transform=`translate(${x-drag.size/2}px,${y-drag.size/2}px)`}
+function markDragOver(drag,square){
+  if(drag.over===square)return;
+  drag.over=square;
+  boardEl.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  if(square)boardEl.querySelector(`[data-sq="${square}"]`)?.classList.add('drag-over');
+}
+function startPointerDrag(drag,x,y){
+  drag.started=true;
+  if(drag.kind==='premove'){premoves.select(drag.from);selected=null}
+  else{premoves.cancel();selected=drag.from}
+  render();
+  const origin=boardEl.querySelector(`[data-sq="${drag.from}"]`),piece=origin?.querySelector('.piece');
+  drag.size=origin?origin.getBoundingClientRect().width:boardPlayArea().width/8;
+  const float=document.createElement('span');
+  float.className=`${piece?.className||'piece'} drag-float dragging`.replace(' drag-origin','');
+  float.setAttribute('aria-hidden','true');
+  Object.assign(float.style,{width:drag.size+'px',height:drag.size+'px'});
+  drag.float=float;positionDragFloat(drag,x,y);document.body.append(float);
+  document.body.classList.add('board-dragging');
+}
+function endPointerDragListeners(){
+  window.removeEventListener('pointermove',onDragPointerMove);
+  window.removeEventListener('pointerup',onDragPointerUp);
+  window.removeEventListener('pointercancel',cancelPointerDrag);
+  window.removeEventListener('keydown',onDragKeydown);
+  window.removeEventListener('blur',cancelPointerDrag);
+}
+// Slides the floating piece back onto its square, then shows the real piece again.
+function returnDragFloat(drag){
+  const float=drag.float,origin=boardEl.querySelector(`[data-sq="${drag.from}"]`),duration=Math.min(160,motionDurationMs());
+  const reveal=()=>{float?.remove();boardEl.querySelectorAll('.drag-origin').forEach(el=>el.classList.remove('drag-origin'))};
+  if(!float||!origin||duration<=0){reveal();return}
+  const r=origin.getBoundingClientRect();
+  boardEl.querySelector(`[data-sq="${drag.from}"] .piece`)?.classList.add('drag-origin');
+  float.style.transition=`transform ${duration}ms cubic-bezier(.2,.7,.3,1)`;
+  float.style.transform=`translate(${r.left}px,${r.top}px)`;
+  setTimeout(reveal,duration+20);
+}
+function suppressClickAfterDrag(){suppressBoardClick=true;setTimeout(()=>{suppressBoardClick=false},0)}
+function finishPointerDrag(to){
+  const drag=pointerDrag;pointerDrag=null;endPointerDragListeners();
+  document.body.classList.remove('board-dragging');markDragOver(drag,null);suppressClickAfterDrag();
+  if(drag.kind==='premove'){
+    if(to&&to!==drag.from&&canQueuePremove()&&premoves.selected===drag.from){drag.float.remove();premoves.queue(to,'q');render();return}
+    render();returnDragFloat(drag);return
   }
-  if(!p||reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn()){event.preventDefault();return}
-  dragPremove=false;selected=square;piece.classList.add('dragging');paintDragTargets(square);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',square);
+  const legalTargets=dragKindFor(drag.from)==='move'?game.moves({square:drag.from,verbose:true}).map(m=>m.to):[];
+  const outcome=dropOutcome({from:drag.from,to,legalTargets,wasSelected:drag.wasSelected});
+  if(outcome==='move'){
+    drag.float.remove();selected=drag.from;
+    void clickSquare(to,game.get(to),{instant:true});
+    boardEl.querySelectorAll('.drag-origin').forEach(el=>el.classList.remove('drag-origin'));
+    return
+  }
+  if(outcome==='deselect')selected=null;
+  render();returnDragFloat(drag);
+}
+function cancelPointerDrag(){
+  const drag=pointerDrag;if(!drag)return;
+  if(!drag.started){pointerDrag=null;endPointerDragListeners();return}
+  finishPointerDrag(null);
+}
+function onDragPointerMove(event){
+  const drag=pointerDrag;if(!drag||event.pointerId!==drag.id)return;
+  if(!drag.started){
+    if(!dragDistanceExceeded(drag.startX,drag.startY,event.clientX,event.clientY))return;
+    if(!dragKindFor(drag.from)){cancelPointerDrag();return}
+    startPointerDrag(drag,event.clientX,event.clientY);
+  }
+  event.preventDefault();
+  positionDragFloat(drag,event.clientX,event.clientY);
+  markDragOver(drag,squareFromPoint(boardPlayArea(),event.clientX,event.clientY,flipped));
+}
+function onDragPointerUp(event){
+  const drag=pointerDrag;if(!drag||event.pointerId!==drag.id)return;
+  if(!drag.started){pointerDrag=null;endPointerDragListeners();return}
+  finishPointerDrag(squareFromPoint(boardPlayArea(),event.clientX,event.clientY,flipped));
+}
+function onDragKeydown(event){if(event.key==='Escape'&&pointerDrag?.started){event.preventDefault();cancelPointerDrag()}}
+// Pieces follow the pointer (mouse, pen or touch) from the first few pixels of movement.
+// A press without movement stays a click, so click-to-move works exactly as before.
+boardEl.addEventListener('pointerdown',event=>{
+  if(pointerDrag){cancelPointerDrag();return}
+  if(!event.isPrimary||event.button!==0)return;
+  const square=event.target.closest?.('.piece')?.closest?.('.square')?.dataset.sq;
+  if(!square)return;
+  const kind=dragKindFor(square);if(!kind)return;
+  pointerDrag={id:event.pointerId,from:square,kind,startX:event.clientX,startY:event.clientY,started:false,float:null,over:null,size:0,wasSelected:kind==='premove'?premoves.selected===square:selected===square};
+  window.addEventListener('pointermove',onDragPointerMove,{passive:false});
+  window.addEventListener('pointerup',onDragPointerUp);
+  window.addEventListener('pointercancel',cancelPointerDrag);
+  window.addEventListener('keydown',onDragKeydown);
+  window.addEventListener('blur',cancelPointerDrag);
 });
-boardEl.addEventListener('dragover',event=>{
-  const to=event.target.closest?.('.square')?.dataset.sq;
-  if(dragPremove&&premoves.selected&&to&&to!==premoves.selected){event.preventDefault();event.dataTransfer.dropEffect='move';return}
-  if(selected&&to&&game.moves({square:selected,verbose:true}).some(m=>m.to===to)){event.preventDefault();event.dataTransfer.dropEffect='move'}
-});
-boardEl.addEventListener('drop',event=>{
-  const to=event.target.closest?.('.square')?.dataset.sq;
-  if(dragPremove&&premoves.selected&&to){event.preventDefault();clearDragTargets();dragPremove=false;premoves.queue(to,'q');render();return}
-  if(!selected||!to)return;event.preventDefault();clearDragTargets();clickSquare(to,game.get(to));
-});
-boardEl.addEventListener('dragend',()=>{boardEl.querySelectorAll('.piece.dragging').forEach(piece=>piece.classList.remove('dragging'));clearDragTargets();if(dragPremove){dragPremove=false;premoves.cancel();render();return}if(selected){selected=null;render()}});
+boardEl.addEventListener('contextmenu',event=>{if(pointerDrag?.started){event.preventDefault();event.stopImmediatePropagation();cancelPointerDrag()}});
 boardEl.addEventListener('contextmenu',event=>{if(cancelPremove()){event.preventDefault()}});
 render();startClock();void completeAuthCallback().then(connect);
 // Email-link landing (/auth/callback). supabase-js reads the session from the URL with
