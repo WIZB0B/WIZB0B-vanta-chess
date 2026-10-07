@@ -42,12 +42,14 @@ test('the board uses pointer dragging instead of native drag and drop',()=>{
   assert.doesNotMatch(main,/addEventListener\('dragstart'/);
   assert.match(main,/boardEl\.addEventListener\('pointerdown'/);
   assert.match(main,/window\.addEventListener\('pointercancel',cancelPointerDrag\)/);
-  assert.match(css,/\.board \.piece\{touch-action:none\}/);
-  assert.match(css,/\.drag-float\{[^}]*pointer-events:none/);
+  assert.match(css,/\.board-piece\{[^}]*touch-action:none/);
+  assert.match(css,/\.drag-layer\{[^}]*pointer-events:none/);
 });
 
 test('a dropped piece is not slid in again, and clicking a selected piece deselects it',()=>{
-  assert.match(main,/if\(!dropped\)animateRenderedPiece\(move\.from,move\.to,duration\)/);
+  // A drop re-renders with instant:true, which places the piece without a transition.
+  assert.match(main,/const durationMs=instant\?0:moveAnimationMs\(\)/);
+  assert.match(main,/if\(outcome==='move'\)\{selected=drag\.from;void clickSquare\(to,game\.get\(to\),\{instant:true\}\)/);
   assert.match(main,/if\(sq===selected\)\{selected=null;render\(\);return\}/);
   assert.match(main,/instantMoveAnimation=instant;\n  try\{makeMove\(/);
 });

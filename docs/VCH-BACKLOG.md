@@ -114,6 +114,34 @@ Use the current piece images and refine them with CSS only:
   outlined, legal drops play instantly, other drops slide back. Helpers live in
   `src/board-drag.js`; see PR #5.
 
+## V1-fix. Board rendering like chessground / chess.com (done 2026-10-07)
+- **Cause (from frame-by-frame video of PR #5):** pieces were rendered inside their
+  squares, so a piece in flight was painted under later squares (the queen vanished on
+  d1→h5 and its square's contact shadow showed up first); every square `<button>` inherited
+  the global 400ms `button` transition, so highlights faded instead of switching; and the
+  panels' backdrop blur was re-run by the compositor on every frame of a move (~20fps in
+  software-rendered Chrome). A premove was also lost when the opponent replied while it
+  was being made (piece picked up or in the air): the drop was still judged as a premove.
+- **In code:** `#board` is the squares grid (built once, updated in place), then ONE
+  `.piece-layer` where every piece is a `.board-piece` placed with
+  `transform: translate(col*100%, row*100%)` (`src/piece-layer.js`, pure diffing in
+  `src/board-view.js`), then the `.arrow-layer` SVG, then the fixed `.drag-layer`. A move is
+  a ~120ms ease-out transform transition (scaled by the Motion slider, 0 with reduced
+  motion); captures fade with opacity. `renderBoard()` is synchronous and cheap; status
+  text, move list, sound, analysis, engine and the network request run after the frame
+  with the move is painted (`afterBoardPaint`). Panels keep the backdrop blur only when
+  Theme Studio glass is below 90%. A piece picked for a premove becomes a normal selection
+  when the opponent replies, and a drop is judged by what the piece may do at drop time.
+- **Proof:** `e2e/board-motion.spec.js` samples every animation frame of Qd1–h5 (queen is
+  topmost via `elementFromPoint`, moves monotonically, ≥30 frames in 650ms, max gap <40ms)
+  and checks the dragged piece sits exactly under the pointer on every frame.
+
+## V1b. Arrows and square marks (done 2026-10-07)
+- Right-drag draws an orange arrow (L-shaped for knight jumps); right-click on a square
+  toggles a red mark. Shift = green, Ctrl/Cmd = blue, Alt = yellow. Drawing the same shape
+  again removes it; drawing it in another colour recolours it. A left-click on the board or
+  any move clears them. Right-click still cancels a drag in flight and queued premoves first.
+
 ## V2. Typography
 One display serif for headlines, one clean UI sans for everything else,
 consistent sizes/weights/letter-spacing across the app (design tokens).

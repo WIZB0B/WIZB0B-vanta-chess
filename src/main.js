@@ -8,6 +8,8 @@ import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 import { PremoveQueue, consumeLegalPremove } from './premove.js';
 import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
+import { arrowsSvg, brushFor, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
+import { PieceLayer } from './piece-layer.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -29,7 +31,7 @@ let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),c
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
-let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false;
+let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -292,35 +294,103 @@ ${splashMarkup(splash)}
 dismissSplash($('#brandSplash'),splash);
 
 let clocks=initialClocks(Number($('#time').value));
-function render(){
-  const board=$('#board'), order=flipped?[...Array(64).keys()].reverse():[...Array(64).keys()];
-  board.innerHTML='';
-  const rankCoords=$('#rankCoords'),fileCoords=$('#fileCoords');
-  if(rankCoords)rankCoords.innerHTML=(flipped?['1','2','3','4','5','6','7','8']:['8','7','6','5','4','3','2','1']).map(value=>`<span>${value}</span>`).join('');
-  if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map(value=>`<span>${value}</span>`).join('');
-  const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
-  const boardGame=reviewFen?new Chess(reviewFen):game;
-  const pos=boardGame.board().flat(), legal=reviewState.viewing?[]:(selected?game.moves({square:selected,verbose:true}):[]);
-  const localLast=game.history({verbose:true}).at(-1),serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null;
-  const reviewLast=reviewState.viewing&&reviewState.currentPly>0?reviewState.moves[reviewState.currentPly-1]:null,lastMove=reviewLast||serverLast||localLast;
-  let checked=-1;
-  if(boardGame.inCheck()){
-    const checkedColor=boardGame.turn();
-    checked=pos.findIndex(p=>p?.type==='k'&&p.color===checkedColor);
+// Board rendering (backlog V1-fix), chessground-style: the squares grid is built once (again
+// only when the board flips) and updated in place; pieces live in ONE absolutely positioned
+// layer above it (src/piece-layer.js), arrows in an SVG layer above that, and a dragged piece
+// in a fixed drag layer on top. renderBoard() is cheap and synchronous, so a move's highlight
+// and slide start in the same frame; everything else (status text, move list, sound,
+// analysis, engine, network) waits until that frame is on screen (afterBoardPaint).
+let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false;
+function afterBoardPaint(fn){
+  let done=false;const run=()=>{if(!done){done=true;fn()}};
+  if(document.hidden){setTimeout(run,0);return}
+  requestAnimationFrame(()=>setTimeout(run,0));setTimeout(run,100);
+}
+function nextBoardPaint(){return new Promise(resolve=>afterBoardPaint(resolve))}
+function ensureBoardDom(){
+  const board=$('#board');
+  if(!boardDom||boardDom.board!==board){
+    const pieceLayer=document.createElement('div');pieceLayer.className='piece-layer';
+    const arrowLayer=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    arrowLayer.setAttribute('class','arrow-layer');arrowLayer.setAttribute('viewBox','0 0 8 8');arrowLayer.setAttribute('preserveAspectRatio','none');arrowLayer.setAttribute('aria-hidden','true');
+    const badge=document.createElement('div');badge.className='board-badge hidden';pieceLayer.append(badge);
+    board.replaceChildren(pieceLayer,arrowLayer);
+    let dragLayer=document.querySelector('.drag-layer');
+    if(!dragLayer){dragLayer=document.createElement('div');dragLayer.className='drag-layer';dragLayer.setAttribute('aria-hidden','true');document.body.append(dragLayer)}
+    boardDom={board,pieceLayer,arrowLayer,dragLayer,badge,badgeKey:'',arrowsHtml:'',pieces:new PieceLayer(pieceLayer),squares:new Map(),squaresFlipped:null};
   }
-  order.forEach(i=>{
-    const r=Math.floor(i/8),f=i%8,sq='abcdefgh'[f]+(8-r),p=pos[i],el=document.createElement('button');
-    el.className=`square ${(r+f)%2?'dark':'light'} ${lastMove&&(lastMove.from===sq||lastMove.to===sq)?'last-move':''} ${selected===sq?'selected':''} ${premoves.selected===sq?'premove-selecting':''} ${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?'premove':''} ${legal.some(m=>m.to===sq)?'legal':''} ${checked===i?'check':''} ${!reviewState.viewing&&boardGame.isCheckmate()&&checked===i?'mated-king':''}`;
-    el.dataset.sq=sq;
-    el.setAttribute('aria-label',sq+(p?` ${p.color==='w'?'white':'black'} ${pieceNames[p.type]}`:' empty'));
-    if(p)el.innerHTML=`<span class="piece ${p.color} piece-${p.type}" aria-hidden="true"></span>`;
-    const boardReview=reviewState.viewing?reviewState.results[reviewState.currentPly-1]:reviewResultForCurrentLastMove(lastMove);
-    if(boardReview&&lastMove?.to===sq)el.insertAdjacentHTML('beforeend',reviewBadgeMarkup(boardReview,'board-review-badge'));
-    el.onclick=()=>{if(!suppressBoardClick)clickSquare(sq,p)}; board.append(el);
-  });
-  // A re-render mid-drag (clock, opponent, server state) keeps the lifted piece hidden and the hovered square marked.
-  if(pointerDrag?.started){board.querySelector(`[data-sq="${pointerDrag.from}"] .piece`)?.classList.add('drag-origin');if(pointerDrag.over)board.querySelector(`[data-sq="${pointerDrag.over}"]`)?.classList.add('drag-over')}
-  board.classList.toggle('mate',game.isCheckmate());
+  if(boardDom.squaresFlipped!==flipped){
+    const order=flipped?[...Array(64).keys()].reverse():[...Array(64).keys()],fragment=document.createDocumentFragment();
+    boardDom.squares.forEach(el=>el.remove());boardDom.squares.clear();
+    order.forEach(i=>{
+      const r=Math.floor(i/8),f=i%8,sq='abcdefgh'[f]+(8-r),el=document.createElement('button');
+      el.type='button';el.dataset.sq=sq;el.dataset.shade=(r+f)%2?'dark':'light';el.className=`square ${el.dataset.shade}`;
+      boardDom.squares.set(sq,el);fragment.append(el);
+    });
+    board.insertBefore(fragment,boardDom.pieceLayer);boardDom.squaresFlipped=flipped;
+    const rankCoords=$('#rankCoords'),fileCoords=$('#fileCoords');
+    if(rankCoords)rankCoords.innerHTML=(flipped?['1','2','3','4','5','6','7','8']:['8','7','6','5','4','3','2','1']).map(value=>`<span>${value}</span>`).join('');
+    if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map(value=>`<span>${value}</span>`).join('');
+  }
+  return boardDom;
+}
+// chess.js replays the whole game for history(), so the last move is remembered when it is
+// played and only recomputed when the position came from somewhere else.
+function rememberLastMove(made){if(made)lastMoveCache={fen:game.fen(),move:made};return made}
+function localLastMove(){
+  const fen=game.fen();
+  if(lastMoveCache.fen!==fen)lastMoveCache={fen,move:game.history({verbose:true}).at(-1)||null};
+  return lastMoveCache.move;
+}
+function boardLastMove(){
+  const reviewLast=reviewState.viewing&&reviewState.currentPly>0?reviewState.moves[reviewState.currentPly-1]:null;
+  const serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null;
+  return reviewLast||serverLast||localLastMove();
+}
+function moveAnimationMs(){return Math.round(120*motionDurationMs()/400)}
+function grabbableColor(){
+  if(canQueuePremove())return premovePlayerColor();
+  if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return '';
+  return game.turn();
+}
+function renderArrows(dom=ensureBoardDom()){
+  const html=arrowsSvg(boardShapes,shapeDraft,flipped);
+  if(html!==dom.arrowsHtml){dom.arrowsHtml=html;dom.arrowLayer.innerHTML=html}
+}
+function renderBoard({hint=null,instant=false}={}){
+  const durationMs=instant?0:moveAnimationMs(),dom=ensureBoardDom();
+  const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
+  const boardGame=reviewFen?new Chess(reviewFen):game,placement=boardGame.fen().split(' ')[0];
+  if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
+  const legal=new Set(reviewState.viewing||!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
+  const lastMove=boardLastMove(),position=positionMap(boardGame.board());
+  let checked=null;
+  if(boardGame.inCheck())for(const [sq,key] of position)if(key===boardGame.turn()+'k')checked=sq;
+  const mated=!reviewState.viewing&&checked&&boardGame.isCheckmate();
+  const marks=new Map(boardShapes.filter(shape=>!shape.to||shape.to===shape.from).map(shape=>[shape.from,shape.brush]));
+  const dragOver=pointerDrag?.started?pointerDrag.over:null;
+  for(const [sq,el] of dom.squares){
+    const key=position.get(sq),mark=marks.get(sq);
+    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${mark?` mark mark-${mark}`:''}`;
+    if(el.className!==cls)el.className=cls;
+    const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
+    if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
+  }
+  dom.pieces.sync(position,{flipped,animate:!instant,durationMs,hint});
+  const hidden=pointerDrag?.started?pointerDrag.from:null;
+  for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
+  dom.board.dataset.grab=grabbableColor()||'';
+  const boardReview=reviewState.viewing?reviewState.results[reviewState.currentPly-1]:reviewResultForCurrentLastMove(lastMove);
+  const badgeKey=boardReview&&lastMove?.to?`${lastMove.to}:${boardReview.classification}:${flipped}`:'';
+  if(badgeKey!==dom.badgeKey){
+    dom.badgeKey=badgeKey;dom.badge.classList.toggle('hidden',!badgeKey);
+    dom.badge.innerHTML=badgeKey?reviewBadgeMarkup(boardReview,'board-review-badge'):'';
+    if(badgeKey)dom.badge.style.transform=pieceTransform(lastMove.to,flipped);
+  }
+  renderArrows(dom);
+  dom.board.classList.toggle('mate',game.isCheckmate());
+}
+function renderStatus(){
   if(localGameOver){
     $('#turn').textContent=localGameOverInfo?.reason==='on time'?'Game over · Time expired':'Game over · Resignation';
     $('#state').textContent='Computer game finished';
@@ -336,6 +406,12 @@ function render(){
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
   renderReviewBoardDecorations();syncClockBars();
   updateOpeningLabel();scheduleAnalysis();void maybeShowGameOver();
+}
+// The board updates now; status text, review decorations, opening name, analysis and the
+// game-over check follow once the frame with the board change has been painted.
+function render(options){
+  renderBoard(options);
+  if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
@@ -480,7 +556,14 @@ function cancelPremove(renderBoard=true){
 }
 function playQueuedPremove(){
   const color=premovePlayerColor(),queued=premoves.move;
-  if(!queued)return null;
+  if(!queued){
+    // A piece picked up for a premove when the opponent replied is now simply selected, so
+    // the next click (or the drop, see finishPointerDrag) plays the move for real.
+    if(premoves.selected&&color&&game.turn()===color&&!premoveBlocked()&&game.get(premoves.selected)?.color===color){
+      selected=premoves.selected;premoves.cancel();render();
+    }
+    return null;
+  }
   if(!color||premoveBlocked()||localGameOver||game.isGameOver()){premoves.cancel();render();return null}
   if(game.turn()!==color)return null;
   const move=consumeLegalPremove(premoves,game);
@@ -617,10 +700,10 @@ async function activateLeftMode(next){
   syncOnlineTransport();
 }
 async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
-  const made=game.move(move),moveAnimation=captureMoveAnimation(made);puzzleSession.played.push(uci);puzzleSession.index++;render();playMoveAnimation(moveAnimation);
+  const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
-  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}),moveAnimation=captureMoveAnimation(made);puzzleSession.played.push(reply);puzzleSession.index++;render();playMoveAnimation(moveAnimation);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
+  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){
   if(onlineMovePending)return;
   let legalMove;
@@ -634,9 +717,10 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   try{made=game.move({from:move.from,to:move.to,...(legalMove.promotion?{promotion:move.promotion||legalMove.promotion}:{})})}catch{return}
   onlineMovePending=true;let resendStaleMove=false;
   lastLocalRealtimeMove={gameId:moveGameId,version:expectedVersion+1,from:made.from,to:made.to,promotion:made.promotion||null,fenBefore};
-  const moveAnimation=captureMoveAnimation(made);
-  selected=null;switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone();
+  rememberLastMove(made);
+  selected=null;switchOnlineClockOptimistically();render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   try{
+    await nextBoardPaint(); // the slide is on screen before the request is built and sent
     const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
     const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
     if(lastLocalRealtimeMove&&lastLocalRealtimeMove.gameId===moveGameId)lastLocalRealtimeMove={...lastLocalRealtimeMove,version:incomingVersion||lastLocalRealtimeMove.version};
@@ -652,7 +736,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
     }
   }finally{onlineMovePending=false}
   if(resendStaleMove)return makeMove(move,false,false);
-  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=game.move(move)}catch{return}const moveAnimation=captureMoveAnimation(made);if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render();playMoveAnimation(moveAnimation);updateMoves();playTone();if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -715,7 +799,14 @@ async function findEngineMove(){
   return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
 }
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
-function playTone(){if($('#sound').dataset.off)return;const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1)}
+// One AudioContext for the whole session: creating one per move is slow and browsers cap them.
+function playTone(){
+  if($('#sound').dataset.off)return;
+  try{
+    toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();
+    const a=toneContext,o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
+  }catch{}
+}
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
 function playerBarClockColors(){
   const bottom=myColor==='b'?'b':'w';
@@ -780,55 +871,6 @@ function motionDurationMs(){
   if(!Number.isFinite(amount))return 400;
   const milliseconds=raw.endsWith('s')&&!raw.endsWith('ms')?amount*1000:amount;
   return Math.max(0,Math.min(400,milliseconds));
-}
-function captureMoveAnimation(move){
-  if(reviewState.viewing||!move?.from||!move?.to)return null;
-  let capturedPiece=$(`.square[data-sq="${move.to}"] .piece`),captureSquare=move.to;
-  const enPassant=move.isEnPassant?.()||String(move.flags||'').includes('e')||(move.captured&&move.piece==='p'&&move.from[0]!==move.to[0]&&!capturedPiece);
-  if(move.captured&&enPassant){
-    captureSquare=move.to[0]+move.from[1];
-    capturedPiece=$(`.square[data-sq="${captureSquare}"] .piece`);
-  }
-  const captured=move.captured&&capturedPiece?{node:capturedPiece.cloneNode(true),rect:capturedPiece.getBoundingClientRect(),square:captureSquare}:null;
-  return {move:{from:move.from,to:move.to,piece:move.piece,captured:move.captured||null},captured};
-}
-function animateRenderedPiece(from,to,duration){
-  const origin=$(`.square[data-sq="${from}"]`),destination=$(`.square[data-sq="${to}"]`),piece=destination?.querySelector('.piece');
-  if(!origin||!destination||!piece||duration<=0)return;
-  const a=origin.getBoundingClientRect(),b=destination.getBoundingClientRect();
-  piece.style.transitionDuration='0ms';
-  piece.style.transform=`translate(${a.left-b.left}px,${a.top-b.top}px)`;
-  destination.classList.add('piece-arriving');
-  piece.getBoundingClientRect();
-  piece.style.transitionDuration='var(--motion)';
-  requestAnimationFrame(()=>{
-    piece.style.removeProperty('transform');
-    setTimeout(()=>destination.classList.remove('piece-arriving'),duration*.6);
-    setTimeout(()=>piece.style.removeProperty('transition-duration'),duration+40);
-  });
-}
-function fadeCapturedPiece(captured,duration){
-  if(!captured?.node||duration<=0)return;
-  const ghost=captured.node,r=captured.rect;
-  ghost.classList.add('piece-ghost');
-  Object.assign(ghost.style,{position:'fixed',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',zIndex:99,pointerEvents:'none',opacity:'1',transition:'opacity var(--motion) ease, transform var(--motion) ease'});
-  document.body.append(ghost);ghost.getBoundingClientRect();
-  requestAnimationFrame(()=>{ghost.style.opacity='0';ghost.style.transform='scale(.62)'});
-  setTimeout(()=>ghost.remove(),duration+50);
-}
-function playMoveAnimation(snapshot){
-  const duration=motionDurationMs();if(!snapshot||duration<=0)return;
-  const move=snapshot.move,dropped=instantMoveAnimation;
-  if(!dropped)animateRenderedPiece(move.from,move.to,duration);
-  if(move.piece==='k'&&Math.abs(move.from.charCodeAt(0)-move.to.charCodeAt(0))===2){
-    const rank=move.from[1],kingSide=move.to[0]==='g';
-    animateRenderedPiece((kingSide?'h':'a')+rank,(kingSide?'f':'d')+rank,duration);
-  }
-  if(!dropped)fadeCapturedPiece(snapshot.captured,duration);
-}
-function captureLastServerMove(state,previousVersion){
-  if(!previousVersion||Number(state.version)<=previousVersion)return null;
-  return captureMoveAnimation(state.move_history?.at?.(-1));
 }
 function playerInitials(value,fallback='GU'){
   const words=String(value||'').replace(/^You ·\s*/,'').trim().split(/\s+/).filter(Boolean);
@@ -949,7 +991,6 @@ function applyServerState(payload,{animateMove=true}={}){
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
-  const moveAnimation=animateMove?captureLastServerMove(state,previousGameId===state.id?previousVersion:0):null;
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
   myColor=seatFromEnvelope(payload,myColor);
@@ -958,7 +999,8 @@ function applyServerState(payload,{animateMove=true}={}){
   clockSnapshot=createClockSnapshot(payload);
   if(state.fen){try{game.load(state.fen)}catch{}}
   if(state.id&&state.id!==previousGameId)void loadChat();
-  syncRoomUi();render();playMoveAnimation(moveAnimation);updateMoves();syncOpponentConnectionToast(state);
+  const lastServerMove=previousGameId===state.id&&Number(state.version)>previousVersion?state.move_history?.at?.(-1):null;
+  syncRoomUi();render({hint:lastServerMove,instant:!animateMove});afterBoardPaint(updateMoves);syncOpponentConnectionToast(state);
   if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
   playQueuedPremove();maybePlayBot();
 }
@@ -1079,8 +1121,8 @@ function applyRealtimeMove(incoming){
   if(!legalMove)return false;
   let made;
   try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
-  const moveAnimation=captureMoveAnimation(made);
-  serverVersion=incoming.version;selected=null;switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone();
+  rememberLastMove(made);
+  serverVersion=incoming.version;selected=null;switchOnlineClockOptimistically();render({hint:made});afterBoardPaint(playTone);
   const premoveResult=playQueuedPremove();
   if(premoveResult)void Promise.resolve(premoveResult).finally(()=>refreshServerState());else void refreshServerState();
   return true;
@@ -1217,6 +1259,7 @@ function boardPlayArea(){
   const r=boardEl.getBoundingClientRect();
   return {left:r.left+boardEl.clientLeft,top:r.top+boardEl.clientTop,width:boardEl.clientWidth,height:boardEl.clientHeight};
 }
+function boardSquareAt(x,y){return squareFromPoint(boardPlayArea(),x,y,flipped)}
 // Which kind of drag a press on this square may start: a move, a premove, or none.
 function dragKindFor(square){
   const p=game.get(square);if(!p)return null;
@@ -1224,26 +1267,37 @@ function dragKindFor(square){
   if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))||p.color!==game.turn())return null;
   return 'move';
 }
+// Squares and pieces answer clicks through the board: a piece sits above its square, so the
+// square is found from the pointer position (keyboard clicks land on the square button).
+boardEl.addEventListener('click',event=>{
+  if(suppressBoardClick)return;
+  const sq=event.target.closest?.('.square')?.dataset.sq||boardSquareAt(event.clientX,event.clientY);
+  if(sq)clickSquare(sq,game.get(sq));
+});
+// ---- Dragging (left button, touch, pen) ----
+// The dragged piece is a copy in the drag layer that follows the pointer with a plain
+// transform (no transition) on every pointer event, i.e. every frame; its own piece in the
+// piece layer is hidden meanwhile and the square under the pointer is outlined.
 function positionDragFloat(drag,x,y){drag.float.style.transform=`translate(${x-drag.size/2}px,${y-drag.size/2}px)`}
 function markDragOver(drag,square){
   if(drag.over===square)return;
+  boardDom?.squares.get(drag.over)?.classList.remove('drag-over');
   drag.over=square;
-  boardEl.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  if(square)boardEl.querySelector(`[data-sq="${square}"]`)?.classList.add('drag-over');
+  boardDom?.squares.get(square)?.classList.add('drag-over');
 }
 function startPointerDrag(drag,x,y){
   drag.started=true;
   if(drag.kind==='premove'){premoves.select(drag.from);selected=null}
   else{premoves.cancel();selected=drag.from}
-  render();
-  const origin=boardEl.querySelector(`[data-sq="${drag.from}"]`),piece=origin?.querySelector('.piece');
-  drag.size=origin?origin.getBoundingClientRect().width:boardPlayArea().width/8;
-  const float=document.createElement('span');
-  float.className=`${piece?.className||'piece'} drag-float dragging`.replace(' drag-origin','');
-  float.setAttribute('aria-hidden','true');
+  const dom=ensureBoardDom(),key=pieceKey(game.get(drag.from));
+  drag.size=boardPlayArea().width/8;
+  const float=document.createElement('div');
+  float.className=`board-piece drag-float ${key[0]}`;float.dataset.piece=key;
+  float.innerHTML=`<span class="piece ${key[0]} piece-${key[1]}"></span>`;
   Object.assign(float.style,{width:drag.size+'px',height:drag.size+'px'});
-  drag.float=float;positionDragFloat(drag,x,y);document.body.append(float);
+  drag.float=float;positionDragFloat(drag,x,y);dom.dragLayer.append(float);
   document.body.classList.add('board-dragging');
+  render();
 }
 function endPointerDragListeners(){
   window.removeEventListener('pointermove',onDragPointerMove);
@@ -1252,40 +1306,34 @@ function endPointerDragListeners(){
   window.removeEventListener('keydown',onDragKeydown);
   window.removeEventListener('blur',cancelPointerDrag);
 }
-// Slides the floating piece back onto its square, then shows the real piece again.
-function returnDragFloat(drag){
-  const float=drag.float,origin=boardEl.querySelector(`[data-sq="${drag.from}"]`),duration=Math.min(160,motionDurationMs());
-  const reveal=()=>{float?.remove();boardEl.querySelectorAll('.drag-origin').forEach(el=>el.classList.remove('drag-origin'))};
-  if(!float||!origin||duration<=0){reveal();return}
-  const r=origin.getBoundingClientRect();
-  boardEl.querySelector(`[data-sq="${drag.from}"] .piece`)?.classList.add('drag-origin');
-  float.style.transition=`transform ${duration}ms cubic-bezier(.2,.7,.3,1)`;
-  float.style.transform=`translate(${r.left}px,${r.top}px)`;
-  setTimeout(reveal,duration+20);
-}
 function suppressClickAfterDrag(){suppressBoardClick=true;setTimeout(()=>{suppressBoardClick=false},0)}
 function finishPointerDrag(to,{cancelled=false}={}){
   const drag=pointerDrag;pointerDrag=null;endPointerDragListeners();
-  document.body.classList.remove('board-dragging');markDragOver(drag,null);suppressClickAfterDrag();
+  document.body.classList.remove('board-dragging');suppressClickAfterDrag();
+  // The float is removed only after the board has re-rendered, so the piece never blinks.
+  const settle=()=>{render();drag.float?.remove()};
   // Escape, right-click, blur or pointercancel put the selection back the way the press found it.
   if(cancelled){
     if(!drag.wasSelected){if(drag.kind==='premove')premoves.cancel();else selected=null}
-    render();returnDragFloat(drag);return
+    settle();return
   }
-  if(drag.kind==='premove'){
-    if(to&&to!==drag.from&&canQueuePremove()&&premoves.selected===drag.from){drag.float.remove();premoves.queue(to,'q');render();return}
-    render();returnDragFloat(drag);return
+  // Judge the drop by what the piece may do NOW: if the opponent replied while a premove
+  // was in the air, the piece is ours to move and a legal drop plays at once.
+  const kind=dragKindFor(drag.from);
+  if(kind==='premove'){
+    if(premoves.selected!==drag.from){premoves.select(drag.from);selected=null}
+    if(to&&to!==drag.from)premoves.queue(to,'q');
+    settle();return
   }
-  const legalTargets=dragKindFor(drag.from)==='move'?game.moves({square:drag.from,verbose:true}).map(m=>m.to):[];
-  const outcome=dropOutcome({from:drag.from,to,legalTargets,wasSelected:drag.wasSelected});
-  if(outcome==='move'){
-    drag.float.remove();selected=drag.from;
-    void clickSquare(to,game.get(to),{instant:true});
-    boardEl.querySelectorAll('.drag-origin').forEach(el=>el.classList.remove('drag-origin'));
-    return
+  if(kind==='move'){
+    if(premoves.selected||premoves.move)premoves.cancel();
+    const legalTargets=game.moves({square:drag.from,verbose:true}).map(m=>m.to);
+    const outcome=dropOutcome({from:drag.from,to,legalTargets,wasSelected:drag.kind==='move'&&drag.wasSelected});
+    if(outcome==='move'){selected=drag.from;void clickSquare(to,game.get(to),{instant:true});drag.float?.remove();return}
+    selected=outcome==='deselect'?null:drag.from;
+    settle();return
   }
-  if(outcome==='deselect')selected=null;
-  render();returnDragFloat(drag);
+  selected=null;premoves.cancel();settle();
 }
 function cancelPointerDrag(){
   const drag=pointerDrag;if(!drag)return;
@@ -1301,20 +1349,60 @@ function onDragPointerMove(event){
   }
   event.preventDefault();
   positionDragFloat(drag,event.clientX,event.clientY);
-  markDragOver(drag,squareFromPoint(boardPlayArea(),event.clientX,event.clientY,flipped));
+  markDragOver(drag,boardSquareAt(event.clientX,event.clientY));
 }
 function onDragPointerUp(event){
   const drag=pointerDrag;if(!drag||event.pointerId!==drag.id)return;
   if(!drag.started){pointerDrag=null;endPointerDragListeners();return}
-  finishPointerDrag(squareFromPoint(boardPlayArea(),event.clientX,event.clientY,flipped));
+  finishPointerDrag(boardSquareAt(event.clientX,event.clientY));
 }
 function onDragKeydown(event){if(event.key==='Escape'&&pointerDrag?.started){event.preventDefault();cancelPointerDrag()}}
-// Pieces follow the pointer (mouse, pen or touch) from the first few pixels of movement.
-// A press without movement stays a click, so click-to-move works exactly as before.
+// ---- Arrows and square marks (V1b, right button) ----
+// Right-drag draws an arrow (L-shaped for knight jumps), a right-click on one square toggles
+// a mark. Orange arrows and red marks by default; Shift green, Ctrl/Cmd blue, Alt yellow.
+// A left-click on the board or any move clears them.
+function clearBoardShapes(){if(!boardShapes.length&&!shapeDraft)return false;boardShapes=[];shapeDraft=null;renderBoard();return true}
+function endShapeListeners(){
+  window.removeEventListener('pointermove',onShapePointerMove);
+  window.removeEventListener('pointerup',onShapePointerUp);
+  window.removeEventListener('pointercancel',cancelShapeDraft);
+  window.removeEventListener('blur',cancelShapeDraft);
+}
+function cancelShapeDraft(){if(!shapeDraft)return;shapeDraft=null;endShapeListeners();renderArrows()}
+function startShapeDraft(event){
+  const square=boardSquareAt(event.clientX,event.clientY);if(!square)return;
+  shapeDraft={id:event.pointerId,from:square,to:square,brush:brushFor('arrow',event)};
+  window.addEventListener('pointermove',onShapePointerMove);
+  window.addEventListener('pointerup',onShapePointerUp);
+  window.addEventListener('pointercancel',cancelShapeDraft);
+  window.addEventListener('blur',cancelShapeDraft);
+}
+function onShapePointerMove(event){
+  if(!shapeDraft||event.pointerId!==shapeDraft.id)return;
+  const to=boardSquareAt(event.clientX,event.clientY),brush=brushFor('arrow',event);
+  if(to===shapeDraft.to&&brush===shapeDraft.brush)return;
+  shapeDraft={...shapeDraft,to,brush};renderArrows();
+}
+function onShapePointerUp(event){
+  const draft=shapeDraft;if(!draft||event.pointerId!==draft.id)return;
+  shapeDraft=null;endShapeListeners();
+  const to=boardSquareAt(event.clientX,event.clientY);
+  if(!to){renderArrows();return}
+  const shape=to===draft.from?{from:draft.from,brush:brushFor('square',event)}:{from:draft.from,to,brush:brushFor('arrow',event)};
+  boardShapes=toggleShape(boardShapes,shape);renderBoard();
+}
 boardEl.addEventListener('pointerdown',event=>{
+  if(event.button===2){
+    // Right button: cancels a drag in flight, then queued premoves, otherwise starts a shape.
+    if(pointerDrag){cancelPointerDrag();return}
+    if(cancelPremove())return;
+    if(event.isPrimary)startShapeDraft(event);
+    return;
+  }
   if(pointerDrag){cancelPointerDrag();return}
   if(!event.isPrimary||event.button!==0)return;
-  const square=event.target.closest?.('.piece')?.closest?.('.square')?.dataset.sq;
+  cancelShapeDraft();clearBoardShapes();
+  const square=boardSquareAt(event.clientX,event.clientY);
   if(!square)return;
   const kind=dragKindFor(square);if(!kind)return;
   pointerDrag={id:event.pointerId,from:square,kind,startX:event.clientX,startY:event.clientY,started:false,float:null,over:null,size:0,wasSelected:kind==='premove'?premoves.selected===square:selected===square};
@@ -1324,8 +1412,9 @@ boardEl.addEventListener('pointerdown',event=>{
   window.addEventListener('keydown',onDragKeydown);
   window.addEventListener('blur',cancelPointerDrag);
 });
-boardEl.addEventListener('contextmenu',event=>{if(pointerDrag?.started){event.preventDefault();event.stopImmediatePropagation();cancelPointerDrag()}});
-boardEl.addEventListener('contextmenu',event=>{if(cancelPremove()){event.preventDefault()}});
+// The board has no context menu: the right button draws, and a right-click (or a long press
+// on touch) during a drag or with premoves queued cancels them.
+boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointerDrag?.started){event.stopImmediatePropagation();cancelPointerDrag();return}cancelPremove()});
 render();startClock();void completeAuthCallback().then(connect);
 // Email-link landing (/auth/callback). supabase-js reads the session from the URL with
 // detectSessionInUrl; a throwaway in-memory client is used so the app's own session store
@@ -1425,7 +1514,7 @@ function setReviewProgress(done,total,label='Analyzing game'){
   wrap.classList.remove('hidden');if(title)title.textContent=label;if(count)count.textContent=`${done} / ${total}`;if(fill)fill.style.width=`${total?Math.round(100*done/total):0}%`;
 }
 function reviewResultForCurrentLastMove(lastMove){
-  if(!lastMove)return null;
+  if(!lastMove||!reviewState.results.length)return null;
   const records=currentReviewRecords(),signature=moveRecordSignature(records);
   if(reviewState.signature!==signature)return null;
   const index=records.length-1,result=reviewState.results[index];
@@ -1841,6 +1930,13 @@ const normalizeMotionCss=value=>{
 savedTheme.pieceTint=0;
 savedTheme['--glass']=String(clamp(savedTheme['--glass'],.35,1,.94));
 savedTheme['--motion']=normalizeMotionCss(savedTheme['--motion']);
+// Backdrop blur only where the glass is see-through. At the near-opaque default the blurred
+// wallpaper contributes almost nothing to the image, but the compositor redoes every panel's
+// blur for every frame that changes anything, which halves the frame rate of board moves on
+// software-rendered and low-end devices (backlog V1-fix).
+const GLASS_BLUR_BELOW=.9;
+function syncGlassBlur(value){document.documentElement.dataset.glass=Number(value)<GLASS_BLUR_BELOW?'clear':'solid'}
+syncGlassBlur(savedTheme['--glass']);
 document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece||'#f0d9a4');
 document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');
 document.documentElement.style.setProperty('--piece-tint','0');
@@ -1850,7 +1946,7 @@ if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'
 if(motionControl)motionControl.value=String(Math.round(parseFloat(savedTheme['--motion'])/4));
 $$('[data-theme]').forEach(input=>input.oninput=()=>{
   const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.35,1,.94)):motionCssValue(input.value);
-  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 });
 savedTheme.pieceStyle=applyPieceStyle(savedTheme.pieceStyle);
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
