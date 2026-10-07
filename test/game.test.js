@@ -1,0 +1,3 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import {Chess} from 'chess.js';
+test('legal move validation and checkmate',()=>{const g=new Chess();assert.equal(g.move('e4').san,'e4');g.move('e5');g.move('Bc4');g.move('Nc6');g.move('Qh5');g.move('Nf6');g.move('Qxf7#');assert.equal(g.isCheckmate(),true)});
+test('castling, en passant and promotion are supported',()=>{const castle=new Chess('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');assert.equal(castle.move('O-O').san,'O-O');const ep=new Chess('8/8/8/3pP3/8/8/8/K6k w - d6 0 1');assert.equal(ep.move('exd6').isEnPassant(),true);const promo=new Chess('8/P7/8/8/8/8/8/k6K w - - 0 1');assert.equal(promo.move('a8=Q+').promotion,'q')});

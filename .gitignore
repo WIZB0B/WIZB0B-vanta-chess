@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.netlify/
+
+test-results/
+playwright-report/
+public/engines/stockfish-19-lite-single.js
+public/engines/stockfish-19-lite-single.wasm
+public/engines/Copying.txt
+public/engines/README.md
+public/engines/.prepared
