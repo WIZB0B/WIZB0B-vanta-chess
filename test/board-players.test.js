@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { pieceStyleOptions } from '../src/piece-styles.js';
 
 const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
@@ -26,17 +27,17 @@ test('player flags use a real SVG and disappear when no supported country is set
 
 test('board supports persisted Vanta and Staunton piece styles with baked-in sizing',()=>{
   const batch=css.slice(css.lastIndexOf('/* Batch 4:'));
-  for(const [value,label] of [['vanta-3d','Vanta 3D'],['vanta-2d','Vanta 2D'],['staunton-3d','Staunton 3D'],['staunton-2d','Staunton 2D']]){
-    assert.ok(main.includes(`<option value="${value}">${label}</option>`),`missing piece style ${label}`);
+  for(const [value,label] of [['vanta-3d','Vanta 3D'],['vanta-2d','Vanta 2D'],['vanta-classic-3d','Vanta Classic 3D'],['vanta-classic-2d','Vanta Classic 2D'],['staunton-3d','Staunton 3D'],['staunton-2d','Staunton 2D']]){
+    assert.ok(pieceStyleOptions().includes(`<option value="${value}">${label}</option>`),`missing piece style ${label}`);
   }
-  assert.ok(main.includes("if(value==='3d'||value==='2d')return 'vanta-3d';"));
+  assert.ok(main.includes('<select id="pieceStyle">${pieceStyleOptions()}</select>'));
   assert.ok(main.includes("document.documentElement.dataset.pieceStyle='vanta-3d';"));
-  assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(savedTheme\.pieceStyle\)/);
+  assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(migratePieceStyle\(savedTheme\)\)/);
   assert.ok(main.includes("savedTheme.pieceTint=0;"));
   assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(e\.target\.value\)/);
   assert.ok(css.includes("/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png"));
   assert.ok(css.includes("background-size:600% 400%;"));
-  const vantaTintMask=css.match(/:root\[data-piece-style\^="vanta-"\] \.piece::after\{([\s\S]*?)\}/)?.[1]||'';
+  const vantaTintMask=css.match(/:root\[data-piece-style\^="vanta-classic-"\] \.piece::after\{([\s\S]*?)\}/)?.[1]||'';
   assert.ok(vantaTintMask.includes('-webkit-mask-size:600% 400%;'));
   assert.ok(vantaTintMask.includes('mask-size:600% 400%;'));
   assert.ok(vantaTintMask.includes('-webkit-mask-position:var(--piece-x) var(--piece-y);'));
@@ -52,7 +53,7 @@ test('board supports persisted Vanta and Staunton piece styles with baked-in siz
   assert.match(batch,/\.board \.piece\{[\s\S]*?width:100%;[\s\S]*?height:100%;/);
   assert.match(batch,/\.board \.square:has\(\.piece\)::before\{/);
   assert.match(batch,/drop-shadow\(0 8px 3px rgba\(0,0,0,\.35\)\)/);
-  assert.ok(css.includes(':root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before,'));
+  assert.ok(css.includes(':root[data-piece-style="vanta-classic-2d"] .board .square:has(.piece)::before,'));
   assert.ok(css.includes(':root[data-piece-style="staunton-2d"] .board .square:has(.piece)::before{display:none}'));
   assert.ok(css.includes('drop-shadow(0 1px 1px rgba(0,0,0,.48))'));
   assert.match(batch,/\.board \.square\.last-move\{\s*box-shadow:inset 0 0 0 999px rgba\(200,216,61,\.56\);/);

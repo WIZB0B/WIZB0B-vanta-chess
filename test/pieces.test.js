@@ -35,7 +35,7 @@ test('every piece in every style is centred on one shared baseline',()=>{
 });
 
 test('2D styles stay flat: no contact shadow and no lift',()=>{
-  assert.match(task5,/:root\[data-piece-style="vanta-2d"\] \.board \.square:has\(\.piece\)::before,\n:root\[data-piece-style="staunton-2d"\] \.board \.square:has\(\.piece\)::before\{display:none\}/);
+  assert.match(task5,/:root\[data-piece-style="vanta-classic-2d"\] \.board \.square:has\(\.piece\)::before,\n:root\[data-piece-style="staunton-2d"\] \.board \.square:has\(\.piece\)::before\{display:none\}/);
   assert.match(task5,/:root\[data-piece-style\$="-2d"\] \.board \.square \.piece\.dragging\{transform:none\}/);
 });
 

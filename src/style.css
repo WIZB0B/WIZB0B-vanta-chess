@@ -1829,16 +1829,16 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px rgba(123,216,170,.12),0 0 18px rgba(85,207,151,.18);
 }
 
-/* Vanta sprite styles use the uploaded 960x640 sheet: 6 columns x 4 rows. */
-:root[data-piece-style="vanta-3d"] .piece,
-:root[data-piece-style="vanta-2d"] .piece{
+/* Vanta Classic sprite styles use the uploaded 960x640 sheet: 6 columns x 4 rows. */
+:root[data-piece-style="vanta-classic-3d"] .piece,
+:root[data-piece-style="vanta-classic-2d"] .piece{
   --piece-image:url('/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png');
   background-image:var(--piece-image);
   background-size:600% 400%;
   background-position:var(--piece-x) var(--piece-y);
   background-repeat:no-repeat;
 }
-:root[data-piece-style^="vanta-"] .piece::after{
+:root[data-piece-style^="vanta-classic-"] .piece::after{
   -webkit-mask-size:600% 400%;
   mask-size:600% 400%;
   -webkit-mask-position:var(--piece-x) var(--piece-y);
@@ -1846,30 +1846,30 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   -webkit-mask-repeat:no-repeat;
   mask-repeat:no-repeat;
 }
-:root[data-piece-style^="vanta-"] .piece-k{--piece-x:0%}
-:root[data-piece-style^="vanta-"] .piece-q{--piece-x:20%}
-:root[data-piece-style^="vanta-"] .piece-r{--piece-x:40%}
-:root[data-piece-style^="vanta-"] .piece-b{--piece-x:60%}
-:root[data-piece-style^="vanta-"] .piece-n{--piece-x:80%}
-:root[data-piece-style^="vanta-"] .piece-p{--piece-x:100%}
-:root[data-piece-style="vanta-3d"] .piece.w{--piece-y:0%}
-:root[data-piece-style="vanta-3d"] .piece.b{--piece-y:33.3333%}
-:root[data-piece-style="vanta-2d"] .piece.w{--piece-y:66.6666%}
-:root[data-piece-style="vanta-2d"] .piece.b{--piece-y:99.9999%}
+:root[data-piece-style^="vanta-classic-"] .piece-k{--piece-x:0%}
+:root[data-piece-style^="vanta-classic-"] .piece-q{--piece-x:20%}
+:root[data-piece-style^="vanta-classic-"] .piece-r{--piece-x:40%}
+:root[data-piece-style^="vanta-classic-"] .piece-b{--piece-x:60%}
+:root[data-piece-style^="vanta-classic-"] .piece-n{--piece-x:80%}
+:root[data-piece-style^="vanta-classic-"] .piece-p{--piece-x:100%}
+:root[data-piece-style="vanta-classic-3d"] .piece.w{--piece-y:0%}
+:root[data-piece-style="vanta-classic-3d"] .piece.b{--piece-y:33.3333%}
+:root[data-piece-style="vanta-classic-2d"] .piece.w{--piece-y:66.6666%}
+:root[data-piece-style="vanta-classic-2d"] .piece.b{--piece-y:99.9999%}
 
 /* 3D styles keep the existing contact shadow and lift; both 2D styles stay flat. */
-:root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before,
+:root[data-piece-style="vanta-classic-2d"] .board .square:has(.piece)::before,
 :root[data-piece-style="staunton-2d"] .board .square:has(.piece)::before{display:none}
-:root[data-piece-style="vanta-2d"] .board .piece,
-:root[data-piece-style="vanta-2d"] .study-board .piece,
+:root[data-piece-style="vanta-classic-2d"] .board .piece,
+:root[data-piece-style="vanta-classic-2d"] .study-board .piece,
 :root[data-piece-style="staunton-2d"] .board .piece,
 :root[data-piece-style="staunton-2d"] .study-board .piece{
   filter:drop-shadow(0 1px 1px rgba(0,0,0,.48));
   transform:none;
 }
-:root[data-piece-style="vanta-2d"] .board .square:hover .piece,
-:root[data-piece-style="vanta-2d"] .board .square.selected .piece,
-:root[data-piece-style="vanta-2d"] .board .piece.dragging,
+:root[data-piece-style="vanta-classic-2d"] .board .square:hover .piece,
+:root[data-piece-style="vanta-classic-2d"] .board .square.selected .piece,
+:root[data-piece-style="vanta-classic-2d"] .board .piece.dragging,
 :root[data-piece-style="staunton-2d"] .board .square:hover .piece,
 :root[data-piece-style="staunton-2d"] .board .square.selected .piece,
 :root[data-piece-style="staunton-2d"] .board .piece.dragging{
@@ -2048,7 +2048,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .board .square.selected:has(.piece)::before,
 .board .square:has(.piece.dragging)::before{transform:scale(.8);opacity:.5;filter:blur(3px)}
 .board .square.piece-arriving::before{opacity:0;transition-duration:0ms}
-:root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before,
+:root[data-piece-style="vanta-classic-2d"] .board .square:has(.piece)::before,
 :root[data-piece-style="staunton-2d"] .board .square:has(.piece)::before{display:none}
 :root[data-piece-style$="-2d"] .board .square .piece,
 :root[data-piece-style$="-2d"] .board .square:hover .piece,
@@ -2057,30 +2057,30 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 @media(prefers-reduced-motion:reduce){
   .board .piece,.board .square::before{transition-duration:0ms!important}
 }
-:root[data-piece-style="vanta-3d"] .board .piece.w.piece-k{translate:0% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.w.piece-q{translate:-0.9% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.w.piece-r{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.w.piece-b{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.w.piece-n{translate:-4.4% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.w.piece-p{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.b.piece-k{translate:0% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.b.piece-q{translate:-0.9% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.b.piece-r{translate:0% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.b.piece-b{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.b.piece-n{translate:-4.7% -5.6%}
-:root[data-piece-style="vanta-3d"] .board .piece.b.piece-p{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-2d"] .board .piece.w.piece-k{translate:0% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.w.piece-q{translate:-0.9% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.w.piece-r{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.w.piece-b{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.w.piece-n{translate:-4.4% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.w.piece-p{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.b.piece-k{translate:0% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.b.piece-q{translate:-0.9% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.b.piece-r{translate:0% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.b.piece-b{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.b.piece-n{translate:-4.4% -6.2%}
-:root[data-piece-style="vanta-2d"] .board .piece.b.piece-p{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.w.piece-k{translate:0% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.w.piece-q{translate:-0.9% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.w.piece-r{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.w.piece-b{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.w.piece-n{translate:-4.4% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.w.piece-p{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.b.piece-k{translate:0% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.b.piece-q{translate:-0.9% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.b.piece-r{translate:0% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.b.piece-b{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.b.piece-n{translate:-4.7% -5.6%}
+:root[data-piece-style="vanta-classic-3d"] .board .piece.b.piece-p{translate:0.3% -5.6%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.w.piece-k{translate:0% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.w.piece-q{translate:-0.9% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.w.piece-r{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.w.piece-b{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.w.piece-n{translate:-4.4% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.w.piece-p{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.b.piece-k{translate:0% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.b.piece-q{translate:-0.9% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.b.piece-r{translate:0% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.b.piece-b{translate:0.3% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.b.piece-n{translate:-4.4% -6.2%}
+:root[data-piece-style="vanta-classic-2d"] .board .piece.b.piece-p{translate:0.3% -6.2%}
 :root[data-piece-style="staunton-3d"] .board .piece.w.piece-k{translate:5% -5.6%}
 :root[data-piece-style="staunton-3d"] .board .piece.w.piece-q{translate:12.2% -6.2%}
 :root[data-piece-style="staunton-3d"] .board .piece.w.piece-r{translate:0.3% -5.6%}
@@ -2134,3 +2134,47 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 }
 :root[data-piece-style$="-2d"] .drag-float{filter:drop-shadow(0 2px 2px rgba(0,0,0,.45))}
 body.board-dragging,body.board-dragging *{cursor:grabbing!important}
+
+/* Vanta pieces v2 (default). Plain artwork only: no filters, drop-shadows, blend or tint
+   layers, and no per-piece offsets, because each cell is already sized and bottom-seated.
+   - Vanta 3D: one 1536x512 sheet, 256px cells, columns k q r b n p, row 0 white, row 1
+     black -> background-size 600% 200%, x = col * 20%, y = row * 100%. Keeps only the
+     subtle contact shadow.
+   - Vanta 2D: one vector file per piece (public/assets/vch/pieces/vanta-2d/{id}.svg),
+     background-size contain. No contact shadow. */
+:root[data-piece-style="vanta-3d"] .piece,
+:root[data-piece-style="vanta-2d"] .piece{
+  filter:none;translate:none;mix-blend-mode:normal;
+  background-image:var(--piece-image);background-repeat:no-repeat;
+}
+:root[data-piece-style="vanta-3d"] .piece::after,
+:root[data-piece-style="vanta-2d"] .piece::after{display:none}
+:root[data-piece-style="vanta-3d"] .piece{
+  --piece-image:url('/assets/vch/pieces/vanta-3d.png');
+  background-size:600% 200%;
+  background-position:var(--piece-x) var(--piece-y);
+}
+:root[data-piece-style="vanta-3d"] .piece-k{--piece-x:0%}
+:root[data-piece-style="vanta-3d"] .piece-q{--piece-x:20%}
+:root[data-piece-style="vanta-3d"] .piece-r{--piece-x:40%}
+:root[data-piece-style="vanta-3d"] .piece-b{--piece-x:60%}
+:root[data-piece-style="vanta-3d"] .piece-n{--piece-x:80%}
+:root[data-piece-style="vanta-3d"] .piece-p{--piece-x:100%}
+:root[data-piece-style="vanta-3d"] .piece.w{--piece-y:0%}
+:root[data-piece-style="vanta-3d"] .piece.b{--piece-y:100%}
+:root[data-piece-style="vanta-2d"] .piece{background-size:contain;background-position:center}
+:root[data-piece-style="vanta-2d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/wk.svg')}
+:root[data-piece-style="vanta-2d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/wq.svg')}
+:root[data-piece-style="vanta-2d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/wr.svg')}
+:root[data-piece-style="vanta-2d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/wb.svg')}
+:root[data-piece-style="vanta-2d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/wn.svg')}
+:root[data-piece-style="vanta-2d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/wp.svg')}
+:root[data-piece-style="vanta-2d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/bk.svg')}
+:root[data-piece-style="vanta-2d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/bq.svg')}
+:root[data-piece-style="vanta-2d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/br.svg')}
+:root[data-piece-style="vanta-2d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/bb.svg')}
+:root[data-piece-style="vanta-2d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/bn.svg')}
+:root[data-piece-style="vanta-2d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/bp.svg')}
+:root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before{display:none}
+:root[data-piece-style="vanta-3d"] .drag-float,
+:root[data-piece-style="vanta-2d"] .drag-float{filter:none}
