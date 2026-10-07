@@ -107,3 +107,33 @@ Use the current piece images and refine them with CSS only:
   `http://localhost:5173/auth/callback` (and `http://localhost:4173/auth/callback` for
   `vite preview`). Supabase rejects a `redirect_to` that is not on this list and falls back
   to the Site URL.
+
+## V1. Piece movement like chess.com (done 2026-10-07)
+- **In code:** pieces are dragged with pointer events (mouse, pen, touch) instead of native
+  drag-and-drop: the piece follows the pointer centred under it, the hovered square is
+  outlined, legal drops play instantly, other drops slide back. Helpers live in
+  `src/board-drag.js`; see PR #5.
+
+## V2. Typography
+One display serif for headlines, one clean UI sans for everything else,
+consistent sizes/weights/letter-spacing across the app (design tokens).
+
+## V3. Icons
+Replace generic icons with a proper icon set (Computer = monitor/robot chip,
+Match = crossed swords/lightning, Room = door/link, etc.). Art comes from the owner.
+
+## V4. Settings page
+Top-right Settings becomes a full page (left categories: Board &
+Pieces, Gameplay, Profile, Notifications, Sound, Accessibility, Privacy & Security), with
+Boards/Pieces/Backgrounds/Presets tabs and a live preview board (see VCH-ROADMAP.md).
+The Board theme button under the board becomes a small quick-settings popover only,
+with "All settings" linking to the page.
+
+## S1. Security audit
+Supabase Security Advisor clean; RLS on every table; no service keys
+client-side; rate limits on the edge function (moves, chat, sign-up); input validation;
+CAPTCHA on sign-up; leaked-password protection; CORS locked to our domains; dependency
+audit; chat content limits; basic anti-cheat flags noted for later.
+
+## C1. Competitor comparison
+Feature matrix vs chess.com, lichess and others; list gaps.
