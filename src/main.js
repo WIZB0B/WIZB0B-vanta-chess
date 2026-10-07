@@ -1264,9 +1264,14 @@ function returnDragFloat(drag){
   setTimeout(reveal,duration+20);
 }
 function suppressClickAfterDrag(){suppressBoardClick=true;setTimeout(()=>{suppressBoardClick=false},0)}
-function finishPointerDrag(to){
+function finishPointerDrag(to,{cancelled=false}={}){
   const drag=pointerDrag;pointerDrag=null;endPointerDragListeners();
   document.body.classList.remove('board-dragging');markDragOver(drag,null);suppressClickAfterDrag();
+  // Escape, right-click, blur or pointercancel put the selection back the way the press found it.
+  if(cancelled){
+    if(!drag.wasSelected){if(drag.kind==='premove')premoves.cancel();else selected=null}
+    render();returnDragFloat(drag);return
+  }
   if(drag.kind==='premove'){
     if(to&&to!==drag.from&&canQueuePremove()&&premoves.selected===drag.from){drag.float.remove();premoves.queue(to,'q');render();return}
     render();returnDragFloat(drag);return
@@ -1285,7 +1290,7 @@ function finishPointerDrag(to){
 function cancelPointerDrag(){
   const drag=pointerDrag;if(!drag)return;
   if(!drag.started){pointerDrag=null;endPointerDragListeners();return}
-  finishPointerDrag(null);
+  finishPointerDrag(null,{cancelled:true});
 }
 function onDragPointerMove(event){
   const drag=pointerDrag;if(!drag||event.pointerId!==drag.id)return;

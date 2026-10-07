@@ -67,6 +67,7 @@ test('Escape cancels a drag in progress',async({page})=>{
   await expect(page.locator('.drag-float')).toHaveCount(0);
   await expect(page.locator('[data-sq="g1"] .piece.w.piece-n')).toBeVisible();
   await expect(page.locator('[data-sq="f3"] .piece')).toHaveCount(0);
+  await expect(page.locator('[data-sq="g1"]')).not.toHaveClass(/selected/);
 });
 
 test('tap-to-move works on touch screens',async({page})=>{

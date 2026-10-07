@@ -51,3 +51,8 @@ test('a dropped piece is not slid in again, and clicking a selected piece desele
   assert.match(main,/if\(sq===selected\)\{selected=null;render\(\);return\}/);
   assert.match(main,/instantMoveAnimation=instant;\n  try\{makeMove\(/);
 });
+
+test('a cancelled drag restores the selection it started from, premoves included',()=>{
+  assert.match(main,/if\(!drag\.wasSelected\)\{if\(drag\.kind==='premove'\)premoves\.cancel\(\);else selected=null\}/);
+  assert.match(main,/finishPointerDrag\(null,\{cancelled:true\}\)/);
+});
