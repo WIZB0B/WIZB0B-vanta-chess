@@ -45,7 +45,9 @@ export async function startComputerGame(page){
 export const piece=(page,sq)=>page.locator(`.board-piece[data-square="${sq}"]`);
 export async function center(page,sq){
   const square=page.locator(`[data-sq="${sq}"]`);
-  await square.evaluate(el=>{const r=el.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight)el.scrollIntoView({block:'center'})});
+  // Keep the whole board in view (not just this square): otherwise measuring the next square
+  // can scroll the page and leave coordinates measured earlier pointing at the wrong square.
+  await square.evaluate(el=>{const board=el.closest('.board')||el,r=board.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight||r.left<0||r.right>innerWidth)board.scrollIntoView({block:'center',inline:'center'})});
   const b=await square.boundingBox();
   return {x:b.x+b.width/2,y:b.y+b.height/2};
 }

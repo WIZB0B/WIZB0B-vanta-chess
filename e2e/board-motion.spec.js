@@ -218,6 +218,14 @@ test('a pawn dragged onto the last rank stays visible while the promotion choice
   await expect(page.locator('.drag-float')).toHaveCount(0);
   await expect(piece(page,'h7')).not.toHaveClass(/drag-origin/);
   await expect(piece(page,'h7').locator('.piece.w.piece-p')).toBeVisible();
+  // A real backdrop click (pressed and released outside the dialog) still cancels.
+  await page.mouse.click(4,4);
+  await expect(page.locator('#promotion')).toBeHidden();
+  await expect(piece(page,'h7').locator('.piece.w.piece-p')).toBeVisible();
+  await expect(piece(page,'g8').locator('.piece.b.piece-n')).toBeVisible();
+  await page.mouse.move(h7.x,h7.y);await page.mouse.down();
+  await page.mouse.move(g8.x,g8.y,{steps:4});await page.mouse.up();
+  await expect(page.locator('#promotion')).toBeVisible();
   await page.locator('#promotion button[data-piece="q"]').click();
   await expect(piece(page,'g8').locator('.piece.w.piece-q')).toBeVisible();
   await expect(page.locator('#moves')).toContainText('hxg8=Q');
