@@ -1329,7 +1329,13 @@ function finishPointerDrag(to,{cancelled=false}={}){
     if(premoves.selected||premoves.move)premoves.cancel();
     const legalTargets=game.moves({square:drag.from,verbose:true}).map(m=>m.to);
     const outcome=dropOutcome({from:drag.from,to,legalTargets,wasSelected:drag.kind==='move'&&drag.wasSelected});
-    if(outcome==='move'){selected=drag.from;void clickSquare(to,game.get(to),{instant:true});drag.float?.remove();return}
+    if(outcome==='move'){
+      selected=drag.from;void clickSquare(to,game.get(to),{instant:true});drag.float?.remove();
+      // A promotion waits for the piece choice before the move is played: show the pawn
+      // on its square meanwhile instead of leaving it hidden as the drag origin.
+      if(boardDom?.pieces.element(drag.from)?.classList.contains('drag-origin'))renderBoard();
+      return
+    }
     selected=outcome==='deselect'?null:drag.from;
     settle();return
   }

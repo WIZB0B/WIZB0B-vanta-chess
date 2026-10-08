@@ -200,3 +200,25 @@ test('right-drag draws arrows (L-shaped for knights), right-click toggles red sq
   await expect(arrows).toHaveCount(0);
   await expect(page.locator('#board .square.mark')).toHaveCount(0);
 });
+
+// Review on PR #6: a pawn dropped on the last rank stayed hidden while the piece choice was open.
+test('a pawn dragged onto the last rank stays visible while the promotion choice is open',async({page})=>{
+  desktopOnly();
+  await mockBackend(page);await useScriptedEngine(page);await startComputerGame(page);
+  const play=async(from,to)=>{await clickAt(page,from);await clickAt(page,to);await expect(piece(page,to)).toHaveCount(1)};
+  let reply=0;const bot=async uci=>{await releaseBotMove(page,uci,++reply);await expect(piece(page,uci.slice(2,4))).toHaveCount(1)};
+  await play('h2','h4');await bot('g7g5');
+  await play('h4','g5');await bot('a7a6');
+  await play('g5','g6');await bot('a6a5');
+  await play('g6','h7');await bot('a5a4');
+  const h7=await center(page,'h7'),g8=await center(page,'g8');
+  await page.mouse.move(h7.x,h7.y);await page.mouse.down();
+  await page.mouse.move(g8.x,g8.y,{steps:4});await page.mouse.up();
+  await expect(page.locator('#promotion')).toBeVisible();
+  await expect(page.locator('.drag-float')).toHaveCount(0);
+  await expect(piece(page,'h7')).not.toHaveClass(/drag-origin/);
+  await expect(piece(page,'h7').locator('.piece.w.piece-p')).toBeVisible();
+  await page.locator('#promotion button[data-piece="q"]').click();
+  await expect(piece(page,'g8').locator('.piece.w.piece-q')).toBeVisible();
+  await expect(page.locator('#moves')).toContainText('hxg8=Q');
+});
