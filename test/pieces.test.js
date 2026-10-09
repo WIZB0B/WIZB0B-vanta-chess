@@ -19,10 +19,10 @@ test('board pieces have no filter halo; depth comes from a contact shadow that t
   assert.doesNotMatch(css,/\.square:has\(\.piece/);
 });
 
-test('a dragged piece is lifted with a softened shadow; nothing else lifts or transitions',()=>{
-  assert.match(layers,/\.drag-layer \.board-piece \.piece\{transform:translateY\(-6%\) scale\(1\.06\)\}/);
-  assert.match(layers,/\.drag-layer \.board-piece::before\{transform:scale\(\.8\);opacity:\.5;filter:blur\(3px\)\}/);
-  assert.match(layers,/\.drag-layer \.board-piece\{transition:none;/);
+test('a dragged piece is drawn crisp and opaque like a board piece; nothing lifts or transitions',()=>{
+  assert.match(layers,/\.drag-layer \.board-piece\{transition:none;pointer-events:none;opacity:1\}/);
+  assert.match(layers,/\.drag-layer \.board-piece::before\{display:none\}/,'no blurred shadow under the dragged piece');
+  assert.doesNotMatch(layers,/\.drag-layer[^{]*\{[^}]*(scale|blur|filter:[^n])/,'no scale, blur or filter on the dragged piece');
   assert.doesNotMatch(css,/\.piece\.dragging|\.drag-float\{|\.piece-ghost|:hover \.piece|piece-arriving/,'old duplicate drag/ghost/hover rules are gone');
   assert.doesNotMatch(css,/\.piece\{[^}]*transition/,'the artwork never transitions; the .board-piece transform does');
   assert.doesNotMatch(main,/piece-arriving|piece-ghost|animateRenderedPiece|fadeCapturedPiece/);

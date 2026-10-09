@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Chess } from 'chess.js';
-import { arrowGeometry, arrowsSvg, brushFor, diffPosition, isKnightJump, isMoveLike, pieceTransform, positionMap, squareCoords, toggleShape } from '../src/board-view.js';
+import { arrowGeometry, arrowsSvg, brushFor, diffPosition, isKnightJump, isMoveLike, moveDurationMs, pieceTransform, positionMap, squareCoords, toggleShape } from '../src/board-view.js';
 
 const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
@@ -69,7 +69,9 @@ test('arrows: straight arrows run centre to centre, knight arrows are L-shaped',
   const straight=arrowGeometry('e2','e4');
   assert.equal(straight.knight,false);assert.equal(straight.shaft.length,2);
   assert.equal(straight.shaft[0].x,4.5);assert.ok(straight.shaft[0].y<6.5&&straight.shaft[0].y>6,'starts just off the e2 centre');
-  assert.equal(straight.head[0].x,4.5);assert.ok(Math.abs(straight.head[0].y-4.58)<.01,'tip stops just short of the e4 centre');
+  assert.equal(straight.head[0].x,4.5);assert.ok(Math.abs(straight.head[0].y-4.56)<.01,'tip stops just short of the e4 centre');
+  const headWidth=Math.abs(straight.head[1].x-straight.head[2].x),headLength=Math.abs(straight.head[0].y-straight.head[1].y);
+  assert.ok(Math.abs(headWidth-.64)<.01&&Math.abs(headLength-.5)<.01,'large heads: ~0.64 wide, 0.5 long (shaft is 0.22)');
   const knight=arrowGeometry('g1','f3');
   assert.equal(knight.knight,true);assert.equal(knight.shaft.length,3);
   assert.deepEqual(knight.shaft[1],{x:6.5,y:5.5},'runs the two-square leg first, then turns');
@@ -109,9 +111,12 @@ test('the board is layered: squares, one piece layer, the arrow layer, a drag la
   assert.match(main,/board\.replaceChildren\(pieceLayer,arrowLayer\)/);
   assert.match(main,/dragLayer\.className='drag-layer'/);
   assert.doesNotMatch(main,/board\.innerHTML=''/,'the board is no longer rebuilt on every render');
-  assert.match(layer,/el\.style\.transform=pieceTransform\(square,this\.flipped\)/);
-  assert.match(layer,/el\.style\.transition=`transform \$\{durationMs\}ms \$\{MOVE_EASING\}`/,'moves only transition transform');
-  assert.match(layer,/el\.style\.transition=`opacity \$\{durationMs\}ms linear`/,'captures only fade opacity');
+  assert.match(layer,/const target=pieceTransform\(square,this\.flipped\);/);
+  assert.match(layer,/el\.style\.transform=target;/);
+  assert.match(layer,/el\.animate\(\[\{transform:start\},\{transform:target\}\],\{duration:durationMs,easing:MOVE_EASING\}\)/,'moves are Web Animations of transform alone');
+  assert.match(layer,/export const MOVE_EASING='ease';/);
+  assert.match(layer,/el\.animate\(\[\{opacity:1\},\{opacity:0\}\]/,'captures only fade opacity');
+  assert.doesNotMatch(layer,/style\.transition/,'no CSS transitions on pieces');
   assert.match(css,/\.piece-layer\{z-index:2\}/);assert.match(css,/\.arrow-layer\{z-index:3;/);
   assert.match(css,/\.drag-layer\{position:fixed;inset:0;z-index:120;pointer-events:none/);
   assert.match(css,/\.board-piece\.moving\{z-index:3\}/);
@@ -122,17 +127,41 @@ test('highlights switch instantly: squares never inherit the global button trans
   assert.match(css,/\.board \.square,\.board \.square:hover\{transition:none;transform:none\}/);
 });
 
-test('heavy work waits until the frame with the move is painted',()=>{
-  // Local / computer moves: board first, then move list and sound, engine on a timer.
+test('move durations scale with distance: ~150ms for one square up to ~250ms, scaled by the Motion slider',()=>{
+  assert.equal(moveDurationMs('a2','a3'),150);
+  assert.equal(moveDurationMs('a1','h8'),250);
+  assert.equal(moveDurationMs('d1','h5'),202);
+  assert.equal(moveDurationMs('g1','f3'),164);
+  assert.ok(moveDurationMs('a1','a8')>moveDurationMs('a1','a4'));
+  assert.equal(moveDurationMs('d1','h5',.5),101);
+  assert.equal(moveDurationMs('d1','h5',0),0,'reduced motion or Motion 0: no slide');
+});
+
+test('all other move work waits until the slide has landed and two frames are painted',()=>{
+  // Local / computer moves: board first, then move list and sound; the engine call after that.
   assert.match(main,/render\(\{hint:made,instant:instantMoveAnimation\}\);afterBoardPaint\(\(\)=>\{updateMoves\(\);playTone\(\)\}\)/);
+  assert.match(main,/afterBoardPaint\(\(\)=>setTimeout\(engineMove,60\)\)/);
+  const localMove=main.slice(main.indexOf('return}let made,localElapsedMs=null'),main.indexOf('function normalizedSan('));
+  assert.doesNotMatch(localMove.replace('afterBoardPaint(()=>setTimeout(engineMove,60))',''),/engineMove/,'the engine is only called after the slide');
+  assert.match(main,/playQueuedPremove\(\);afterBoardPaint\(\(\)=>void maybePlayBot\(\)\);/);
+  // No history() replay in the move frame.
+  assert.match(main,/moveTimeByPly\[Math\.max\(0,\(game\.moveNumber\(\)-1\)\*2\+\(game\.turn\(\)==='b'\?1:0\)-1\)\]=localElapsedMs/);
+  // Clock text is not repainted while a piece slides.
+  assert.match(main,/ticking=setInterval\(\(\)=>\{if\(!boardIsMoving\(\)\)syncClockBars\(\);checkLocalTimeout\(\)\},250\)/);
   // render() itself only updates the board synchronously; status, analysis and the
   // game-over check are deferred.
   const renderFn=main.slice(main.indexOf('function render(options){'),main.indexOf('function endText()'));
   assert.match(renderFn,/renderBoard\(options\);\n\s*if\(!statusScheduled\)\{statusScheduled=true;afterBoardPaint\(\(\)=>\{statusScheduled=false;renderStatus\(\)\}\)\}/);
   const status=main.slice(main.indexOf('function renderStatus(){'),main.indexOf('function render(options){'));
   assert.match(status,/scheduleAnalysis\(\)/);assert.match(status,/maybeShowGameOver\(\)/);
-  // afterBoardPaint never depends on requestAnimationFrame alone (hidden tabs get no frames).
-  assert.match(main,/if\(document\.hidden\)\{setTimeout\(run,0\);return\}\n\s*requestAnimationFrame\(\(\)=>setTimeout\(run,0\)\);setTimeout\(run,100\);/);
+  // afterBoardPaint waits for two painted frames AND the slide's end; it never depends on
+  // frames alone (hidden tabs get none) and a safety timer bounds the wait.
+  const after=main.slice(main.indexOf('function afterBoardPaint(fn){'),main.indexOf('function boardIsMoving()'));
+  assert.match(after,/if\(document\.hidden\)\{setTimeout\(run,0\);return\}/);
+  assert.match(after,/nextFrames\(2\)\.then\(\(\)=>\{framesDone=true;go\(\)\}\);/);
+  assert.match(after,/boardMotion\.then\(\(\)=>\{landed=true;go\(\)\}\);/);
+  assert.match(after,/setTimeout\(run,Math\.max\(0,boardMotionUntil-performance\.now\(\)\)\+400\);/);
+  assert.match(main,/if\(motion\.animated\)\{boardMotion=motion\.finished;boardMotionUntil=performance\.now\(\)\+motion\.durationMs\}/);
   // One AudioContext for the session instead of one per move.
   assert.match(main,/toneContext\?\?=new AudioContext\(\)/);
   assert.equal((main.match(/new AudioContext\(\)/g)||[]).length,1);

@@ -126,15 +126,27 @@ Use the current piece images and refine them with CSS only:
   `.piece-layer` where every piece is a `.board-piece` placed with
   `transform: translate(col*100%, row*100%)` (`src/piece-layer.js`, pure diffing in
   `src/board-view.js`), then the `.arrow-layer` SVG, then the fixed `.drag-layer`. A move is
-  a ~120ms ease-out transform transition (scaled by the Motion slider, 0 with reduced
-  motion); captures fade with opacity. `renderBoard()` is synchronous and cheap; status
-  text, move list, sound, analysis, engine and the network request run after the frame
-  with the move is painted (`afterBoardPaint`). Panels keep the backdrop blur only when
-  Theme Studio glass is below 90%. A piece picked for a premove becomes a normal selection
-  when the opponent replies, and a drop is judged by what the piece may do at drop time.
-- **Proof:** `e2e/board-motion.spec.js` samples every animation frame of Qd1–h5 (queen is
-  topmost via `elementFromPoint`, moves monotonically, ≥30 frames in 650ms, max gap <40ms)
-  and checks the dragged piece sits exactly under the pointer on every frame.
+  a Web Animations API animation of transform alone (`element.animate`), started in the same
+  frame as the move with its clock pinned to the move: CSS `ease`, ~150ms for one square up
+  to ~250ms for the longest move (scaled by the Motion slider, none with reduced motion);
+  captures fade with opacity. `renderBoard()` is synchronous and cheap; status text, move
+  list, clocks, sound, analysis, the engine call and the game-over check wait until the
+  slide has landed and two frames are painted (`afterBoardPaint`); the online move request
+  waits two frames. Panels keep the backdrop blur only when Theme Studio glass is below 90%.
+  A piece picked for a premove becomes a normal selection when the opponent replies, and a
+  drop is judged by what the piece may do at drop time.
+- **Dragging:** the origin square shows only its highlight; the dragged piece is opaque and
+  crisp (no scale, shadow or filter, whole-pixel positions) and stays inside the board
+  (it slides along the edge); releasing outside the board cancels. Cursor: `grab` over your
+  movable pieces, `grabbing` from the press to the drop.
+- **Hints:** soft dark translucent dots for moves, a translucent ring around capturable
+  pieces. Square marks fill the whole square; arrows are ~22% of a square thick at .85.
+- **Proof:** `e2e/board-timing.spec.js` (runs alone, after all other tests) samples every
+  frame of Qd1–h5: the queen leaves d1 within 40ms and its first moved frame is within the
+  first 25% of the path, a frame is painted at least every 20ms until it lands, through at
+  least 8 positions. It fails on the previous build (first moved frame at 37%).
+  `e2e/board-motion.spec.js` checks the queen stays on top in every frame, the Web Animation
+  (transform only, `ease`, distance-scaled), dragging, hints, marks and arrows.
 
 ## V1b. Arrows and square marks (done 2026-10-07)
 - Right-drag draws an orange arrow (L-shaped for knight jumps); right-click on a square

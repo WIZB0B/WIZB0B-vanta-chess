@@ -63,6 +63,16 @@ export function diffPosition(prev,next,{hint=null}={}){
   return {kept,moved,added,removed:[...vanished]};
 }
 
+// Move slide duration (CSS 'ease'): ~150ms for one square up to ~250ms for the longest move
+// (a1-h8), in between by distance. `scale` follows the Motion slider (0 = no animation).
+export const MOVE_MS_MIN=150,MOVE_MS_MAX=250;
+export function moveDurationMs(from,to,scale=1){
+  const a=squareCoords(from),b=squareCoords(to);if(!a||!b||!(scale>0))return 0;
+  const distance=Math.hypot(a.col-b.col,a.row-b.row),longest=Math.hypot(7,7);
+  const t=Math.max(0,Math.min(1,(distance-1)/(longest-1)));
+  return Math.round((MOVE_MS_MIN+t*(MOVE_MS_MAX-MOVE_MS_MIN))*scale);
+}
+
 // Only single moves are animated (a move, a capture, castling, en passant, promotion).
 // Bigger jumps (new game, flipping through review) snap into place.
 export function isMoveLike(diff){
@@ -98,7 +108,7 @@ export function toggleShape(shapes,shape){
   return shapes.map((existing,i)=>i===index?{...existing,brush:shape.brush}:existing);
 }
 
-const ARROW_HEAD_LENGTH=.42,ARROW_HEAD_WIDTH=.5,ARROW_START_OFFSET=.18,ARROW_TIP_INSET=.08;
+const ARROW_HEAD_LENGTH=.5,ARROW_HEAD_WIDTH=.64,ARROW_START_OFFSET=.18,ARROW_TIP_INSET=.06;
 const round=value=>Math.round(value*1000)/1000;
 
 // Geometry of an arrow in board units (one square = 1, origin top-left).

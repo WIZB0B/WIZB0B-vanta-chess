@@ -47,8 +47,8 @@ test('the board uses pointer dragging instead of native drag and drop',()=>{
 });
 
 test('a dropped piece is not slid in again, and clicking a selected piece deselects it',()=>{
-  // A drop re-renders with instant:true, which places the piece without a transition.
-  assert.match(main,/const durationMs=instant\?0:moveAnimationMs\(\)/);
+  // A drop re-renders with instant:true, which places the piece without a slide.
+  assert.match(main,/const scale=instant\?0:motionScale\(\),dom=ensureBoardDom\(\);/);
   assert.match(main,/if\(outcome==='move'\)\{\n\s*selected=drag\.from;void clickSquare\(to,game\.get\(to\),\{instant:true\}\)/);
   // A promotion drop waits for the piece choice: the pawn is revealed on its square meanwhile.
   assert.match(main,/if\(boardDom\?\.pieces\.element\(drag\.from\)\?\.classList\.contains\('drag-origin'\)\)renderBoard\(\);/);

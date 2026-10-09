@@ -29,7 +29,7 @@ test('online moves apply locally before waiting for the authoritative response',
   const validate=body.indexOf("game.moves({square:move.from,verbose:true}).find");
   const apply=body.indexOf('made=game.move(');
   const render=body.indexOf('switchOnlineClockOptimistically();render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone)');
-  const paint=body.indexOf('await nextBoardPaint()');
+  const paint=body.indexOf('await nextFrames(2)');
   const request=body.indexOf('const state=await api.move(');
   assert.ok(validate>=0&&apply>validate&&render>apply&&paint>render&&request>paint,'online move must validate, apply/render locally, let the slide start, then await the server');
   assert.match(body,/if\(onlineMovePending\)return/);

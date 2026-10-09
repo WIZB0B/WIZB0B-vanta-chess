@@ -8,7 +8,7 @@ import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 import { PremoveQueue, consumeLegalPremove } from './premove.js';
 import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
-import { arrowsSvg, brushFor, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
+import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
 import { PieceLayer } from './piece-layer.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
@@ -298,15 +298,35 @@ let clocks=initialClocks(Number($('#time').value));
 // only when the board flips) and updated in place; pieces live in ONE absolutely positioned
 // layer above it (src/piece-layer.js), arrows in an SVG layer above that, and a dragged piece
 // in a fixed drag layer on top. renderBoard() is cheap and synchronous, so a move's highlight
-// and slide start in the same frame; everything else (status text, move list, sound,
-// analysis, engine, network) waits until that frame is on screen (afterBoardPaint).
+// and its slide (a Web Animations API transform animation) start in the same frame as the
+// move. Everything else (status text, move list, clocks, sound, analysis, engine, game-over
+// check) waits until the slide has landed and at least two frames have been painted
+// (afterBoardPaint); the online move request waits two frames (nextFrames).
 let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false;
+let boardMotion=Promise.resolve(),boardMotionUntil=0,motionScaleCache=null;
+function nextFrames(count=2){
+  return new Promise(resolve=>{
+    if(document.hidden){setTimeout(resolve,0);return}
+    const step=left=>left?requestAnimationFrame(()=>step(left-1)):resolve();step(count);
+  });
+}
 function afterBoardPaint(fn){
   let done=false;const run=()=>{if(!done){done=true;fn()}};
   if(document.hidden){setTimeout(run,0);return}
-  requestAnimationFrame(()=>setTimeout(run,0));setTimeout(run,100);
+  let framesDone=false,landed=false;
+  const go=()=>{if(framesDone&&landed)setTimeout(run,0)};
+  nextFrames(2).then(()=>{framesDone=true;go()});
+  boardMotion.then(()=>{landed=true;go()});
+  // Safety net: work is never held back long, even if frames stop (throttled tab).
+  setTimeout(run,Math.max(0,boardMotionUntil-performance.now())+400);
 }
-function nextBoardPaint(){return new Promise(resolve=>afterBoardPaint(resolve))}
+function boardIsMoving(){return performance.now()<boardMotionUntil}
+// The Motion slider (0-400ms, default 400) scales move slides; reduced motion turns them off.
+function motionScale(){
+  if(prefersReducedMotion())return 0;
+  motionScaleCache??=motionDurationMs()/400;
+  return motionScaleCache;
+}
 function ensureBoardDom(){
   const board=$('#board');
   if(!boardDom||boardDom.board!==board){
@@ -347,7 +367,6 @@ function boardLastMove(){
   const serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null;
   return reviewLast||serverLast||localLastMove();
 }
-function moveAnimationMs(){return Math.round(120*motionDurationMs()/400)}
 function grabbableColor(){
   if(canQueuePremove())return premovePlayerColor();
   if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return '';
@@ -358,7 +377,7 @@ function renderArrows(dom=ensureBoardDom()){
   if(html!==dom.arrowsHtml){dom.arrowsHtml=html;dom.arrowLayer.innerHTML=html}
 }
 function renderBoard({hint=null,instant=false}={}){
-  const durationMs=instant?0:moveAnimationMs(),dom=ensureBoardDom();
+  const scale=instant?0:motionScale(),dom=ensureBoardDom();
   const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
   const boardGame=reviewFen?new Chess(reviewFen):game,placement=boardGame.fen().split(' ')[0];
   if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
@@ -371,12 +390,13 @@ function renderBoard({hint=null,instant=false}={}){
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
     const key=position.get(sq),mark=marks.get(sq);
-    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${mark?` mark mark-${mark}`:''}`;
+    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
     if(el.className!==cls)el.className=cls;
     const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
     if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
   }
-  dom.pieces.sync(position,{flipped,animate:!instant,durationMs,hint});
+  const motion=dom.pieces.sync(position,{flipped,animate:!instant,duration:(from,to)=>moveDurationMs(from,to,scale),hint});
+  if(motion.animated){boardMotion=motion.finished;boardMotionUntil=performance.now()+motion.durationMs}
   const hidden=pointerDrag?.started?pointerDrag.from:null;
   for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
   dom.board.dataset.grab=grabbableColor()||'';
@@ -720,7 +740,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   rememberLastMove(made);
   selected=null;switchOnlineClockOptimistically();render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   try{
-    await nextBoardPaint(); // the slide is on screen before the request is built and sent
+    await nextFrames(2); // the slide is under way before the request is built and sent
     const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
     const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
     if(lastLocalRealtimeMove&&lastLocalRealtimeMove.gameId===moveGameId)lastLocalRealtimeMove={...lastLocalRealtimeMove,version:incomingVersion||lastLocalRealtimeMove.version};
@@ -736,7 +756,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
     }
   }finally{onlineMovePending=false}
   if(resendStaleMove)return makeMove(move,false,false);
-  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,game.history().length-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())setTimeout(engineMove,280);}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -856,7 +876,8 @@ function checkLocalTimeout(){
   const values=currentClockSeconds(),side=game.turn();if(Number(values[side])>0)return;
   localClockState[side]=0;localClockState.startedAt=performance.now();localGameOver=true;localGameOverInfo={result:side==='w'?'0-1':'1-0',reason:'on time'};render();
 }
-function startClock(){clearInterval(ticking);ticking=setInterval(()=>{syncClockBars();checkLocalTimeout()},250)}
+// Clock text is left alone while a piece slides, so the slide's frames carry no other paint.
+function startClock(){clearInterval(ticking);ticking=setInterval(()=>{if(!boardIsMoving())syncClockBars();checkLocalTimeout()},250)}
 function toast(s,{duration=1800,onClick=null,actionLabel='',onAction=null}={}){
   const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.replaceChildren();el.className='show';
   const text=document.createElement('span');text.className='toast-text';text.textContent=String(s);el.append(text);
@@ -1002,7 +1023,7 @@ function applyServerState(payload,{animateMove=true}={}){
   const lastServerMove=previousGameId===state.id&&Number(state.version)>previousVersion?state.move_history?.at?.(-1):null;
   syncRoomUi();render({hint:lastServerMove,instant:!animateMove});afterBoardPaint(updateMoves);syncOpponentConnectionToast(state);
   if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
-  playQueuedPremove();maybePlayBot();
+  playQueuedPremove();afterBoardPaint(()=>void maybePlayBot());
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(move===undefined)return;if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
@@ -1278,7 +1299,13 @@ boardEl.addEventListener('click',event=>{
 // The dragged piece is a copy in the drag layer that follows the pointer with a plain
 // transform (no transition) on every pointer event, i.e. every frame; its own piece in the
 // piece layer is hidden meanwhile and the square under the pointer is outlined.
-function positionDragFloat(drag,x,y){drag.float.style.transform=`translate(${x-drag.size/2}px,${y-drag.size/2}px)`}
+// The dragged piece stays inside the board: past an edge it slides along it. Whole pixels
+// keep the artwork crisp.
+function positionDragFloat(drag,x,y){
+  const area=boardPlayArea(),half=drag.size/2;
+  const cx=Math.min(Math.max(x,area.left+half),area.left+area.width-half),cy=Math.min(Math.max(y,area.top+half),area.top+area.height-half);
+  drag.float.style.transform=`translate(${Math.round(cx-half)}px,${Math.round(cy-half)}px)`;
+}
 function markDragOver(drag,square){
   if(drag.over===square)return;
   boardDom?.squares.get(drag.over)?.classList.remove('drag-over');
@@ -1305,6 +1332,7 @@ function endPointerDragListeners(){
   window.removeEventListener('pointercancel',cancelPointerDrag);
   window.removeEventListener('keydown',onDragKeydown);
   window.removeEventListener('blur',cancelPointerDrag);
+  document.body.classList.remove('board-dragging');
 }
 function suppressClickAfterDrag(){suppressBoardClick=true;setTimeout(()=>{suppressBoardClick=false},0)}
 function finishPointerDrag(to,{cancelled=false}={}){
@@ -1360,7 +1388,10 @@ function onDragPointerMove(event){
 function onDragPointerUp(event){
   const drag=pointerDrag;if(!drag||event.pointerId!==drag.id)return;
   if(!drag.started){pointerDrag=null;endPointerDragListeners();return}
-  finishPointerDrag(boardSquareAt(event.clientX,event.clientY));
+  // Releasing outside the board cancels the move: the piece goes home as it was before.
+  const to=boardSquareAt(event.clientX,event.clientY);
+  if(!to){finishPointerDrag(null,{cancelled:true});return}
+  finishPointerDrag(to);
 }
 function onDragKeydown(event){if(event.key==='Escape'&&pointerDrag?.started){event.preventDefault();cancelPointerDrag()}}
 // ---- Arrows and square marks (V1b, right button) ----
@@ -1411,6 +1442,7 @@ boardEl.addEventListener('pointerdown',event=>{
   const square=boardSquareAt(event.clientX,event.clientY);
   if(!square)return;
   const kind=dragKindFor(square);if(!kind)return;
+  document.body.classList.add('board-dragging'); // "grabbing" for the whole press and drag
   pointerDrag={id:event.pointerId,from:square,kind,startX:event.clientX,startY:event.clientY,started:false,float:null,over:null,size:0,wasSelected:kind==='premove'?premoves.selected===square:selected===square};
   window.addEventListener('pointermove',onDragPointerMove,{passive:false});
   window.addEventListener('pointerup',onDragPointerUp);
@@ -1947,12 +1979,13 @@ document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece
 document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');
 document.documentElement.style.setProperty('--piece-tint','0');
 for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else if(key!=='pieceStyle'&&key!=='pieceTint')document.documentElement.style.setProperty(key,value)}
+motionScaleCache=null; // the saved Motion setting is applied now
 const glassControl=$('[data-theme="--glass"]'),motionControl=$('[data-theme="--motion"]');
 if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'])*100));
 if(motionControl)motionControl.value=String(Math.round(parseFloat(savedTheme['--motion'])/4));
 $$('[data-theme]').forEach(input=>input.oninput=()=>{
   const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.35,1,.94)):motionCssValue(input.value);
-  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--motion')motionScaleCache=null;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 });
 savedTheme.pieceStyle=applyPieceStyle(savedTheme.pieceStyle);
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));

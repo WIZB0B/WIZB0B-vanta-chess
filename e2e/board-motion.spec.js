@@ -1,78 +1,52 @@
 import { test, expect } from '@playwright/test';
-import { center, clickAt, mockBackend, nextFrame, piece, releaseBotMove, startComputerGame, useScriptedEngine } from './board-helpers.js';
+import { center, clickAt, mockBackend, nextFrame, openingAfterE4D5, piece, recordQueenMove, releaseBotMove, startComputerGame, useScriptedEngine } from './board-helpers.js';
 
 const desktopOnly=()=>test.skip(test.info().project.name==='mobile','mouse input is covered on desktop');
 
-async function openingAfterE4D5(page){
-  await mockBackend(page);await useScriptedEngine(page);await startComputerGame(page);
-  await clickAt(page,'e2');await clickAt(page,'e4');
-  await releaseBotMove(page,'d7d5',1);
-  await expect(piece(page,'d5')).toHaveCount(1);
-}
-
-// Backlog V1-fix, bug 1 and 2: the queen used to vanish under the squares in flight and the
-// main thread stalled at move time. Every animation frame of the move is sampled in the page.
-test('a queen move across the board is on top in every frame, moves monotonically, and frames keep coming',async({page})=>{
+// Backlog V1-fix: the queen used to vanish under the squares in flight. Every animation frame
+// of Qd1-h5 is sampled in the page. (Frame timing is asserted in e2e/board-timing.spec.js,
+// which runs on its own so other tests' load can't drop frames from the measurement.)
+test('a queen move across the board stays on top and visible in every frame and moves monotonically',async({page})=>{
   await openingAfterE4D5(page);
-  await clickAt(page,'d1');
-  await expect(page.locator('[data-sq="d1"]')).toHaveClass(/selected/);
-  const d1=await center(page,'d1'),h5=await center(page,'h5');
-  await page.evaluate(()=>{
-    const queen=document.querySelector('.board-piece[data-square="d1"]');
-    window.__queen=queen;window.__frames=[];
-    const sample=time=>{
-      const r=queen.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,hit=document.elementFromPoint(x,y);
-      window.__frames.push({time,x,y,onTop:!!hit&&queen.contains(hit),square:queen.dataset.square,connected:queen.isConnected,visibility:getComputedStyle(queen).visibility,opacity:Number(getComputedStyle(queen).opacity)});
-      if(window.__frames.length<56)requestAnimationFrame(sample);
-    };
-    requestAnimationFrame(sample);
-  });
-  await clickAt(page,'h5');
-  await page.waitForFunction(()=>window.__frames.length>=56,null,{timeout:5000});
-  const frames=await page.evaluate(()=>window.__frames);
-  const moving=frames.filter(f=>f.square==='h5');
-  expect(moving.length).toBeGreaterThan(20);
-
-  // The same element flew from d1 to h5 (it was not re-created on the target square).
-  expect(await page.evaluate(()=>window.__queen===document.querySelector('.board-piece[data-square="h5"]'))).toBe(true);
+  const {frames,progress,log,h5}=await recordQueenMove(page);
+  expect(await page.evaluate(()=>window.__queen===document.querySelector('.board-piece[data-square="h5"]')),'the same element flew from d1 to h5').toBe(true);
   for(const f of frames){
     expect(f.connected).toBe(true);
     expect(f.visibility).toBe('visible');
     expect(f.opacity).toBe(1);
     expect(f.onTop,`queen hidden at ${f.x.toFixed(1)},${f.y.toFixed(1)}`).toBe(true);
   }
-  // Monotonic: right and up, never backwards, from d1 to h5.
   for(let i=1;i<frames.length;i++){
     expect(frames[i].x).toBeGreaterThanOrEqual(frames[i-1].x-.5);
     expect(frames[i].y).toBeLessThanOrEqual(frames[i-1].y+.5);
   }
-  const inFlight=moving.filter(f=>Math.abs(f.x-d1.x)>2&&Math.abs(f.x-h5.x)>2);
-  expect(inFlight.length,'the move is animated, not a jump').toBeGreaterThanOrEqual(2);
+  expect(frames.filter(f=>progress(f)>.005&&progress(f)<.995).length,log).toBeGreaterThanOrEqual(4);
   const last=frames.at(-1);
-  expect(Math.abs(last.x-h5.x)).toBeLessThan(2);expect(Math.abs(last.y-h5.y)).toBeLessThan(2);
-  // The slide is short (~120ms): settled within ~250ms of the first moving frame.
-  const settled=moving.find(f=>Math.abs(f.x-h5.x)<1&&Math.abs(f.y-h5.y)<1);
-  expect(settled.time-moving[0].time).toBeLessThan(250);
-  // Frames keep coming around the move: no stall, and far more frames than the ~11 in 650ms
-  // of the original recording (60Hz gives ~39). The bounds leave room for the occasional
-  // dropped frame on a loaded, software-rendered CI runner; the causes of the old frame drops
-  // (square transitions, panel backdrop blur) are pinned by unit tests in test/board-view.test.js.
-  const gaps=frames.slice(1).map((f,i)=>f.time-frames[i].time),gapList=gaps.map(g=>g.toFixed(0)).join(',');
-  expect(Math.max(...gaps),`frame gaps ${gapList}`).toBeLessThan(100);
-  const firstMoving=moving[0].time;
-  expect(frames.filter(f=>f.time>=firstMoving-100&&f.time<=firstMoving+550).length,`frame gaps ${gapList}`).toBeGreaterThanOrEqual(20);
+  expect(Math.abs(last.x-h5.x)).toBeLessThan(1);expect(Math.abs(last.y-h5.y)).toBeLessThan(1);
   await expect(page.locator('#moves')).toContainText('Qh5');
 });
 
-test('the move animation only touches transform: no layout or filter changes on the moving piece',async({page})=>{
+test('the move is a Web Animations API transform animation with CSS ease, longer for longer moves',async({page})=>{
   await openingAfterE4D5(page);
+  const sample=()=>page.evaluate(()=>{
+    const q=document.querySelector('.board-piece.moving');if(!q)return null;
+    const animations=q.getAnimations().map(a=>({timing:a.effect.getTiming(),props:[...new Set(a.effect.getKeyframes().flatMap(k=>Object.keys(k).filter(p=>!['offset','easing','composite','computedOffset'].includes(p))))]}));
+    return {animations,transition:getComputedStyle(q).transitionDuration,artFilter:getComputedStyle(q.firstElementChild).filter};
+  });
   await clickAt(page,'d1');
   await clickAt(page,'h5');
-  const style=await page.evaluate(()=>{const q=document.querySelector('.board-piece[data-square="h5"]'),s=getComputedStyle(q);return {property:s.transitionProperty,duration:s.transitionDuration,timing:s.transitionTimingFunction,artFilter:getComputedStyle(q.firstElementChild).filter}});
-  expect(style.property).toBe('transform');
-  expect(parseFloat(style.duration)).toBeGreaterThan(.08);expect(parseFloat(style.duration)).toBeLessThan(.16);
-  expect(style.timing).toMatch(/cubic-bezier/);
-  expect(style.artFilter).toBe('none');
+  const long=await sample();
+  expect(long.animations).toHaveLength(1);
+  expect(long.animations[0].props).toEqual(['transform']);
+  expect(long.animations[0].timing.easing).toBe('ease');
+  expect(long.animations[0].timing.duration).toBeGreaterThan(180);expect(long.animations[0].timing.duration).toBeLessThanOrEqual(250);
+  expect(long.transition).toBe('0s');
+  expect(long.artFilter).toBe('none');
+  await releaseBotMove(page,'a7a6',2);
+  await expect(piece(page,'a6')).toHaveCount(1);
+  await clickAt(page,'a2');await clickAt(page,'a3');
+  const short=await sample();
+  expect(short.animations[0].timing.duration).toBe(150);
 });
 
 // Drag: the piece follows the pointer every animation frame with no transition.
@@ -109,8 +83,74 @@ test('a dragged piece is repositioned on every animation frame, exactly under th
   expect(distinct.size,'a new position for every pointer step').toBeGreaterThanOrEqual(steps);
   await expect(page.locator('[data-sq="f3"]')).toHaveClass(/drag-over/);
   expect(await page.evaluate(()=>getComputedStyle(document.body).cursor)).toBe('grabbing');
+  // The origin square shows only its highlight (no piece left behind), and the dragged piece
+  // is drawn fully opaque and crisp: no scale, opacity, blur, shadow or filter.
+  const look=await page.evaluate(({x,y})=>{
+    const hit=document.elementFromPoint(x,y),float=document.querySelector('.drag-layer .drag-float'),art=float.firstElementChild;
+    const fs=getComputedStyle(float),as=getComputedStyle(art),shadow=getComputedStyle(float,'::before');
+    return {hitSquare:hit?.dataset?.sq||null,hitClass:hit?.className||'',opacity:[fs.opacity,as.opacity],filter:[fs.filter,as.filter],transform:as.transform,shadow:shadow.display};
+  },g1);
+  expect(look.hitSquare).toBe('g1');
+  expect(look.hitClass).toMatch(/selected/);
+  expect(look.opacity).toEqual(['1','1']);
+  expect(look.filter).toEqual(['none','none']);
+  expect(look.transform).toBe('none');
+  expect(look.shadow).toBe('none');
   await page.mouse.up();
   await expect(piece(page,'f3').locator('.piece.w.piece-n')).toBeVisible();
+  expect(await page.evaluate(()=>getComputedStyle(document.body).cursor)).not.toBe('grabbing');
+});
+
+test('cursor is grab over your pieces and grabbing from the press; the dragged piece stays inside the board and a drop outside cancels',async({page})=>{
+  desktopOnly();
+  await mockBackend(page);await startComputerGame(page);
+  const e2=await center(page,'e2');
+  await page.mouse.move(e2.x,e2.y);
+  expect(await piece(page,'e2').evaluate(el=>getComputedStyle(el).cursor)).toBe('grab');
+  expect(await piece(page,'e7').evaluate(el=>getComputedStyle(el).cursor)).not.toBe('grab');
+  await page.mouse.down();
+  expect(await page.evaluate(()=>getComputedStyle(document.body).cursor),'grabbing from the press, before any movement').toBe('grabbing');
+  // Drag far past the right edge: the piece slides along the edge instead of leaving the board.
+  const board=await page.evaluate(()=>{const b=document.querySelector('#board'),r=b.getBoundingClientRect();return {left:r.left+b.clientLeft,top:r.top+b.clientTop,width:b.clientWidth,height:b.clientHeight}});
+  await page.mouse.move(e2.x+40,e2.y,{steps:2});
+  await page.mouse.move(board.left+board.width+150,e2.y-60,{steps:6});
+  const fb=await page.locator('.drag-layer .drag-float').boundingBox();
+  expect(Math.abs(fb.x+fb.width-(board.left+board.width))).toBeLessThanOrEqual(1);
+  expect(Math.abs(fb.y+fb.height/2-(e2.y-60))).toBeLessThanOrEqual(1);
+  await expect(page.locator('#board .square.drag-over')).toHaveCount(0);
+  // Releasing outside the board cancels: the pawn is home, nothing played, nothing selected.
+  await page.mouse.up();
+  await expect(page.locator('.drag-float')).toHaveCount(0);
+  await expect(piece(page,'e2').locator('.piece.w.piece-p')).toBeVisible();
+  await expect(piece(page,'e2')).not.toHaveClass(/drag-origin/);
+  await expect(page.locator('[data-sq="e2"]')).not.toHaveClass(/selected/);
+  await expect(page.locator('#moves .move-pair-row')).toHaveCount(0);
+});
+
+test('legal-move hints are soft dark dots and rings; marks fill the square; arrows are bold',async({page})=>{
+  desktopOnly();
+  await openingAfterE4D5(page);
+  await clickAt(page,'e4');
+  const hint=sq=>page.locator(`[data-sq="${sq}"]`).evaluate(el=>{const a=getComputedStyle(el,'::after'),r=el.getBoundingClientRect();return {bg:a.backgroundColor,image:a.backgroundImage,width:parseFloat(a.width)/r.width,radius:a.borderRadius}});
+  const dot=await hint('e5');
+  expect(dot.bg).toBe('rgba(0, 0, 0, 0.16)');
+  expect(dot.width).toBeGreaterThan(.2);expect(dot.width).toBeLessThan(.36);
+  const ring=await hint('d5');
+  expect(ring.image).toMatch(/radial-gradient\(circle closest-side, rgba\(0, 0, 0, 0\) 81%, rgba\(0, 0, 0, 0\.16\) 82%/);
+  expect(ring.width).toBeCloseTo(1,2);
+  // A red mark covers the whole square: same box as its neighbours, square corners.
+  const a=await center(page,'h3');
+  await page.mouse.move(a.x,a.y);await page.mouse.down({button:'right'});await page.mouse.up({button:'right'});
+  const mark=await page.locator('[data-sq="h3"]').evaluate(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect(),n=el.previousElementSibling.getBoundingClientRect();return {radius:s.borderRadius,shadow:s.boxShadow,w:r.width,h:r.height,nw:n.width,nh:n.height}});
+  expect(mark.radius).toBe('0px');
+  expect(mark.shadow).toMatch(/rgba\(235, 97, 80, 0\.8\) 0px 0px 0px 999px inset/);
+  expect(Math.abs(mark.w-mark.nw)).toBeLessThan(.5);expect(Math.abs(mark.h-mark.nh)).toBeLessThan(.5);
+  // Arrows: ~22% of a square thick, .85 opacity.
+  const b=await center(page,'b1'),c=await center(page,'c3');
+  await page.mouse.move(b.x,b.y);await page.mouse.down({button:'right'});await page.mouse.move(c.x,c.y,{steps:3});await page.mouse.up({button:'right'});
+  const arrow=await page.locator('.arrow-layer .arrow').first().evaluate(g=>({opacity:getComputedStyle(g).opacity,stroke:getComputedStyle(g.querySelector('polyline')).strokeWidth}));
+  expect(arrow.opacity).toBe('0.85');
+  expect(parseFloat(arrow.stroke)).toBeCloseTo(.22,3);
 });
 
 // Backlog V1-fix, bug 4: a premove was lost when the opponent replied while it was being made.
@@ -190,17 +230,17 @@ test('right-drag draws arrows (L-shaped for knights), right-click toggles red sq
   // A left-click clears everything.
   await clickAt(page,'h4');
   await expect(arrows).toHaveCount(0);
-  await expect(page.locator('#board .square.mark')).toHaveCount(0);
+  await expect(page.locator('#board .square.shape-mark')).toHaveCount(0);
 
   // A move clears them too.
   await rightDrag(page,'a2','a4');await rightDrag(page,'h6','h6');
   await expect(arrows).toHaveCount(1);
-  await expect(page.locator('#board .square.mark')).toHaveCount(1);
+  await expect(page.locator('#board .square.shape-mark')).toHaveCount(1);
   const e2=await center(page,'e2'),e4=await center(page,'e4');
   await page.mouse.move(e2.x,e2.y);await page.mouse.down();await page.mouse.move(e4.x,e4.y,{steps:4});await page.mouse.up();
   await expect(piece(page,'e4')).toHaveCount(1);
   await expect(arrows).toHaveCount(0);
-  await expect(page.locator('#board .square.mark')).toHaveCount(0);
+  await expect(page.locator('#board .square.shape-mark')).toHaveCount(0);
 });
 
 // Review on PR #6: a pawn dropped on the last rank stayed hidden while the piece choice was open.

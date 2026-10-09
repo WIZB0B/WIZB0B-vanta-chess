@@ -55,3 +55,40 @@ export async function center(page,sq){
 // square under the pointer, exactly as for a user.
 export async function clickAt(page,sq){const c=await center(page,sq);await page.mouse.click(c.x,c.y)}
 export async function nextFrame(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve())))}
+
+export async function openingAfterE4D5(page){
+  await mockBackend(page);await useScriptedEngine(page);await startComputerGame(page);
+  await clickAt(page,'e2');await clickAt(page,'e4');
+  await releaseBotMove(page,'d7d5',1);
+  await expect(piece(page,'d5')).toHaveCount(1);
+}
+
+// Plays Qd1-h5 by clicks and samples the queen on every animation frame from before the move
+// until well after it lands. `input` is when the board's click handler (which makes the move)
+// received the click; `progress(frame)` is 0 on d1 and 1 on h5 along the path.
+export async function recordQueenMove(page,frameCount=90){
+  await clickAt(page,'d1');
+  await expect(page.locator('[data-sq="d1"]')).toHaveClass(/selected/);
+  const d1=await center(page,'d1'),h5=await center(page,'h5');
+  await page.evaluate(count=>{
+    const queen=document.querySelector('.board-piece[data-square="d1"]');
+    window.__queen=queen;window.__frames=[];window.__input=null;
+    document.querySelector('#board').addEventListener('click',()=>{window.__input??=performance.now()},{capture:true});
+    const sample=time=>{
+      const r=queen.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,hit=document.elementFromPoint(x,y);
+      window.__frames.push({time,x,y,onTop:!!hit&&queen.contains(hit),connected:queen.isConnected,visibility:getComputedStyle(queen).visibility,opacity:Number(getComputedStyle(queen).opacity)});
+      if(window.__frames.length<count)requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  },frameCount);
+  await clickAt(page,'h5');
+  // Wait outside the page: polling it (waitForFunction) would add work to the frames measured.
+  await page.waitForTimeout(frameCount*17+300);
+  await page.waitForFunction(count=>window.__frames.length>=count,frameCount,{timeout:5000});
+  const {frames,input}=await page.evaluate(()=>({frames:window.__frames,input:window.__input}));
+  expect(input,'the move click reached the board').not.toBeNull();
+  const dx=h5.x-d1.x,dy=h5.y-d1.y,length2=dx*dx+dy*dy;
+  const progress=f=>((f.x-d1.x)*dx+(f.y-d1.y)*dy)/length2;
+  const log=frames.filter(f=>f.time>=input-20).map(f=>`${(f.time-input).toFixed(0)}ms:${(progress(f)*100).toFixed(0)}%`).join(' ');
+  return {frames,input,d1,h5,progress,log};
+}

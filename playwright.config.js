@@ -13,7 +13,10 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'] }, testIgnore: /board-timing\.spec\.js/ },
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testIgnore: /board-timing\.spec\.js/ },
+    // Frame-timing measurements run alone, after all other tests, so their load can't drop
+    // frames from the measurement.
+    { name: 'timing', use: { ...devices['Desktop Chrome'] }, testMatch: /board-timing\.spec\.js/, dependencies: ['desktop', 'mobile'] },
   ],
 });
