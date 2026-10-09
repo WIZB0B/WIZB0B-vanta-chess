@@ -18,11 +18,9 @@ body[data-wallpaper="ivory"]{background-image:linear-gradient(rgb(2 7 8 / .38),r
 .quick-actions{display:flex;justify-content:flex-end;margin-top:8px}.quick-actions button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#111d1c;font-size:11px}
 @media(max-width:800px){body{background-attachment:scroll}}
 
-/* Staunton piece assets remain available as the alternate board styles. */
-:root[data-piece-style="staunton-3d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
-:root[data-piece-style="staunton-3d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
-:root[data-piece-style="staunton-2d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/2d/wk.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/2d/wq.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/2d/wr.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/2d/wb.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/2d/wn.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/2d/wp.webp')}
-:root[data-piece-style="staunton-2d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/2d/bk.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/2d/bq.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/2d/br.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/2d/bb.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/2d/bn.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/2d/bp.webp')}
+/* Heritage: the original Staunton pieces (one image per piece). */
+:root[data-piece-style="heritage"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}:root[data-piece-style="heritage"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}:root[data-piece-style="heritage"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}:root[data-piece-style="heritage"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}:root[data-piece-style="heritage"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}:root[data-piece-style="heritage"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
+:root[data-piece-style="heritage"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}:root[data-piece-style="heritage"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}:root[data-piece-style="heritage"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}:root[data-piece-style="heritage"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}:root[data-piece-style="heritage"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}:root[data-piece-style="heritage"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
 
 
 /* === VCH reference-match rebuild === */
@@ -1783,38 +1781,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px rgba(123,216,170,.12),0 0 18px rgba(85,207,151,.18);
 }
 
-/* Vanta sprite styles use the uploaded 960x640 sheet: 6 columns x 4 rows. */
-:root[data-piece-style="vanta-3d"] .piece,
-:root[data-piece-style="vanta-2d"] .piece{
-  --piece-image:url('/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png');
-  background-image:var(--piece-image);
-  background-size:600% 400%;
-  background-position:var(--piece-x) var(--piece-y);
-  background-repeat:no-repeat;
-}
-:root[data-piece-style^="vanta-"] .piece::after{
-  -webkit-mask-size:600% 400%;
-  mask-size:600% 400%;
-  -webkit-mask-position:var(--piece-x) var(--piece-y);
-  mask-position:var(--piece-x) var(--piece-y);
-  -webkit-mask-repeat:no-repeat;
-  mask-repeat:no-repeat;
-}
-:root[data-piece-style^="vanta-"] .piece-k{--piece-x:0%}
-:root[data-piece-style^="vanta-"] .piece-q{--piece-x:20%}
-:root[data-piece-style^="vanta-"] .piece-r{--piece-x:40%}
-:root[data-piece-style^="vanta-"] .piece-b{--piece-x:60%}
-:root[data-piece-style^="vanta-"] .piece-n{--piece-x:80%}
-:root[data-piece-style^="vanta-"] .piece-p{--piece-x:100%}
-:root[data-piece-style="vanta-3d"] .piece.w{--piece-y:0%}
-:root[data-piece-style="vanta-3d"] .piece.b{--piece-y:33.3333%}
-:root[data-piece-style="vanta-2d"] .piece.w{--piece-y:66.6666%}
-:root[data-piece-style="vanta-2d"] .piece.b{--piece-y:99.9999%}
-
-:root[data-piece-style="vanta-2d"] .study-board .piece,
-:root[data-piece-style="staunton-2d"] .study-board .piece{filter:drop-shadow(0 1px 1px rgba(0,0,0,.48));transform:none}
-
-
 /* Theme Studio: live glass opacity, move motion, and primary completion action. */
 .panel,.game,.topbar{
   background:linear-gradient(180deg,rgb(8 19 21 / var(--glass)),rgb(5 15 17 / calc(var(--glass) - .04)))!important;
@@ -1946,54 +1912,18 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
    Offsets below are measured from the artwork's alpha (base-footprint centre and lowest
    opaque row) and applied with `translate` on the artwork, so they never interfere with the
    transform that places and moves the .board-piece around it (see "Board layers" below). */
-:root[data-piece-style="vanta-3d"] .board-piece .piece.w.piece-k{translate:0% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.w.piece-q{translate:-0.9% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.w.piece-r{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.w.piece-b{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.w.piece-n{translate:-4.4% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.w.piece-p{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.b.piece-k{translate:0% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.b.piece-q{translate:-0.9% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.b.piece-r{translate:0% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.b.piece-b{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.b.piece-n{translate:-4.7% -5.6%}
-:root[data-piece-style="vanta-3d"] .board-piece .piece.b.piece-p{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.w.piece-k{translate:0% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.w.piece-q{translate:-0.9% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.w.piece-r{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.w.piece-b{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.w.piece-n{translate:-4.4% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.w.piece-p{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.b.piece-k{translate:0% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.b.piece-q{translate:-0.9% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.b.piece-r{translate:0% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.b.piece-b{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.b.piece-n{translate:-4.4% -6.2%}
-:root[data-piece-style="vanta-2d"] .board-piece .piece.b.piece-p{translate:0.3% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-k{translate:5% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-q{translate:12.2% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-r{translate:0.3% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-b{translate:2.2% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-n{translate:0.9% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-p{translate:1.2% -4.4%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-k{translate:5% -6.9%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-q{translate:2.8% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-r{translate:2.2% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-b{translate:0% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-n{translate:4.7% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-p{translate:4.1% -5%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-k{translate:8.4% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-q{translate:1.6% -5.6%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-r{translate:3.8% -6.9%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-b{translate:-0.9% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-n{translate:-0.3% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-p{translate:4.4% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-k{translate:1.9% -6.9%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-q{translate:4.7% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-r{translate:3.1% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-b{translate:4.1% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-n{translate:1.9% -6.9%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-p{translate:2.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-k{translate:5% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-q{translate:12.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-r{translate:0.3% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-b{translate:2.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-n{translate:0.9% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-p{translate:1.2% -4.4%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-k{translate:5% -6.9%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-q{translate:2.8% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-r{translate:2.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-b{translate:0% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-n{translate:4.7% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-p{translate:4.1% -5%}
 
 /* Auth link error dialog: email field for "Resend confirmation email". */
 .auth-resend-field{display:grid;gap:6px;margin-top:12px;color:#9ba7a4;font-size:11px}
@@ -2027,22 +1957,25 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   width:100%;height:100%;aspect-ratio:auto;inset:0;border-radius:50%;
   background:radial-gradient(circle closest-side,transparent 81%,rgba(0,0,0,.16) 82%,rgba(0,0,0,.16) 99%,transparent 100%)
 }
+/* The selected square is filled with the same wash as the last move (no outline ring), and
+   the selection clears as soon as the move is played. */
+.board .square.selected,.board .square.last-move.selected{box-shadow:inset 0 0 0 999px rgba(200,216,61,.56)}
 .board .square.drag-over{box-shadow:inset 0 0 0 4px rgba(244,246,236,.78)}
 .piece-layer,.arrow-layer{position:absolute;inset:0;pointer-events:none}
 .piece-layer{z-index:2}
 .arrow-layer{z-index:3;width:100%;height:100%;overflow:visible}
 .board-piece{
   --piece-baseline:90%;
-  position:absolute;left:0;top:0;width:12.5%;height:12.5%;z-index:1;
+  position:absolute;left:0;top:0;width:12.5%;height:12.5%;z-index:calc(1 + var(--row,0));
   will-change:transform;pointer-events:auto;touch-action:none;
 }
-.board-piece .piece{display:block;filter:none}
+.board-piece .piece{display:block;filter:none;pointer-events:none}
 .board[data-grab="w"] .board-piece.w,.board[data-grab="b"] .board-piece.b{cursor:grab}
-.board-piece.moving{z-index:3}
+.board-piece.moving{z-index:20}
 .board-piece.captured{z-index:0;pointer-events:none}
 .board-piece.drag-origin{visibility:hidden}
 /* Contact shadow: about 60% of the square wide and 12% tall, centred on the baseline. It
-   belongs to the piece, so it travels with it. 2D styles stay flat. */
+   belongs to the piece, so it travels with it. The Ink sets stay flat. */
 .board-piece::before{
   content:"";
   position:absolute;
@@ -2053,7 +1986,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   filter:blur(1.5px);
   pointer-events:none;
 }
-:root[data-piece-style$="-2d"] .board-piece::before{display:none}
+:root[data-piece-style$="-ink"] .board-piece::before{display:none}
 .board-badge{position:absolute;left:0;top:0;width:12.5%;height:12.5%;z-index:4;pointer-events:none}
 .board-badge.hidden{display:none}
 /* Dragging: the copy under the pointer has no transition at all, so it follows the pointer
@@ -2064,6 +1997,105 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .drag-layer .board-piece{transition:none;pointer-events:none;opacity:1}
 .drag-layer .board-piece::before{display:none}
 body.board-dragging,body.board-dragging *{cursor:grabbing!important}
+
+/* Piece sets (src/piece-styles.js). Vanta (default), Vanta Ink, Monarch and Monarch Ink are
+   plain artwork: no filters, drop-shadows, blend or tint layers, and no per-piece offsets,
+   because each cell is already sized and bottom-seated. Vanta and Monarch keep only the
+   subtle contact shadow (.board-piece::before); the Ink sets have none.
+   - Vanta / Monarch: a 6x2 sheet with a baked-in dark outline, pre-shrunk so the browser
+     barely rescales it: 1344x448 (224px cells) for 2x screens, 672x224 (112px cells) for 1x,
+     picked with image-set(). Columns k q r b n p, row 0 white,
+     row 1 black -> background-size 600% 200%, x = col * 20%, y = row * 100%.
+   - Side-view sets (Vanta, Vanta Ink) stay inside their own square.
+   - Regal is rendered from slightly above, like a real 3D board, so its pieces are drawn a
+     quarter of a square taller than the square and rise into the square behind it. Its
+     sheets have 224x280 cells (1344x560, 2x) and 112x140 (672x280, 1x). Pieces stack by
+     screen row (--row, set in src/piece-layer.js) so the nearer piece is in front, and the
+     board lets the back rank show above its top edge.
+   - Vanta and Vanta Ink carry a bold dark outline baked into their artwork.
+   - Monarch, Monarch Ink and Heritage are hidden from the menu (src/piece-styles.js): their
+     slender pieces fill too little of a square. Their files stay until new artwork replaces
+     them.
+   - Vanta Ink / Monarch Ink: one vector file per piece, background-size contain. */
+:root[data-piece-style="vanta"] .piece,
+:root[data-piece-style="vanta-ink"] .piece,
+:root[data-piece-style="monarch"] .piece,
+:root[data-piece-style="monarch-ink"] .piece{
+  filter:none;translate:none;mix-blend-mode:normal;
+  background-image:var(--piece-image);background-repeat:no-repeat;
+}
+:root[data-piece-style="vanta"] .piece::after,
+:root[data-piece-style="vanta-ink"] .piece::after,
+:root[data-piece-style="monarch"] .piece::after,
+:root[data-piece-style="monarch-ink"] .piece::after{display:none}
+:root[data-piece-style="vanta"] .piece,
+:root[data-piece-style="monarch"] .piece{
+  background-size:600% 200%;
+  background-position:var(--piece-x) var(--piece-y);
+}
+:root[data-piece-style="vanta"] .piece{--piece-image:url('/assets/vch/pieces/vanta-3d.png')}
+:root[data-piece-style="monarch"] .piece{--piece-image:url('/assets/vch/pieces/vanta-premium-3d.png')}
+@supports (background-image:image-set(url('/x.png') 1x)){
+  :root[data-piece-style="vanta"] .piece{--piece-image:image-set(url('/assets/vch/pieces/vanta-3d-1x.png') 1x,url('/assets/vch/pieces/vanta-3d.png') 2x)}
+  :root[data-piece-style="monarch"] .piece{--piece-image:image-set(url('/assets/vch/pieces/vanta-premium-3d-1x.png') 1x,url('/assets/vch/pieces/vanta-premium-3d.png') 2x)}
+}
+:root[data-piece-style="vanta"] .piece-k,:root[data-piece-style="monarch"] .piece-k{--piece-x:0%}
+:root[data-piece-style="vanta"] .piece-q,:root[data-piece-style="monarch"] .piece-q{--piece-x:20%}
+:root[data-piece-style="vanta"] .piece-r,:root[data-piece-style="monarch"] .piece-r{--piece-x:40%}
+:root[data-piece-style="vanta"] .piece-b,:root[data-piece-style="monarch"] .piece-b{--piece-x:60%}
+:root[data-piece-style="vanta"] .piece-n,:root[data-piece-style="monarch"] .piece-n{--piece-x:80%}
+:root[data-piece-style="vanta"] .piece-p,:root[data-piece-style="monarch"] .piece-p{--piece-x:100%}
+:root[data-piece-style="vanta"] .piece.w,:root[data-piece-style="monarch"] .piece.w{--piece-y:0%}
+:root[data-piece-style="vanta"] .piece.b,:root[data-piece-style="monarch"] .piece.b{--piece-y:100%}
+:root[data-piece-style="regal"] .piece{
+  filter:none;translate:none;mix-blend-mode:normal;
+  background-image:var(--piece-image);background-repeat:no-repeat;
+  background-size:600% 200%;background-position:var(--piece-x) var(--piece-y);
+  --piece-image:url('/assets/vch/pieces/vanta-regal.png');
+}
+@supports (background-image:image-set(url('/x.png') 1x)){
+  :root[data-piece-style="regal"] .piece{--piece-image:image-set(url('/assets/vch/pieces/vanta-regal-1x.png') 1x,url('/assets/vch/pieces/vanta-regal.png') 2x)}
+}
+:root[data-piece-style="regal"] .piece::after{display:none}
+:root[data-piece-style="regal"] .piece-k{--piece-x:0%}
+:root[data-piece-style="regal"] .piece-q{--piece-x:20%}
+:root[data-piece-style="regal"] .piece-r{--piece-x:40%}
+:root[data-piece-style="regal"] .piece-b{--piece-x:60%}
+:root[data-piece-style="regal"] .piece-n{--piece-x:80%}
+:root[data-piece-style="regal"] .piece-p{--piece-x:100%}
+:root[data-piece-style="regal"] .piece.w{--piece-y:0%}
+:root[data-piece-style="regal"] .piece.b{--piece-y:100%}
+:root[data-piece-style="regal"] .board-piece .piece{height:125%;top:-25%}
+:root[data-piece-style="regal"] .board{overflow:visible}
+:root[data-piece-style="regal"] .board>.square:nth-child(1){border-top-left-radius:6px}
+:root[data-piece-style="regal"] .board>.square:nth-child(8){border-top-right-radius:6px}
+:root[data-piece-style="regal"] .board>.square:nth-child(57){border-bottom-left-radius:6px}
+:root[data-piece-style="regal"] .board>.square:nth-child(64){border-bottom-right-radius:6px}
+:root[data-piece-style$="-ink"] .piece{background-size:contain;background-position:center}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/wk.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/wq.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/wr.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/wb.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/wn.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/wp.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/bk.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/bq.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/br.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/bb.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/bn.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/bp.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wk.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wq.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wr.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wb.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wn.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wp.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bk.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bq.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/br.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bb.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bn.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bp.svg')}
 /* V1b: square marks fill the whole square (under the pieces); arrows sit above them, about
    22% of a square thick at .85 opacity. (".shape-mark", not ".mark": that is the brand logo.) */
 .board .square.shape-mark{box-shadow:inset 0 0 0 999px var(--mark-color)!important}

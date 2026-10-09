@@ -88,7 +88,7 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
   await page.locator('[data-bot-slug="gambit"]').click();
   await page.locator('#computerStart').click();
-  await page.locator('.board-piece[data-square="e2"] .piece').dragTo(page.locator('[data-sq="e4"]'));
+  await page.locator('.board-piece[data-square="e2"]').dragTo(page.locator('[data-sq="e4"]'));
   await expect(page.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible();
   await expect.poll(async()=>page.locator('#moves .move-pair-row').count(),{timeout:12000}).toBe(1);
   await page.waitForTimeout(800);

@@ -6,6 +6,7 @@ import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
+import { migratePieceStyle, normalizePieceStyle, pieceAssetFor, pieceStyleOptions } from './piece-styles.js';
 import { PremoveQueue, consumeLegalPremove } from './premove.js';
 import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
 import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
@@ -81,17 +82,8 @@ reviewWorker.onmessage=({data})=>{
   }
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
-const pieceStyles=new Set(['vanta-3d','vanta-2d','staunton-3d','staunton-2d']);
-function normalizePieceStyle(value){
-  if(value==='3d'||value==='2d')return 'vanta-3d';
-  return pieceStyles.has(value)?value:'vanta-3d';
-}
-document.documentElement.dataset.pieceStyle='vanta-3d';
-function pieceAsset(name){
-  const style=normalizePieceStyle(document.documentElement.dataset.pieceStyle);
-  const folder=style.endsWith('2d')?'2d':'3d';
-  return `/assets/vch/pieces/${folder}/${name}.webp`;
-}
+document.documentElement.dataset.pieceStyle='vanta';
+function pieceAsset(name){return pieceAssetFor(normalizePieceStyle(document.documentElement.dataset.pieceStyle),name)}
 function applyPieceStyle(value){
   const style=normalizePieceStyle(value);
   document.documentElement.dataset.pieceStyle=style;
@@ -267,7 +259,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle"><option value="vanta-3d">Vanta 3D</option><option value="vanta-2d">Vanta 2D</option><option value="staunton-3d">Staunton 3D</option><option value="staunton-2d">Staunton 2D</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -756,7 +748,7 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
     }
   }finally{onlineMovePending=false}
   if(resendStaleMove)return makeMove(move,false,false);
-  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -1987,7 +1979,7 @@ $$('[data-theme]').forEach(input=>input.oninput=()=>{
   const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.35,1,.94)):motionCssValue(input.value);
   document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--motion')motionScaleCache=null;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 });
-savedTheme.pieceStyle=applyPieceStyle(savedTheme.pieceStyle);
+savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=0;$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};

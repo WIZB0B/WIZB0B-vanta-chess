@@ -34,7 +34,7 @@ the server region.
 ## Phase C: Settings (full player control)
 - **Board:**
   - board themes (wood, marble, glass, green, etc.) generated with Higgsfield;
-  - piece sets (Vanta 3D/2D, Staunton 3D/2D, plus more generated sets);
+  - piece sets (Vanta, Vanta Ink, Monarch, Monarch Ink, Heritage, plus more generated sets);
   - coordinates inside/outside/off, highlight colors, legal-move display.
 - **Backgrounds and sceneries:** a gallery of Higgsfield scenes, each also usable as a
   full preset theme (board + pieces + background + accent).

@@ -28,14 +28,16 @@ test('a queen move across the board stays on top and visible in every frame and 
 
 test('the move is a Web Animations API transform animation with CSS ease, longer for longer moves',async({page})=>{
   await openingAfterE4D5(page);
-  const sample=()=>page.evaluate(()=>{
-    const q=document.querySelector('.board-piece.moving');if(!q)return null;
+  // Sample the piece that is moving to `square`: the bot's d7-d5 pawn may still be finishing
+  // its own slide when the queen is clicked.
+  const sample=square=>page.evaluate(square=>{
+    const q=document.querySelector(`.board-piece.moving[data-square="${square}"]`);if(!q)return null;
     const animations=q.getAnimations().map(a=>({timing:a.effect.getTiming(),props:[...new Set(a.effect.getKeyframes().flatMap(k=>Object.keys(k).filter(p=>!['offset','easing','composite','computedOffset'].includes(p))))]}));
     return {animations,transition:getComputedStyle(q).transitionDuration,artFilter:getComputedStyle(q.firstElementChild).filter};
-  });
+  },square);
   await clickAt(page,'d1');
   await clickAt(page,'h5');
-  const long=await sample();
+  const long=await sample('h5');
   expect(long.animations).toHaveLength(1);
   expect(long.animations[0].props).toEqual(['transform']);
   expect(long.animations[0].timing.easing).toBe('ease');
@@ -45,7 +47,7 @@ test('the move is a Web Animations API transform animation with CSS ease, longer
   await releaseBotMove(page,'a7a6',2);
   await expect(piece(page,'a6')).toHaveCount(1);
   await clickAt(page,'a2');await clickAt(page,'a3');
-  const short=await sample();
+  const short=await sample('a3');
   expect(short.animations[0].timing.duration).toBe(150);
 });
 

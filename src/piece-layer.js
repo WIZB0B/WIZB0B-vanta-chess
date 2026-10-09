@@ -4,7 +4,7 @@
 // keyframe animation of transform alone (element.animate), started in the same frame as the
 // move: the compositor runs it even while the main thread is busy, and the moving piece is
 // always painted above the squares and the other pieces.
-import { diffPosition, isMoveLike, pieceTransform } from './board-view.js';
+import { diffPosition, isMoveLike, pieceTransform, squareCoords } from './board-view.js';
 
 export const MOVE_EASING='ease';
 
@@ -76,6 +76,10 @@ export class PieceLayer{
   // keyframe animation slides it there from where it is now. Returns that Animation, if any.
   place(el,square,durationMs){
     const target=pieceTransform(square,this.flipped);
+    // Stacking follows the screen row: a piece nearer the bottom of the board is drawn over
+    // the one behind it, so tall sets (Monarch) can rise above their squares.
+    const coords=squareCoords(square,this.flipped);
+    if(coords)el.style.setProperty('--row',String(coords.row));
     const running=this.motion.get(el);
     // A piece still sliding (a second move in quick succession) continues from where it is.
     const start=running?.playState==='running'?getComputedStyle(el).transform:el.style.transform;
