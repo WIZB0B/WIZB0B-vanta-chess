@@ -28,9 +28,10 @@ test('online moves apply locally before waiting for the authoritative response',
   const start=main.indexOf('if(serverGameId&&!remote){'),end=main.indexOf('return}let made,localElapsedMs=null',start),body=main.slice(start,end);
   const validate=body.indexOf("game.moves({square:move.from,verbose:true}).find");
   const apply=body.indexOf('made=game.move(');
-  const render=body.indexOf('switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone()');
+  const render=body.indexOf('switchOnlineClockOptimistically();render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone)');
+  const paint=body.indexOf('await nextFrames(2)');
   const request=body.indexOf('const state=await api.move(');
-  assert.ok(validate>=0&&apply>validate&&render>apply&&request>render,'online move must validate, apply/render locally, then await the server');
+  assert.ok(validate>=0&&apply>validate&&render>apply&&paint>render&&request>paint,'online move must validate, apply/render locally, let the slide start, then await the server');
   assert.match(body,/if\(onlineMovePending\)return/);
   assert.match(body,/onlineMovePending=true/);
   assert.match(body,/finally\{onlineMovePending=false\}/);
@@ -62,7 +63,7 @@ test('valid remote move is applied instantly before server confirmation',()=>{
   assert.match(body,/incoming\.gameId!==serverGameId\|\|incoming\.version!==serverVersion\+1\|\|incoming\.fenBefore!==game\.fen\(\)/);
   const legal=body.indexOf("game.moves({square:incoming.from,verbose:true}).find");
   const apply=body.indexOf('made=game.move(');
-  const render=body.indexOf('switchOnlineClockOptimistically();render();playMoveAnimation(moveAnimation);playTone()');
+  const render=body.indexOf('switchOnlineClockOptimistically();render({hint:made});afterBoardPaint(playTone)');
   const confirm=body.indexOf('void refreshServerState()');
   assert.ok(legal>=0&&apply>legal&&render>apply&&confirm>render,'remote move must validate, render immediately, then confirm in background');
 });

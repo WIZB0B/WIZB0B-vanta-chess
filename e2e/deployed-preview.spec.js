@@ -49,7 +49,7 @@ test('Netlify preview supports a real two-browser room and authoritative move', 
   await b.goto(a.url());
   await expect(a.locator('body')).toHaveAttribute('data-seat','w',{timeout:10000});
   await expect(b.locator('body')).toHaveAttribute('data-seat','b',{timeout:10000});
-  await a.locator('[data-sq="e2"]').click();await a.locator('[data-sq="e4"]').click();
-  await expect(b.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible({timeout:10000});
+  await a.locator('.board-piece[data-square="e2"]').click();await a.locator('[data-sq="e4"]').click();
+  await expect(b.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible({timeout:10000});
   await first.close();await second.close();
 });
