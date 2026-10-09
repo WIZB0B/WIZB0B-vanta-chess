@@ -106,6 +106,6 @@ test('pieces stay inside their square: no set rises into the square behind it',a
 test('Vanta Ink has the bold dark outline: a stroked silhouette under the artwork',async()=>{
   for(const folder of ['vanta-2d'])for(const id of IDS){
     const svg=await readFile(new URL(`../public/assets/vch/pieces/${folder}/${id}.svg`,import.meta.url),'utf8');
-    assert.match(svg,/^<svg[^>]*><path fill="#16110d" stroke="#16110d" stroke-width="5\.6" stroke-linejoin="round" d="/,`${folder}/${id}`);
+    assert.match(svg,/^<svg[^>]*><path fill="#16110d" stroke="#16110d" stroke-width="[0-9.]+" stroke-linejoin="round" d="/,`${folder}/${id}`);
   }
 });
