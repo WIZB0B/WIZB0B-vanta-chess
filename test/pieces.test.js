@@ -9,7 +9,7 @@ const layers=css.slice(css.indexOf('/* Board layers (backlog V1-fix + V1b)'));
 
 test('board pieces have no filter halo; depth comes from a contact shadow that travels with the piece',()=>{
   assert.ok(layers.length>0,'board layers block exists');
-  assert.match(layers,/\.board-piece \.piece\{display:block;filter:none\}/);
+  assert.match(layers,/\.board-piece \.piece\{display:block;filter:none;pointer-events:none\}/);
   const shadow=layers.match(/\.board-piece::before\{([^}]*)\}/)?.[1]||'';
   assert.match(shadow,/left:20%;width:60%;/,'about 60% of the square wide, centred');
   assert.match(shadow,/top:calc\(var\(--piece-baseline\) - 6%\);height:12%;/,'12% tall, centred on the baseline');

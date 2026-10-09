@@ -64,7 +64,7 @@ test('the new sets have no filters, offsets, blend or tint layers; only Vanta an
 });
 
 test('the committed artwork is complete: 1x and 2x sheets per set and 12 standalone vectors per Ink set',async()=>{
-  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,448]],['vanta-premium-3d-1x.png',[672,224]]]){
+  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,560]],['vanta-premium-3d-1x.png',[672,280]]]){
     const png=await readFile(new URL(`../public/assets/vch/pieces/${name}`,import.meta.url));
     assert.equal(png.subarray(1,4).toString(),'PNG',name);
     assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],size,name);
@@ -91,4 +91,19 @@ test('the splitter refuses sheets with scripts, handlers, external references or
   assert.throws(()=>splitPieceSheet(sheet.replace('<path ','<path onload="x()" ')),/scripts/);
   assert.throws(()=>splitPieceSheet(sheet.replace('<path ','<image href="https://example.com/a.png"/><path ')),/external/);
   assert.throws(()=>splitPieceSheet(sheet.replace(/<symbol id="bp"[\s\S]*?<\/symbol>/,'')),/missing symbols: bp/);
+});
+
+test('Monarch is a tall set: pieces rise 25% above their square, stacked by screen row',async()=>{
+  assert.ok(sets.includes(':root[data-piece-style="monarch"] .board-piece .piece{height:125%;top:-25%}'));
+  assert.ok(sets.includes(':root[data-piece-style="monarch"] .board{overflow:visible}'));
+  assert.match(css,/\.board-piece\{[^}]*z-index:calc\(1 \+ var\(--row,0\)\);/);
+  const layer=await readFile(new URL('../src/piece-layer.js',import.meta.url),'utf8');
+  assert.match(layer,/el\.style\.setProperty\('--row',String\(coords\.row\)\)/);
+});
+
+test('every set has a dark outline: Ink vectors draw a stroked silhouette under the artwork',async()=>{
+  for(const folder of ['vanta-2d','vanta-premium-2d'])for(const id of IDS){
+    const svg=await readFile(new URL(`../public/assets/vch/pieces/${folder}/${id}.svg`,import.meta.url),'utf8');
+    assert.match(svg,/^<svg[^>]*><path fill="#16110d" stroke="#16110d" stroke-width="5\.6" stroke-linejoin="round" d="/,`${folder}/${id}`);
+  }
 });

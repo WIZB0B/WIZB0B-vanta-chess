@@ -119,7 +119,7 @@ test('the board is layered: squares, one piece layer, the arrow layer, a drag la
   assert.doesNotMatch(layer,/style\.transition/,'no CSS transitions on pieces');
   assert.match(css,/\.piece-layer\{z-index:2\}/);assert.match(css,/\.arrow-layer\{z-index:3;/);
   assert.match(css,/\.drag-layer\{position:fixed;inset:0;z-index:120;pointer-events:none/);
-  assert.match(css,/\.board-piece\.moving\{z-index:3\}/);
+  assert.match(css,/\.board-piece\.moving\{z-index:20\}/);
 });
 
 test('highlights switch instantly: squares never inherit the global button transition',()=>{
