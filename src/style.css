@@ -2146,3 +2146,38 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
    see syncGlassBlur in main.js). At the near-opaque default the blur is invisible but the
    compositor re-blurs every panel on every frame that changes, e.g. each frame of a move. */
 :root[data-glass="solid"] .panel,:root[data-glass="solid"] .game,:root[data-glass="solid"] .topbar{backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* === BOARD FIT: the board is as big as the screen allows (like chess.com) ===
+   --board is the playing area's side: the smaller of
+   - the viewport height minus everything stacked above and below the board (top bar,
+     player bars, coordinates, tools, paddings: --fit-chrome), and
+   - the width left after the side panels (--fit-side) and gaps.
+   The game column is exactly the board plus its coordinate gutter, so the player bars and
+   tools line up with it. Side panels take the rest of the width and scroll inside
+   themselves rather than making the page scroll. Phones keep the full-width board. */
+@media (min-width:801px){
+  :root{--fit-chrome:288px;--fit-pad:14px;--fit-gutter:18px}
+  .shell{padding-top:14px;padding-bottom:12px}
+  main{margin-top:10px}
+  .game{
+    --board:clamp(300px,min(calc(100dvh - var(--fit-chrome)),calc(100vw - var(--fit-side))),1100px);
+    width:calc(var(--board) + var(--fit-gutter) + 2 * var(--fit-pad))!important;
+    min-width:0;min-height:0;
+    padding-left:var(--fit-pad)!important;padding-right:var(--fit-pad)!important;
+  }
+  .game .board-shell{width:calc(var(--board) + var(--fit-gutter))}
+  .lpanel,.rpanel{width:auto!important;min-width:0;min-height:0!important;max-height:calc(100dvh - 104px);overflow-y:auto;scrollbar-width:thin}
+}
+@media (min-width:1181px){
+  :root{--fit-side:calc(96px + 300px + 320px + 2 * 18px + 2 * var(--fit-pad) + var(--fit-gutter))}
+  main{grid-template-columns:minmax(300px,1fr) auto minmax(320px,1fr)!important;column-gap:18px!important}
+}
+@media (min-width:801px) and (max-width:1180px){
+  :root{--fit-side:calc(18px + 280px + 14px + 2 * var(--fit-pad) + var(--fit-gutter))}
+  main{grid-template-columns:minmax(280px,1fr) auto!important}
+  .rpanel{max-height:none}
+}
+@media (max-width:800px){
+  /* Phones: the board spans the screen edge to edge (only the coordinate gutter remains). */
+  .game{margin-left:0!important;margin-right:0!important;max-width:100vw!important;padding:6px 4px!important;border-radius:0!important;border-left:0!important;border-right:0!important}
+}
