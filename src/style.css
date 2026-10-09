@@ -1957,6 +1957,9 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   width:100%;height:100%;aspect-ratio:auto;inset:0;border-radius:50%;
   background:radial-gradient(circle closest-side,transparent 81%,rgba(0,0,0,.16) 82%,rgba(0,0,0,.16) 99%,transparent 100%)
 }
+/* The selected square is filled with the same wash as the last move (no outline ring), and
+   the selection clears as soon as the move is played. */
+.board .square.selected,.board .square.last-move.selected{box-shadow:inset 0 0 0 999px rgba(200,216,61,.56)}
 .board .square.drag-over{box-shadow:inset 0 0 0 4px rgba(244,246,236,.78)}
 .piece-layer,.arrow-layer{position:absolute;inset:0;pointer-events:none}
 .piece-layer{z-index:2}

@@ -185,3 +185,10 @@ test('panels blur their backdrop only for see-through glass',()=>{
   assert.match(main,/if\(input\.dataset\.theme==='--glass'\)syncGlassBlur\(value\)/);
   assert.match(css,/:root\[data-glass="solid"\] \.panel,:root\[data-glass="solid"\] \.game,:root\[data-glass="solid"\] \.topbar\{backdrop-filter:none;-webkit-backdrop-filter:none\}/);
 });
+
+test('a selected square is filled like the last move, and a local move clears the selection before drawing',async()=>{
+  const css=await (await import('node:fs/promises')).readFile(new URL('../src/style.css',import.meta.url),'utf8');
+  assert.ok(css.includes('.board .square.selected,.board .square.last-move.selected{box-shadow:inset 0 0 0 999px rgba(200,216,61,.56)}'));
+  const main=await (await import('node:fs/promises')).readFile(new URL('../src/main.js',import.meta.url),'utf8');
+  assert.ok(main.includes("localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});"));
+});
