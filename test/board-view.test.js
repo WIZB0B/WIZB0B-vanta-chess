@@ -192,3 +192,12 @@ test('a selected square is filled like the last move, and a local move clears th
   const main=await (await import('node:fs/promises')).readFile(new URL('../src/main.js',import.meta.url),'utf8');
   assert.ok(main.includes("localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});"));
 });
+
+test('the board is sized to the screen: the smaller of the free height and the free width',async()=>{
+  const css=await (await import('node:fs/promises')).readFile(new URL('../src/style.css',import.meta.url),'utf8');
+  const fit=css.slice(css.indexOf('/* === BOARD FIT'));
+  assert.ok(fit.length>100,'board-fit block exists');
+  assert.match(fit,/--board:clamp\(300px,min\(calc\(100dvh - var\(--fit-chrome\)\),calc\(100vw - var\(--fit-side\)\)\),1100px\)/);
+  assert.match(fit,/\.game \.board-shell\{width:calc\(var\(--board\) \+ var\(--fit-gutter\)\)\}/);
+  assert.match(fit,/main\{grid-template-columns:minmax\(300px,1fr\) auto minmax\(320px,1fr\)!important/);
+});
