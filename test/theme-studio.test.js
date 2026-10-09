@@ -22,15 +22,12 @@ test('Theme Studio motion maps 0-100 to 0-400ms and animates rendered moves',()=
   assert.match(main,/function motionDurationMs\(\)/);
   assert.match(main,/Math\.max\(0,Math\.min\(400,milliseconds\)\)/);
   assert.match(main,/window\.matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)/);
-  assert.match(main,/function animateRenderedPiece\(from,to,duration\)/);
-  assert.match(main,/piece\.style\.transform=\`translate\(\$\{a\.left-b\.left\}px,\$\{a\.top-b\.top\}px\)\`/);
-  assert.match(main,/piece\.style\.transitionDuration='var\(--motion\)'/);
-  assert.match(main,/render\(\);playMoveAnimation\(moveAnimation\)/);
-  assert.match(main,/syncRoomUi\(\);render\(\);playMoveAnimation\(moveAnimation\);updateMoves\(\)/);
-  assert.match(main,/animateRenderedPiece\(\(kingSide\?'h':'a'\)\+rank,\(kingSide\?'f':'d'\)\+rank,duration\)/);
-  assert.match(main,/fadeCapturedPiece\(snapshot\.captured,duration\)/);
-  assert.match(main,/ghost\.style\.opacity='0'/);
-  assert.match(css,/@media\(prefers-reduced-motion:reduce\)\{[\s\S]*?transition-duration:0ms!important/);
+  // Move slides (150-250ms by distance) are scaled by the slider; reduced motion turns them off.
+  assert.match(main,/motionScaleCache\?\?=motionDurationMs\(\)\/400;/);
+  assert.match(main,/if\(input\.dataset\.theme==='--motion'\)motionScaleCache=null;/);
+  assert.match(main,/render\(\{hint:made,instant:instantMoveAnimation\}\)/);
+  assert.match(main,/syncRoomUi\(\);render\(\{hint:lastServerMove,instant:!animateMove\}\);afterBoardPaint\(updateMoves\)/);
+  assert.match(main,/function motionScale\(\)\{\n\s*if\(prefersReducedMotion\(\)\)return 0;/);
 });
 
 test('Theme Studio Done button uses the gold primary treatment',()=>{

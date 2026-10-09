@@ -22,10 +22,10 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await expect(b.locator('.player.bottom')).toHaveAttribute('data-color','b');
   await a.waitForTimeout(1200);
 
-  await a.locator('[data-sq="e2"]').click();await a.locator('[data-sq="e4"]').click();
-  await expect(b.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
-  await b.locator('[data-sq="e7"]').click();await b.locator('[data-sq="e5"]').click();
-  await expect(a.locator('[data-sq="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
+  await a.locator('.board-piece[data-square="e2"]').click();await a.locator('[data-sq="e4"]').click();
+  await expect(b.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
+  await b.locator('.board-piece[data-square="e7"]').click();await b.locator('[data-sq="e5"]').click();
+  await expect(a.locator('.board-piece[data-square="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
 
   const before=await a.locator('#bottomClock').textContent();
   await a.waitForTimeout(1200);
@@ -39,8 +39,8 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await expect(b.locator('#messages')).toContainText('acceptance-chat',{timeout:6000});
 
   await a.reload();
-  await expect(a.locator('[data-sq="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
-  await expect(a.locator('[data-sq="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
+  await expect(a.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
+  await expect(a.locator('.board-piece[data-square="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
 
   const puzzleResponse=a.waitForResponse(async response=>{
     if(!response.url().includes('/functions/v1/chess')||response.request().method()!=='POST')return false;
@@ -72,7 +72,7 @@ test('casual queue falls back to a Stockfish bot after fifteen seconds', async (
   await expect(page.locator('#matchSearch')).toBeVisible();
   await expect(page.locator('body')).toHaveAttribute('data-bot-game','true',{timeout:26000});
   const seat=await page.locator('body').getAttribute('data-seat');
-  if(seat==='w'){await page.locator('[data-sq="e2"]').click();await page.locator('[data-sq="e4"]').click()}
+  if(seat==='w'){await page.locator('.board-piece[data-square="e2"]').click();await page.locator('[data-sq="e4"]').click()}
   await expect.poll(async()=>page.locator('#moves div').count(),{timeout:12000}).toBeGreaterThan(0);
   await ctx.close();
 });
