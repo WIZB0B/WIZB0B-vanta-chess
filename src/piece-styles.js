@@ -4,10 +4,10 @@
 // - monarch:     public/assets/vch/pieces/vanta-premium-3d.png (6x2 sheet, 2x) + vanta-premium-3d-1x.png
 // - monarch-ink: public/assets/vch/pieces/vanta-premium-2d/{id}.svg
 // - heritage:    the original Staunton pieces, public/assets/vch/pieces/3d/{id}.webp
+// Monarch, Monarch Ink and Heritage are hidden for now: their slender pieces fill too little
+// of a square to read clearly. Anyone who had picked one moves to Vanta.
 export const PIECE_STYLES=[
   ['vanta','Vanta'],['vanta-ink','Vanta Ink'],
-  ['monarch','Monarch'],['monarch-ink','Monarch Ink'],
-  ['heritage','Heritage'],
 ];
 export const DEFAULT_PIECE_STYLE='vanta';
 const known=new Set(PIECE_STYLES.map(([value])=>value));

@@ -8,12 +8,13 @@ const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
 const sets=css.slice(css.indexOf('/* Piece sets (src/piece-styles.js).'),css.indexOf('/* V1b: square marks'));
 const IDS=['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp'];
 
-test('menu: Vanta (default), Vanta Ink, Monarch, Monarch Ink, Heritage; no 2D/3D in any label',()=>{
-  assert.deepEqual(PIECE_STYLES,[['vanta','Vanta'],['vanta-ink','Vanta Ink'],['monarch','Monarch'],['monarch-ink','Monarch Ink'],['heritage','Heritage']]);
+test('menu: Vanta (default) and Vanta Ink; the slender sets are hidden; no 2D/3D in any label',()=>{
+  assert.deepEqual(PIECE_STYLES,[['vanta','Vanta'],['vanta-ink','Vanta Ink']]);
+  for(const hidden of ['monarch','monarch-ink','heritage'])assert.equal(normalizePieceStyle(hidden),'vanta',hidden);
   assert.doesNotMatch(pieceStyleOptions(),/[23]D/i);
   assert.equal(DEFAULT_PIECE_STYLE,'vanta');
   for(const retired of ['nonsense',undefined,'vanta-3d','vanta-2d','vanta-classic-3d','staunton-2d','3d'])assert.equal(normalizePieceStyle(retired),'vanta',String(retired));
-  assert.equal(normalizePieceStyle('monarch-ink'),'monarch-ink');
+  assert.equal(normalizePieceStyle('vanta-ink'),'vanta-ink');
 });
 
 test('saved choices move to Vanta once, then every choice is kept',()=>{
@@ -22,8 +23,9 @@ test('saved choices move to Vanta once, then every choice is kept',()=>{
     assert.equal(migratePieceStyle(theme),'vanta',String(saved));
     assert.equal(theme.pieceSetVersion,PIECE_SET_VERSION);
   }
-  const theme={pieceStyle:'heritage',pieceSetVersion:PIECE_SET_VERSION};
-  assert.equal(migratePieceStyle(theme),'heritage');
+  const theme={pieceStyle:'vanta-ink',pieceSetVersion:PIECE_SET_VERSION};
+  assert.equal(migratePieceStyle(theme),'vanta-ink');
+  assert.equal(migratePieceStyle({pieceStyle:'monarch',pieceSetVersion:PIECE_SET_VERSION}),'vanta','a hidden set falls back to Vanta');
 });
 
 test('portraits use one vector per piece; Heritage keeps its images',()=>{
@@ -64,7 +66,7 @@ test('the new sets have no filters, offsets, blend or tint layers; only Vanta an
 });
 
 test('the committed artwork is complete: 1x and 2x sheets per set and 12 standalone vectors per Ink set',async()=>{
-  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,560]],['vanta-premium-3d-1x.png',[672,280]]]){
+  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,448]],['vanta-premium-3d-1x.png',[672,224]]]){
     const png=await readFile(new URL(`../public/assets/vch/pieces/${name}`,import.meta.url));
     assert.equal(png.subarray(1,4).toString(),'PNG',name);
     assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],size,name);
@@ -93,16 +95,16 @@ test('the splitter refuses sheets with scripts, handlers, external references or
   assert.throws(()=>splitPieceSheet(sheet.replace(/<symbol id="bp"[\s\S]*?<\/symbol>/,'')),/missing symbols: bp/);
 });
 
-test('Monarch is a tall set: pieces rise 25% above their square, stacked by screen row',async()=>{
-  assert.ok(sets.includes(':root[data-piece-style="monarch"] .board-piece .piece{height:125%;top:-25%}'));
-  assert.ok(sets.includes(':root[data-piece-style="monarch"] .board{overflow:visible}'));
+test('pieces stay inside their square: no set rises into the square behind it',async()=>{
+  assert.doesNotMatch(css,/\.board-piece \.piece\{[^}]*height:1[0-9]{2}%/);
+  assert.doesNotMatch(sets,/\.board\{overflow:visible\}/);
   assert.match(css,/\.board-piece\{[^}]*z-index:calc\(1 \+ var\(--row,0\)\);/);
   const layer=await readFile(new URL('../src/piece-layer.js',import.meta.url),'utf8');
   assert.match(layer,/el\.style\.setProperty\('--row',String\(coords\.row\)\)/);
 });
 
-test('every set has a dark outline: Ink vectors draw a stroked silhouette under the artwork',async()=>{
-  for(const folder of ['vanta-2d','vanta-premium-2d'])for(const id of IDS){
+test('Vanta Ink has the bold dark outline: a stroked silhouette under the artwork',async()=>{
+  for(const folder of ['vanta-2d'])for(const id of IDS){
     const svg=await readFile(new URL(`../public/assets/vch/pieces/${folder}/${id}.svg`,import.meta.url),'utf8');
     assert.match(svg,/^<svg[^>]*><path fill="#16110d" stroke="#16110d" stroke-width="5\.6" stroke-linejoin="round" d="/,`${folder}/${id}`);
   }

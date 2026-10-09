@@ -2003,11 +2003,13 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
      barely rescales it: 1344x448 (224px cells) for 2x screens, 672x224 (112px cells) for 1x,
      picked with image-set(). Columns k q r b n p, row 0 white,
      row 1 black -> background-size 600% 200%, x = col * 20%, y = row * 100%.
-   - Monarch is a tall set: its cells are 1.25 squares high (1344x560 / 672x280 sheets) and
-     each piece is drawn 25% taller than the square, rising into the square behind it the way
-     3D sets do. Pieces stack by screen row (--row, set in src/piece-layer.js) and the board
-     lets them show above its top edge.
-   - Every set carries a bold dark outline baked into its artwork.
+   - Pieces stay inside their own square: side-view artwork never overlaps the square behind
+     it. Pieces still stack by screen row (--row, set in src/piece-layer.js), ready for a
+     future set rendered from above.
+   - Vanta and Vanta Ink carry a bold dark outline baked into their artwork.
+   - Monarch, Monarch Ink and Heritage are hidden from the menu (src/piece-styles.js): their
+     slender pieces fill too little of a square. Their files stay until new artwork replaces
+     them.
    - Vanta Ink / Monarch Ink: one vector file per piece, background-size contain. */
 :root[data-piece-style="vanta"] .piece,
 :root[data-piece-style="vanta-ink"] .piece,
@@ -2039,12 +2041,6 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 :root[data-piece-style="vanta"] .piece-p,:root[data-piece-style="monarch"] .piece-p{--piece-x:100%}
 :root[data-piece-style="vanta"] .piece.w,:root[data-piece-style="monarch"] .piece.w{--piece-y:0%}
 :root[data-piece-style="vanta"] .piece.b,:root[data-piece-style="monarch"] .piece.b{--piece-y:100%}
-:root[data-piece-style="monarch"] .board-piece .piece{height:125%;top:-25%}
-:root[data-piece-style="monarch"] .board{overflow:visible}
-:root[data-piece-style="monarch"] .board>.square:nth-child(1){border-top-left-radius:6px}
-:root[data-piece-style="monarch"] .board>.square:nth-child(8){border-top-right-radius:6px}
-:root[data-piece-style="monarch"] .board>.square:nth-child(57){border-bottom-left-radius:6px}
-:root[data-piece-style="monarch"] .board>.square:nth-child(64){border-bottom-right-radius:6px}
 :root[data-piece-style$="-ink"] .piece{background-size:contain;background-position:center}
 :root[data-piece-style="vanta-ink"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/wk.svg')}
 :root[data-piece-style="vanta-ink"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/wq.svg')}

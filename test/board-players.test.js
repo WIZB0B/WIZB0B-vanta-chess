@@ -27,7 +27,7 @@ test('player flags use a real SVG and disappear when no supported country is set
 
 test('board supports the persisted piece sets with baked-in sizing',()=>{
   const batch=css.slice(css.lastIndexOf('/* Batch 4:'));
-  for(const [value,label] of [['vanta','Vanta'],['vanta-ink','Vanta Ink'],['monarch','Monarch'],['monarch-ink','Monarch Ink'],['heritage','Heritage']]){
+  for(const [value,label] of [['vanta','Vanta'],['vanta-ink','Vanta Ink']]){
     assert.ok(pieceStyleOptions().includes(`<option value="${value}">${label}</option>`),`missing piece set ${label}`);
   }
   assert.ok(main.includes('<select id="pieceStyle">${pieceStyleOptions()}</select>'));
