@@ -8,8 +8,8 @@ const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
 const sets=css.slice(css.indexOf('/* Piece sets (src/piece-styles.js).'),css.indexOf('/* V1b: square marks'));
 const IDS=['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp'];
 
-test('menu: Vanta (default) and Vanta Ink; the slender sets are hidden; no 2D/3D in any label',()=>{
-  assert.deepEqual(PIECE_STYLES,[['vanta','Vanta'],['vanta-ink','Vanta Ink']]);
+test('menu: Vanta (default), Vanta Ink and Regal; the slender sets are hidden; no 2D/3D in any label',()=>{
+  assert.deepEqual(PIECE_STYLES,[['vanta','Vanta'],['vanta-ink','Vanta Ink'],['regal','Regal']]);
   for(const hidden of ['monarch','monarch-ink','heritage'])assert.equal(normalizePieceStyle(hidden),'vanta',hidden);
   assert.doesNotMatch(pieceStyleOptions(),/[23]D/i);
   assert.equal(DEFAULT_PIECE_STYLE,'vanta');
@@ -66,7 +66,7 @@ test('the new sets have no filters, offsets, blend or tint layers; only Vanta an
 });
 
 test('the committed artwork is complete: 1x and 2x sheets per set and 12 standalone vectors per Ink set',async()=>{
-  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,448]],['vanta-premium-3d-1x.png',[672,224]]]){
+  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,448]],['vanta-premium-3d-1x.png',[672,224]],['vanta-regal.png',[1344,560]],['vanta-regal-1x.png',[672,280]]]){
     const png=await readFile(new URL(`../public/assets/vch/pieces/${name}`,import.meta.url));
     assert.equal(png.subarray(1,4).toString(),'PNG',name);
     assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],size,name);
@@ -95,9 +95,10 @@ test('the splitter refuses sheets with scripts, handlers, external references or
   assert.throws(()=>splitPieceSheet(sheet.replace(/<symbol id="bp"[\s\S]*?<\/symbol>/,'')),/missing symbols: bp/);
 });
 
-test('pieces stay inside their square: no set rises into the square behind it',async()=>{
-  assert.doesNotMatch(css,/\.board-piece \.piece\{[^}]*height:1[0-9]{2}%/);
-  assert.doesNotMatch(sets,/\.board\{overflow:visible\}/);
+test('only Regal (rendered from above) rises into the square behind it; pieces stack by row',async()=>{
+  assert.deepEqual([...css.matchAll(/:root\[data-piece-style="([a-z-]+)"\] \.board-piece \.piece\{height:125%;top:-25%\}/g)].map(m=>m[1]),['regal']);
+  assert.deepEqual([...css.matchAll(/:root\[data-piece-style="([a-z-]+)"\] \.board\{overflow:visible\}/g)].map(m=>m[1]),['regal']);
+  assert.ok(sets.includes(`image-set(url('/assets/vch/pieces/vanta-regal-1x.png') 1x,url('/assets/vch/pieces/vanta-regal.png') 2x)`));
   assert.match(css,/\.board-piece\{[^}]*z-index:calc\(1 \+ var\(--row,0\)\);/);
   const layer=await readFile(new URL('../src/piece-layer.js',import.meta.url),'utf8');
   assert.match(layer,/el\.style\.setProperty\('--row',String\(coords\.row\)\)/);
