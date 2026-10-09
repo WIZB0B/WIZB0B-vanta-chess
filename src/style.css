@@ -2096,6 +2096,36 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 :root[data-piece-style="monarch-ink"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bb.svg')}
 :root[data-piece-style="monarch-ink"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bn.svg')}
 :root[data-piece-style="monarch-ink"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bp.svg')}
+/* Piece reactions (src/piece-reactions.js). The artwork span reacts; .board-piece keeps the
+   transform that places it on its square.
+   - Hover (mouse/pen, a piece you may move): lifts 3% and grows 4%, plays its own gesture
+     once, then leans toward the cursor (--lean, ±5deg) while the cursor stays on its square.
+     Its square gets a soft dark disc and its contact shadow widens.
+   - Press: grows 10% and is pulled toward the pointer (--pull-x/--pull-y, up to 14%).
+   - Touch (no hover): a tapped, selected piece plays its gesture and stays lifted (.picked).
+   - Hints: dots grow in when a piece is picked; the dot under the cursor (or under a
+     dragged piece) swells; a capture ring thickens.
+   Reduced motion: no transitions, gestures or growing dots. */
+.board-piece .piece{
+  transform-origin:50% 92%;
+  transition:translate .18s cubic-bezier(.2,.8,.3,1),scale .18s cubic-bezier(.2,.8,.3,1),rotate .14s ease-out;
+}
+.board-piece.hovered .piece{translate:0 -3%;scale:1.04;rotate:var(--lean,0deg)}
+.board-piece.picked .piece{translate:0 -3%;scale:1.04}
+.board-piece.pressed .piece{translate:var(--pull-x,0%) calc(var(--pull-y,0%) - 3%);scale:1.1;rotate:0deg;transition-duration:.09s}
+.board-piece::before{transition:scale .18s ease-out,opacity .18s ease-out}
+.board-piece.hovered::before,.board-piece.picked::before{scale:1.12;opacity:.8}
+.board .square.hover-piece{background-image:radial-gradient(circle closest-side,rgba(0,0,0,.12) 0 84%,transparent 88%)}
+.board .square.legal::after{animation:vch-hint-in .2s cubic-bezier(.2,.9,.3,1.3) backwards;transition:scale .14s ease-out,background-color .14s ease-out}
+.board .square.legal.hint-hover::after,.board .square.legal.drag-over::after{scale:1.8;background-color:rgba(0,0,0,.22)}
+.board .square.legal.occupied.hint-hover::after,.board .square.legal.occupied.drag-over::after{
+  scale:1;background:radial-gradient(circle closest-side,transparent 72%,rgba(0,0,0,.22) 73%,rgba(0,0,0,.22) 99%,transparent 100%)
+}
+@keyframes vch-hint-in{from{scale:.15;opacity:0}to{scale:1;opacity:1}}
+@media (prefers-reduced-motion:reduce){
+  .board-piece .piece,.board-piece::before{transition:none}
+  .board .square.legal::after{animation:none;transition:none}
+}
 /* V1b: square marks fill the whole square (under the pieces); arrows sit above them, about
    22% of a square thick at .85 opacity. (".shape-mark", not ".mark": that is the brand logo.) */
 .board .square.shape-mark{box-shadow:inset 0 0 0 999px var(--mark-color)!important}

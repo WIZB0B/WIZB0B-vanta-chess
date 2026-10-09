@@ -24,7 +24,9 @@ test('a dragged piece is drawn crisp and opaque like a board piece; nothing lift
   assert.match(layers,/\.drag-layer \.board-piece::before\{display:none\}/,'no blurred shadow under the dragged piece');
   assert.doesNotMatch(layers,/\.drag-layer[^{]*\{[^}]*(scale|blur|filter:[^n])/,'no scale, blur or filter on the dragged piece');
   assert.doesNotMatch(css,/\.piece\.dragging|\.drag-float\{|\.piece-ghost|:hover \.piece|piece-arriving/,'old duplicate drag/ghost/hover rules are gone');
-  assert.doesNotMatch(css,/\.piece\{[^}]*transition/,'the artwork never transitions; the .board-piece transform does');
+  // Moves animate the .board-piece transform only. The artwork may ease its hover/press pose
+  // (translate, scale, rotate), but never transitions transform or "all".
+  assert.doesNotMatch(css,/\.piece\{[^}]*transition:[^};]*(\btransform\b|\ball\b)/,'the artwork never transitions its transform; the .board-piece transform does');
   assert.doesNotMatch(main,/piece-arriving|piece-ghost|animateRenderedPiece|fadeCapturedPiece/);
 });
 
