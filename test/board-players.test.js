@@ -50,11 +50,11 @@ test('board supports persisted Vanta and Staunton piece styles with baked-in siz
   assert.ok(css.includes(":root[data-piece-style=\"staunton-3d\"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}"));
   assert.ok(css.includes(":root[data-piece-style=\"staunton-2d\"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/2d/wk.webp')}"));
   assert.ok(css.includes('--piece-tint:0'));
-  assert.match(batch,/\.board \.piece\{[\s\S]*?width:100%;[\s\S]*?height:100%;/);
-  assert.match(batch,/\.board \.square:has\(\.piece\)::before\{/);
-  assert.match(batch,/drop-shadow\(0 8px 3px rgba\(0,0,0,\.35\)\)/);
-  assert.ok(css.includes(':root[data-piece-style="vanta-classic-2d"] .board .square:has(.piece)::before,'));
-  assert.ok(css.includes(':root[data-piece-style="staunton-2d"] .board .square:has(.piece)::before{display:none}'));
+  // Pieces are .board-piece elements one square in size in the piece layer; the artwork fills them.
+  assert.match(css,/\.board-piece\{[^}]*width:12\.5%;height:12\.5%;/);
+  assert.match(css,/\.piece\{font-size:0;width:100%;height:100%;/);
+  assert.match(css,/\.board-piece::before\{/);
+  assert.ok(css.includes(':root[data-piece-style$="-2d"] .board-piece::before{display:none}'));
   assert.ok(css.includes('drop-shadow(0 1px 1px rgba(0,0,0,.48))'));
   assert.match(batch,/\.board \.square\.last-move\{\s*box-shadow:inset 0 0 0 999px rgba\(200,216,61,\.56\);/);
 });

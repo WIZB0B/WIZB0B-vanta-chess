@@ -27,7 +27,9 @@ test('premove cancel clears state and is wired to click, right-click and Escape'
   const queue=new PremoveQueue();queue.select('g1');queue.queue('f3');queue.cancel();
   assert.equal(queue.move,null);assert.equal(queue.selected,null);
   assert.match(main,/if\(premoves\.move\?\.from===sq\)\{cancelPremove\(\);return\}/);
-  assert.match(main,/boardEl\.addEventListener\('contextmenu',event=>\{if\(cancelPremove\(\)\)\{event\.preventDefault\(\)\}\}\)/);
+  assert.match(main,/boardEl\.addEventListener\('contextmenu',event=>\{event\.preventDefault\(\);[^\n]*cancelPremove\(\)\}\)/);
+  // A right press cancels queued premoves before it may start drawing an arrow.
+  assert.match(main,/if\(event\.button===2\)\{[\s\S]{0,160}if\(cancelPremove\(\)\)return;[\s\S]{0,60}startShapeDraft\(event\)/);
   assert.match(main,/if\(event\.key==='Escape'&&cancelPremove\(\)\)\{event\.preventDefault\(\);return\}/);
 });
 

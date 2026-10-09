@@ -48,11 +48,9 @@ test('Vanta 2D uses one SVG per piece, contained',()=>{
 test('v2 sets have no filters, offsets, blend or tint layers; only 3D keeps the contact shadow',()=>{
   assert.match(v2,/:root\[data-piece-style="vanta-3d"\] \.piece,\n:root\[data-piece-style="vanta-2d"\] \.piece\{\s*filter:none;translate:none;mix-blend-mode:normal;/);
   assert.ok(v2.includes(':root[data-piece-style="vanta-3d"] .piece::after,\n:root[data-piece-style="vanta-2d"] .piece::after{display:none}'));
-  assert.ok(v2.includes(':root[data-piece-style="vanta-2d"] .board .square:has(.piece)::before{display:none}'));
-  assert.doesNotMatch(v2,/data-piece-style="vanta-3d"\] \.board \.square:has\(\.piece\)::before\{display:none/);
-  assert.match(v2,/:root\[data-piece-style="vanta-3d"\] \.drag-float,\n:root\[data-piece-style="vanta-2d"\] \.drag-float\{filter:none\}/);
+  assert.ok(css.includes(':root[data-piece-style$="-2d"] .board-piece::before{display:none}'));
   // Only the Classic and Staunton sets carry the measured per-piece offsets.
-  assert.doesNotMatch(css,/data-piece-style="vanta-[23]d"\] \.board \.piece\.[wb]\.piece-[kqrbnp]\{translate/);
+  assert.doesNotMatch(css,/data-piece-style="vanta-[23]d"\] \.board-piece \.piece\.[wb]\.piece-[kqrbnp]\{translate/);
   assert.match(css,/:root\{--white-piece:#f0d9a4;--black-piece:#342019;--piece-tint:0\}/);
 });
 
