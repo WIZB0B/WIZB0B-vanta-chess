@@ -34,6 +34,7 @@ if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
+let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
 // Piece reactions (src/piece-reactions.js): hover gestures, lean, press pull and hint swell.
 const reactions=new PieceReactions({
   pieceAt:square=>boardDom?.pieces.element(square)||null,
@@ -399,6 +400,8 @@ function renderBoard({hint=null,instant=false}={}){
   // A move or a change of turn can leave the hovered piece somewhere else or no longer yours.
   if(reactions.hovered&&(reactions.pieceAt(reactions.hoverSquare)!==reactions.hovered||!reactions.canPick(reactions.hoverSquare)))reactions.clearHover();
   if(reactions.hintSquare&&!legal.has(reactions.hintSquare))reactions.hint(null);
+  // Touch: the selected piece gestures once and stays lifted while it is selected.
+  if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started)reactions.pick(selected);else reactions.unpick();
   if(motion.animated){boardMotion=motion.finished;boardMotionUntil=performance.now()+motion.durationMs}
   const hidden=pointerDrag?.started?pointerDrag.from:null;
   for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
@@ -1456,6 +1459,7 @@ boardEl.addEventListener('pointerdown',event=>{
     return;
   }
   if(pointerDrag){cancelPointerDrag();return}
+  lastPointerType=event.pointerType||'mouse';
   if(!event.isPrimary||event.button!==0)return;
   cancelShapeDraft();clearBoardShapes();
   const square=boardSquareAt(event.clientX,event.clientY);

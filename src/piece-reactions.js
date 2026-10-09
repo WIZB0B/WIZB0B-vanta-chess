@@ -3,6 +3,7 @@
 // - Hover: a piece you may move lifts a little, plays a short gesture of its own (each piece
 //   type has one), then leans toward the cursor while the cursor stays on its square.
 // - Press: the piece grows slightly and is pulled toward the pointer, so it meets the hand.
+// - Touch: no hover, so a tapped (selected) piece plays its gesture and stays lifted.
 // - Hints: legal-move dots grow in when a piece is picked, and the dot under the cursor
 //   swells toward it (CSS, see "Piece reactions" in style.css).
 //
@@ -53,7 +54,7 @@ export class PieceReactions{
   // `squareEl(square)` -> the square element; `enabled()` -> motion allowed.
   constructor({pieceAt,canPick,squareEl,enabled}){
     Object.assign(this,{pieceAt,canPick,squareEl,enabled});
-    this.hovered=null;this.hoverSquare=null;this.pressed=null;this.hintSquare=null;
+    this.hovered=null;this.hoverSquare=null;this.pressed=null;this.hintSquare=null;this.picked=null;
   }
   // Pointer moved over the board (not dragging). `square` may be null (off the board).
   hover(square,x,y,{hintTargets=null}={}){
@@ -64,13 +65,7 @@ export class PieceReactions{
       if(el){
         this.hovered=el;this.hoverSquare=square;
         el.classList.add('hovered');this.squareEl(square)?.classList.add('hover-piece');
-        if(this.enabled()){
-          const type=el.dataset.piece?.[1],art=el.firstElementChild;
-          if(art&&GESTURES[type]&&typeof art.animate==='function'){
-            art.getAnimations?.().forEach(a=>a.id==='vch-gesture'&&a.cancel());
-            const a=art.animate(GESTURES[type],{duration:GESTURE_MS[type],easing:GESTURE_EASING});a.id='vch-gesture';
-          }
-        }
+        this.playGesture(el);
       }
     }
     if(this.hovered&&this.enabled()){
@@ -105,6 +100,22 @@ export class PieceReactions{
     this.pressed.classList.remove('pressed');
     this.pressed.style.removeProperty('--pull-x');this.pressed.style.removeProperty('--pull-y');
     this.pressed=null;
+  }
+  // Touch screens have no hover: a tapped (selected) piece plays its gesture and holds the
+  // lifted pose until it is deselected or moves.
+  pick(square){
+    const el=this.pieceAt(square);
+    if(el===this.picked)return;
+    this.unpick();if(!el)return;
+    this.picked=el;el.classList.add('picked');this.playGesture(el);
+  }
+  unpick(){if(this.picked){this.picked.classList.remove('picked');this.picked=null}}
+  playGesture(el){
+    if(!this.enabled())return;
+    const type=el.dataset.piece?.[1],art=el.firstElementChild;
+    if(!art||!GESTURES[type]||typeof art.animate!=='function')return;
+    art.getAnimations?.().forEach(a=>a.id==='vch-gesture'&&a.cancel());
+    const a=art.animate(GESTURES[type],{duration:GESTURE_MS[type],easing:GESTURE_EASING});a.id='vch-gesture';
   }
   reset(){this.release();this.clearHover();this.hint(null)}
 }
