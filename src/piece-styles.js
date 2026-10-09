@@ -1,33 +1,36 @@
-// Piece style choices (Theme Studio). Vanta 3D / 2D are the v2 sets and the default;
-// Vanta Classic is the original sprite sheet, kept as an option.
+// Piece sets (Theme Studio). Vanta is the default. Each set's artwork:
+// - vanta:       public/assets/vch/pieces/vanta-3d.png (6x2 sheet)
+// - vanta-ink:   public/assets/vch/pieces/vanta-2d/{id}.svg
+// - monarch:     public/assets/vch/pieces/vanta-premium-3d.png (6x2 sheet)
+// - monarch-ink: public/assets/vch/pieces/vanta-premium-2d/{id}.svg
+// - heritage:    the original Staunton pieces, public/assets/vch/pieces/3d/{id}.webp
 export const PIECE_STYLES=[
-  ['vanta-3d','Vanta 3D'],['vanta-2d','Vanta 2D'],
-  ['vanta-classic-3d','Vanta Classic 3D'],['vanta-classic-2d','Vanta Classic 2D'],
-  ['staunton-3d','Staunton 3D'],['staunton-2d','Staunton 2D'],
+  ['vanta','Vanta'],['vanta-ink','Vanta Ink'],
+  ['monarch','Monarch'],['monarch-ink','Monarch Ink'],
+  ['heritage','Heritage'],
 ];
-export const DEFAULT_PIECE_STYLE='vanta-3d';
+export const DEFAULT_PIECE_STYLE='vanta';
 const known=new Set(PIECE_STYLES.map(([value])=>value));
 
 export function normalizePieceStyle(value){
-  if(value==='3d')return 'vanta-3d';
-  if(value==='2d')return 'vanta-2d';
   return known.has(value)?value:DEFAULT_PIECE_STYLE;
 }
 
-// Runs once per saved theme: choices saved before the v2 sets existed ('vanta-3d' /
-// 'vanta-2d' meant the sprite then, '3d' / '2d' even earlier) move to the v2 sets, and
-// pieceSetVersion records that it ran, so a later Classic choice is never overridden.
-export const PIECE_SET_VERSION=2;
+// Runs once per saved theme: every choice saved before these sets existed moves to Vanta,
+// and pieceSetVersion records that it ran, so any later choice is kept.
+export const PIECE_SET_VERSION=3;
 export function migratePieceStyle(theme){
   if(Number(theme.pieceSetVersion)>=PIECE_SET_VERSION)return normalizePieceStyle(theme.pieceStyle);
   theme.pieceSetVersion=PIECE_SET_VERSION;
-  return normalizePieceStyle(theme.pieceStyle);
+  return DEFAULT_PIECE_STYLE;
 }
 
 export function pieceStyleOptions(){return PIECE_STYLES.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}
 
-// Single-piece image for portraits and menu art (the 3D sheet can't be used in an <img>).
+// Single-piece image for portraits and menu art. A sheet can't be used in an <img>, so Vanta
+// and Monarch show their Ink vectors there.
 export function pieceAssetFor(style,name){
-  if(style==='vanta-2d')return `/assets/vch/pieces/vanta-2d/${name}.svg`;
-  return `/assets/vch/pieces/${style.endsWith('2d')?'2d':'3d'}/${name}.webp`;
+  if(style==='vanta'||style==='vanta-ink')return `/assets/vch/pieces/vanta-2d/${name}.svg`;
+  if(style==='monarch'||style==='monarch-ink')return `/assets/vch/pieces/vanta-premium-2d/${name}.svg`;
+  return `/assets/vch/pieces/3d/${name}.webp`;
 }

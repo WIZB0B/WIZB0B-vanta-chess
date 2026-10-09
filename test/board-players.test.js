@@ -25,36 +25,22 @@ test('player flags use a real SVG and disappear when no supported country is set
   assert.doesNotMatch(main,/element\.textContent=normalized\|\|'--'/);
 });
 
-test('board supports persisted Vanta and Staunton piece styles with baked-in sizing',()=>{
+test('board supports the persisted piece sets with baked-in sizing',()=>{
   const batch=css.slice(css.lastIndexOf('/* Batch 4:'));
-  for(const [value,label] of [['vanta-3d','Vanta 3D'],['vanta-2d','Vanta 2D'],['vanta-classic-3d','Vanta Classic 3D'],['vanta-classic-2d','Vanta Classic 2D'],['staunton-3d','Staunton 3D'],['staunton-2d','Staunton 2D']]){
-    assert.ok(pieceStyleOptions().includes(`<option value="${value}">${label}</option>`),`missing piece style ${label}`);
+  for(const [value,label] of [['vanta','Vanta'],['vanta-ink','Vanta Ink'],['monarch','Monarch'],['monarch-ink','Monarch Ink'],['heritage','Heritage']]){
+    assert.ok(pieceStyleOptions().includes(`<option value="${value}">${label}</option>`),`missing piece set ${label}`);
   }
   assert.ok(main.includes('<select id="pieceStyle">${pieceStyleOptions()}</select>'));
-  assert.ok(main.includes("document.documentElement.dataset.pieceStyle='vanta-3d';"));
+  assert.ok(main.includes("document.documentElement.dataset.pieceStyle='vanta';"));
   assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(migratePieceStyle\(savedTheme\)\)/);
   assert.ok(main.includes("savedTheme.pieceTint=0;"));
   assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(e\.target\.value\)/);
-  assert.ok(css.includes("/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png"));
-  assert.ok(css.includes("background-size:600% 400%;"));
-  const vantaTintMask=css.match(/:root\[data-piece-style\^="vanta-classic-"\] \.piece::after\{([\s\S]*?)\}/)?.[1]||'';
-  assert.ok(vantaTintMask.includes('-webkit-mask-size:600% 400%;'));
-  assert.ok(vantaTintMask.includes('mask-size:600% 400%;'));
-  assert.ok(vantaTintMask.includes('-webkit-mask-position:var(--piece-x) var(--piece-y);'));
-  assert.ok(vantaTintMask.includes('mask-position:var(--piece-x) var(--piece-y);'));
-  assert.ok(vantaTintMask.includes('-webkit-mask-repeat:no-repeat;'));
-  assert.ok(vantaTintMask.includes('mask-repeat:no-repeat;'));
-  for(const position of ['--piece-x:0%','--piece-x:20%','--piece-x:40%','--piece-x:60%','--piece-x:80%','--piece-x:100%','--piece-y:0%','--piece-y:33.3333%','--piece-y:66.6666%','--piece-y:99.9999%']){
-    assert.ok(css.includes(position),`missing sprite position ${position}`);
-  }
-  assert.ok(css.includes(":root[data-piece-style=\"staunton-3d\"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}"));
-  assert.ok(css.includes(":root[data-piece-style=\"staunton-2d\"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/2d/wk.webp')}"));
+  assert.ok(css.includes(":root[data-piece-style=\"heritage\"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}"));
   assert.ok(css.includes('--piece-tint:0'));
   // Pieces are .board-piece elements one square in size in the piece layer; the artwork fills them.
   assert.match(css,/\.board-piece\{[^}]*width:12\.5%;height:12\.5%;/);
   assert.match(css,/\.piece\{font-size:0;width:100%;height:100%;/);
   assert.match(css,/\.board-piece::before\{/);
-  assert.ok(css.includes(':root[data-piece-style$="-2d"] .board-piece::before{display:none}'));
-  assert.ok(css.includes('drop-shadow(0 1px 1px rgba(0,0,0,.48))'));
+  assert.ok(css.includes(':root[data-piece-style$="-ink"] .board-piece::before{display:none}'));
   assert.match(batch,/\.board \.square\.last-move\{\s*box-shadow:inset 0 0 0 999px rgba\(200,216,61,\.56\);/);
 });

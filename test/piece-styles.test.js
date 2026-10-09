@@ -1,57 +1,79 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { DEFAULT_PIECE_STYLE, PIECE_SET_VERSION, PIECE_STYLES, migratePieceStyle, normalizePieceStyle, pieceAssetFor } from '../src/piece-styles.js';
+import { readFile, readdir } from 'node:fs/promises';
+import { DEFAULT_PIECE_STYLE, PIECE_SET_VERSION, PIECE_STYLES, migratePieceStyle, normalizePieceStyle, pieceAssetFor, pieceStyleOptions } from '../src/piece-styles.js';
 import { splitPieceSheet } from '../scripts/split-piece-svg.mjs';
 
 const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
-const v2=css.slice(css.indexOf('/* Vanta pieces v2 (default).'));
+const sets=css.slice(css.indexOf('/* Piece sets (src/piece-styles.js).'),css.indexOf('/* V1b: square marks'));
+const IDS=['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp'];
 
-test('menu order: Vanta 3D (default), Vanta 2D, Vanta Classic 3D/2D, Staunton 3D/2D',()=>{
-  assert.deepEqual(PIECE_STYLES.map(([value])=>value),['vanta-3d','vanta-2d','vanta-classic-3d','vanta-classic-2d','staunton-3d','staunton-2d']);
-  assert.equal(DEFAULT_PIECE_STYLE,'vanta-3d');
-  assert.equal(normalizePieceStyle('nonsense'),'vanta-3d');
-  assert.equal(normalizePieceStyle(undefined),'vanta-3d');
-  assert.equal(normalizePieceStyle('vanta-classic-2d'),'vanta-classic-2d');
+test('menu: Vanta (default), Vanta Ink, Monarch, Monarch Ink, Heritage; no 2D/3D in any label',()=>{
+  assert.deepEqual(PIECE_STYLES,[['vanta','Vanta'],['vanta-ink','Vanta Ink'],['monarch','Monarch'],['monarch-ink','Monarch Ink'],['heritage','Heritage']]);
+  assert.doesNotMatch(pieceStyleOptions(),/[23]D/i);
+  assert.equal(DEFAULT_PIECE_STYLE,'vanta');
+  for(const retired of ['nonsense',undefined,'vanta-3d','vanta-2d','vanta-classic-3d','staunton-2d','3d'])assert.equal(normalizePieceStyle(retired),'vanta',String(retired));
+  assert.equal(normalizePieceStyle('monarch-ink'),'monarch-ink');
 });
 
-test('saved choices move to the v2 sets once, then every choice is kept',()=>{
-  for(const [saved,expected] of [['vanta-3d','vanta-3d'],['vanta-2d','vanta-2d'],['3d','vanta-3d'],['2d','vanta-2d'],['staunton-2d','staunton-2d'],[undefined,'vanta-3d']]){
-    const theme={pieceStyle:saved};
-    assert.equal(migratePieceStyle(theme),expected,String(saved));
+test('saved choices move to Vanta once, then every choice is kept',()=>{
+  for(const saved of ['vanta-3d','vanta-2d','vanta-classic-2d','staunton-3d','staunton-2d','3d',undefined]){
+    const theme={pieceStyle:saved,pieceSetVersion:2};
+    assert.equal(migratePieceStyle(theme),'vanta',String(saved));
     assert.equal(theme.pieceSetVersion,PIECE_SET_VERSION);
   }
-  // After the migration ran, a Classic choice is respected forever.
-  const theme={pieceStyle:'vanta-classic-3d',pieceSetVersion:PIECE_SET_VERSION};
-  assert.equal(migratePieceStyle(theme),'vanta-classic-3d');
+  const theme={pieceStyle:'heritage',pieceSetVersion:PIECE_SET_VERSION};
+  assert.equal(migratePieceStyle(theme),'heritage');
 });
 
-test('portraits use the v2 2D vectors; other styles keep their single-piece images',()=>{
-  assert.equal(pieceAssetFor('vanta-2d','bn'),'/assets/vch/pieces/vanta-2d/bn.svg');
-  assert.equal(pieceAssetFor('vanta-3d','bn'),'/assets/vch/pieces/3d/bn.webp');
-  assert.equal(pieceAssetFor('staunton-2d','bn'),'/assets/vch/pieces/2d/bn.webp');
+test('portraits use one vector per piece; Heritage keeps its images',()=>{
+  assert.equal(pieceAssetFor('vanta','bn'),'/assets/vch/pieces/vanta-2d/bn.svg');
+  assert.equal(pieceAssetFor('vanta-ink','bn'),'/assets/vch/pieces/vanta-2d/bn.svg');
+  assert.equal(pieceAssetFor('monarch','bn'),'/assets/vch/pieces/vanta-premium-2d/bn.svg');
+  assert.equal(pieceAssetFor('monarch-ink','bn'),'/assets/vch/pieces/vanta-premium-2d/bn.svg');
+  assert.equal(pieceAssetFor('heritage','bn'),'/assets/vch/pieces/3d/bn.webp');
 });
 
-test('Vanta 3D reads the 6x2 sheet: 600% 200%, x = col*20%, y = row*100%',()=>{
-  assert.match(v2,/:root\[data-piece-style="vanta-3d"\] \.piece\{\s*--piece-image:url\('\/assets\/vch\/pieces\/vanta-3d\.png'\);\s*background-size:600% 200%;\s*background-position:var\(--piece-x\) var\(--piece-y\);/);
-  ['k','q','r','b','n','p'].forEach((type,col)=>assert.ok(v2.includes(`:root[data-piece-style="vanta-3d"] .piece-${type}{--piece-x:${col*20}%}`),type));
-  assert.ok(v2.includes(':root[data-piece-style="vanta-3d"] .piece.w{--piece-y:0%}'));
-  assert.ok(v2.includes(':root[data-piece-style="vanta-3d"] .piece.b{--piece-y:100%}'));
+test('Vanta and Monarch read their 6x2 sheets: 600% 200%, x = col*20%, y = row*100%',()=>{
+  assert.match(sets,/:root\[data-piece-style="vanta"\] \.piece,\n:root\[data-piece-style="monarch"\] \.piece\{\s*background-size:600% 200%;\s*background-position:var\(--piece-x\) var\(--piece-y\);/);
+  assert.ok(sets.includes(`:root[data-piece-style="vanta"] .piece{--piece-image:url('/assets/vch/pieces/vanta-3d.png')}`));
+  assert.ok(sets.includes(`:root[data-piece-style="monarch"] .piece{--piece-image:url('/assets/vch/pieces/vanta-premium-3d.png')}`));
+  ['k','q','r','b','n','p'].forEach((type,col)=>assert.ok(sets.includes(`:root[data-piece-style="vanta"] .piece-${type},:root[data-piece-style="monarch"] .piece-${type}{--piece-x:${col*20}%}`),type));
+  assert.ok(sets.includes(':root[data-piece-style="vanta"] .piece.w,:root[data-piece-style="monarch"] .piece.w{--piece-y:0%}'));
+  assert.ok(sets.includes(':root[data-piece-style="vanta"] .piece.b,:root[data-piece-style="monarch"] .piece.b{--piece-y:100%}'));
 });
 
-test('Vanta 2D uses one SVG per piece, contained',()=>{
-  assert.ok(v2.includes(':root[data-piece-style="vanta-2d"] .piece{background-size:contain;background-position:center}'));
-  for(const color of 'wb')for(const type of 'kqrbnp')
-    assert.ok(v2.includes(`:root[data-piece-style="vanta-2d"] .piece.${color}.piece-${type}{--piece-image:url('/assets/vch/pieces/vanta-2d/${color}${type}.svg')}`));
+test('the Ink sets use one SVG per piece, contained',()=>{
+  assert.ok(sets.includes(':root[data-piece-style$="-ink"] .piece{background-size:contain;background-position:center}'));
+  for(const [style,folder] of [['vanta-ink','vanta-2d'],['monarch-ink','vanta-premium-2d']])for(const id of IDS)
+    assert.ok(sets.includes(`:root[data-piece-style="${style}"] .piece.${id[0]}.piece-${id[1]}{--piece-image:url('/assets/vch/pieces/${folder}/${id}.svg')}`),`${style} ${id}`);
 });
 
-test('v2 sets have no filters, offsets, blend or tint layers; only 3D keeps the contact shadow',()=>{
-  assert.match(v2,/:root\[data-piece-style="vanta-3d"\] \.piece,\n:root\[data-piece-style="vanta-2d"\] \.piece\{\s*filter:none;translate:none;mix-blend-mode:normal;/);
-  assert.ok(v2.includes(':root[data-piece-style="vanta-3d"] .piece::after,\n:root[data-piece-style="vanta-2d"] .piece::after{display:none}'));
-  assert.ok(css.includes(':root[data-piece-style$="-2d"] .board-piece::before{display:none}'));
-  // Only the Classic and Staunton sets carry the measured per-piece offsets.
-  assert.doesNotMatch(css,/data-piece-style="vanta-[23]d"\] \.board-piece \.piece\.[wb]\.piece-[kqrbnp]\{translate/);
-  assert.match(css,/:root\{--white-piece:#f0d9a4;--black-piece:#342019;--piece-tint:0\}/);
+test('the new sets have no filters, offsets, blend or tint layers; only Vanta and Monarch keep the contact shadow',()=>{
+  assert.match(sets,/:root\[data-piece-style="monarch-ink"\] \.piece\{\s*filter:none;translate:none;mix-blend-mode:normal;/);
+  assert.ok(sets.includes(':root[data-piece-style="monarch-ink"] .piece::after{display:none}'));
+  assert.doesNotMatch(sets.replace(/\/\*[\s\S]*?\*\//g,''),/drop-shadow|blur\(|mix-blend-mode:(?!normal)|--piece-tint/);
+  assert.ok(css.includes(':root[data-piece-style$="-ink"] .board-piece::before{display:none}'));
+  assert.doesNotMatch(css,/data-piece-style="(vanta|monarch)[a-z-]*"\][^{]*\.board-piece::before/);
+  assert.doesNotMatch(css,/data-piece-style="(vanta|monarch)[a-z-]*"\] \.board-piece \.piece\.[wb]\.piece-[kqrbnp]\{translate/);
+  // The retired Vanta Classic sprite and the old style names are gone.
+  assert.doesNotMatch(css,/2c49bffb|vanta-classic|staunton|data-piece-style\$?="[^"]*-[23]d"/);
+});
+
+test('the committed artwork is complete: two 1920x640 sheets and 12 standalone vectors per Ink set',async()=>{
+  for(const name of ['vanta-3d.png','vanta-premium-3d.png']){
+    const png=await readFile(new URL(`../public/assets/vch/pieces/${name}`,import.meta.url));
+    assert.equal(png.subarray(1,4).toString(),'PNG',name);
+    assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],[1920,640],name);
+  }
+  for(const folder of ['vanta-2d','vanta-premium-2d']){
+    assert.deepEqual((await readdir(new URL(`../public/assets/vch/pieces/${folder}/`,import.meta.url))).sort(),IDS.map(id=>`${id}.svg`).sort());
+    for(const id of IDS){
+      const svg=await readFile(new URL(`../public/assets/vch/pieces/${folder}/${id}.svg`,import.meta.url),'utf8');
+      assert.match(svg,/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="[^"]+">/,`${folder}/${id}`);
+      assert.doesNotMatch(svg,/<script|<foreignObject|\son[a-z]+\s*=|<symbol/i,`${folder}/${id}`);
+    }
+  }
 });
 
 const sheet=`<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/></linearGradient></defs>${['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp'].map(id=>`<symbol id="${id}" viewBox="0 0 100 100"><path d="M10 90h80" fill="url(#g)"/></symbol>`).join('')}</svg>`;

@@ -18,13 +18,13 @@ Planning docs — read before starting work:
 
 ## Branch and pull requests
 
-- Work only on `dev`. Never commit or push directly to `main` or any other branch.
-  (`codex/set-up-vch-repository-and-implement-chess-game` was merged via PR #1 and is
-  retired; never use the old `...-a878ma` branch from PR #2.)
-- For each batch of work, open a PR from `dev` to `main` (or update the open one) so the
-  change gets a Netlify deploy preview and CI runs on it.
-- Merge only when CI is green on the PR's latest commit **and** the owner has approved.
-  Use a regular merge commit. Merging to `main` deploys production
+- Each task gets its own branch (e.g. `claude/<task>`) and its own PR into `dev`. Never commit
+  or push directly to `main` or `dev`. (`codex/set-up-vch-repository-and-implement-chess-game`
+  was merged via PR #1 and is retired; never use the old `...-a878ma` branch from PR #2.)
+- A task PR merges into `dev` only when CI is green on its latest commit **and** the owner has
+  approved (after testing its Netlify deploy preview). Use a regular merge commit.
+- `dev` goes to `main` in batches, through a PR from `dev` to `main`, only when the owner
+  approves that batch. Merging to `main` deploys production
   (https://vanta-chess-play.netlify.app).
 
 ## Before every commit
@@ -61,7 +61,9 @@ ideas) only. Never copy its logo, art, text, sounds or layouts. All visuals are 
 
 ## Other standing rules (from the backlog)
 
-- Don't create, convert or commit image files as part of code tasks.
+- Image and art files may be committed when the owner provides them (downloaded from the
+  owner's links), placed where the owner says. Otherwise don't create, convert or commit image
+  files as part of code tasks.
 - Don't edit `.github/workflows`, don't use the Codex bot, and don't poll GitHub Actions.
 - Preserve the board's `aspect-ratio: 1` and eight equal grid columns, with a1 a dark square.
 - No unicode/emoji as icons; use `public/assets/vch/icons/`.

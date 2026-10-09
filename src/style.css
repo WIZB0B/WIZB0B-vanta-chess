@@ -18,11 +18,9 @@ body[data-wallpaper="ivory"]{background-image:linear-gradient(rgb(2 7 8 / .38),r
 .quick-actions{display:flex;justify-content:flex-end;margin-top:8px}.quick-actions button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#111d1c;font-size:11px}
 @media(max-width:800px){body{background-attachment:scroll}}
 
-/* Staunton piece assets remain available as the alternate board styles. */
-:root[data-piece-style="staunton-3d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}:root[data-piece-style="staunton-3d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
-:root[data-piece-style="staunton-3d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}:root[data-piece-style="staunton-3d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
-:root[data-piece-style="staunton-2d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/2d/wk.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/2d/wq.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/2d/wr.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/2d/wb.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/2d/wn.webp')}:root[data-piece-style="staunton-2d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/2d/wp.webp')}
-:root[data-piece-style="staunton-2d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/2d/bk.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/2d/bq.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/2d/br.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/2d/bb.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/2d/bn.webp')}:root[data-piece-style="staunton-2d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/2d/bp.webp')}
+/* Heritage: the original Staunton pieces (one image per piece). */
+:root[data-piece-style="heritage"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}:root[data-piece-style="heritage"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}:root[data-piece-style="heritage"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}:root[data-piece-style="heritage"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}:root[data-piece-style="heritage"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}:root[data-piece-style="heritage"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
+:root[data-piece-style="heritage"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}:root[data-piece-style="heritage"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}:root[data-piece-style="heritage"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}:root[data-piece-style="heritage"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}:root[data-piece-style="heritage"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}:root[data-piece-style="heritage"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
 
 
 /* === VCH reference-match rebuild === */
@@ -1783,38 +1781,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px rgba(123,216,170,.12),0 0 18px rgba(85,207,151,.18);
 }
 
-/* Vanta Classic sprite styles use the uploaded 960x640 sheet: 6 columns x 4 rows. */
-:root[data-piece-style="vanta-classic-3d"] .piece,
-:root[data-piece-style="vanta-classic-2d"] .piece{
-  --piece-image:url('/assets/vch/pieces/2c49bffb-4bcc-4fb7-b053-b559c7b7e4fc.png');
-  background-image:var(--piece-image);
-  background-size:600% 400%;
-  background-position:var(--piece-x) var(--piece-y);
-  background-repeat:no-repeat;
-}
-:root[data-piece-style^="vanta-classic-"] .piece::after{
-  -webkit-mask-size:600% 400%;
-  mask-size:600% 400%;
-  -webkit-mask-position:var(--piece-x) var(--piece-y);
-  mask-position:var(--piece-x) var(--piece-y);
-  -webkit-mask-repeat:no-repeat;
-  mask-repeat:no-repeat;
-}
-:root[data-piece-style^="vanta-classic-"] .piece-k{--piece-x:0%}
-:root[data-piece-style^="vanta-classic-"] .piece-q{--piece-x:20%}
-:root[data-piece-style^="vanta-classic-"] .piece-r{--piece-x:40%}
-:root[data-piece-style^="vanta-classic-"] .piece-b{--piece-x:60%}
-:root[data-piece-style^="vanta-classic-"] .piece-n{--piece-x:80%}
-:root[data-piece-style^="vanta-classic-"] .piece-p{--piece-x:100%}
-:root[data-piece-style="vanta-classic-3d"] .piece.w{--piece-y:0%}
-:root[data-piece-style="vanta-classic-3d"] .piece.b{--piece-y:33.3333%}
-:root[data-piece-style="vanta-classic-2d"] .piece.w{--piece-y:66.6666%}
-:root[data-piece-style="vanta-classic-2d"] .piece.b{--piece-y:99.9999%}
-
-:root[data-piece-style="vanta-classic-2d"] .study-board .piece,
-:root[data-piece-style="staunton-2d"] .study-board .piece{filter:drop-shadow(0 1px 1px rgba(0,0,0,.48));transform:none}
-
-
 /* Theme Studio: live glass opacity, move motion, and primary completion action. */
 .panel,.game,.topbar{
   background:linear-gradient(180deg,rgb(8 19 21 / var(--glass)),rgb(5 15 17 / calc(var(--glass) - .04)))!important;
@@ -1946,54 +1912,18 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
    Offsets below are measured from the artwork's alpha (base-footprint centre and lowest
    opaque row) and applied with `translate` on the artwork, so they never interfere with the
    transform that places and moves the .board-piece around it (see "Board layers" below). */
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.w.piece-k{translate:0% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.w.piece-q{translate:-0.9% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.w.piece-r{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.w.piece-b{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.w.piece-n{translate:-4.4% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.w.piece-p{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.b.piece-k{translate:0% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.b.piece-q{translate:-0.9% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.b.piece-r{translate:0% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.b.piece-b{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.b.piece-n{translate:-4.7% -5.6%}
-:root[data-piece-style="vanta-classic-3d"] .board-piece .piece.b.piece-p{translate:0.3% -5.6%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.w.piece-k{translate:0% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.w.piece-q{translate:-0.9% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.w.piece-r{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.w.piece-b{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.w.piece-n{translate:-4.4% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.w.piece-p{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.b.piece-k{translate:0% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.b.piece-q{translate:-0.9% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.b.piece-r{translate:0% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.b.piece-b{translate:0.3% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.b.piece-n{translate:-4.4% -6.2%}
-:root[data-piece-style="vanta-classic-2d"] .board-piece .piece.b.piece-p{translate:0.3% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-k{translate:5% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-q{translate:12.2% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-r{translate:0.3% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-b{translate:2.2% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-n{translate:0.9% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.w.piece-p{translate:1.2% -4.4%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-k{translate:5% -6.9%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-q{translate:2.8% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-r{translate:2.2% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-b{translate:0% -5.6%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-n{translate:4.7% -6.2%}
-:root[data-piece-style="staunton-3d"] .board-piece .piece.b.piece-p{translate:4.1% -5%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-k{translate:8.4% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-q{translate:1.6% -5.6%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-r{translate:3.8% -6.9%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-b{translate:-0.9% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-n{translate:-0.3% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.w.piece-p{translate:4.4% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-k{translate:1.9% -6.9%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-q{translate:4.7% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-r{translate:3.1% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-b{translate:4.1% -6.2%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-n{translate:1.9% -6.9%}
-:root[data-piece-style="staunton-2d"] .board-piece .piece.b.piece-p{translate:2.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-k{translate:5% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-q{translate:12.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-r{translate:0.3% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-b{translate:2.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-n{translate:0.9% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.w.piece-p{translate:1.2% -4.4%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-k{translate:5% -6.9%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-q{translate:2.8% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-r{translate:2.2% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-b{translate:0% -5.6%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-n{translate:4.7% -6.2%}
+:root[data-piece-style="heritage"] .board-piece .piece.b.piece-p{translate:4.1% -5%}
 
 /* Auth link error dialog: email field for "Resend confirmation email". */
 .auth-resend-field{display:grid;gap:6px;margin-top:12px;color:#9ba7a4;font-size:11px}
@@ -2042,7 +1972,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .board-piece.captured{z-index:0;pointer-events:none}
 .board-piece.drag-origin{visibility:hidden}
 /* Contact shadow: about 60% of the square wide and 12% tall, centred on the baseline. It
-   belongs to the piece, so it travels with it. 2D styles stay flat. */
+   belongs to the piece, so it travels with it. The Ink sets stay flat. */
 .board-piece::before{
   content:"";
   position:absolute;
@@ -2053,7 +1983,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   filter:blur(1.5px);
   pointer-events:none;
 }
-:root[data-piece-style$="-2d"] .board-piece::before{display:none}
+:root[data-piece-style$="-ink"] .board-piece::before{display:none}
 .board-badge{position:absolute;left:0;top:0;width:12.5%;height:12.5%;z-index:4;pointer-events:none}
 .board-badge.hidden{display:none}
 /* Dragging: the copy under the pointer has no transition at all, so it follows the pointer
@@ -2065,46 +1995,64 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .drag-layer .board-piece::before{display:none}
 body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 
-/* Vanta pieces v2 (default). Plain artwork only: no filters, drop-shadows, blend or tint
-   layers, and no per-piece offsets, because each cell is already sized and bottom-seated.
-   - Vanta 3D: one 1536x512 sheet, 256px cells, columns k q r b n p, row 0 white, row 1
-     black -> background-size 600% 200%, x = col * 20%, y = row * 100%. Keeps only the
-     subtle contact shadow.
-   - Vanta 2D: one vector file per piece (public/assets/vch/pieces/vanta-2d/{id}.svg),
-     background-size contain. No contact shadow. */
-:root[data-piece-style="vanta-3d"] .piece,
-:root[data-piece-style="vanta-2d"] .piece{
+/* Piece sets (src/piece-styles.js). Vanta (default), Vanta Ink, Monarch and Monarch Ink are
+   plain artwork: no filters, drop-shadows, blend or tint layers, and no per-piece offsets,
+   because each cell is already sized and bottom-seated. Vanta and Monarch keep only the
+   subtle contact shadow (.board-piece::before); the Ink sets have none.
+   - Vanta / Monarch: one 1920x640 sheet, 320px cells, columns k q r b n p, row 0 white,
+     row 1 black -> background-size 600% 200%, x = col * 20%, y = row * 100%.
+   - Vanta Ink / Monarch Ink: one vector file per piece, background-size contain. */
+:root[data-piece-style="vanta"] .piece,
+:root[data-piece-style="vanta-ink"] .piece,
+:root[data-piece-style="monarch"] .piece,
+:root[data-piece-style="monarch-ink"] .piece{
   filter:none;translate:none;mix-blend-mode:normal;
   background-image:var(--piece-image);background-repeat:no-repeat;
 }
-:root[data-piece-style="vanta-3d"] .piece::after,
-:root[data-piece-style="vanta-2d"] .piece::after{display:none}
-:root[data-piece-style="vanta-3d"] .piece{
-  --piece-image:url('/assets/vch/pieces/vanta-3d.png');
+:root[data-piece-style="vanta"] .piece::after,
+:root[data-piece-style="vanta-ink"] .piece::after,
+:root[data-piece-style="monarch"] .piece::after,
+:root[data-piece-style="monarch-ink"] .piece::after{display:none}
+:root[data-piece-style="vanta"] .piece,
+:root[data-piece-style="monarch"] .piece{
   background-size:600% 200%;
   background-position:var(--piece-x) var(--piece-y);
 }
-:root[data-piece-style="vanta-3d"] .piece-k{--piece-x:0%}
-:root[data-piece-style="vanta-3d"] .piece-q{--piece-x:20%}
-:root[data-piece-style="vanta-3d"] .piece-r{--piece-x:40%}
-:root[data-piece-style="vanta-3d"] .piece-b{--piece-x:60%}
-:root[data-piece-style="vanta-3d"] .piece-n{--piece-x:80%}
-:root[data-piece-style="vanta-3d"] .piece-p{--piece-x:100%}
-:root[data-piece-style="vanta-3d"] .piece.w{--piece-y:0%}
-:root[data-piece-style="vanta-3d"] .piece.b{--piece-y:100%}
-:root[data-piece-style="vanta-2d"] .piece{background-size:contain;background-position:center}
-:root[data-piece-style="vanta-2d"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/wk.svg')}
-:root[data-piece-style="vanta-2d"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/wq.svg')}
-:root[data-piece-style="vanta-2d"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/wr.svg')}
-:root[data-piece-style="vanta-2d"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/wb.svg')}
-:root[data-piece-style="vanta-2d"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/wn.svg')}
-:root[data-piece-style="vanta-2d"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/wp.svg')}
-:root[data-piece-style="vanta-2d"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/bk.svg')}
-:root[data-piece-style="vanta-2d"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/bq.svg')}
-:root[data-piece-style="vanta-2d"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/br.svg')}
-:root[data-piece-style="vanta-2d"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/bb.svg')}
-:root[data-piece-style="vanta-2d"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/bn.svg')}
-:root[data-piece-style="vanta-2d"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/bp.svg')}
+:root[data-piece-style="vanta"] .piece{--piece-image:url('/assets/vch/pieces/vanta-3d.png')}
+:root[data-piece-style="monarch"] .piece{--piece-image:url('/assets/vch/pieces/vanta-premium-3d.png')}
+:root[data-piece-style="vanta"] .piece-k,:root[data-piece-style="monarch"] .piece-k{--piece-x:0%}
+:root[data-piece-style="vanta"] .piece-q,:root[data-piece-style="monarch"] .piece-q{--piece-x:20%}
+:root[data-piece-style="vanta"] .piece-r,:root[data-piece-style="monarch"] .piece-r{--piece-x:40%}
+:root[data-piece-style="vanta"] .piece-b,:root[data-piece-style="monarch"] .piece-b{--piece-x:60%}
+:root[data-piece-style="vanta"] .piece-n,:root[data-piece-style="monarch"] .piece-n{--piece-x:80%}
+:root[data-piece-style="vanta"] .piece-p,:root[data-piece-style="monarch"] .piece-p{--piece-x:100%}
+:root[data-piece-style="vanta"] .piece.w,:root[data-piece-style="monarch"] .piece.w{--piece-y:0%}
+:root[data-piece-style="vanta"] .piece.b,:root[data-piece-style="monarch"] .piece.b{--piece-y:100%}
+:root[data-piece-style$="-ink"] .piece{background-size:contain;background-position:center}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/wk.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/wq.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/wr.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/wb.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/wn.svg')}
+:root[data-piece-style="vanta-ink"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/wp.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/vanta-2d/bk.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/vanta-2d/bq.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/vanta-2d/br.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-2d/bb.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-2d/bn.svg')}
+:root[data-piece-style="vanta-ink"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-2d/bp.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wk.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wq.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wr.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wb.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wn.svg')}
+:root[data-piece-style="monarch-ink"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/wp.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bk.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bq.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/br.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bb.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bn.svg')}
+:root[data-piece-style="monarch-ink"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/vanta-premium-2d/bp.svg')}
 /* V1b: square marks fill the whole square (under the pieces); arrows sit above them, about
    22% of a square thick at .85 opacity. (".shape-mark", not ".mark": that is the brand logo.) */
 .board .square.shape-mark{box-shadow:inset 0 0 0 999px var(--mark-color)!important}

@@ -82,7 +82,7 @@ reviewWorker.onmessage=({data})=>{
   }
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
-document.documentElement.dataset.pieceStyle='vanta-3d';
+document.documentElement.dataset.pieceStyle='vanta';
 function pieceAsset(name){return pieceAssetFor(normalizePieceStyle(document.documentElement.dataset.pieceStyle),name)}
 function applyPieceStyle(value){
   const style=normalizePieceStyle(value);

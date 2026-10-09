@@ -30,7 +30,8 @@ test('a dragged piece is drawn crisp and opaque like a board piece; nothing lift
 
 test('every piece in every style is centred on one shared baseline',()=>{
   const rules=[...task5.matchAll(/:root\[data-piece-style="([a-z0-9-]+)"\] \.board-piece \.piece\.([wb])\.piece-([kqrbnp])\{translate:(-?[\d.]+)% (-?[\d.]+)%\}/g)];
-  assert.equal(rules.length,48,'4 styles x 2 colours x 6 pieces');
+  assert.equal(rules.length,12,'Heritage: 2 colours x 6 pieces (the other sets are seated in their artwork)');
+  assert.ok(rules.every(([,style])=>style==='heritage'));
   for(const [,style,color,type,dx,dy] of rules){
     assert.ok(Math.abs(Number(dx))<=15,`${style} ${color}${type} horizontal offset stays small`);
     assert.ok(Number(dy)<=0&&Number(dy)>=-8,`${style} ${color}${type} is raised onto the 90% baseline`);
@@ -38,8 +39,8 @@ test('every piece in every style is centred on one shared baseline',()=>{
   assert.match(layers,/\.board-piece\{\s*--piece-baseline:90%;/);
 });
 
-test('2D styles stay flat: no contact shadow',()=>{
-  assert.match(layers,/:root\[data-piece-style\$="-2d"\] \.board-piece::before\{display:none\}/);
+test('the Ink sets stay flat: no contact shadow',()=>{
+  assert.match(layers,/:root\[data-piece-style\$="-ink"\] \.board-piece::before\{display:none\}/);
 });
 
 test('board geometry is untouched',()=>{
