@@ -1,7 +1,7 @@
 // Piece sets (Theme Studio). Vanta is the default. Each set's artwork:
-// - vanta:       public/assets/vch/pieces/vanta-3d.png (6x2 sheet)
+// - vanta:       public/assets/vch/pieces/vanta-3d.png (6x2 sheet, 2x) + vanta-3d-1x.png
 // - vanta-ink:   public/assets/vch/pieces/vanta-2d/{id}.svg
-// - monarch:     public/assets/vch/pieces/vanta-premium-3d.png (6x2 sheet)
+// - monarch:     public/assets/vch/pieces/vanta-premium-3d.png (6x2 sheet, 2x) + vanta-premium-3d-1x.png
 // - monarch-ink: public/assets/vch/pieces/vanta-premium-2d/{id}.svg
 // - heritage:    the original Staunton pieces, public/assets/vch/pieces/3d/{id}.webp
 export const PIECE_STYLES=[

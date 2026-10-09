@@ -1999,7 +1999,9 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
    plain artwork: no filters, drop-shadows, blend or tint layers, and no per-piece offsets,
    because each cell is already sized and bottom-seated. Vanta and Monarch keep only the
    subtle contact shadow (.board-piece::before); the Ink sets have none.
-   - Vanta / Monarch: one 1920x640 sheet, 320px cells, columns k q r b n p, row 0 white,
+   - Vanta / Monarch: a 6x2 sheet with a baked-in dark outline, pre-shrunk so the browser
+     barely rescales it: 1344x448 (224px cells) for 2x screens, 672x224 (112px cells) for 1x,
+     picked with image-set(). Columns k q r b n p, row 0 white,
      row 1 black -> background-size 600% 200%, x = col * 20%, y = row * 100%.
    - Vanta Ink / Monarch Ink: one vector file per piece, background-size contain. */
 :root[data-piece-style="vanta"] .piece,
@@ -2020,6 +2022,10 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 }
 :root[data-piece-style="vanta"] .piece{--piece-image:url('/assets/vch/pieces/vanta-3d.png')}
 :root[data-piece-style="monarch"] .piece{--piece-image:url('/assets/vch/pieces/vanta-premium-3d.png')}
+@supports (background-image:image-set(url('/x.png') 1x)){
+  :root[data-piece-style="vanta"] .piece{--piece-image:image-set(url('/assets/vch/pieces/vanta-3d-1x.png') 1x,url('/assets/vch/pieces/vanta-3d.png') 2x)}
+  :root[data-piece-style="monarch"] .piece{--piece-image:image-set(url('/assets/vch/pieces/vanta-premium-3d-1x.png') 1x,url('/assets/vch/pieces/vanta-premium-3d.png') 2x)}
+}
 :root[data-piece-style="vanta"] .piece-k,:root[data-piece-style="monarch"] .piece-k{--piece-x:0%}
 :root[data-piece-style="vanta"] .piece-q,:root[data-piece-style="monarch"] .piece-q{--piece-x:20%}
 :root[data-piece-style="vanta"] .piece-r,:root[data-piece-style="monarch"] .piece-r{--piece-x:40%}

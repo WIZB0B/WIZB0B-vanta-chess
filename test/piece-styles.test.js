@@ -38,6 +38,9 @@ test('Vanta and Monarch read their 6x2 sheets: 600% 200%, x = col*20%, y = row*1
   assert.match(sets,/:root\[data-piece-style="vanta"\] \.piece,\n:root\[data-piece-style="monarch"\] \.piece\{\s*background-size:600% 200%;\s*background-position:var\(--piece-x\) var\(--piece-y\);/);
   assert.ok(sets.includes(`:root[data-piece-style="vanta"] .piece{--piece-image:url('/assets/vch/pieces/vanta-3d.png')}`));
   assert.ok(sets.includes(`:root[data-piece-style="monarch"] .piece{--piece-image:url('/assets/vch/pieces/vanta-premium-3d.png')}`));
+  // Browsers with image-set() get the 1x sheet on 1x screens and the 2x sheet on 2x/3x screens.
+  for(const name of ['vanta-3d','vanta-premium-3d'])
+    assert.ok(sets.includes(`image-set(url('/assets/vch/pieces/${name}-1x.png') 1x,url('/assets/vch/pieces/${name}.png') 2x)`),name);
   ['k','q','r','b','n','p'].forEach((type,col)=>assert.ok(sets.includes(`:root[data-piece-style="vanta"] .piece-${type},:root[data-piece-style="monarch"] .piece-${type}{--piece-x:${col*20}%}`),type));
   assert.ok(sets.includes(':root[data-piece-style="vanta"] .piece.w,:root[data-piece-style="monarch"] .piece.w{--piece-y:0%}'));
   assert.ok(sets.includes(':root[data-piece-style="vanta"] .piece.b,:root[data-piece-style="monarch"] .piece.b{--piece-y:100%}'));
@@ -60,11 +63,11 @@ test('the new sets have no filters, offsets, blend or tint layers; only Vanta an
   assert.doesNotMatch(css,/2c49bffb|vanta-classic|staunton|data-piece-style\$?="[^"]*-[23]d"/);
 });
 
-test('the committed artwork is complete: two 1920x640 sheets and 12 standalone vectors per Ink set',async()=>{
-  for(const name of ['vanta-3d.png','vanta-premium-3d.png']){
+test('the committed artwork is complete: 1x and 2x sheets per set and 12 standalone vectors per Ink set',async()=>{
+  for(const [name,size] of [['vanta-3d.png',[1344,448]],['vanta-3d-1x.png',[672,224]],['vanta-premium-3d.png',[1344,448]],['vanta-premium-3d-1x.png',[672,224]]]){
     const png=await readFile(new URL(`../public/assets/vch/pieces/${name}`,import.meta.url));
     assert.equal(png.subarray(1,4).toString(),'PNG',name);
-    assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],[1920,640],name);
+    assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],size,name);
   }
   for(const folder of ['vanta-2d','vanta-premium-2d']){
     assert.deepEqual((await readdir(new URL(`../public/assets/vch/pieces/${folder}/`,import.meta.url))).sort(),IDS.map(id=>`${id}.svg`).sort());
