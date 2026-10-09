@@ -142,6 +142,33 @@ Use the current piece images and refine them with CSS only:
   again removes it; drawing it in another colour recolours it. A left-click on the board or
   any move clears them. Right-click still cancels a drag in flight and queued premoves first.
 
+## MOTION (M0–M9)
+Don't start these until T1 (PR #6: V1-fix + V1b) is merged.
+
+- M0 Motion foundation: add gsap (incl. Flip + ScrollTrigger) and lenis via npm (bundled, no
+  CDN, CSP unchanged). One motion-tokens module (durations, easings, stagger). Respect
+  prefers-reduced-motion everywhere. No main-thread jank: transform/opacity only.
+- M1 Intro replacing the VCH splash: dark board fades in, gold stroke draws the Vanta king
+  (SVG line art from owner), king steps e1→e2 with squash & stretch and a glow ring on
+  landing, VCH wordmark reveals. <2s, tap to skip, once per session; refresh goes
+  straight to the app.
+- M2 Loader: bouncing pawn with squash & stretch + glow rings, replaces all spinners.
+- M3 Find Match: full-screen searching state (board dims, radar rings, live timer);
+  opponent found = VS reveal (avatar/rating flip), pieces drop in rank by rank, clocks
+  slide in; cancel reverses.
+- M4 Page transitions: crossfade + staggered rise; GSAP Flip shared-element board ↔ mini
+  live board.
+- M5 Auth: sign-in/up card bloom, staggered fields, focus glow, error shake, success check
+  draw + card flies into header avatar.
+- M6 Micro-interactions: button lift/press, icon hover, sliding tab underline, spring
+  toggles, subtle cursor glow on Home.
+- M7 Home scroll story: entrance reveal, parallax hero, pinned board replaying a sample game
+  as you scroll with review badges, horizontal-scroll gallery, scroll progress bar.
+- M8 Game moments: start drop-in, check flash, capture pop, promotion burst, checkmate
+  topple + optional "dramatic" ember dissolve (setting).
+- M9 Optional cinematic looping video backgrounds for Home and some presets (small, Home
+  only, poster image fallback).
+
 ## V2. Typography
 One display serif for headlines, one clean UI sans for everything else,
 consistent sizes/weights/letter-spacing across the app (design tokens).
