@@ -11,6 +11,7 @@ import { PremoveQueue, consumeLegalPremove } from './premove.js';
 import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
 import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
 import { PieceLayer } from './piece-layer.js';
+import { PieceReactions } from './piece-reactions.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -33,6 +34,13 @@ if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
+// Piece reactions (src/piece-reactions.js): hover gestures, lean, press pull and hint swell.
+const reactions=new PieceReactions({
+  pieceAt:square=>boardDom?.pieces.element(square)||null,
+  canPick:square=>!!dragKindFor(square),
+  squareEl:square=>boardDom?.squares.get(square)||null,
+  enabled:()=>!prefersReducedMotion()&&motionScale()>0,
+});
 let matchSelection={seconds:600,increment:0,rated:false};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
@@ -382,12 +390,15 @@ function renderBoard({hint=null,instant=false}={}){
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
     const key=position.get(sq),mark=marks.get(sq);
-    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
+    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
     if(el.className!==cls)el.className=cls;
     const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
     if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
   }
   const motion=dom.pieces.sync(position,{flipped,animate:!instant,duration:(from,to)=>moveDurationMs(from,to,scale),hint});
+  // A move or a change of turn can leave the hovered piece somewhere else or no longer yours.
+  if(reactions.hovered&&(reactions.pieceAt(reactions.hoverSquare)!==reactions.hovered||!reactions.canPick(reactions.hoverSquare)))reactions.clearHover();
+  if(reactions.hintSquare&&!legal.has(reactions.hintSquare))reactions.hint(null);
   if(motion.animated){boardMotion=motion.finished;boardMotionUntil=performance.now()+motion.durationMs}
   const hidden=pointerDrag?.started?pointerDrag.from:null;
   for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
@@ -1273,6 +1284,21 @@ function boardPlayArea(){
   return {left:r.left+boardEl.clientLeft,top:r.top+boardEl.clientTop,width:boardEl.clientWidth,height:boardEl.clientHeight};
 }
 function boardSquareAt(x,y){return squareFromPoint(boardPlayArea(),x,y,flipped)}
+let hintTargetsKey='',hintTargets=null;
+function currentHintTargets(){
+  const from=reviewState.viewing?null:selected;if(!from){hintTargetsKey='';hintTargets=null;return null}
+  const key=`${game.fen()}|${from}`;
+  if(key!==hintTargetsKey){
+    hintTargetsKey=key;
+    try{hintTargets=new Set(game.moves({square:from,verbose:true}).map(m=>m.to))}catch{hintTargets=null}
+  }
+  return hintTargets;
+}
+boardEl.addEventListener('pointermove',event=>{
+  if(pointerDrag||event.pointerType==='touch'||event.buttons)return;
+  reactions.hover(boardSquareAt(event.clientX,event.clientY),event.clientX,event.clientY,{hintTargets:currentHintTargets()});
+});
+boardEl.addEventListener('pointerleave',()=>{if(!pointerDrag){reactions.clearHover();reactions.hint(null)}});
 // Which kind of drag a press on this square may start: a move, a premove, or none.
 function dragKindFor(square){
   const p=game.get(square);if(!p)return null;
@@ -1305,7 +1331,7 @@ function markDragOver(drag,square){
   boardDom?.squares.get(square)?.classList.add('drag-over');
 }
 function startPointerDrag(drag,x,y){
-  drag.started=true;
+  drag.started=true;reactions.reset();
   if(drag.kind==='premove'){premoves.select(drag.from);selected=null}
   else{premoves.cancel();selected=drag.from}
   const dom=ensureBoardDom(),key=pieceKey(game.get(drag.from));
@@ -1319,6 +1345,7 @@ function startPointerDrag(drag,x,y){
   render();
 }
 function endPointerDragListeners(){
+  reactions.release();
   window.removeEventListener('pointermove',onDragPointerMove);
   window.removeEventListener('pointerup',onDragPointerUp);
   window.removeEventListener('pointercancel',cancelPointerDrag);
@@ -1434,6 +1461,7 @@ boardEl.addEventListener('pointerdown',event=>{
   const square=boardSquareAt(event.clientX,event.clientY);
   if(!square)return;
   const kind=dragKindFor(square);if(!kind)return;
+  reactions.press(square,event.clientX,event.clientY); // the piece meets the hand
   document.body.classList.add('board-dragging'); // "grabbing" for the whole press and drag
   pointerDrag={id:event.pointerId,from:square,kind,startX:event.clientX,startY:event.clientY,started:false,float:null,over:null,size:0,wasSelected:kind==='premove'?premoves.selected===square:selected===square};
   window.addEventListener('pointermove',onDragPointerMove,{passive:false});
