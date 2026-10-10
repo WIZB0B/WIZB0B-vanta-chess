@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
 import { calculateMoveTiming } from "./latency.js";
-import { arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, kMultiplier, newAchievements, puzzleRatingUpdate, verifyJwt } from "./rules.js";
+import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -57,7 +57,7 @@ const gamesOf=(p:any,pool:string)=>Number(p?.provisional_games?.[pool]??0);
 const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
 const publicPlayer=(p:any)=>({id:p.id,username:p.username,display_name:p.display_name,rating:p.rating,ratings:p.ratings,provisional_games:p.provisional_games,wins:p.wins,losses:p.losses,draws:p.draws,bot_stats:p.bot_stats,smurf_score:Number(p.smurf_score||0),account:!!p.auth_user_id,country_code:p.country_code||null,has_avatar:!!p.avatar_data,puzzle_rating:Number(p.puzzle_rating||1200),achievements:Array.isArray(p.achievements)?p.achievements:[]});
 // The player's own profile also carries their portrait (a small data: image, see profileUpdate).
-const ownPlayer=(p:any)=>({...publicPlayer(p),avatar_data:p.avatar_data||null,berserk_ready:!!p.berserk_ready,rated_win_streak:Number(p.rated_win_streak||0),puzzle_games:Number(p.puzzle_games||0),puzzle_best_streak:Number(p.puzzle_best_streak||0)});
+const ownPlayer=(p:any)=>({...publicPlayer(p),avatar_data:p.avatar_data||null,berserk_ready:!!p.berserk_ready,rated_win_streak:Number(p.rated_win_streak||0),puzzle_games:Number(p.puzzle_games||0),puzzle_best_streak:Number(p.puzzle_best_streak||0),league_division:Number(p.league_division||0)});
 // Portraits: small inline images only (data: URLs, so the site's CSP needs no new origin).
 const AVATAR_MAX=48000;
 const AVATAR_RE=/^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+\/]+={0,2}$/;
@@ -226,6 +226,7 @@ async function settleRatings(g:any){
   ]);
   const {data}=await admin.from("chess_games").update({white_rating_before:rw,black_rating_before:rb,white_rating_delta:dw,black_rating_delta:db,ended_at:g.ended_at||nowIso(),updated_at:nowIso()}).eq("id",g.id).is("white_rating_delta",null).select().maybeSingle();
   const settled=data||g;await settleTournament(settled);
+  await Promise.all([addLeaguePoints(w,sw),addLeaguePoints(b,sb)]).catch(e=>console.error("league",e));
   // Achievements from the new totals; beating someone 200+ rated higher is a giant slaying.
   await Promise.all([
     awardAchievements({...w,wins:Number(w.wins)+(sw===1?1:0),rated_games:Number(w.rated_games)+1,rated_win_streak:streakW},{giantSlayer:sw===1&&rb-rw>=200}),
@@ -262,10 +263,12 @@ async function createGame(req:Request,b:any,{players=null,source="private",tourn
   let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),active=!!black;
   // Daily games: days per move instead of a clock, rated in their own "daily" pool.
   const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":poolFor(base,inc),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
+  // Freestyle: a random Chess960 start without castling (chess.js has no 960 castling). Casual only.
+  const freestyle=b.variant==="freestyle"&&!bot,startFen=freestyle?freestyleFen():START_FEN;if(freestyle)b={...b,rated:false};
   const {data,error}=await admin.from("chess_games").insert({
     invite_code:code,white_player_id:white.id,black_player_id:black?.id||null,
     white_name:white.username||white.display_name,black_name:black?(black.username||black.display_name):null,
-    fen:START_FEN,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,
+    fen:startFen,start_fen:freestyle?startFen:null,variant:freestyle?"freestyle":"standard",status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,
     time_control_seconds:dailyDays?dailyDays*86400:base,increment_seconds:dailyDays?0:inc,white_time_ms:moveMs,black_time_ms:moveMs,daily_days:dailyDays,challenge_id:b.challengeId||null,
     last_move_at:active?nowIso():null,started_at:active?nowIso():null,white_last_seen_at:nowIso(),black_last_seen_at:black?nowIso():null,
     bot_player_id:bot?.player_id||null,bot_elo:bot?.elo||null,bot_style:bot?.style||null
@@ -300,12 +303,15 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   }).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("Move conflict. Syncing latest position.",409);
   const nextGame=o.result==="*"?data:await settleRatings(data);
+  // Daily games: the opponent may have planned a reply to exactly this move.
+  if(g.daily_days&&o.result==="*"&&!b.conditional){const auto=await conditionalReply(nextGame,color,m).catch(e=>{console.error("conditional",e);return null});if(auto)return {...auto,move:m,conditionalReply:auto.move}}
   EdgeRuntime.waitUntil(broadcastGameState(nextGame));
   if(g.daily_days){
     const next=color==="w"?g.black_player_id:g.white_player_id,name=color==="w"?g.white_name:g.black_name;
     EdgeRuntime.waitUntil(notifyPlayer(next,{title:o.result==="*"?"Your move":"Game over",body:o.result==="*"?`${name||"Your opponent"} played ${m.san}`:`${name||"Your opponent"} played ${m.san} · ${o.result}`,url:`/?game=${g.invite_code}`,tag:`game-${g.id}`}));
     if(o.result!=="*")EdgeRuntime.waitUntil(Promise.all([g.white_player_id,g.black_player_id].map(async(id:string)=>awardAchievements(await playerById(id),{dailyFinished:true}))).then(()=>{}).catch(()=>{}));
   }
+  if(g.variant==="freestyle"&&o.result!=="*")EdgeRuntime.waitUntil(Promise.all([g.white_player_id,g.black_player_id].filter(Boolean).map(async(id:string)=>awardAchievements(await playerById(id),{freestyleFinished:true}))).then(()=>{}).catch(()=>{}));
   return {game:nextGame,move:m}
 }
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
@@ -377,7 +383,7 @@ async function takebackRespond(req:Request,b:any){
   }
   const askerColor=asker===g.white_player_id?"w":"b",plies=takebackPlies(g,askerColor);
   if(!plies)throw fail("There is no move to take back.",409);
-  const history=(Array.isArray(g.move_history)?g.move_history:[]).slice(0,-plies),c=new Chess();
+  const history=(Array.isArray(g.move_history)?g.move_history:[]).slice(0,-plies),c=new Chess(g.start_fen||START_FEN);
   for(const m of history){try{c.move({from:m.from,to:m.to,promotion:m.promotion||undefined})}catch{throw fail("Could not rebuild the position.",500)}}
   const {data,error}=await admin.from("chess_games").update({
     fen:c.fen(),pgn:c.pgn(),move_history:history,move_count:history.length,version:Number(g.version)+1,
@@ -389,7 +395,7 @@ async function takebackRespond(req:Request,b:any){
 }
 // Watch: recent public games (matchmaking and tournament games; private rooms are never
 // listed). Spectators get the board, names, ratings and clocks, nothing else.
-const WATCH_FIELDS="id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
+const WATCH_FIELDS="variant,start_fen,id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
 const publicGame=(g:any)=>{const {bot_player_id,...rest}=g;return {...rest,bot:!!bot_player_id}};
 async function liveGames(){
   const since=new Date(Date.now()-3*60000).toISOString();
@@ -487,7 +493,8 @@ async function challengeSend(req:Request,b:any){
   const {count}=await admin.from("chess_challenges").select("id",{count:"exact",head:true}).eq("from_player_id",p.id).eq("status","pending").gt("expires_at",nowIso());
   if(Number(count||0)>=5)throw fail("You have too many open challenges.",429);
   const color=["w","b"].includes(b.color)?b.color:"random";
-  const {data,error}=await admin.from("chess_challenges").insert({from_player_id:p.id,to_player_id:to,base_seconds:Math.max(30,Math.min(7200,Number(b.seconds||600))),increment_seconds:Math.max(0,Math.min(60,Number(b.increment||0))),daily_days:dailyDays,rated,color,expires_at:new Date(Date.now()+(dailyDays?3*86400000:10*60000)).toISOString()}).select().single();
+  const variant=b.variant==="freestyle"?"freestyle":"standard";
+  const {data,error}=await admin.from("chess_challenges").insert({variant,from_player_id:p.id,to_player_id:to,base_seconds:Math.max(30,Math.min(7200,Number(b.seconds||600))),increment_seconds:Math.max(0,Math.min(60,Number(b.increment||0))),daily_days:dailyDays,rated,color,expires_at:new Date(Date.now()+(dailyDays?3*86400000:10*60000)).toISOString()}).select().single();
   if(error)throw error;
   EdgeRuntime.waitUntil(Promise.all([
     broadcastTo("player:"+to,"challenge",{id:data.id}),
@@ -507,7 +514,7 @@ async function challengeList(req:Request,b:any){
   const ids=[...new Set((data||[]).flatMap((c:any)=>[c.from_player_id,c.to_player_id]))];
   const {data:players}=ids.length?await admin.from("chess_players").select(FRIEND_FIELDS).in("id",ids):{data:[]};
   const map=new Map((players||[]).map((x:any)=>[x.id,friendCard(x)]));
-  const card=(c:any)=>({id:c.id,from:map.get(c.from_player_id)||null,to:map.get(c.to_player_id)||null,base_seconds:c.base_seconds,increment_seconds:c.increment_seconds,daily_days:c.daily_days,rated:c.rated,color:c.color,expires_at:c.expires_at});
+  const card=(c:any)=>({id:c.id,from:map.get(c.from_player_id)||null,to:map.get(c.to_player_id)||null,base_seconds:c.base_seconds,increment_seconds:c.increment_seconds,daily_days:c.daily_days,rated:c.rated,color:c.color,variant:c.variant||"standard",expires_at:c.expires_at});
   // Your challenges accepted in the last 10 minutes, with the game to open (in case the realtime hint was missed).
   const {data:acc}=await admin.from("chess_challenges").select("id,game_id,daily_days").eq("from_player_id",p.id).eq("status","accepted").not("game_id","is",null).gte("created_at",new Date(Date.now()-600000).toISOString()).limit(5);
   const gids=(acc||[]).map((c:any)=>c.game_id),{data:ag}=gids.length?await admin.from("chess_games").select("id,invite_code,status").in("id",gids):{data:[]};
@@ -524,7 +531,7 @@ async function challengeRespond(req:Request,b:any){
   const from=await playerById(c.from_player_id);if(!from)throw fail("The challenger is gone.",404);
   if(c.rated&&(!from.auth_user_id||!p.auth_user_id))throw fail("Rated challenges are between signed-in players.",401);
   const fromWhite=c.color==="w"?true:c.color==="b"?false:crypto.getRandomValues(new Uint8Array(1))[0]%2===0;
-  const made=await createGame(req,{seconds:c.base_seconds,increment:c.increment_seconds,rated:c.rated,dailyDays:c.daily_days,challengeId:c.id},{players:fromWhite?[from,p]:[p,from],source:"private"});
+  const made=await createGame(req,{seconds:c.base_seconds,increment:c.increment_seconds,rated:c.rated&&c.variant!=="freestyle",dailyDays:c.daily_days,challengeId:c.id,variant:c.variant},{players:fromWhite?[from,p]:[p,from],source:"private"});
   await admin.from("chess_challenges").update({game_id:made.game.id}).eq("id",c.id);
   EdgeRuntime.waitUntil(Promise.all([
     broadcastTo("player:"+c.from_player_id,"challenge_answer",{id:c.id,accepted:true,code:made.game.invite_code}),
@@ -581,6 +588,239 @@ async function achievementsFor(req:Request,b:any){
   const p=await playerFor(req,b,false,{touch:false});
   return {achievements:Array.isArray(p.achievements)?p.achievements:[]}
 }
+// ---- Conditional moves (daily games; rules.js matchConditional) ----
+async function conditionalReply(g:any,moverColor:string,m:any){
+  const replier=moverColor==="w"?g.black_player_id:g.white_player_id;if(!replier)return null;
+  const {data:row}=await admin.from("chess_conditional_moves").select("lines").eq("game_id",g.id).eq("player_id",replier).maybeSingle();
+  const lines=Array.isArray(row?.lines)?row.lines:[];if(!lines.length)return null;
+  const {reply,rest}=matchConditional(lines,m.from+m.to+(m.promotion||""));
+  await admin.from("chess_conditional_moves").update({lines:rest,updated_at:nowIso()}).eq("game_id",g.id).eq("player_id",replier);
+  if(!reply)return null;
+  try{return await applyMove(g,moverColor==="w"?"b":"w",{from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]||undefined,expectedVersion:g.version,conditional:true})}
+  catch(e){console.error("conditional reply failed",e);await admin.from("chess_conditional_moves").update({lines:[]}).eq("game_id",g.id).eq("player_id",replier);return null}
+}
+async function conditionalList(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);
+  const {data}=await admin.from("chess_conditional_moves").select("lines").eq("game_id",g.id).eq("player_id",p.id).maybeSingle();
+  return {lines:Array.isArray(data?.lines)?data.lines:[]}
+}
+async function conditionalSet(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);
+  if(!g.daily_days||g.status!=="active")throw fail("Conditional moves are for daily games in progress.",409);
+  const color=g.white_player_id===p.id?"w":"b";
+  if(new Chess(g.fen).turn()===color)throw fail("It's your move. Plan replies while you wait for your opponent.",409);
+  const incoming=Array.isArray(b.lines)?b.lines:[];
+  if(incoming.length>CONDITIONAL_MAX_LINES)throw fail(`Up to ${CONDITIONAL_MAX_LINES} plans per game.`);
+  const lines:string[][]=[];
+  for(const line of incoming){
+    if(!Array.isArray(line)||line.length<2||line.length>CONDITIONAL_MAX_PLIES)throw fail("Each plan is 2 to 12 moves.");
+    const c=new Chess(g.fen),out:string[]=[];
+    for(const u of line){
+      const x=String(u);if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(x))throw fail("Invalid move in a plan.");
+      let mv:any=null;try{mv=c.move({from:x.slice(0,2),to:x.slice(2,4),promotion:x[4]||undefined})}catch{}
+      if(!mv)throw fail("A planned move is not legal.");out.push(mv.from+mv.to+(mv.promotion||""));
+    }
+    if(out.length%2===1)out.pop(); // a plan ends on your reply
+    lines.push(out);
+  }
+  const {error}=await admin.from("chess_conditional_moves").upsert({game_id:g.id,player_id:p.id,lines,updated_at:nowIso()},{onConflict:"game_id,player_id"});if(error)throw error;
+  return {lines}
+}
+// ---- Monthly leagues (rules.js) ----
+async function processSeasonIfDue(){
+  let season=seasonOf();
+  for(let i=0;i<3;i++){
+    season=previousSeason(season);
+    const {data:claimed}=await admin.from("chess_league_seasons").upsert({season},{onConflict:"season",ignoreDuplicates:true}).select();
+    if(!claimed?.length)continue; // already processed (or being processed)
+    const {data:entries}=await admin.from("chess_league_entries").select("player_id,division,points,games,wins").eq("season",season).limit(5000);
+    const moves=leagueMoves(entries||[]),moved=new Map(moves.map(x=>[x.player_id,x.to]));
+    for(const mv of moves)await admin.from("chess_players").update({league_division:mv.to}).eq("id",mv.player_id);
+    // Season badge for everyone who played the minimum, in the division they finished in.
+    const at=nowIso();
+    for(const e of (entries||[]).filter((x:any)=>Number(x.games)>=LEAGUE_MIN_GAMES)){
+      const pl=await playerById(e.player_id);if(!pl)continue;
+      const finished=moved.has(e.player_id)?moved.get(e.player_id):Number(e.division),badge=`season-${season}-${DIVISIONS[finished].toLowerCase()}`;
+      const have=Array.isArray(pl.achievements)?pl.achievements:[];
+      const extra=newAchievements(have,pl,{promoted:Number(finished)>Number(e.division)});
+      const next=[...have.filter((a:any)=>a?.id!==badge),{id:badge,at},...extra.map((id:string)=>({id,at}))];
+      await admin.from("chess_players").update({achievements:next}).eq("id",pl.id);
+    }
+  }
+}
+async function addLeaguePoints(p:any,score:number){
+  if(!p?.id||!p.auth_user_id)return;
+  const season=seasonOf(),pts=leaguePoints(score),win=score===1?1:0;
+  const {data:e}=await admin.from("chess_league_entries").select("*").eq("season",season).eq("player_id",p.id).maybeSingle();
+  if(e){await admin.from("chess_league_entries").update({points:Number(e.points)+pts,games:Number(e.games)+1,wins:Number(e.wins)+win,updated_at:nowIso()}).eq("season",season).eq("player_id",p.id);return}
+  await processSeasonIfDue();
+  const fresh=await playerById(p.id);
+  const {error}=await admin.from("chess_league_entries").insert({season,player_id:p.id,division:Number(fresh?.league_division||0),points:pts,games:1,wins:win});
+  if(error?.code==="23505")return addLeaguePoints(p,score);if(error)throw error;
+}
+async function league(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  await processSeasonIfDue().catch(e=>console.error("season",e));
+  const season=seasonOf();
+  const {data:mine}=p?await admin.from("chess_league_entries").select("*").eq("season",season).eq("player_id",p.id).maybeSingle():{data:null};
+  const fresh=p?await playerById(p.id):null;
+  const asked=Number.isInteger(Number(b.division))&&b.division!==null&&b.division!==undefined?Math.max(0,Math.min(4,Number(b.division))):null;
+  const division=asked??(mine?Number(mine.division):Number(fresh?.league_division||0));
+  const {data:rows,error}=await admin.from("chess_league_entries").select("player_id,points,games,wins").eq("season",season).eq("division",division).order("points",{ascending:false}).order("wins",{ascending:false}).limit(100);
+  if(error)throw error;
+  const ids=(rows||[]).map((r:any)=>r.player_id),{data:players}=ids.length?await admin.from("chess_players").select("id,username,display_name,country_code").in("id",ids):{data:[]};
+  const names=new Map((players||[]).map((x:any)=>[x.id,x]));
+  const {count}=await admin.from("chess_league_entries").select("player_id",{count:"exact",head:true}).eq("season",season).eq("division",division);
+  const badges=(Array.isArray(fresh?.achievements)?fresh.achievements:[]).filter((a:any)=>String(a?.id||"").startsWith("season-"));
+  return {season,ends:seasonEnds(season),division,divisions:DIVISIONS,myDivision:Number(fresh?.league_division||0),me:mine||null,minGames:LEAGUE_MIN_GAMES,zones:zoneSizes(Number(count||0)),total:Number(count||0),
+    standings:(rows||[]).map((r:any,i:number)=>{const x:any=names.get(r.player_id);return {rank:i+1,name:x?.username||x?.display_name||"Player",country_code:x?.country_code||null,points:r.points,games:r.games,wins:r.wins,me:r.player_id===p?.id}}),badges}
+}
+// ---- Clubs and club battles ----
+const cleanSlug=(v:any)=>String(v||"").toLowerCase().trim().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,32);
+const cleanClubName=(v:any)=>String(v||"").replace(/[<>\u0000-\u001F]/g,"").replace(/\s+/g," ").trim().slice(0,40);
+async function clubOf(playerId:string){const {data}=await admin.from("chess_club_members").select("club_id,role").eq("player_id",playerId).maybeSingle();return data}
+async function recountClub(id:string){const {count}=await admin.from("chess_club_members").select("player_id",{count:"exact",head:true}).eq("club_id",id);await admin.from("chess_clubs").update({member_count:Number(count||0)}).eq("id",id);return Number(count||0)}
+const clubCard=(c:any)=>({slug:c.slug,name:c.name,description:c.description,member_count:c.member_count,created_at:c.created_at});
+async function clubList(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  const q=cleanClubName(b.q).replace(/[%_\\]/g,"");
+  let query=admin.from("chess_clubs").select("*").order("member_count",{ascending:false}).limit(30);
+  if(q.length>=2)query=query.ilike("name",`%${q}%`);
+  const {data,error}=await query;if(error)throw error;
+  const m=p?await clubOf(p.id):null,mine=m?await one("chess_clubs","id",m.club_id):null;
+  return {clubs:(data||[]).map(clubCard),mine:mine?{...clubCard(mine),role:m.role}:null}
+}
+async function clubView(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  const club=await one("chess_clubs","slug",cleanSlug(b.slug));if(!club)throw fail("Club not found.",404);
+  const {data:mem}=await admin.from("chess_club_members").select("player_id,role,joined_at").eq("club_id",club.id).order("joined_at").limit(300);
+  const ids=(mem||[]).map((x:any)=>x.player_id),{data:players}=ids.length?await admin.from("chess_players").select(FRIEND_FIELDS).in("id",ids):{data:[]};
+  const map=new Map((players||[]).map((x:any)=>[x.id,x])),me=(mem||[]).find((x:any)=>x.player_id===p?.id);
+  const members=(mem||[]).map((x:any)=>{const pl:any=map.get(x.player_id);return pl?{...friendCard(pl),role:x.role}:null}).filter(Boolean).sort((a:any,c:any)=>Number(c.online)-Number(a.online)||c.rating-a.rating);
+  let messages:any[]=[];
+  if(me){ // club chat is for members only
+    const {data:msgs}=await admin.from("chess_club_messages").select("id,player_id,body,created_at").eq("club_id",club.id).order("created_at",{ascending:false}).limit(50);
+    messages=(msgs||[]).reverse().map((x:any)=>{const pl:any=map.get(x.player_id);return {id:x.id,name:pl?.username||pl?.display_name||"Former member",body:x.body,created_at:x.created_at,mine:x.player_id===p?.id}});
+  }
+  return {club:{...clubCard(club),id:club.id},members,messages,member:!!me,role:me?.role||null}
+}
+async function clubCreate(req:Request,b:any){
+  const p=await playerFor(req,b,true);
+  if(await clubOf(p.id))throw fail("Leave your club before starting a new one.",409);
+  const name=cleanClubName(b.name);if(name.length<3)throw fail("Club names are 3 to 40 characters.");
+  const slug=cleanSlug(b.slug||name);if(!/^[a-z0-9][a-z0-9-]{2,31}$/.test(slug))throw fail("Pick a club link of 3 to 32 letters, numbers or dashes.");
+  const {data:club,error}=await admin.from("chess_clubs").insert({slug,name,description:cleanChat(b.description),owner_id:p.id}).select().single();
+  if(error){if(error.code==="23505")throw fail("That club link is taken.",409);throw error}
+  const {error:e2}=await admin.from("chess_club_members").insert({club_id:club.id,player_id:p.id,role:"owner"});
+  if(e2){await admin.from("chess_clubs").delete().eq("id",club.id);throw e2}
+  EdgeRuntime.waitUntil(awardAchievements(p,{joinedClub:true}).then(()=>{}).catch(()=>{}));
+  return {club:clubCard(club)}
+}
+async function clubJoin(req:Request,b:any){
+  const p=await playerFor(req,b,true),club=await one("chess_clubs","slug",cleanSlug(b.slug));if(!club)throw fail("Club not found.",404);
+  const m=await clubOf(p.id);if(m){if(m.club_id===club.id)return {joined:true};throw fail("You're already in a club. Leave it first.",409)}
+  const {error}=await admin.from("chess_club_members").insert({club_id:club.id,player_id:p.id});
+  if(error){if(error.code==="23505")throw fail("You're already in a club.",409);throw error}
+  await recountClub(club.id);EdgeRuntime.waitUntil(awardAchievements(p,{joinedClub:true}).then(()=>{}).catch(()=>{}));
+  return {joined:true}
+}
+async function clubLeave(req:Request,b:any){
+  const p=await playerFor(req,b,true),m=await clubOf(p.id);if(!m)return {left:true};
+  await admin.from("chess_club_members").delete().eq("club_id",m.club_id).eq("player_id",p.id);
+  const left=await recountClub(m.club_id);
+  if(m.role==="owner"){ // the longest-standing member takes over; an empty club closes
+    if(!left)await admin.from("chess_clubs").delete().eq("id",m.club_id);
+    else{const {data:next}=await admin.from("chess_club_members").select("player_id").eq("club_id",m.club_id).order("joined_at").limit(1).maybeSingle();if(next){await admin.from("chess_club_members").update({role:"owner"}).eq("club_id",m.club_id).eq("player_id",next.player_id);await admin.from("chess_clubs").update({owner_id:next.player_id}).eq("id",m.club_id)}}
+  }
+  return {left:true}
+}
+async function clubChat(req:Request,b:any){
+  const p=await playerFor(req,b,true),m=await clubOf(p.id),club=await one("chess_clubs","slug",cleanSlug(b.slug));
+  if(!club||!m||m.club_id!==club.id)throw fail("Only club members can chat here.",403);
+  const body=cleanChat(b.body);if(!body)throw fail("Write a message first.");
+  const {count}=await admin.from("chess_club_messages").select("id",{count:"exact",head:true}).eq("player_id",p.id).gte("created_at",new Date(Date.now()-15000).toISOString());
+  if(Number(count||0)>=3)throw fail("Slow down a little.",429);
+  const {data,error}=await admin.from("chess_club_messages").insert({club_id:club.id,player_id:p.id,body}).select("id,body,created_at").single();if(error)throw error;
+  EdgeRuntime.waitUntil(broadcastTo("club:"+club.id,"message",{id:data.id}));
+  return {message:{...data,name:p.username||p.display_name,mine:true}}
+}
+// Club battle: every Sunday 18:00 UTC for 90 minutes, rated 5+0. A club scores its best five
+// players' arena points; you are never paired against your own club.
+const CLUB_BATTLE={day:0,hourUtc:18,minutes:90,base:300,inc:0,pool:"blitz",top:5};
+async function ensureClubBattle(){
+  const now=new Date(),start=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),CLUB_BATTLE.hourUtc));
+  start.setUTCDate(start.getUTCDate()+((CLUB_BATTLE.day-start.getUTCDay()+7)%7));
+  let end=new Date(start.getTime()+CLUB_BATTLE.minutes*60000);
+  if(end<=now){start.setUTCDate(start.getUTCDate()+7);end=new Date(start.getTime()+CLUB_BATTLE.minutes*60000)}
+  await admin.from("chess_tournaments").upsert({slug:"club-battle-"+start.toISOString().slice(0,10),name:"VCH Club Battle",kind:"club_battle",description:`Every Sunday · 90 minutes · rated 5+0. Play for your club: its best ${CLUB_BATTLE.top} players' points count.`,format:"arena",status:Date.now()>=start.getTime()?"active":"scheduled",rated:true,pool:CLUB_BATTLE.pool,base_seconds:CLUB_BATTLE.base,increment_seconds:CLUB_BATTLE.inc,starts_at:start.toISOString(),ends_at:end.toISOString()},{onConflict:"slug",ignoreDuplicates:true});
+  const iso=nowIso();
+  await Promise.all([
+    admin.from("chess_tournaments").update({status:"active"}).like("slug","club-battle-%").eq("status","scheduled").lte("starts_at",iso).gt("ends_at",iso),
+    admin.from("chess_tournaments").update({status:"finished"}).like("slug","club-battle-%").in("status",["scheduled","active"]).lte("ends_at",iso)
+  ]);
+}
+async function clubBattleTable(entries:any[]){
+  const byClub=new Map<string,any[]>();
+  for(const e of entries)if(e.club_id){const l=byClub.get(e.club_id)||[];l.push(e);byClub.set(e.club_id,l)}
+  if(!byClub.size)return [];
+  const {data:clubs}=await admin.from("chess_clubs").select("id,slug,name").in("id",[...byClub.keys()]);
+  return (clubs||[]).map((c:any)=>{const rows=(byClub.get(c.id)||[]).sort((a:any,x:any)=>Number(x.points)-Number(a.points));return {slug:c.slug,name:c.name,points:rows.slice(0,CLUB_BATTLE.top).reduce((s:number,x:any)=>s+Number(x.points||0),0),players:rows.length}}).sort((a:any,c:any)=>c.points-a.points||c.players-a.players)
+}
+// ---- Public profile: rating history, best wins, head-to-head ----
+async function publicProfile(req:Request,b:any){
+  const u=cleanUsername(b.username);if(u.length<3)throw fail("Player not found.",404);
+  const {data:found}=await admin.from("chess_players").select("*").ilike("username",u).not("auth_user_id","is",null).limit(5);
+  const t=(found||[]).find((x:any)=>String(x.username).toLowerCase()===u.toLowerCase());if(!t)throw fail("Player not found.",404);
+  let viewer:any=null;try{viewer=await playerFor(req,b,false,{touch:false})}catch{}
+  const fields="id,white_player_id,black_player_id,white_name,black_name,result,pool,rated,variant,ended_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta";
+  const {data:games}=await admin.from("chess_games").select(fields).eq("rated",true).not("white_rating_delta","is",null).or(`white_player_id.eq.${t.id},black_player_id.eq.${t.id}`).order("ended_at",{ascending:false}).limit(300);
+  const list=(games||[]).reverse(),side=(g:any)=>g.white_player_id===t.id?"w":"b";
+  const history=list.map((g:any)=>{const s=side(g);return {pool:g.pool,at:g.ended_at,rating:Number(s==="w"?g.white_rating_before:g.black_rating_before)+Number(s==="w"?g.white_rating_delta:g.black_rating_delta)}});
+  const row=(g:any)=>{const s=side(g);return {opponent:s==="w"?g.black_name:g.white_name,opponent_rating:Number(s==="w"?g.black_rating_before:g.white_rating_before),result:scoreFor(g.result,s)===1?"win":g.result==="1/2-1/2"?"draw":"loss",pool:g.pool,at:g.ended_at}};
+  const bestWins=list.filter((g:any)=>scoreFor(g.result,side(g))===1).map(row).sort((a:any,c:any)=>c.opponent_rating-a.opponent_rating).slice(0,5);
+  let headToHead=null,following=false;
+  if(viewer&&viewer.id!==t.id){
+    const {data:h2h}=await admin.from("chess_games").select("white_player_id,result").not("result","eq","*").or(`and(white_player_id.eq.${viewer.id},black_player_id.eq.${t.id}),and(white_player_id.eq.${t.id},black_player_id.eq.${viewer.id})`).limit(500);
+    const r={wins:0,draws:0,losses:0};for(const g of h2h||[]){const s=scoreFor(g.result,g.white_player_id===viewer.id?"w":"b");if(s===1)r.wins++;else if(s===.5)r.draws++;else r.losses++}
+    headToHead=r;
+    const {data:f}=await admin.from("chess_follows").select("followee_id").eq("follower_id",viewer.id).eq("followee_id",t.id).maybeSingle();following=!!f;
+  }
+  const m=await clubOf(t.id),club=m?await one("chess_clubs","id",m.club_id):null;
+  return {player:{id:t.id,username:t.username,country_code:t.country_code||null,avatar_data:t.avatar_data||null,ratings:t.ratings||{},provisional_games:t.provisional_games||{},wins:t.wins,losses:t.losses,draws:t.draws,rated_games:t.rated_games,puzzle_rating:Number(t.puzzle_rating||1200),achievements:Array.isArray(t.achievements)?t.achievements:[],league_division:Number(t.league_division||0),member_since:String(t.account_created_at||t.created_at||"").slice(0,7),online:!!t.last_seen_at&&Date.now()-Date.parse(t.last_seen_at)<ONLINE_MS},
+    history,bestWins,recent:list.slice(-10).reverse().map(row),headToHead,following,self:viewer?.id===t.id,club:club?{slug:club.slug,name:club.name}:null,division:DIVISIONS[Number(t.league_division||0)]}
+}
+// ---- Fair play ----
+async function reportPlayer(req:Request,b:any){
+  const p=await playerFor(req,b,true),id=String(b.playerId||"");
+  if(!/^[0-9a-f-]{36}$/i.test(id)||id===p.id)throw fail("Player not found.",404);
+  if(!await playerById(id))throw fail("Player not found.",404);
+  const reason=["engine","abuse","sandbagging","other"].includes(b.reason)?b.reason:"other";
+  let gameId=null;
+  if(b.gameId){const g=await gameById(String(b.gameId));if(g&&[g.white_player_id,g.black_player_id].includes(p.id)&&[g.white_player_id,g.black_player_id].includes(id))gameId=g.id}
+  const {count}=await admin.from("chess_reports").select("id",{count:"exact",head:true}).eq("reporter_id",p.id).gte("created_at",new Date(Date.now()-86400000).toISOString());
+  if(Number(count||0)>=10)throw fail("You've sent a lot of reports today. Thank you; we'll look at them.",429);
+  const {error}=await admin.from("chess_reports").insert({reporter_id:p.id,reported_id:id,game_id:gameId,reason,note:String(b.note||"").replace(/[\u0000-\u001F]/g," ").trim().slice(0,500)});
+  if(error&&error.code!=="23505")throw error;
+  return {reported:true}
+}
+// Your own engine review of a rated game you played sends the opponent's accuracy. Used only
+// as a signal for a human to look at (chess_fairplay_review), never to act automatically.
+async function fairplaySignal(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),g=await gameById(String(b.gameId||""));
+  if(!g||!g.rated||["waiting","active"].includes(g.status))return {ok:false};
+  const color=g.white_player_id===p.id?"w":g.black_player_id===p.id?"b":null;if(!color)throw fail("You are not a player in this game.",403);
+  const subject=color==="w"?g.black_player_id:g.white_player_id;if(!subject||subject===g.bot_player_id)return {ok:false};
+  const accuracy=Number(b.accuracy),avgLoss=Number(b.avgLoss),moves=Math.floor(Number(b.moves));
+  if(!(accuracy>=0&&accuracy<=100)||!(avgLoss>=0&&avgLoss<=100)||!(moves>=1&&moves<=Math.ceil(Number(g.move_count||0)/2)))throw fail("Invalid review data.");
+  await admin.from("chess_fairplay_signals").upsert({game_id:g.id,submitter_id:p.id,subject_id:subject,accuracy:Math.round(accuracy*100)/100,avg_loss:Math.round(avgLoss*100)/100,moves},{onConflict:"game_id,submitter_id",ignoreDuplicates:true});
+  return {ok:true}
+}
+
+// "Learn from your mistakes" lives in the browser; it reports progress for the badge only.
+async function mistakesFixed(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),n=Math.max(0,Math.min(10000,Math.floor(Number(b.count)||0)));
+  const awarded=n>=10?await awardAchievements(p,{fixedMistakes:true}):[];return {awarded}
+}
 async function resign(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")return {game:g};let patch:any;
   if(g.white_player_id===p.id)patch={status:"black_won",result:"0-1"};else if(g.black_player_id===p.id)patch={status:"white_won",result:"1-0"};else throw fail("Not your game.",403);
@@ -619,7 +859,7 @@ async function respondDraw(req:Request,b:any){
 }
 async function gameHistory(req:Request,b:any){
   const p=await playerFor(req,b),limit=Math.max(1,Math.min(100,Number(b.limit||30)));
-  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
+  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
   if(error)throw error;return {games:data||[]}
 }
 
@@ -750,7 +990,12 @@ async function queueJoin(req:Request,b:any){
   await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");
   const r=ratingOf(p,pool),er=effectiveRating(p,pool);const {data:q,error}=await admin.from("chess_matchmaking_queue").insert({player_id:p.id,rated,pool,base_seconds:tournament?.base_seconds||base,increment_seconds:tournament?.increment_seconds||inc,rating:r,effective_rating:er,tournament_id:tournament?.id||null,state:"searching",heartbeat_at:nowIso()}).select().single();if(error)throw error;
   const cutoff=new Date(Date.now()-90000).toISOString();let query=admin.from("chess_matchmaking_queue").select("*").eq("state","searching").eq("rated",rated).eq("pool",pool).neq("player_id",p.id).gte("heartbeat_at",cutoff).order("created_at").limit(60);const {data:raw,error:e2}=await query;if(e2)throw e2;let candidates=raw||[];
-  candidates=candidates.filter((x:any)=>tournament?x.tournament_id===tournament.id:!x.tournament_id);const wait=(x:any)=>(Date.now()-Date.parse(x.created_at))/1000;
+  candidates=candidates.filter((x:any)=>tournament?x.tournament_id===tournament.id:!x.tournament_id);
+  if(tournament?.kind==="club_battle"&&candidates.length){
+    const {data:ents}=await admin.from("chess_tournament_entries").select("player_id,club_id").eq("tournament_id",tournament.id).in("player_id",[p.id,...candidates.map((x:any)=>x.player_id)]);
+    const clubOfP=new Map((ents||[]).map((x:any)=>[x.player_id,x.club_id])),mine=clubOfP.get(p.id);
+    candidates=candidates.filter((x:any)=>!mine||clubOfP.get(x.player_id)!==mine); // never against your own club
+  }const wait=(x:any)=>(Date.now()-Date.parse(x.created_at))/1000;
   candidates=candidates.filter((x:any)=>Math.abs(Number(x.effective_rating)-er)<=Math.max(searchRange(wait(q)),searchRange(wait(x)))&&(Math.abs(Number(x.base_seconds)-(tournament?.base_seconds||base))+20*Math.abs(Number(x.increment_seconds)-(tournament?.increment_seconds||inc)))<=Math.max(60,(tournament?.base_seconds||base)*.35)).sort((a:any,bx:any)=>Math.abs(Number(a.effective_rating)-er)-wait(a)*1.4-(Math.abs(Number(bx.effective_rating)-er)-wait(bx)*1.4));
   for(const cand of candidates){const {data:claimed}=await admin.from("chess_matchmaking_queue").update({state:"matched"}).eq("id",cand.id).eq("state","searching").select().maybeSingle();if(!claimed)continue;const opp=await playerById(cand.player_id);if(!opp)continue;const players=Number(p.color_balance||0)<=Number(opp.color_balance||0)?[p,opp]:[opp,p];
     try{const made=await createGame(req,{seconds:tournament?.base_seconds||base,increment:tournament?.increment_seconds||inc,rated},{players,source:tournament?"tournament":"queue",tournamentId:tournament?.id||null});await Promise.all([admin.from("chess_matchmaking_queue").update({state:"matched",matched_game_id:made.game.id}).eq("id",q.id),admin.from("chess_matchmaking_queue").update({state:"matched",matched_game_id:made.game.id}).eq("id",cand.id)]);return {matched:true,game:made.game,player:publicPlayer(p),seat:made.game.white_player_id===p.id?"w":"b"}}catch(err){await admin.from("chess_matchmaking_queue").update({state:"searching"}).eq("id",cand.id);throw err}}
@@ -807,10 +1052,14 @@ async function queueStatus(req:Request,b:any){
   return {state:q.state,queue:q}
 }
 async function queueLeave(req:Request,b:any){const p=await playerFor(req,b);await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");return {state:"cancelled"}}
-async function tournaments(req:Request,b:any){try{await ensureWeeklyArena()}catch(e){console.error("weekly arena",e)}const recent=new Date(Date.now()-3*86400000).toISOString();const {data:list,error}=await admin.from("chess_tournaments").select("*").or(`status.in.(scheduled,active),and(status.eq.finished,ends_at.gte.${recent})`).order("starts_at").limit(30);if(error)throw error;let memberships:any[]=[];try{const p=await playerFor(req,b);const {data}=await admin.from("chess_tournament_entries").select("tournament_id,points,games,wins,draws,losses").eq("player_id",p.id);memberships=data||[]}catch{}return {tournaments:list||[],memberships}}
-async function tournamentJoin(req:Request,b:any){const t=await one("chess_tournaments","id",b.tournamentId);if(!t)throw fail("Tournament not found.",404);const p=await playerFor(req,b,!!t.rated);const {data:exists}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",t.id).eq("player_id",p.id).maybeSingle();if(!exists){const {error}=await admin.from("chess_tournament_entries").insert({tournament_id:t.id,player_id:p.id});if(error)throw error}return {joined:true,tournament:t,player:publicPlayer(p)}}
+async function tournaments(req:Request,b:any){try{await Promise.all([ensureWeeklyArena(),ensureClubBattle()])}catch(e){console.error("weekly arena",e)}const recent=new Date(Date.now()-3*86400000).toISOString();const {data:list,error}=await admin.from("chess_tournaments").select("*").or(`status.in.(scheduled,active),and(status.eq.finished,ends_at.gte.${recent})`).order("starts_at").limit(30);if(error)throw error;let memberships:any[]=[];try{const p=await playerFor(req,b);const {data}=await admin.from("chess_tournament_entries").select("tournament_id,points,games,wins,draws,losses").eq("player_id",p.id);memberships=data||[]}catch{}return {tournaments:list||[],memberships}}
+async function tournamentJoin(req:Request,b:any){const t=await one("chess_tournaments","id",b.tournamentId);if(!t)throw fail("Tournament not found.",404);const p=await playerFor(req,b,!!t.rated);
+  // Club battles: you play for your club; join a club first.
+  let clubId=null;if(t.kind==="club_battle"){const m=await clubOf(p.id);if(!m)throw fail("Join a club to play in the club battle.",409);clubId=m.club_id}
+  const {data:exists}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",t.id).eq("player_id",p.id).maybeSingle();if(!exists){const {error}=await admin.from("chess_tournament_entries").insert({tournament_id:t.id,player_id:p.id,club_id:clubId});if(error)throw error}return {joined:true,tournament:t,player:publicPlayer(p)}}
 async function tournamentStandings(b:any){const {data:e,error}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",b.tournamentId).order("points",{ascending:false}).order("wins",{ascending:false}).order("joined_at").limit(100);if(error)throw error;
-  try{const t=await one("chess_tournaments","id",b.tournamentId);if(t?.status==="finished")for(const x of (e||[]).filter((x:any)=>x.games>0).slice(0,3)){const pl=await playerById(x.player_id);await awardAchievements(pl,{arenaPodium:true})}}catch(err){console.error("podium",err)}const ids=(e||[]).map((x:any)=>x.player_id),{data:players}=ids.length?await admin.from("chess_players").select("id,username,display_name,ratings").in("id",ids):{data:[]};const map=new Map((players||[]).map((p:any)=>[p.id,p]));return {standings:(e||[]).map((x:any)=>{const p:any=map.get(x.player_id);return {...x,username:p?.username||p?.display_name||"Player",rating:ratingOf(p,"blitz"),on_fire:Number(x.streak||0)>=3}})}}
+  try{const t=await one("chess_tournaments","id",b.tournamentId);if(t?.status==="finished")for(const x of (e||[]).filter((x:any)=>x.games>0).slice(0,3)){const pl=await playerById(x.player_id);await awardAchievements(pl,{arenaPodium:true})}}catch(err){console.error("podium",err)}const ids=(e||[]).map((x:any)=>x.player_id),{data:players}=ids.length?await admin.from("chess_players").select("id,username,display_name,ratings").in("id",ids):{data:[]};const map=new Map((players||[]).map((p:any)=>[p.id,p]));const standings=(e||[]).map((x:any)=>{const p:any=map.get(x.player_id);return {...x,username:p?.username||p?.display_name||"Player",rating:ratingOf(p,"blitz"),on_fire:Number(x.streak||0)>=3}});
+  return {standings,clubs:await clubBattleTable(e||[])}}
 async function leaderboard(b:any){const pool=POOLS.includes(b.pool)?b.pool:"rapid";const {data,error}=await admin.from("chess_players").select("id,username,display_name,ratings,provisional_games,wins,losses,draws,rated_games,smurf_score").not("auth_user_id","is",null).limit(300);if(error)throw error;return {pool,leaderboard:(data||[]).map((p:any)=>({...publicPlayer(p),pool_rating:ratingOf(p,pool),pool_games:gamesOf(p,pool)})).filter((x:any)=>x.pool_games>0).sort((a:any,bx:any)=>bx.pool_rating-a.pool_rating).slice(0,100)}}
 async function botCatalog(){
   const {data,error}=await admin.from("chess_bots").select("slug,display_name,elo,engine_skill,style,blurb").eq("enabled",true).order("elo");
@@ -861,6 +1110,19 @@ Deno.serve(async(req)=>{
       case "puzzle_stats":out=await puzzleStats(req,b);break;
       case "puzzle_streak_record":out=await puzzleStreakRecord(req,b);break;
       case "achievements":out=await achievementsFor(req,b);break;
+      case "public_profile":out=await publicProfile(req,b);break;
+      case "club_list":out=await clubList(req,b);break;
+      case "club_view":out=await clubView(req,b);break;
+      case "club_create":out=await clubCreate(req,b);break;
+      case "club_join":out=await clubJoin(req,b);break;
+      case "club_leave":out=await clubLeave(req,b);break;
+      case "club_chat":out=await clubChat(req,b);break;
+      case "league":out=await league(req,b);break;
+      case "conditional_list":out=await conditionalList(req,b);break;
+      case "conditional_set":out=await conditionalSet(req,b);break;
+      case "report_player":out=await reportPlayer(req,b);break;
+      case "fairplay_signal":out=await fairplaySignal(req,b);break;
+      case "mistakes_fixed":out=await mistakesFixed(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;

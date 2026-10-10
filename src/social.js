@@ -87,6 +87,10 @@ export const ACHIEVEMENT_INFO = [
   { id: 'arena-podium', title: 'Arena podium', mark: 'A3', text: 'Finish an arena in the top three.' },
   { id: 'daily-finished', title: 'Correspondent', mark: 'D', text: 'Finish a daily game.' },
   { id: 'first-friend', title: 'Good company', mark: 'F', text: 'Follow another player.' },
+  { id: 'club-member', title: 'Club player', mark: 'C', text: 'Join or start a club.' },
+  { id: 'league-promoted', title: 'Promoted', mark: 'UP', text: 'Move up a league division.' },
+  { id: 'mistake-fixer', title: 'Learns fast', mark: 'LF', text: 'Fix 10 of your own mistakes.' },
+  { id: 'freestyle', title: 'Freestyler', mark: '960', text: 'Finish a Freestyle game.' },
 ];
 export function achievementBoard(owned = []) {
   const at = new Map((owned || []).map(a => (typeof a === 'string' ? [a, null] : [a?.id, a?.at || null])));

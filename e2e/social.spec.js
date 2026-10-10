@@ -110,6 +110,6 @@ test('profile: rating grid, Berserk progress and achievements', async ({ page })
   await expect(page.locator('#ratingDaily')).toHaveText('1310');
   await expect(page.locator('#ratingPuzzle')).toHaveText('1640');
   await expect(page.locator('#berserkStatus')).toHaveText('2 more rated wins to Berserk');
-  await expect(page.locator('#achievementCount')).toHaveText('1 / 11');
+  await expect(page.locator('#achievementCount')).toHaveText('1 / 15');
   await expect(page.locator('.achievement.earned')).toHaveCount(1);
 });

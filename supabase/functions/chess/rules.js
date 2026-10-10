@@ -61,6 +61,10 @@ export const ACHIEVEMENTS = [
   { id: 'arena-podium', title: 'Arena podium', test: (s, x) => !!x.arenaPodium },
   { id: 'daily-finished', title: 'Correspondent', test: (s, x) => !!x.dailyFinished },
   { id: 'first-friend', title: 'Good company', test: (s, x) => !!x.followed },
+  { id: 'club-member', title: 'Club player', test: (s, x) => !!x.joinedClub },
+  { id: 'league-promoted', title: 'Promoted', test: (s, x) => !!x.promoted },
+  { id: 'mistake-fixer', title: 'Learns fast', test: (s, x) => !!x.fixedMistakes },
+  { id: 'freestyle', title: 'Freestyler', test: (s, x) => !!x.freestyleFinished },
 ];
 export function newAchievements(have = [], stats = {}, extra = {}) {
   const owned = new Set((have || []).map(a => (typeof a === 'string' ? a : a?.id)));
@@ -91,3 +95,63 @@ export async function verifyJwt(token, jwks, { issuer = null, now = Date.now() }
     return claims;
   } catch { return null; }
 }
+
+// ---- Freestyle (Chess960 start positions, played without castling) ----
+// chess.js has no Chess960 castling, so Freestyle games start with castling rights off.
+// `pick(n)` returns a random integer in [0, n). Bishops on opposite colours, king between
+// the rooks (the 960 rule, kept so the positions are the familiar ones).
+export function freestyleBackRank(pick = n => Math.floor(Math.random() * n)) {
+  const rank = Array(8).fill(null), free = () => rank.map((x, i) => (x ? null : i)).filter(i => i !== null);
+  rank[2 * pick(4)] = 'b'; rank[2 * pick(4) + 1] = 'b';
+  let f = free(); rank[f[pick(f.length)]] = 'q';
+  f = free(); rank[f[pick(f.length)]] = 'n';
+  f = free(); rank[f[pick(f.length)]] = 'n';
+  f = free(); rank[f[0]] = 'r'; rank[f[1]] = 'k'; rank[f[2]] = 'r';
+  return rank.join('');
+}
+export function freestyleFen(rank = freestyleBackRank()) {
+  return `${rank}/pppppppp/8/8/8/8/PPPPPPPP/${rank.toUpperCase()} w - - 0 1`;
+}
+export function isFreestyleRank(rank) {
+  const r = String(rank || '');
+  if (!/^[rnbqk]{8}$/.test(r) || [...'rrnnbbqk'].sort().join('') !== [...r].sort().join('')) return false;
+  const b = [...r].map((c, i) => (c === 'b' ? i : -1)).filter(i => i >= 0), rooks = [...r].map((c, i) => (c === 'r' ? i : -1)).filter(i => i >= 0), k = r.indexOf('k');
+  return b[0] % 2 !== b[1] % 2 && rooks[0] < k && k < rooks[1];
+}
+
+// ---- Monthly leagues ----
+// Rated games earn league points (win 3, draw 1). A season is a calendar month (UTC). At the
+// end, the top fifth of each division with at least MIN_GAMES moves up, the bottom fifth of
+// those who played moves down; new players start in Bronze.
+export const DIVISIONS = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'];
+export const LEAGUE_MIN_GAMES = 5;
+export function leaguePoints(score) { return score === 1 ? 3 : score === 0.5 ? 1 : 0; }
+export function seasonOf(date = new Date()) { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; }
+export function previousSeason(season) { const [y, m] = String(season).split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; }
+export function seasonEnds(season) { const [y, m] = String(season).split('-').map(Number); return new Date(Date.UTC(y, m, 1)).toISOString(); }
+// entries: [{player_id, division, points, games, wins}] for one season -> moves
+export function leagueMoves(entries = []) {
+  const out = [];
+  for (let d = 0; d < DIVISIONS.length; d++) {
+    const rows = entries.filter(e => Number(e.division) === d && Number(e.games) >= 1)
+      .sort((a, b) => b.points - a.points || b.wins - a.wins || a.games - b.games);
+    const eligible = rows.filter(e => Number(e.games) >= LEAGUE_MIN_GAMES), n = Math.floor(rows.length / 5);
+    if (d < DIVISIONS.length - 1) for (const e of eligible.slice(0, Math.max(n, eligible.length >= 3 ? 1 : 0))) out.push({ player_id: e.player_id, from: d, to: d + 1 });
+    if (d > 0 && n > 0) for (const e of rows.slice(-n)) if (!out.some(o => o.player_id === e.player_id)) out.push({ player_id: e.player_id, from: d, to: d - 1 });
+  }
+  return out;
+}
+export function zoneSizes(count) { const n = Math.floor(count / 5); return { promote: n, relegate: n }; }
+
+// ---- Conditional moves (daily games) ----
+// lines: arrays of UCI moves, opponent first: [theirs, yours, theirs, yours, ...].
+// After the opponent plays `uci`, returns your reply (if a line expects it) and the lines
+// that still apply, shifted past the two moves.
+export function matchConditional(lines = [], uci) {
+  const matching = lines.filter(l => Array.isArray(l) && l[0] === uci && l.length >= 2);
+  if (!matching.length) return { reply: null, rest: [] };
+  const reply = matching[0][1];
+  const rest = matching.filter(l => l[1] === reply).map(l => l.slice(2)).filter(l => l.length >= 2);
+  return { reply, rest };
+}
+export const CONDITIONAL_MAX_LINES = 10, CONDITIONAL_MAX_PLIES = 12;
