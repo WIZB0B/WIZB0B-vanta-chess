@@ -34,6 +34,8 @@ export class VchApi {
   }
 
   profile(name) { return this.request('profile', { name }); }
+  profileUpdate(changes) { return this.request('profile_update', changes); }
+  gamePlayers(gameId) { return this.request('game_players', { gameId }); }
   create(options) { return this.request('create', options); }
   join(code, name) { return this.request('join', { code, name }); }
   move(gameId, expectedVersion, move) { return this.request('move', { gameId, expectedVersion, ...move }); }

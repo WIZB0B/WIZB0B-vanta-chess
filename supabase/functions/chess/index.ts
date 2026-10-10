@@ -53,7 +53,12 @@ const poolFor=(base:number,inc=0)=>{const e=Number(base)+(Number(inc)*40);return
 const ratingOf=(p:any,pool:string)=>Number(p?.ratings?.[pool]??p?.rating??1200);
 const gamesOf=(p:any,pool:string)=>Number(p?.provisional_games?.[pool]??0);
 const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
-const publicPlayer=(p:any)=>({id:p.id,username:p.username,display_name:p.display_name,rating:p.rating,ratings:p.ratings,provisional_games:p.provisional_games,wins:p.wins,losses:p.losses,draws:p.draws,bot_stats:p.bot_stats,smurf_score:Number(p.smurf_score||0),account:!!p.auth_user_id});
+const publicPlayer=(p:any)=>({id:p.id,username:p.username,display_name:p.display_name,rating:p.rating,ratings:p.ratings,provisional_games:p.provisional_games,wins:p.wins,losses:p.losses,draws:p.draws,bot_stats:p.bot_stats,smurf_score:Number(p.smurf_score||0),account:!!p.auth_user_id,country_code:p.country_code||null,has_avatar:!!p.avatar_data});
+// The player's own profile also carries their portrait (a small data: image, see profileUpdate).
+const ownPlayer=(p:any)=>({...publicPlayer(p),avatar_data:p.avatar_data||null});
+// Portraits: small inline images only (data: URLs, so the site's CSP needs no new origin).
+const AVATAR_MAX=48000;
+const AVATAR_RE=/^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+\/]+={0,2}$/;
 const outcome=(c:Chess)=>!c.isGameOver()?{status:"active",result:"*"}:c.isCheckmate()?(c.turn()==="w"?{status:"black_won",result:"0-1"}:{status:"white_won",result:"1-0"}):{status:"draw",result:"1/2-1/2"};
 const expected=(ra:number,rb:number)=>1/(1+Math.pow(10,(rb-ra)/400));
 const scoreFor=(result:string,color:string)=>result==="1/2-1/2"?.5:(result===(color==="w"?"1-0":"0-1")?1:0);
@@ -108,6 +113,32 @@ async function playerFor(req:Request,b:any={},requireAccount=false){
     const {data,error}=await admin.from("chess_players").update({display_name:b.name?cleanName(b.name):p.display_name,last_seen_at:nowIso()}).eq("id",p.id).select().single();if(error)throw error;p=data
   }
   return p
+}
+// Edit your own profile. country_code: a 2-letter ISO code or null to hide the flag (guests
+// too). avatar_data: signed-in accounts only, a small data: image or null to remove it.
+async function profileUpdate(req:Request,b:any){
+  const p=await playerFor(req,b);const patch:any={updated_at:nowIso()};
+  if("country_code" in b){
+    const c=b.country_code==null||b.country_code===""?null:String(b.country_code).toUpperCase();
+    if(c!==null&&!/^[A-Z]{2}$/.test(c))throw fail("Country must be a 2-letter code.");
+    patch.country_code=c;
+  }
+  if("avatar_data" in b){
+    if(!p.auth_user_id)throw fail("Sign in to add a profile picture.",401);
+    const a=b.avatar_data==null||b.avatar_data===""?null:String(b.avatar_data);
+    if(a!==null&&(a.length>AVATAR_MAX||!AVATAR_RE.test(a)))throw fail("Profile picture must be a small WebP, JPEG or PNG image.");
+    patch.avatar_data=a;
+  }
+  const {data,error}=await admin.from("chess_players").update(patch).eq("id",p.id).select().single();if(error)throw error;
+  return {player:ownPlayer(data)}
+}
+// Names, flags and portraits of the two players in a game the caller is playing.
+async function gamePlayers(req:Request,b:any){
+  const {g}=await assertGameParticipant(req,b);
+  const ids=[g.white_player_id,g.black_player_id].filter(Boolean);
+  const {data,error}=ids.length?await admin.from("chess_players").select("id,username,display_name,country_code,avatar_data").in("id",ids):{data:[],error:null};
+  if(error)throw error;
+  return {players:(data||[]).map((x:any)=>({id:x.id,name:x.username||x.display_name,country_code:x.country_code||null,avatar_data:x.avatar_data||null,seat:x.id===g.white_player_id?"w":"b"}))}
 }
 async function settleTournament(g:any){
   if(!g.tournament_id||g.result==="*")return;
@@ -463,7 +494,9 @@ Deno.serve(async(req)=>{
     if(b.action==="ping") return send(req,{pong:true});
     switch(b.action){
       case "config":out=await publicConfig();break;
-      case "profile":out={player:publicPlayer(await playerFor(req,b))};break;
+      case "profile":out={player:ownPlayer(await playerFor(req,b))};break;
+      case "profile_update":out=await profileUpdate(req,b);break;
+      case "game_players":out=await gamePlayers(req,b);break;
       case "create":out=await createGame(req,b);break;
       case "join":out=await joinGame(req,b);break;
       case "move":out=await makeMove(req,b,serverReceivedMs);break;

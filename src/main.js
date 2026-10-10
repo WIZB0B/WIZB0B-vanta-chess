@@ -13,6 +13,9 @@ import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, position
 import { PieceLayer } from './piece-layer.js';
 import { PieceReactions } from './piece-reactions.js';
 import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
+import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
+import { FLAG_URL, countryList, countryName } from './flags.js';
+import { avatarFromFile, setPortrait } from './portrait.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -137,6 +140,7 @@ ${splashMarkup(splash)}
         <header><span id="profileMenuAvatar" class="avatar light" aria-hidden="true">GU</span><div><b id="profileMenuName">${guestName}</b><small id="profileMenuRating">1200 rating</small></div><button id="closeProfileMenu" class="menu-close" type="button" aria-label="Close account menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
         <nav class="profile-menu-items" aria-label="Account">
           <button id="profileMenuProfile" type="button">Profile</button>
+          <button id="profileMenuEdit" type="button">Edit portrait &amp; flag</button>
           <button id="profileMenuSettings" type="button">Settings</button>
           <button id="profileMenuAuth" type="button">Sign in</button>
         </nav>
@@ -184,7 +188,7 @@ ${splashMarkup(splash)}
         <span class="avatar" id="topAvatar">OP</span>
         <div class="player-info">
           <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag hidden" id="topFlag" aria-hidden="true"></span></div>
-          <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span></div>
+          <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span><span class="captured-tray" id="topCaptured" aria-label="Pieces captured"></span></div>
         </div>
         <time id="topClock" data-color="b">10:00</time>
       </div>
@@ -203,7 +207,7 @@ ${splashMarkup(splash)}
         <span class="avatar light" id="bottomAvatar">GU</span>
         <div class="player-info">
           <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag hidden" id="bottomFlag" aria-hidden="true"></span></div>
-          <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span></div>
+          <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span><span class="captured-tray" id="bottomCaptured" aria-label="Pieces captured"></span></div>
         </div>
         <div class="player-connection hidden" id="bottomConnection" aria-label="Network latency">
           <span class="ping-bars" id="bottomPingBars" aria-hidden="true"><i></i><i></i><i></i></span><span id="bottomPing">-- ms</span>
@@ -412,6 +416,7 @@ function squareCenter(square){
 function landingFx(made){
   const dom=boardDom;if(!dom||!expressionsEnabled())return;
   const impact=landingImpact(game,made.to,made.color),c=squareCenter(made.to);
+  buzz(hapticFor(made,game.inCheck()));
   const ring=document.createElement('i');ring.className=`fx-ring${impact.shock?' fx-shock':''} fx-${made.color}`;
   ring.style.left=c.x+'%';ring.style.top=c.y+'%';
   dom.fxLayer.append(ring);ring.addEventListener('animationend',()=>ring.remove(),{once:true});
@@ -420,6 +425,44 @@ function landingFx(made){
     const el=dom.pieces.element(square);if(!el)continue;
     setTimeout(()=>{el.classList.remove('shocked');void el.offsetWidth;el.classList.add('shocked');setTimeout(()=>el.classList.remove('shocked'),520)},90+distance*110);
   }
+}
+// ---- Game feel (src/game-feel.js) ----
+// Captured-pieces trays: each player bar lists the pieces that player has taken, smallest
+// last, with the material lead (+N) for the side ahead.
+function syncCapturedTrays(boardGame,placement){
+  const style=document.documentElement.dataset.pieceStyle||'vanta',bars=playerBarClockColors();
+  const key=`${placement}|${style}|${bars.top}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  const caps=capturedPieces(boardGame.board());
+  for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
+    const tray=$(id);if(!tray)continue;
+    const enemy=color==='w'?'b':'w',groups=[];
+    for(const type of caps[color]){const last=groups.at(-1);if(last?.type===type)last.n++;else groups.push({type,n:1})}
+    tray.innerHTML=groups.map(g=>`<span class="tray-group" data-type="${g.type}">${Array(g.n).fill(`<img src="${pieceAssetFor(style,enemy+g.type)}" alt="">`).join('')}</span>`).join('')+(caps.lead[color]?`<b class="tray-lead">+${caps.lead[color]}</b>`:'');
+    tray.setAttribute('aria-label',caps[color].length?`Captured: ${caps[color].map(t=>pieceNames[t]).join(', ')}${caps.lead[color]?`, ahead by ${caps.lead[color]}`:''}`:'No captures yet');
+  }
+}
+// The game-end moment: the winner's pieces cheer in a wave, the losing king topples (and
+// stays down until the next game); a draw makes both kings bow. Then the result dialog.
+function clearEnding(dom){
+  dom.endingPlacement=null;
+  for(const el of dom.pieceLayer.querySelectorAll('.board-piece[data-ending]')){delete el.dataset.ending;el.style.removeProperty('--wave')}
+}
+async function playEnding(info){
+  const dom=boardDom,cast=endingCast(info?.result);
+  if(!dom||!cast||!expressionsEnabled())return;
+  clearEnding(dom);dom.endingPlacement=game.fen().split(' ')[0];
+  let i=0;
+  for(const [sq,el] of dom.pieces.elements){
+    const key=el.dataset.piece||'';
+    if(cast.draw){if(key[1]==='k')el.dataset.ending='bow';continue}
+    if(key[0]===cast.winner){el.dataset.ending='cheer';el.style.setProperty('--wave',`${(i++%8)*70}ms`)}
+    else if(key===cast.loser+'k')el.dataset.ending='topple';
+  }
+  await new Promise(resolve=>setTimeout(resolve,1900));
+}
+function buzz(pattern){
+  if(lastPointerType==='mouse'||!expressionsEnabled())return;
+  try{navigator.vibrate?.(pattern)}catch{}
 }
 function renderBoard({hint=null,instant=false}={}){
   const scale=instant?0:motionScale(),dom=ensureBoardDom();
@@ -445,9 +488,11 @@ function renderBoard({hint=null,instant=false}={}){
   if(reactions.hovered&&(reactions.pieceAt(reactions.hoverSquare)!==reactions.hovered||!reactions.canPick(reactions.hoverSquare)))reactions.clearHover();
   if(reactions.hintSquare&&!legal.has(reactions.hintSquare))reactions.hint(null);
   // Touch: the selected piece gestures once and stays lifted while it is selected.
-  if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started)reactions.pick(selected);else reactions.unpick();
+  if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started){if(reactions.picked!==reactions.pieceAt(selected))buzz(HAPTICS.pick);reactions.pick(selected)}else reactions.unpick();
   if(motion.animated){boardMotion=motion.finished;boardMotionUntil=performance.now()+motion.durationMs}
   applyMoods(dom,boardGame,placement);
+  syncCapturedTrays(boardGame,placement);
+  if(dom.endingPlacement&&dom.endingPlacement!==placement)clearEnding(dom);
   if(hint?.to&&!reviewState.viewing){const made=hint;if(motion.animated)motion.finished.then(()=>landingFx(made));else landingFx(made)}
   const hidden=pointerDrag?.started?pointerDrag.from:null;
   for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
@@ -458,6 +503,11 @@ function renderBoard({hint=null,instant=false}={}){
     dom.badgeKey=badgeKey;dom.badge.classList.toggle('hidden',!badgeKey);
     dom.badge.innerHTML=badgeKey?reviewBadgeMarkup(boardReview,'board-review-badge'):'';
     if(badgeKey)dom.badge.style.transform=pieceTransform(lastMove.to,flipped);
+    // The moved piece reacts to its grade (triumph, proud, unsure, slump, despair).
+    for(const el of dom.pieceLayer.querySelectorAll('.board-piece[data-react]'))delete el.dataset.react;
+    const reaction=badgeKey&&expressionsEnabled()?REVIEW_REACTION[boardReview.classification]:null;
+    const moved=reaction?dom.pieces.element(lastMove.to):null;
+    if(moved)moved.dataset.react=reaction;
   }
   renderArrows(dom);
   dom.board.classList.toggle('mate',game.isCheckmate());
@@ -608,6 +658,7 @@ async function joinRematchFromPeer(payload){
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
   lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';playUiSound(title==='Draw'?'draw':won?'win':'lose');
+  await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
   const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
   if(action==='review')await startGameReview();
@@ -953,12 +1004,12 @@ function playerInitials(value,fallback='GU'){
 function setPlayerFlag(element,code){
   if(!element)return;
   const normalized=/^[a-z]{2}$/i.test(String(code||''))?String(code).toUpperCase():'';
-  const flagSrc=normalized==='US'?'/assets/vch/flags/us.svg':'';
+  const flagSrc=normalized?FLAG_URL[normalized]||'':'';
   element.classList.toggle('hidden',!flagSrc);
   element.toggleAttribute('aria-hidden',!flagSrc);
   if(flagSrc){
     element.innerHTML=`<img src="${flagSrc}" alt="">`;
-    element.setAttribute('aria-label','United States flag');
+    element.setAttribute('aria-label',`${countryName(normalized)} flag`);element.title=countryName(normalized);
   }else{
     element.replaceChildren();
     element.removeAttribute('aria-label');
@@ -1002,10 +1053,12 @@ function syncPlayerBars(){
   $('#bottomPlayerName').textContent=`You · ${ownName}`;
   $('#topRating').textContent=`${topRating} rating`;
   $('#bottomRating').textContent=`${ratingFor(pool)} rating`;
-  $('#topAvatar').textContent=playerInitials(topName,'OP');
-  $('#bottomAvatar').textContent=playerInitials(ownName,'GU');
+  const opponent=opponentInfo&&opponentInfo.gameId===serverGameId?opponentInfo:null;
+  setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,label:topName});
+  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:ownName});
+  if(serverGameId&&opponentId&&!currentBot)void loadOpponentInfo(serverGameId,opponentId);
   const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
-  setPlayerFlag($('#topFlag'),opponentColor?serverGame?.[`${opponentColor}_country_code`]:null);
+  setPlayerFlag($('#topFlag'),opponent?.country_code||(opponentColor?serverGame?.[`${opponentColor}_country_code`]:null));
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code||(ownColor?serverGame?.[`${ownColor}_country_code`]:null));
   const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
@@ -1102,18 +1155,80 @@ function syncIdentityUI(){
   const user=$('#accountBtn');if(user){user.querySelector('span').textContent=name;user.querySelector('small').textContent=rating+' rating'}
   const bottom=$('#bottomPlayerName');if(bottom)bottom.textContent='You · '+name;
   const bottomRating=$('#bottomRating');if(bottomRating)bottomRating.textContent=rating+' rating';
-  const bottomAvatar=$('#bottomAvatar');if(bottomAvatar)bottomAvatar.textContent=playerInitials(name,'GU');
+  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:name});
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code);
   syncPlayerBars();
-  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';$('#profileMenuAvatar').textContent=playerInitials(name,'GU');$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
+  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),{avatar:currentProfile?.avatar_data,label:name});$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
     for(const pool of ['bullet','blitz','rapid','classical']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
   }
 }
+// ---- Portrait and country flag ----
+// The opponent's flag and portrait come from game_players once per game and seat.
+let opponentInfo=null,opponentInfoKey='';
+async function loadOpponentInfo(gameId,opponentId){
+  const key=`${gameId}:${opponentId}`;if(opponentInfoKey===key)return;opponentInfoKey=key;
+  try{
+    const out=await api.gamePlayers(gameId),them=(out.players||[]).find(p=>p.id===opponentId);
+    opponentInfo=them?{gameId,...them}:null;syncPlayerBars();
+  }catch{opponentInfoKey=''}
+}
+// Country detection asks Netlify's edge for the country code only, and only when the player
+// presses "Detect" (their consent). The code is the only thing we keep.
+async function detectCountry(){
+  const response=await fetch('/api/geo',{cache:'no-store',headers:{accept:'application/json'}});
+  const data=await response.json().catch(()=>({}));
+  const code=String(data?.country||'').toUpperCase();
+  if(!/^[A-Z]{2}$/.test(code)||!FLAG_URL[code])throw new Error('Could not detect your country. Pick it from the list.');
+  return code;
+}
+async function saveProfileChanges(changes){
+  const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
+}
+function flagPromptDone(){try{return !!localStorage.getItem('vanta.flagPrompt')}catch{return true}}
+function scheduleFlagPrompt(){
+  if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending)return;
+  scheduleFlagPrompt.pending=true;setTimeout(showFlagPrompt,2500);
+}
+function showFlagPrompt(){
+  if(flagPromptDone()||currentProfile?.country_code||document.querySelector('.flag-prompt'))return;
+  const card=document.createElement('section');card.className='flag-prompt';card.setAttribute('role','dialog');card.setAttribute('aria-label','Show your country flag');
+  card.innerHTML=`<b>Show your country flag?</b><p>Opponents see it beside your name. "Detect" looks up only your country from your connection; we keep the 2-letter code, never your IP address.</p><div><button type="button" data-flag="detect" class="primary">Detect my country</button><button type="button" data-flag="choose">Choose myself</button><button type="button" data-flag="no">No thanks</button></div>`;
+  const done=()=>{try{localStorage.setItem('vanta.flagPrompt','1')}catch{}card.remove()};
+  card.addEventListener('click',async event=>{
+    const choice=event.target.closest('[data-flag]')?.dataset.flag;if(!choice)return;
+    if(choice==='no'){done();return}
+    if(choice==='choose'){done();void openProfileEditor();return}
+    try{const code=await detectCountry();await saveProfileChanges({country_code:code});done();toast(`Flag set: ${countryName(code)}`)}
+    catch(error){done();toast(error.message);void openProfileEditor()}
+  });
+  document.body.append(card);
+}
+async function openProfileEditor(){
+  const account=!!authSession?.access_token&&!!currentProfile?.account;
+  let avatar=currentProfile?.avatar_data||null,country=currentProfile?.country_code||'';
+  const body=document.createElement('div');body.className='profile-editor';
+  const options=['<option value="">No flag</option>',...countryList().map(([code,name])=>`<option value="${code}">${escapeHtml(name)}</option>`)].join('');
+  body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div>${account?`<label class="pe-upload"><input type="file" accept="image/*" hidden><span>Upload picture</span></label><button type="button" class="pe-remove">Remove picture</button><small>Square crop, 128px. JPEG, PNG or WebP.</small>`:`<small>Sign in to add a profile picture. Guests show an empty portrait.</small>`}</div></div>
+<label class="pe-country"><span>Country flag</span><select>${options}</select></label>
+<button type="button" class="pe-detect">Detect from my connection</button>
+<p class="pe-note">Your flag is shown to opponents. Detect looks up only your country from your connection; we keep the 2-letter code, never your IP address. Choose "No flag" to hide it.</p>`;
+  const preview=body.querySelector('.pe-avatar'),select=body.querySelector('select');
+  const draw=()=>setPortrait(preview,{avatar});draw();select.value=country;
+  select.onchange=()=>{country=select.value};
+  body.querySelector('.pe-detect').onclick=async()=>{try{country=await detectCountry();select.value=country}catch(error){toast(error.message)}};
+  body.querySelector('input[type=file]')?.addEventListener('change',async event=>{try{avatar=await avatarFromFile(event.target.files?.[0]);draw()}catch(error){toast(error.message)}});
+  const remove=body.querySelector('.pe-remove');if(remove)remove.onclick=()=>{avatar=null;draw()};
+  const action=await vchDialog({title:'Portrait & flag',body,actions:[{label:'Cancel',value:false},{label:'Save',value:true,primary:true}]});
+  if(!action)return;
+  const changes={country_code:country||null};
+  if(account&&avatar!==(currentProfile?.avatar_data||null))changes.avatar_data=avatar;
+  try{await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')}catch(error){toast(error.message)}
+}
 async function loadProfile(){
-  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
+  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();scheduleFlagPrompt();return out}
   catch(error){
     if(error.status===401&&authSession&&await refreshAuthSession()){const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
     if(error.status===401&&authSession){saveAuthSession(null);currentProfile=null;syncIdentityUI()}
@@ -1986,6 +2101,7 @@ document.addEventListener('pointerdown',event=>{menus.handleOutside(event.target
 $('#closeProfileMenu').onclick=()=>menus.close('profile');
 $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
 $('#profileMenuProfile').onclick=openAccount;
+$('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
 $('#profileMenuSettings').onclick=()=>menus.open('theme');
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});

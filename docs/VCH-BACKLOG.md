@@ -241,16 +241,18 @@ Pieces show how their position feels; landings can shock the enemy. Owner's idea
   part of the project (needs payments, entitlements and a store page).
 
 ## A. Accounts, profile and legal (owner request 2026-10-10)
-- A1 Player portraits: guests show an empty silhouette portrait (not initials); signed-in
-  players can upload a picture or pick an avatar (Supabase Storage + migration: owner approval).
-- A2 Country flag beside every name. Detected from the connection only after the player agrees,
-  keeping just the 2-letter country code (never the IP address); players can change or hide it.
-  Needs a country column and edge-function change (owner approval to deploy).
+- A1 Player portraits (done 2026-10-10, PR claude/game-feel): guests show an empty silhouette;
+  signed-in players upload a picture (cropped to 128px, stored as a small inline image in
+  `chess_players.avatar_data`, so the CSP needs no new origin). Later: pick a VCH avatar.
+- A2 Country flag beside every name (done 2026-10-10, same PR): a one-time prompt and the
+  "Edit portrait & flag" menu. "Detect" asks `/api/geo` (Netlify edge) only when pressed and keeps
+  just the 2-letter code (`chess_players.country_code`, never the IP); players can change or hide
+  it. Migration applied and `chess` function v16 deployed with owner approval.
 - A3 Terms and conditions, privacy policy (what we store, why, how to delete it) and a cookie /
   storage notice if analytics are ever added. Linked from sign-up and the footer.
 - A4 Backend security pass later (see S1): RLS review, rate limits, anti-cheat signals.
 
-## I. Ideas proposed by Claude (owner to pick)
+## I. Ideas proposed by Claude (approved 2026-10-10; done in PR claude/game-feel)
 - I1 Captured-pieces tray by each player bar with the material difference (+3).
 - I2 Game-end cinematic: the winner's pieces cheer, the losing king topples (uses expressions).
 - I3 Review mode: pieces react to move quality (brilliant glow, blunder slump).
