@@ -16,6 +16,7 @@ import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-express
 import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
 import { FLAG_URL, countryList, countryName } from './flags.js';
 import { avatarFromFile, setPortrait } from './portrait.js';
+import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
@@ -233,6 +234,7 @@ ${splashMarkup(splash)}
           <div class="analysis">
             <header><b><img class="analysis-title-icon" src="/assets/vch/icons/review.svg" alt="">Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
             <div id="reviewProgress" class="review-progress hidden" aria-live="polite"><span><b id="reviewProgressLabel">Analyzing game</b><em id="reviewProgressCount">0 / 0</em></span><div><i id="reviewProgressFill"></i></div></div>
+            <p id="engineLockedNote" class="engine-locked-note hidden">Engine analysis is off while a live game is played, for both players. It comes back, with Review game, as soon as the game ends.</p>
             <div class="analysis-row"><h2 id="score">+0.0</h2><div class="meter"><i id="meterFill"></i></div></div>
             <p id="advantage">Equal position</p>
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
@@ -711,7 +713,7 @@ async function clickSquare(sq,p,{instant=false}={}){
   if(sq===selected){selected=null;render();return}
   if(p?.color===game.turn()){selected=sq;render();return}
   const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);
-  if(!candidates.length){selected=null;render();return}
+  if(!candidates.length){rejectMove(selected,sq,{quietRule:true});selected=null;render();return}
   let promotion;if(candidates.some(m=>m.promotion)){promotion=await choosePromotion();if(!promotion){selected=null;render();return}}
   instantMoveAnimation=instant;
   try{makeMove({from:selected,to:sq,promotion:promotion||'q'})}finally{instantMoveAnimation=false}
@@ -874,6 +876,7 @@ function isBookMove(records,index){
   return OPENINGS.some(opening=>index<opening.line.length&&sans.every((san,ply)=>san===normalizedSan(opening.line[ply])));
 }
 function recordEval(record,index){
+  if(engineLocked())return '';
   const raw=record?.eval??record?.evaluation??record?.eval_cp??record?.score_cp;
   if(raw!==undefined&&raw!==null&&raw!==''){
     let value=Number(raw);
@@ -931,12 +934,38 @@ async function findEngineMove(){
 }
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
+function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
 function playTone(){
   if($('#sound').dataset.off)return;
   try{
-    toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();
-    const a=toneContext,o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
+    const a=audioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
   }catch{}
+}
+// An illegal try: a low double knock (and a short buzz on phones). When the king is the
+// reason (check, a pin, an attacked square) its square flashes red, like a warning light.
+function playIllegalTone(){
+  if($('#sound').dataset.off)return;
+  try{
+    const a=audioContext(),t=a.currentTime;
+    for(const at of [0,.11]){
+      const o=a.createOscillator(),g=a.createGain();o.type='triangle';o.frequency.setValueAtTime(190,t+at);o.frequency.exponentialRampToValueAtTime(120,t+at+.08);
+      g.gain.setValueAtTime(.0001,t+at);g.gain.exponentialRampToValueAtTime(.09,t+at+.008);g.gain.exponentialRampToValueAtTime(.0001,t+at+.09);
+      o.connect(g).connect(a.destination);o.start(t+at);o.stop(t+at+.1);
+    }
+  }catch{}
+}
+function flashIllegal(square){
+  const el=boardDom?.squares.get(square);if(!el)return;
+  el.querySelector('.illegal-flash')?.remove();
+  const flash=document.createElement('span');flash.className='illegal-flash';flash.setAttribute('aria-hidden','true');
+  flash.addEventListener('animationend',()=>flash.remove(),{once:true});setTimeout(()=>flash.remove(),1400);
+  el.append(flash);
+}
+// A tap elsewhere is often just "never mind": taps stay quiet unless the king is the reason.
+function rejectMove(from,to,{quietRule=false}={}){
+  const reason=illegalReason(game,from,to);if(!reason||(quietRule&&reason.kind==='rule'))return;
+  playIllegalTone();buzz(HAPTICS.illegal);
+  const square=flashSquareFor(reason);if(square)flashIllegal(square);
 }
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
 function playerBarClockColors(){
@@ -1612,6 +1641,7 @@ function finishPointerDrag(to,{cancelled=false}={}){
       if(boardDom?.pieces.element(drag.from)?.classList.contains('drag-origin'))renderBoard();
       return
     }
+    if(outcome==='return'&&to&&to!==drag.from)rejectMove(drag.from,to);
     selected=outcome==='deselect'?null:drag.from;
     settle();return
   }
@@ -1966,7 +1996,30 @@ function formatPv(pv=''){
     return out.join(' ');
   }catch{return pv}
 }
+// Fair play: no engine help during a live online game (rated or casual, against a person or
+// a matched bot). The evaluation, the best line and per-move evals are hidden and the engine
+// doesn't run; all of it returns when the game ends. Computer games keep it (no one to wrong).
+function engineLocked(){
+  if(reviewState.running||reviewState.viewing)return false;
+  return isOnlineGame()&&!!myColor&&['active','playing','in_progress'].includes(serverGame?.status);
+}
+let engineWasLocked=false;
+function syncEngineLock(){
+  const locked=engineLocked();
+  $('.analysis')?.classList.toggle('engine-locked',locked);
+  $('#engineLockedNote')?.classList.toggle('hidden',!locked);
+  if(locked&&!engineWasLocked){
+    clearTimeout(analysisTimer);analysisRequest=null;
+    try{analysisWorker.postMessage({action:'stop'})}catch{}
+    const depthEl=$('#depth');if(depthEl)depthEl.textContent='—';
+    updateMoves();
+  }
+  if(!locked&&engineWasLocked)updateMoves();
+  engineWasLocked=locked;
+  return locked;
+}
 function updateAnalysisFromUci(text,request){
+  if(engineLocked())return;
   if(reviewState.running||reviewState.viewing){const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);return}
   if(!request||request.fen!==game.fen())return;
   const depth=Number(text.match(/\bdepth (\d+)/)?.[1]||0);
@@ -1990,7 +2043,8 @@ function updateAnalysisFromUci(text,request){
 }
 function scheduleAnalysis({force=false}={}){
   clearTimeout(analysisTimer);
-  if(reviewState.running||reviewState.viewing||mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
+  if(syncEngineLock())return;
+  if(reviewState.running||reviewState.viewing||mode==='puzzle')return;
   analysisTimer=setTimeout(()=>{
     if(botThinking)return;
     const fen=game.fen();

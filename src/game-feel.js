@@ -32,7 +32,7 @@ export const REVIEW_REACTION={
 };
 
 // Phone haptics (vibration patterns in ms). Only on touch input, never with reduced motion.
-export const HAPTICS={pick:8,move:12,capture:28,check:[22,40,22]};
+export const HAPTICS={pick:8,move:12,capture:28,check:[22,40,22],illegal:[14,30,14]};
 export function hapticFor(made,inCheck){
   if(inCheck)return HAPTICS.check;
   if(made?.captured)return HAPTICS.capture;

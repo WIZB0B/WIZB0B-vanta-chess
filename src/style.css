@@ -2297,3 +2297,16 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 .pe-country select{padding:9px;border-radius:8px;background:#0a1514;color:#e9ece9;border:1px solid #3b4848}
 .pe-detect{justify-self:start}
 @media (prefers-reduced-motion:reduce){.flag-prompt{animation:none}}
+
+/* Illegal move: the king's square blinks red twice when the king is why the move fails. */
+.square .illegal-flash{position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:rgb(214 48 42 / .78);box-shadow:inset 0 0 0 4px rgb(255 128 108 / .9);opacity:0;
+  animation:vch-illegal 900ms ease-out both}
+@keyframes vch-illegal{0%{opacity:0}12%{opacity:1}34%{opacity:.25}52%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.square .illegal-flash{animation:vch-illegal-still 900ms linear both}}
+@keyframes vch-illegal-still{0%,80%{opacity:.85}100%{opacity:0}}
+
+/* Fair play: during a live online game the engine panel shows only a note. */
+.analysis.engine-locked .analysis-row,.analysis.engine-locked #advantage,.analysis.engine-locked #line,
+.analysis.engine-locked>small,.analysis.engine-locked header small{display:none}
+.engine-locked-note{margin:12px 0 2px;color:#a9b1b0;line-height:1.45;font-size:13px}
