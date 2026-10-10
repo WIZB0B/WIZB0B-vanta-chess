@@ -303,6 +303,23 @@ round-4 and round-5 migrations). Not deployed; waiting for the owner's approval.
   of previews only). Turn it off in Netlify: Project configuration > Build & deploy >
   Deploy Previews > Netlify Drawer. CSP stays strict.
 
+## V. Round 7 (owner approved 2026-10-10)
+Server code in PR #35 (migration `20261011000000_round7_notifications_explorer`, after
+rounds 4-6). Not deployed; waiting for the owner's approval. After deploy, an admin can
+fill the explorer from past games with the `explorer_backfill` action (150 games a call).
+- V1 Faster live moves: replies to a move still in flight go straight out; the server waits
+  for the move they answer. Preconnect to the game server. (PR #35, #36)
+  True peer-to-peer (WebRTC) was not used: it would show each player's IP address to the
+  opponent and need third-party STUN/TURN servers.
+- V2 Opening explorer from VCH games, off for positions in your live game. (PR #35, #37)
+- V3 Bullet: premove chains (up to 3); first moves untimed; 30 s to start or the game is
+  aborted (no rating). (PR #35, #36)
+- V4 Notifications inbox: bell + page. (PR #35, #37)
+- V5 Languages: French, Spanish, Portuguese, Arabic (right-to-left, board stays LTR). (PR #38)
+- V6 Season board sets unlocked by league division or season badge. (PR #38)
+- Known: e2e/board-motion animation-timing tests are flaky in the shared container (same
+  rate on round-5 builds); they pass when the machine is idle.
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

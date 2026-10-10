@@ -38,6 +38,8 @@ import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
 import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
 import { explorerRows } from './explorer-view.js';
+import { LANGUAGES, LANG_KEY, RTL, detectLanguage, translateTree } from './i18n.js';
+import { BOARD_SETS, unlockedSets } from './season-themes.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
 import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
@@ -331,7 +333,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><small id="boardSetNote" class="board-set-note"></small><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -1324,7 +1326,7 @@ function syncIdentityUI(){
     for(const pool of ['bullet','blitz','rapid','classical','daily']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
     const pr=$('#ratingPuzzle');if(pr)pr.textContent=Number(currentProfile?.puzzle_rating||1200);
     const bs=$('#berserkStatus');if(bs){const prog=berserkProgress(currentProfile?.rated_win_streak,currentProfile?.berserk_ready);bs.textContent=prog.label;bs.classList.toggle('ready',prog.ready)}
-    renderAchievements();if(typeof syncAdminUi==='function')syncAdminUi();
+    renderAchievements();if(typeof syncAdminUi==='function')syncAdminUi();if(typeof syncBoardSets==='function')syncBoardSets();
     const notice=$('#accountNotice'),muted=currentProfile?.muted_until&&Date.parse(currentProfile.muted_until)>Date.now();
     if(notice){notice.textContent=currentProfile?.banned?'Your account is suspended: you can review your games but not play rated games, join events or chat.':muted?`You're muted until ${new Date(currentProfile.muted_until).toLocaleString()}.`:'';notice.classList.toggle('hidden',!notice.textContent)}
   }
@@ -1600,7 +1602,7 @@ function syncAbandonCard(){
   $('#abandonClaim')?.classList.toggle('hidden',info.state!=='claimable');
   $('#abandonDraw')?.classList.toggle('hidden',info.state!=='claimable');
   const text=$('#abandonText');
-  if(text)text.textContent=info.state==='claimable'?'Claim the win, or call it a draw':`You can claim the win in ${info.secondsLeft}s if they don't come back`;
+  if(text&&info.state!=='here')text.textContent=info.state==='claimable'?'Claim the win, or call it a draw':`You can claim the win in ${info.secondsLeft}s if they don't come back`;
 }
 function syncWakeLock(){
   const want=liveGameOn()&&!document.hidden;
@@ -3235,6 +3237,40 @@ boardEl.addEventListener('pointerdown',event=>{
 // on touch) during a drag or with premoves queued cancels them.
 boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointerDrag?.started){event.stopImmediatePropagation();cancelPointerDrag();return}cancelPremove()});
 render();startClock();
+// ---- Interface language (src/i18n.js) ----
+let uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
+const i18nPending=new Set();let i18nFrame=0;
+function applyLanguage(lang,{save=false}={}){
+  uiLang=LANGUAGES[lang]?lang:'en';
+  document.documentElement.lang=uiLang;document.documentElement.dir=RTL.has(uiLang)?'rtl':'ltr';
+  translateTree(document.body,uiLang);
+  if(save)try{localStorage.setItem(LANG_KEY,uiLang)}catch{}
+  const select=$('#languageSelect');if(select)select.value=uiLang;
+}
+new MutationObserver(records=>{
+  if(uiLang==='en')return;
+  for(const r of records){const node=r.type==='characterData'?r.target.parentElement:r.target;if(node)i18nPending.add(node)}
+  if(!i18nFrame)i18nFrame=requestAnimationFrame(()=>{i18nFrame=0;const roots=[...i18nPending];i18nPending.clear();for(const root of roots)if(root.isConnected)translateTree(root,uiLang)});
+}).observe(document.body,{childList:true,subtree:true,characterData:true});
+$('#languageSelect').onchange=e=>applyLanguage(e.target.value,{save:true});
+applyLanguage(uiLang);
+// ---- Board sets earned in the league (src/season-themes.js) ----
+function setThemeVar(name,value){const input=$(`#themeStudio [data-theme="${name}"]`);if(input){input.value=value;input.oninput?.()}}
+function syncBoardSets(){
+  const select=$('#boardSet');if(!select)return;
+  const sets=unlockedSets(currentProfile),current=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').boardSet||'classic'}catch{return 'classic'}})();
+  select.innerHTML=sets.map(s=>`<option value="${s.id}"${s.unlocked?'':' disabled'}${s.id===current?' selected':''}>${s.name}${s.unlocked?'':' · locked'}</option>`).join('');
+  const locked=sets.filter(s=>!s.unlocked).length,note=$('#boardSetNote');
+  if(note)note.textContent=locked?(signedIn()?'Reach a league division (or finish a season in it) to unlock its board set.':'Sign in and play rated games in the monthly league to unlock board sets.'):'Every board set is yours.';
+}
+$('#boardSet').onchange=e=>{
+  const set=BOARD_SETS.find(s=>s.id===e.target.value),open=unlockedSets(currentProfile).find(s=>s.id===e.target.value)?.unlocked;
+  if(!set||!open){syncBoardSets();return toast('That board set is still locked')}
+  setThemeVar('--light',set.light);setThemeVar('--dark',set.dark);
+  savedTheme.boardSet=set.id;try{localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))}catch{}
+  toast(`${set.name} board set`);
+};
+$('#theme').addEventListener('click',syncBoardSets);
 // ---- Offline: the computer opponent works without a connection (public/sw.js caches it) ----
 function syncOffline(){
   const off=navigator.onLine===false;document.body.classList.toggle('offline',off);

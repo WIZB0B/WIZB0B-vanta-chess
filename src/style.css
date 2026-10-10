@@ -2755,3 +2755,12 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .inbox-kind.k-challenge,.inbox-kind.k-tournament{background:#3a3220;color:var(--gold)}
 .inbox-kind.k-achievement,.inbox-kind.k-league{background:#2a2337;color:#cdb6ff}
 .inbox-all{width:100%;margin-top:8px;padding:8px;border:1px solid var(--line-strong);border-radius:8px;font-size:12px}
+
+/* === Languages: right-to-left pages, left-to-right board === */
+[dir="rtl"] body{text-align:right}
+[dir="rtl"] .board-shell,[dir="rtl"] .board,[dir="rtl"] .board-coords,[dir="rtl"] .study-board,[dir="rtl"] .m-moves,[dir="rtl"] .moves,[dir="rtl"] time,[dir="rtl"] .pp-chart-svg,[dir="rtl"] .ex-bar{direction:ltr}
+[dir="rtl"] .board-shell{unicode-bidi:isolate}
+[dir="rtl"] .view-title .back-view{transform:scaleX(-1)}
+.board-set-note{display:block;color:var(--muted);font-size:11px;margin:-6px 0 10px}
+[dir="rtl"] .analysis h2,[dir="rtl"] .review-eval-bar,[dir="rtl"] .rating-grid b,[dir="rtl"] .player-rating{direction:ltr;unicode-bidi:isolate}
+[dir="rtl"] .status{direction:ltr}

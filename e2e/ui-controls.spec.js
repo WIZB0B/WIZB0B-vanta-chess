@@ -117,16 +117,22 @@ test('preview CSP runs Stockfish WebAssembly and Black-side clocks follow player
   await expect(page.locator('.player.bottom')).toHaveAttribute('data-color','b');
   await expect(page.locator('#topClock')).toHaveAttribute('data-color','w');
   await expect(page.locator('#bottomClock')).toHaveAttribute('data-color','b');
-  await expect(page.locator('#bottomClock')).toHaveClass(/running/);
+  // Round 7: each side's first move is untimed, so neither clock runs yet.
+  await expect(page.locator('#bottomClock')).not.toHaveClass(/running/);
   await expect(page.locator('#topClock')).not.toHaveClass(/running/);
-
-  const topBefore=await page.locator('#topClock').textContent();
+  const bottomStill=await page.locator('#bottomClock').textContent();
+  await page.waitForTimeout(1300);
+  expect(await page.locator('#bottomClock').textContent()).toBe(bottomStill);
+  // After both first moves the clocks run: once the engine replies, Black's clock ticks.
+  const tap=async sq=>{const b=await page.locator(`[data-sq="${sq}"]`).boundingBox();if(test.info().project.name==='mobile')await page.touchscreen.tap(b.x+b.width/2,b.y+b.height/2);else await page.mouse.click(b.x+b.width/2,b.y+b.height/2)};
+  const piece=await page.locator('.board-piece[data-square="e7"]').count()?'e7':'d7';
+  await tap(piece);await tap(piece[0]+'5');
+  await expect(page.locator('#turn')).toContainText('Black to move',{timeout:15000});
+  await expect(page.locator('#bottomClock')).toHaveClass(/running/,{timeout:15000});
+  await expect(page.locator('#topClock')).not.toHaveClass(/running/);
   const bottomBefore=await page.locator('#bottomClock').textContent();
   await page.waitForTimeout(1300);
-  const topAfter=await page.locator('#topClock').textContent();
-  const bottomAfter=await page.locator('#bottomClock').textContent();
-  expect(topAfter).toBe(topBefore);
-  expect(bottomAfter).not.toBe(bottomBefore);
+  expect(await page.locator('#bottomClock').textContent()).not.toBe(bottomBefore);
 });
 
 test('right-panel feature cards open their real destinations',async({page})=>{
