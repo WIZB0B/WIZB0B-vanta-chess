@@ -244,6 +244,15 @@ Desktop stays as it is. On phones the site should feel like the lichess / chess.
   tab title. Next ideas: takeback requests in casual games, a pre-move confirmation option for
   slow connections, puzzle streaks, and a weekly arena.
 
+## R. Round 3 (owner approved 2026-10-10)
+- R1 Look back through any game without taking back; Undo against the computer (PR #17).
+- R2 Takeback requests in casual games; Watch tab for public live games; weekly arena every
+  Saturday 18:00 UTC (PR #18; chess v18 and migration takeback_offers deployed).
+- R3 My games + Game Story: archive with form insights, chapters, key moments, story
+  playback, replay your toughest moment (PR #19).
+- R4 Puzzle Streak, harder every three solves, one skip (PR #20). Fixed: tapped puzzle moves
+  never matched because taps always send a queen promotion.
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

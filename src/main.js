@@ -21,6 +21,7 @@ import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-mome
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
 import { browseLine, browseStep, browseTo, undoPlies } from './move-browse.js';
 import { arenaPhase, isWeeklyArena, sortArenas, standingsRows } from './arena.js';
+import { loadBestStreak, saveBestStreak, streakDifficulty } from './puzzle-streak.js';
 import { archiveEntryFromServer, chapterAccuracy, formInsights, keyMoments, loadLocalArchive, loadReviewCache, outcomeFor, sansFromPgn, saveLocalGame, saveReviewSummary, storyChapters, storyDelayMs, worstMoment } from './game-story.js';
 import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
@@ -46,6 +47,7 @@ const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
+let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
@@ -238,7 +240,7 @@ ${splashMarkup(splash)}
       </div>
       <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
       <div class="m-movebar"><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><div id="mMoves" class="m-moves" aria-label="Moves"></div><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
-      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="takeback" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span>Takeback</span></button><button type="button" data-m-action="leave" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Stop watching</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
+      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="takeback" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span>Takeback</span></button><button type="button" data-m-action="leave" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Stop watching</span></button><button type="button" data-m-action="puzzle-next" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Next</span></button><button type="button" data-m-action="puzzle-streak" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3 0-3-1-5 0-8Z"/></svg><span>Streak</span></button><button type="button" data-m-action="puzzle-skip" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Skip once</span></button><button type="button" data-m-action="puzzle-end" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>End streak</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
     </section>
 
     <aside class="rpanel panel">
@@ -866,11 +868,11 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
+async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);toast('Try another move');return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
-  if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
+  if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
-  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null}}catch{toast('Puzzle line could not continue')}},260)}
+  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){
   if(onlineMovePending)return;
   let legalMove;
@@ -1556,6 +1558,29 @@ function syncGameMoments(){
 }
 setInterval(syncGameMoments,1000);
 document.addEventListener('visibilitychange',syncGameMoments);
+// ---- Puzzle Streak (src/puzzle-streak.js) ----
+function startStreak(){streakSession={count:0,best:loadBestStreak(),skipUsed:false};puzzleSession=null;showBackendView('streak')}
+function puzzleSolved(){
+  const session=puzzleSession;puzzleSession=null;
+  if(!streakSession){toast('Puzzle solved');return}
+  streakSession.count++;streakSession.best=saveBestStreak(streakSession.count);
+  toast(`Streak ${streakSession.count}${streakSession.count===streakSession.best&&streakSession.count>1?' · new best':''}`,{duration:1200});
+  setTimeout(()=>{if(streakSession)showBackendView('streak')},900);
+}
+function endStreak(move){
+  const session=streakSession;if(!session)return;streakSession=null;
+  if(move){playIllegalTone();buzz(HAPTICS.illegal)}
+  const solution=puzzleSession?.solution?.[puzzleSession.index];
+  if(puzzleSession&&move)void api.puzzleAttempt({puzzleId:puzzleSession.id,success:false,durationMs:Date.now()-puzzleSession.started,playedMoves:[...puzzleSession.played,`${move.from}${move.to}`]}).catch(()=>{});
+  if(solution){boardShapes=[{from:solution.slice(0,2),to:solution.slice(2,4),brush:'green'}];render()}
+  puzzleSession=null;
+  const best=saveBestStreak(session.count),target=$('#dynamicView .view-content');
+  if(target)target.innerHTML=`<article class="puzzle-info streak-info streak-over"><div class="streak-count"><small>STREAK</small><b>${session.count}</b><span>Best ${best}</span></div><h4>${move?'Streak over':'Streak ended'}</h4><p>${move&&solution?'The green arrow shows the move that kept it going.':session.count?'Well played.':'Have another go.'}</p><div class="streak-actions"><button class="primary-action start-streak">Start again</button><button class="next-puzzle">Back to training</button></div></article>`;
+  $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
+  $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
+  if(isMobileApp())setTimeout(()=>{mTab='puzzles';setMView('panel')},move?1600:0); // phones: the result card lives in the panel
+}
+
 // ---- Game archive and Game Story (src/game-story.js) ----
 const archiveAgo=iso=>{const t=Date.parse(iso||'');if(!Number.isFinite(t))return '';const m=Math.round((Date.now()-t)/60000);if(m<60)return `${Math.max(1,m)}m ago`;const h=Math.round(m/60);if(h<48)return `${h}h ago`;return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'})};
 let archiveEntries=[],archiveFilter='all';
@@ -1872,16 +1897,18 @@ function syncMobileShell(){
   shell.classList.toggle('m-over',over);
   const show=(action,visible)=>$(`[data-m-action="${action}"]`)?.classList.toggle('hidden',!visible);
   const watching=!!watchSession;
+  const puzzling=!!puzzleSession;
+  show('puzzle-next',puzzling&&!streakSession);show('puzzle-streak',puzzling&&!streakSession);show('puzzle-skip',puzzling&&!!streakSession&&!streakSession.skipUsed);show('puzzle-end',puzzling&&!!streakSession);
   show('options',true);show('draw',human&&live);show('resign',live);show('takeback',takebackAvailable());show('leave',watching);show('chat',human);show('hint',mode==='computer'&&live);show('undo',mode==='computer'&&live);
   show('review',over);show('rematch',over&&human);show('new',over);
   const title=$('#mGameTitle'),sub=$('#mGameSub');
   if(title){
-    const t=archiveSession?'Game story':watchSession?'Watching':puzzleSession?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
+    const t=puzzleSession&&streakSession?`Puzzle Streak · ${streakSession.count}`:archiveSession?'Game story':watchSession?'Watching':puzzleSession?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
     if(title.textContent!==t)title.textContent=t;
   }
   if(sub){
     const tc=serverGame?formatTimeControl(serverGame.time_control_seconds||600,serverGame.increment_seconds||0):'';
-    const t=archiveSession?`${archiveSession.entry.white} vs ${archiveSession.entry.black}`:watchSession?`${watchSession.state?.white_name||'White'} vs ${watchSession.state?.black_name||'Black'}`:over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
+    const t=puzzleSession&&streakSession?`Best ${streakSession.best} · ${streakDifficulty(streakSession.count)}`:archiveSession?`${archiveSession.entry.white} vs ${archiveSession.entry.black}`:watchSession?`${watchSession.state?.white_name||'White'} vs ${watchSession.state?.black_name||'Black'}`:over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
     if(sub.textContent!==t)sub.textContent=t;
   }
   $('#mReturnGame')?.classList.toggle('hidden',!(live&&mView!=='game'&&mView!=='review'));
@@ -1927,6 +1954,10 @@ const M_ACTIONS={
   hint:()=>void showHint(),
   undo:undoComputerMove,
   takeback:()=>void requestTakeback(),
+  'puzzle-next':()=>void showBackendView('puzzle'),
+  'puzzle-streak':startStreak,
+  'puzzle-skip':()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;void showBackendView('streak')},
+  'puzzle-end':()=>endStreak(null),
   leave:()=>{stopWatching();mTab='watch';openSection('watch')},
   review:()=>void startGameReview(),
   rematch:()=>void startOnlineRematch(),
@@ -2638,16 +2669,25 @@ function brandLoading(label){
   return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
 }
 async function showBackendView(kind){
-  if(kind==='puzzle'){
-    cancelPremove(false);if(watchSession)stopWatching();
-    setDynamicView('puzzles','Puzzle Training',brandLoading('Loading a real tactical position…'));
+  if(kind==='puzzle'||kind==='streak'){
+    cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+    const streak=kind==='streak';if(!streak)streakSession=null;
+    setDynamicView('puzzles',streak?'Puzzle Streak':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:'Loading a real tactical position…'));
     try{
-      const data=await api.puzzleNext('normal',1400),puzzle=data.puzzle||data;
-      game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;
+      const data=await api.puzzleNext(streak?streakDifficulty(streakSession.count):'normal',1400),puzzle=data.puzzle||data;
+      if(streak&&!streakSession)return;
+      game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;
+      flipped=game.turn()==='b';orientationSet=true; // you play the side to move
       puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now()};
       render();
-      $('#dynamicView .view-content').innerHTML=`<article class="puzzle-info"><small>LIVE PUZZLE · ${puzzle.rating||'—'} RATING</small><h4>Find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).join(' · ')||'Tactical training')}</p><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button></article>`;
-      $('#dynamicView .next-puzzle').onclick=()=>showBackendView('puzzle');
+      const side=game.turn()==='w'?'White':'Black';
+      $('#dynamicView .view-content').innerHTML=streak
+        ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
+        :`<article class="puzzle-info"><small>LIVE PUZZLE · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).join(' · ')||'Tactical training')}</p><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><button class="start-streak">Start a Puzzle Streak · best ${loadBestStreak()}</button></article>`;
+      $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
+      $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
+      $('#dynamicView .skip-puzzle')?.addEventListener('click',()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;showBackendView('streak')});
+      $('#dynamicView .end-streak')?.addEventListener('click',()=>endStreak(null));
     }catch(error){toast(error.message);showMovesView()}
     return;
   }

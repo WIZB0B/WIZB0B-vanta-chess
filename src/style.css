@@ -2507,3 +2507,14 @@ body[data-archive="1"] #topClock,body[data-archive="1"] #bottomClock{visibility:
 
 /* While reviewing, the live-analysis numbers above are stale: the review card speaks instead. */
 .analysis.reviewing .analysis-row,.analysis.reviewing #advantage,.analysis.reviewing #line,.analysis.reviewing>small{display:none}
+
+/* Puzzle Streak. */
+.start-streak{display:block;width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid rgba(229,193,124,.45);color:#f2dfaf;font-weight:700;background:rgba(229,193,124,.08)}
+.streak-info .streak-count{display:flex;align-items:baseline;gap:10px}
+.streak-count small{color:#8d9a97;letter-spacing:.12em;font-size:10.5px}
+.streak-count b{font-size:44px;line-height:1;color:#f2dfaf;font-variant-numeric:tabular-nums}
+.streak-count span{color:#93a29d;font-size:12px}
+.streak-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.streak-actions button{flex:1;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.12);color:#dfe7e3;font-weight:600}
+.streak-actions button[disabled]{opacity:.5}
+.streak-over .streak-count b{color:#f0a093}
