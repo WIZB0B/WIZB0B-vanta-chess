@@ -29,6 +29,8 @@ import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
 import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
 import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './splash.js';
+import { openingName, trainerReport } from './opening-trainer.js';
+import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
 import { difficultyForRating, ratingDeltaText, sparklinePoints, themeLabel, weakestThemes } from './puzzle-rating.js';
 import { CHALLENGE_TIMES, VAPID_PUBLIC_KEY, achievementBoard, berserkProgress, canBerserk, challengePayload, clockLabel, dailyDeadlineLabel, pushSupported, sortFriends, timeChoice, timeControlLabel, urlBase64ToBytes } from './social.js';
 
@@ -878,11 +880,11 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
-  if(puzzleSession.index>=puzzleSession.solution.length){await recordPuzzle(true);puzzleSolved();return}
+  if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
-  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){await recordPuzzle(true);puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
+  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){
   if(onlineMovePending)return;
   let legalMove;
@@ -1579,7 +1581,7 @@ function bestStreakShown(){return Math.max(loadBestStreak(),Number(currentProfil
 // Only the first try at a puzzle moves your rating (the server enforces it): a miss counts
 // once, and solving it afterwards just finishes the puzzle.
 async function recordPuzzle(success,move=null){
-  const session=puzzleSession;if(!session||(success&&session.failed&&session.recorded))return;
+  const session=puzzleSession;if(!session||session.trainer||(success&&session.failed&&session.recorded))return;
   const played=move?[...session.played,`${move.from}${move.to}`]:session.played;
   try{
     const out=await api.puzzleAttempt({puzzleId:session.id,success,durationMs:Date.now()-session.started,playedMoves:played});
@@ -1662,6 +1664,7 @@ function drawArchive(){
       <div class="archive-signature"><small>Signature opening</small><b>${insight.topOpening?escapeHtml(insight.topOpening.name):'—'}</b>${insight.topOpening?`<em>${insight.topOpening.games} games · ${insight.topOpening.percent}%</em>`:''}</div>
     </section>
     ${current?'<button type="button" class="archive-current">Tell the story of the game you just played</button>':''}
+    <button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button>
     <div class="archive-filters" role="tablist">${['all','win','loss','draw','computer'].map(f=>`<button type="button" data-archive-filter="${f}" class="${archiveFilter===f?'on':''}">${{all:'All',win:'Wins',loss:'Losses',draw:'Draws',computer:'vs Computer'}[f]}</button>`).join('')}</div>
     <div class="archive-list">${rows.map(({e,i})=>{
       const o=outcomeFor(e.result,e.myColor),opp=e.myColor==='w'?e.black:e.white,oppRating=e.myColor==='w'?e.blackRating:e.whiteRating,acc=reviews[e.id]?.accuracy?.[e.myColor],opening=detectOpening(sansFromPgn(e.pgn))?.name;
@@ -1671,6 +1674,7 @@ function drawArchive(){
   target.querySelectorAll('[data-archive-filter]').forEach(b=>b.onclick=()=>{archiveFilter=b.dataset.archiveFilter;drawArchive()});
   target.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>void openArchivedGame(archiveEntries[Number(b.dataset.archive)]));
   target.querySelector('.archive-current')?.addEventListener('click',()=>void startGameReview());
+  target.querySelector('.archive-trainer')?.addEventListener('click',()=>void renderTrainer());
 }
 async function openArchivedGame(entry){
   if(!entry)return;
@@ -1724,11 +1728,94 @@ function renderStoryCard(){
   card.innerHTML=`<header><b>The story of this game</b><span>${storyTimer?'<button type="button" data-story="stop">Pause</button>':'<button type="button" data-story="play">Play the story</button>'}</span></header>
     <ol class="story-chapters">${chapters.map(c=>`<li class="${inChapter(c)?'on':''}"><button type="button" data-story-ply="${c.from}"><b>${c.title}</b><small>moves ${Math.ceil(c.from/2)}–${Math.ceil(c.to/2)}</small><span><em>You ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,mine))}</em><em>Them ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,them))}</em></span></button></li>`).join('')}</ol>
     ${moments.length?`<div class="story-moments"><small>Moments that decided it</small>${moments.map(m=>`<button type="button" data-story-ply="${m.ply}" class="moment ${m.color===mine?'mine':'theirs'}${ply===m.ply?' on':''}"><b>${escapeHtml(m.label)}</b><span>${Math.ceil(m.ply/2)}${m.color==='w'?'.':'…'} ${escapeHtml(m.san)}</span><em>${m.color===mine?'you':'them'} · −${Math.round(m.loss)}%</em></button>`).join('')}</div>`:'<p class="story-quiet">A clean game: no single move swung it.</p>'}
+    <div class="story-share"><button type="button" data-story="share-card">Share image</button><button type="button" data-story="share-clip">Share clip</button></div>
     ${worst?`<button type="button" class="story-retry" data-story="retry">${retrySession?'Replaying your moment…':`Replay your toughest moment (move ${Math.ceil(worst.ply/2)})`}</button>`:''}`;
   card.querySelectorAll('[data-story-ply]').forEach(b=>b.onclick=()=>{stopStory();setReviewPly(Number(b.dataset.storyPly))});
   card.querySelector('[data-story="play"]')?.addEventListener('click',playStory);
   card.querySelector('[data-story="stop"]')?.addEventListener('click',()=>{stopStory();renderReviewDashboard()});
   card.querySelector('[data-story="retry"]')?.addEventListener('click',()=>{if(!retrySession)startRetry(worst)});
+  card.querySelector('[data-story="share-card"]')?.addEventListener('click',()=>void shareStory('card'));
+  card.querySelector('[data-story="share-clip"]')?.addEventListener('click',()=>void shareStory('clip'));
+}
+// ---- Share a Game Story (src/story-share.js): an image card or a short clip ----
+let sharePieces=null,sharing=false;
+function storyShareInfo(){
+  const entry=archiveSession?.entry,{moments,mine}=storyData(),moves=reviewState.moves,them=mine==='w'?'b':'w';
+  const whole={from:1,to:moves.length},bot=currentBot?.display_name||currentBot?.name||'Computer',own=ownPlayerName();
+  const white=entry?entry.white:mode==='computer'?(computerSide==='w'?own:bot):serverGame?.white_name||'White';
+  const black=entry?entry.black:mode==='computer'?(computerSide==='b'?own:bot):serverGame?.black_name||'Black';
+  const result=entry?.result||(serverGameId&&serverGame?resultFromState(serverGame):localGameOverInfo?.result||resultFromBoard());
+  const outcome=outcomeFor(result,mine),sans=moves.map(m=>m.san);
+  return {white,black,whiteRating:entry?.whiteRating||null,blackRating:entry?.blackRating||null,mine,moments,
+    result:result==='1/2-1/2'?'½–½':result.replace('-','–'),resultText:outcome==='win'?`${mine==='w'?white:black} won`:outcome==='loss'?`${mine==='w'?black:white} won`:outcome==='draw'?'Drawn game':'Game in progress',
+    opening:openingName(sans)||detectOpening(sans)?.name||'Game Story',accuracy:{mine:chapterAccuracy(reviewState.results,moves,whole,mine),theirs:chapterAccuracy(reviewState.results,moves,whole,them)}};
+}
+async function shareStory(kind){
+  if(sharing||!reviewState.moves.length)return;sharing=true;stopStory();
+  const button=$(`#storyCard [data-story="share-${kind}"]`),label=button?.textContent;
+  try{
+    if(button){button.disabled=true;button.textContent=kind==='clip'?'Recording…':'Drawing…'}
+    sharePieces=sharePieces||await loadPieceImages();
+    const info=storyShareInfo(),canvas=document.createElement('canvas');canvas.width=CARD_W;canvas.height=CARD_H;
+    const ctx=canvas.getContext('2d'),orientation=info.mine,moves=reviewState.moves,positions=reviewState.positions;
+    const momentAt=ply=>{const m=info.moments.find(x=>x.ply===ply);return m?{label:m.label,san:m.san,moveNo:`${Math.ceil(ply/2)}${m.color==='w'?'.':'…'}`}:null};
+    const moveText=ply=>ply?`${Math.ceil(ply/2)}${moves[ply-1].color==='w'?'.':'…'} ${moves[ply-1].san}`:'Starting position';
+    const drawAt=ply=>drawStoryFrame(ctx,{fen:positions[ply]||positions.at(-1),lastMove:moves[ply-1]||null,orientation,pieces:sharePieces,info:{...info,moment:ply===moves.length?null:momentAt(ply),resultText:ply===moves.length?info.resultText:moveText(ply)}});
+    const name=storyFileName(info.white,info.black,kind==='clip'?'webm':'png');
+    if(kind==='card'){
+      const top=info.moments[0];drawStoryFrame(ctx,{fen:positions.at(-1),lastMove:moves.at(-1),orientation,pieces:sharePieces,info:{...info,moment:null,resultText:top?`${info.resultText} · turning point ${Math.ceil(top.ply/2)}${top.color==='w'?'.':'…'} ${top.san}`:info.resultText}});
+      const out=await shareOrDownload(await canvasToBlob(canvas),name,{text:`${info.white} vs ${info.black} · ${info.result}`});
+      if(out!=='cancelled')toast(out==='shared'?'Story card shared':'Story card saved');
+    }else{
+      const frames=clipSchedule(moves.length,info.moments);
+      const blob=await recordClip(canvas,frames,drawAt,{onProgress:p=>{if(button)button.textContent=`Recording ${Math.round(p*100)}%`}});
+      const out=await shareOrDownload(blob,name.replace(/\.webm$/,blob.type.includes('mp4')?'.mp4':'.webm'),{text:`${info.white} vs ${info.black} · ${info.result}`});
+      if(out!=='cancelled')toast(out==='shared'?'Story clip shared':'Story clip saved');
+    }
+  }catch(error){toast(error.message||'Could not share the story')}
+  finally{sharing=false;if(button){button.disabled=false;button.textContent=label}}
+}
+
+// ---- Opening trainer (src/opening-trainer.js): your own deviations from theory ----
+let trainerDrills=[],trainerIndex=0;
+async function renderTrainer(){
+  setDynamicView('review','Opening trainer',brandLoading('Reading your games…'));
+  if(!archiveEntries.length){try{const out=await api.archive(60),me=currentProfile?.id||currentPlayerId;archiveEntries=[...(out.games||[]).filter(g=>g.move_count>0&&!['waiting','active'].includes(g.status)).map(g=>archiveEntryFromServer(g,me)),...loadLocalArchive()]}catch{archiveEntries=loadLocalArchive()}}
+  const report=trainerReport(archiveEntries,e=>sansFromPgn(e.pgn)),target=$('#dynamicView .view-content');if(!target)return;
+  trainerDrills=report.drills;
+  const pct=s=>`${s}%`,colorName=c=>c==='w'?'White':'Black';
+  target.innerHTML=`<div class="trainer">
+    <p class="trainer-intro">Built from your own games: where <b>you</b> left known opening theory, and what the main line plays instead.</p>
+    ${trainerDrills.length?`<button class="primary-action trainer-start">Drill ${trainerDrills.length} ${trainerDrills.length===1?'position':'positions'}</button>`:''}
+    <h4>Where you left the book</h4>
+    ${trainerDrills.length?`<div class="trainer-list">${trainerDrills.slice(0,20).map((d,i)=>`<button class="trainer-row" data-drill="${i}"><span><b>${escapeHtml(d.name)}</b><small>as ${colorName(d.color)} · move ${d.moveNo}${d.times>1?` · ${d.times} games`:''}</small></span><span class="trainer-moves"><em>You: ${escapeHtml(d.played)}</em><em>Book: ${escapeHtml(d.book.join(' / '))}</em></span></button>`).join('')}</div>`:'<p class="menu-empty">No deviations yet. Your finished games will show up here when you leave a main line before it ends.</p>'}
+    <h4>Your openings</h4>
+    ${report.openings.length?`<div class="trainer-openings">${report.openings.slice(0,12).map(o=>`<div><span>${escapeHtml(o.name)}<small>as ${colorName(o.color)}</small></span><b>${o.games}</b><em>${pct(o.score)}</em></div>`).join('')}</div>`:'<p class="menu-empty">Play a few games to see your openings.</p>'}
+    <button class="secondary-action trainer-back">Back to my games</button></div>`;
+  target.querySelector('.trainer-start')?.addEventListener('click',()=>startDrill(0));
+  target.querySelectorAll('[data-drill]').forEach(b=>b.onclick=()=>startDrill(Number(b.dataset.drill)));
+  target.querySelector('.trainer-back').onclick=()=>void renderArchive();
+}
+function startDrill(i){
+  const d=trainerDrills[i];if(!d)return void renderTrainer();
+  trainerIndex=i;cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  streakSession=null;game.load(d.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];
+  flipped=game.turn()==='b';orientationSet=true;
+  puzzleSession={id:`drill-${i}`,solution:d.solution,index:0,played:[],started:Date.now(),failed:false,trainer:true,misses:0};
+  render();
+  setDynamicView('review','Opening trainer',`<article class="puzzle-info trainer-drill"><small>DRILL ${i+1} OF ${trainerDrills.length} · ${escapeHtml(d.name.toUpperCase())}</small><h4>${game.turn()==='w'?'White':'Black'} to move · play the main line</h4><p>In your game you played <b>${escapeHtml(d.played)}</b> here. Find the book move${d.solution.length>1?', then keep going':''}.</p><div class="streak-actions"><button class="trainer-skip">Skip</button><button class="trainer-stop">Stop</button></div></article>`);
+  $('#dynamicView .trainer-skip').onclick=()=>startDrill(i+1);
+  $('#dynamicView .trainer-stop').onclick=()=>{puzzleSession=null;void renderTrainer()};
+}
+function drillMiss(){
+  const s=puzzleSession;s.misses++;playIllegalTone();buzz(HAPTICS.illegal);
+  const next=s.solution[s.index];
+  if(s.misses>=2&&next){boardShapes=[{from:next.slice(0,2),to:next.slice(2,4),brush:'green'}];render();toast('The arrow shows the book move')}
+  else toast('Not the main line. Try again');
+}
+function drillSolved(){
+  boardShapes=[];puzzleSession=null;toast('Main line found');
+  setTimeout(()=>{if(mode==='puzzle'&&!puzzleSession)startDrill(trainerIndex+1)},900);
 }
 function playStory(){
   stopStory();const {moments}=storyData();

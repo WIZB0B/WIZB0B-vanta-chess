@@ -2571,3 +2571,17 @@ body[data-archive="1"] #topClock,body[data-archive="1"] #bottomClock{visibility:
 .theme-row{display:grid;grid-template-columns:1fr 70px 38px 44px;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:#0b1715;text-align:left;font-size:12px}
 .theme-row i{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--mint) var(--rate),#24302e var(--rate))}
 .theme-row small{color:var(--muted);text-align:right}
+
+/* === Opening trainer and Game Story sharing === */
+.archive-trainer{width:100%;margin:8px 0;padding:10px 12px;border:1px solid rgba(229,193,124,.4);border-radius:9px;background:#14211f;color:var(--gold);font-weight:600;text-align:left}
+.trainer h4{margin:14px 0 6px}.trainer-intro{color:var(--muted);font-size:12px}
+.trainer-list{display:grid;gap:6px}
+.trainer-row{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#0b1715;text-align:left}
+.trainer-row small{display:block;color:var(--muted);font-size:11px}
+.trainer-moves{display:grid;justify-items:end;font-size:12px}.trainer-moves em{font-style:normal}.trainer-moves em:first-child{color:#ef8a76}.trainer-moves em:last-child{color:var(--mint)}
+.trainer-openings{display:grid;gap:4px}
+.trainer-openings>div{display:grid;grid-template-columns:1fr 40px 48px;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#0b1715;font-size:12px}
+.trainer-openings small{display:block;color:var(--muted);font-size:10px}.trainer-openings em{font-style:normal;color:var(--gold);text-align:right}
+.story-share{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.story-share button{padding:9px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#14211f;font-size:12px;font-weight:600}
+.story-share button:disabled{opacity:.6}
