@@ -12,6 +12,12 @@ import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag
 import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
 import { PieceLayer } from './piece-layer.js';
 import { PieceReactions } from './piece-reactions.js';
+import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
+import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
+import { FLAG_URL, countryList, countryName } from './flags.js';
+import { avatarFromFile, setPortrait } from './portrait.js';
+import { flashSquareFor, illegalReason } from './illegal-move.js';
+import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -32,8 +38,9 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
+let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
 let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
 // Piece reactions (src/piece-reactions.js): hover gestures, lean, press pull and hint swell.
 const reactions=new PieceReactions({
@@ -135,6 +142,7 @@ ${splashMarkup(splash)}
         <header><span id="profileMenuAvatar" class="avatar light" aria-hidden="true">GU</span><div><b id="profileMenuName">${guestName}</b><small id="profileMenuRating">1200 rating</small></div><button id="closeProfileMenu" class="menu-close" type="button" aria-label="Close account menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
         <nav class="profile-menu-items" aria-label="Account">
           <button id="profileMenuProfile" type="button">Profile</button>
+          <button id="profileMenuEdit" type="button">Edit portrait &amp; flag</button>
           <button id="profileMenuSettings" type="button">Settings</button>
           <button id="profileMenuAuth" type="button">Sign in</button>
         </nav>
@@ -182,7 +190,7 @@ ${splashMarkup(splash)}
         <span class="avatar" id="topAvatar">OP</span>
         <div class="player-info">
           <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag hidden" id="topFlag" aria-hidden="true"></span></div>
-          <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span></div>
+          <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span><span class="captured-tray" id="topCaptured" aria-label="Pieces captured"></span></div>
         </div>
         <time id="topClock" data-color="b">10:00</time>
       </div>
@@ -201,7 +209,7 @@ ${splashMarkup(splash)}
         <span class="avatar light" id="bottomAvatar">GU</span>
         <div class="player-info">
           <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag hidden" id="bottomFlag" aria-hidden="true"></span></div>
-          <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span></div>
+          <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span><span class="captured-tray" id="bottomCaptured" aria-label="Pieces captured"></span></div>
         </div>
         <div class="player-connection hidden" id="bottomConnection" aria-label="Network latency">
           <span class="ping-bars" id="bottomPingBars" aria-hidden="true"><i></i><i></i><i></i></span><span id="bottomPing">-- ms</span>
@@ -226,6 +234,7 @@ ${splashMarkup(splash)}
           <div class="analysis">
             <header><b><img class="analysis-title-icon" src="/assets/vch/icons/review.svg" alt="">Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
             <div id="reviewProgress" class="review-progress hidden" aria-live="polite"><span><b id="reviewProgressLabel">Analyzing game</b><em id="reviewProgressCount">0 / 0</em></span><div><i id="reviewProgressFill"></i></div></div>
+            <p id="engineLockedNote" class="engine-locked-note hidden">Engine analysis is off while a live game is played, for both players. It comes back, with Review game, as soon as the game ends.</p>
             <div class="analysis-row"><h2 id="score">+0.0</h2><div class="meter"><i id="meterFill"></i></div></div>
             <p id="advantage">Equal position</p>
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
@@ -268,7 +277,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -335,10 +344,11 @@ function ensureBoardDom(){
     const arrowLayer=document.createElementNS('http://www.w3.org/2000/svg','svg');
     arrowLayer.setAttribute('class','arrow-layer');arrowLayer.setAttribute('viewBox','0 0 8 8');arrowLayer.setAttribute('preserveAspectRatio','none');arrowLayer.setAttribute('aria-hidden','true');
     const badge=document.createElement('div');badge.className='board-badge hidden';pieceLayer.append(badge);
-    board.replaceChildren(pieceLayer,arrowLayer);
+    const fxLayer=document.createElement('div');fxLayer.className='fx-layer';fxLayer.setAttribute('aria-hidden','true');
+    board.replaceChildren(fxLayer,pieceLayer,arrowLayer);
     let dragLayer=document.querySelector('.drag-layer');
     if(!dragLayer){dragLayer=document.createElement('div');dragLayer.className='drag-layer';dragLayer.setAttribute('aria-hidden','true');document.body.append(dragLayer)}
-    boardDom={board,pieceLayer,arrowLayer,dragLayer,badge,badgeKey:'',arrowsHtml:'',pieces:new PieceLayer(pieceLayer),squares:new Map(),squaresFlipped:null};
+    boardDom={board,fxLayer,moodKey:'',pieceLayer,arrowLayer,dragLayer,badge,badgeKey:'',arrowsHtml:'',pieces:new PieceLayer(pieceLayer),squares:new Map(),squaresFlipped:null};
   }
   if(boardDom.squaresFlipped!==flipped){
     const order=flipped?[...Array(64).keys()].reverse():[...Array(64).keys()],fragment=document.createDocumentFragment();
@@ -377,6 +387,86 @@ function renderArrows(dom=ensureBoardDom()){
   const html=arrowsSvg(boardShapes,shapeDraft,flipped);
   if(html!==dom.arrowsHtml){dom.arrowsHtml=html;dom.arrowLayer.innerHTML=html}
 }
+// ---- Piece expressions (src/piece-expressions.js) ----
+// Setting (Theme Studio): Full (default), Subtle or Off. A rated game in progress uses the
+// "fair" level: softer, and only moods that give nothing away (see fairMoods). Landing rings
+// and shockwaves react to a move already made, so they stay on at every level but Off.
+function ratedLiveGame(){return !!(serverGameId&&serverGame?.rated&&!localGameOver&&serverGame?.status==='active'&&!serverGame?.bot_player_id)}
+function expressionLevel(){
+  if(prefersReducedMotion()||motionScale()<=0||expressionSetting==='off')return 'off';
+  if(ratedLiveGame())return 'fair';
+  return expressionSetting==='subtle'?'subtle':'full';
+}
+function expressionsEnabled(){return expressionLevel()!=='off'}
+function applyMoods(dom,boardGame,placement){
+  const level=expressionLevel();
+  if(document.documentElement.dataset.expressions!==level)document.documentElement.dataset.expressions=level;
+  const key=level==='off'?'off':`${level}|${placement}|${boardGame.turn()}|${flipped}`;
+  if(key===dom.moodKey)return;dom.moodKey=key;
+  const all=level==='off'?new Map():analyzeMoods(boardGame);
+  const moods=level==='fair'?fairMoods(all,boardGame):all;
+  for(const [sq,el] of dom.pieces.elements){
+    const m=moods.get(sq);
+    if(!m){if(el.dataset.mood){delete el.dataset.mood;el.style.removeProperty('--toward')}continue}
+    if(el.dataset.mood!==m.mood)el.dataset.mood=m.mood;
+    if(m.toward)el.style.setProperty('--toward',`${bearing(sq,m.toward,flipped)}deg`);else el.style.removeProperty('--toward');
+  }
+}
+function squareCenter(square){
+  const f=square.charCodeAt(0)-97,r=Number(square[1])-1;
+  return {x:((flipped?7-f:f)+.5)*12.5,y:((flipped?r:7-r)+.5)*12.5};
+}
+function landingFx(made){
+  const dom=boardDom;if(!dom||!expressionsEnabled())return;
+  const impact=landingImpact(game,made.to,made.color),c=squareCenter(made.to);
+  buzz(hapticFor(made,game.inCheck()));
+  const ring=document.createElement('i');ring.className=`fx-ring${impact.shock?' fx-shock':''} fx-${made.color}`;
+  ring.style.left=c.x+'%';ring.style.top=c.y+'%';
+  dom.fxLayer.append(ring);ring.addEventListener('animationend',()=>ring.remove(),{once:true});
+  setTimeout(()=>ring.remove(),1600);
+  for(const {square,distance} of impact.hit){
+    const el=dom.pieces.element(square);if(!el)continue;
+    setTimeout(()=>{el.classList.remove('shocked');void el.offsetWidth;el.classList.add('shocked');setTimeout(()=>el.classList.remove('shocked'),520)},90+distance*110);
+  }
+}
+// ---- Game feel (src/game-feel.js) ----
+// Captured-pieces trays: each player bar lists the pieces that player has taken, smallest
+// last, with the material lead (+N) for the side ahead.
+function syncCapturedTrays(boardGame,placement){
+  const style=document.documentElement.dataset.pieceStyle||'vanta',bars=playerBarClockColors();
+  const key=`${placement}|${style}|${bars.top}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  const caps=capturedPieces(boardGame.board());
+  for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
+    const tray=$(id);if(!tray)continue;
+    const enemy=color==='w'?'b':'w',groups=[];
+    for(const type of caps[color]){const last=groups.at(-1);if(last?.type===type)last.n++;else groups.push({type,n:1})}
+    tray.innerHTML=groups.map(g=>`<span class="tray-group" data-type="${g.type}">${Array(g.n).fill(`<img src="${pieceAssetFor(style,enemy+g.type)}" alt="">`).join('')}</span>`).join('')+(caps.lead[color]?`<b class="tray-lead">+${caps.lead[color]}</b>`:'');
+    tray.setAttribute('aria-label',caps[color].length?`Captured: ${caps[color].map(t=>pieceNames[t]).join(', ')}${caps.lead[color]?`, ahead by ${caps.lead[color]}`:''}`:'No captures yet');
+  }
+}
+// The game-end moment: the winner's pieces cheer in a wave, the losing king topples (and
+// stays down until the next game); a draw makes both kings bow. Then the result dialog.
+function clearEnding(dom){
+  dom.endingPlacement=null;
+  for(const el of dom.pieceLayer.querySelectorAll('.board-piece[data-ending]')){delete el.dataset.ending;el.style.removeProperty('--wave')}
+}
+async function playEnding(info){
+  const dom=boardDom,cast=endingCast(info?.result);
+  if(!dom||!cast||!expressionsEnabled())return;
+  clearEnding(dom);dom.endingPlacement=game.fen().split(' ')[0];
+  let i=0;
+  for(const [sq,el] of dom.pieces.elements){
+    const key=el.dataset.piece||'';
+    if(cast.draw){if(key[1]==='k')el.dataset.ending='bow';continue}
+    if(key[0]===cast.winner){el.dataset.ending='cheer';el.style.setProperty('--wave',`${(i++%8)*70}ms`)}
+    else if(key===cast.loser+'k')el.dataset.ending='topple';
+  }
+  await new Promise(resolve=>setTimeout(resolve,1900));
+}
+function buzz(pattern){
+  if(lastPointerType==='mouse'||!expressionsEnabled())return;
+  try{navigator.vibrate?.(pattern)}catch{}
+}
 function renderBoard({hint=null,instant=false}={}){
   const scale=instant?0:motionScale(),dom=ensureBoardDom();
   const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
@@ -401,8 +491,12 @@ function renderBoard({hint=null,instant=false}={}){
   if(reactions.hovered&&(reactions.pieceAt(reactions.hoverSquare)!==reactions.hovered||!reactions.canPick(reactions.hoverSquare)))reactions.clearHover();
   if(reactions.hintSquare&&!legal.has(reactions.hintSquare))reactions.hint(null);
   // Touch: the selected piece gestures once and stays lifted while it is selected.
-  if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started)reactions.pick(selected);else reactions.unpick();
+  if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started){if(reactions.picked!==reactions.pieceAt(selected))buzz(HAPTICS.pick);reactions.pick(selected)}else reactions.unpick();
   if(motion.animated){boardMotion=motion.finished;boardMotionUntil=performance.now()+motion.durationMs}
+  applyMoods(dom,boardGame,placement);
+  syncCapturedTrays(boardGame,placement);
+  if(dom.endingPlacement&&dom.endingPlacement!==placement)clearEnding(dom);
+  if(hint?.to&&!reviewState.viewing){const made=hint;if(motion.animated)motion.finished.then(()=>landingFx(made));else landingFx(made)}
   const hidden=pointerDrag?.started?pointerDrag.from:null;
   for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
   dom.board.dataset.grab=grabbableColor()||'';
@@ -412,6 +506,11 @@ function renderBoard({hint=null,instant=false}={}){
     dom.badgeKey=badgeKey;dom.badge.classList.toggle('hidden',!badgeKey);
     dom.badge.innerHTML=badgeKey?reviewBadgeMarkup(boardReview,'board-review-badge'):'';
     if(badgeKey)dom.badge.style.transform=pieceTransform(lastMove.to,flipped);
+    // The moved piece reacts to its grade (triumph, proud, unsure, slump, despair).
+    for(const el of dom.pieceLayer.querySelectorAll('.board-piece[data-react]'))delete el.dataset.react;
+    const reaction=badgeKey&&expressionsEnabled()?REVIEW_REACTION[boardReview.classification]:null;
+    const moved=reaction?dom.pieces.element(lastMove.to):null;
+    if(moved)moved.dataset.react=reaction;
   }
   renderArrows(dom);
   dom.board.classList.toggle('mate',game.isCheckmate());
@@ -562,6 +661,7 @@ async function joinRematchFromPeer(payload){
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
   lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';playUiSound(title==='Draw'?'draw':won?'win':'lose');
+  await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
   const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
   if(action==='review')await startGameReview();
@@ -613,7 +713,7 @@ async function clickSquare(sq,p,{instant=false}={}){
   if(sq===selected){selected=null;render();return}
   if(p?.color===game.turn()){selected=sq;render();return}
   const candidates=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);
-  if(!candidates.length){selected=null;render();return}
+  if(!candidates.length){rejectMove(selected,sq,{quietRule:true});selected=null;render();return}
   let promotion;if(candidates.some(m=>m.promotion)){promotion=await choosePromotion();if(!promotion){selected=null;render();return}}
   instantMoveAnimation=instant;
   try{makeMove({from:selected,to:sq,promotion:promotion||'q'})}finally{instantMoveAnimation=false}
@@ -744,9 +844,14 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   onlineMovePending=true;let resendStaleMove=false;
   lastLocalRealtimeMove={gameId:moveGameId,version:expectedVersion+1,from:made.from,to:made.to,promotion:made.promotion||null,fenBefore};
   rememberLastMove(made);
+  setProvisional(moveGameId,expectedVersion+1);
   selected=null;switchOnlineClockOptimistically();render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
+  // The opponent sees the move now, not after the server round trip.
+  broadcastMoved(moveGameId,expectedVersion+1,lastLocalRealtimeMove,{early:true});
   try{
     await nextFrames(2); // the slide is under way before the request is built and sent
+    // Replying to a move the server hasn't confirmed yet: give it a moment so our version matches.
+    if(relayConfirm)await relayConfirm.promise;
     const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
     const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
     if(lastLocalRealtimeMove&&lastLocalRealtimeMove.gameId===moveGameId)lastLocalRealtimeMove={...lastLocalRealtimeMove,version:incomingVersion||lastLocalRealtimeMove.version};
@@ -754,6 +859,8 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
     if(moveGameId===serverGameId&&incomingVersion>serverVersion)applyServerState(state,{animateMove:false});
   }catch(error){
     if(lastLocalRealtimeMove?.gameId===moveGameId)lastLocalRealtimeMove=null;
+    if(provisional?.gameId===moveGameId)provisional=null;
+    broadcastAux('move_void',{from:realtimeClientId,version:expectedVersion+1});
     if(moveGameId===serverGameId){
       await refreshServerState();render();
       // A 409 means our version was stale (e.g. the opponent's join bumped it); resend once if the move is still ours and legal.
@@ -769,6 +876,7 @@ function isBookMove(records,index){
   return OPENINGS.some(opening=>index<opening.line.length&&sans.every((san,ply)=>san===normalizedSan(opening.line[ply])));
 }
 function recordEval(record,index){
+  if(engineLocked())return '';
   const raw=record?.eval??record?.evaluation??record?.eval_cp??record?.score_cp;
   if(raw!==undefined&&raw!==null&&raw!==''){
     let value=Number(raw);
@@ -826,12 +934,38 @@ async function findEngineMove(){
 }
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
+function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
 function playTone(){
   if($('#sound').dataset.off)return;
   try{
-    toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();
-    const a=toneContext,o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
+    const a=audioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
   }catch{}
+}
+// An illegal try: a low double knock (and a short buzz on phones). When the king is the
+// reason (check, a pin, an attacked square) its square flashes red, like a warning light.
+function playIllegalTone(){
+  if($('#sound').dataset.off)return;
+  try{
+    const a=audioContext(),t=a.currentTime;
+    for(const at of [0,.11]){
+      const o=a.createOscillator(),g=a.createGain();o.type='triangle';o.frequency.setValueAtTime(190,t+at);o.frequency.exponentialRampToValueAtTime(120,t+at+.08);
+      g.gain.setValueAtTime(.0001,t+at);g.gain.exponentialRampToValueAtTime(.09,t+at+.008);g.gain.exponentialRampToValueAtTime(.0001,t+at+.09);
+      o.connect(g).connect(a.destination);o.start(t+at);o.stop(t+at+.1);
+    }
+  }catch{}
+}
+function flashIllegal(square){
+  const el=boardDom?.squares.get(square);if(!el)return;
+  el.querySelector('.illegal-flash')?.remove();
+  const flash=document.createElement('span');flash.className='illegal-flash';flash.setAttribute('aria-hidden','true');
+  flash.addEventListener('animationend',()=>flash.remove(),{once:true});setTimeout(()=>flash.remove(),1400);
+  el.append(flash);
+}
+// A tap elsewhere is often just "never mind": taps stay quiet unless the king is the reason.
+function rejectMove(from,to,{quietRule=false}={}){
+  const reason=illegalReason(game,from,to);if(!reason||(quietRule&&reason.kind==='rule'))return;
+  playIllegalTone();buzz(HAPTICS.illegal);
+  const square=flashSquareFor(reason);if(square)flashIllegal(square);
 }
 function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
 function playerBarClockColors(){
@@ -907,12 +1041,12 @@ function playerInitials(value,fallback='GU'){
 function setPlayerFlag(element,code){
   if(!element)return;
   const normalized=/^[a-z]{2}$/i.test(String(code||''))?String(code).toUpperCase():'';
-  const flagSrc=normalized==='US'?'/assets/vch/flags/us.svg':'';
+  const flagSrc=normalized?FLAG_URL[normalized]||'':'';
   element.classList.toggle('hidden',!flagSrc);
   element.toggleAttribute('aria-hidden',!flagSrc);
   if(flagSrc){
     element.innerHTML=`<img src="${flagSrc}" alt="">`;
-    element.setAttribute('aria-label','United States flag');
+    element.setAttribute('aria-label',`${countryName(normalized)} flag`);element.title=countryName(normalized);
   }else{
     element.replaceChildren();
     element.removeAttribute('aria-label');
@@ -956,10 +1090,12 @@ function syncPlayerBars(){
   $('#bottomPlayerName').textContent=`You · ${ownName}`;
   $('#topRating').textContent=`${topRating} rating`;
   $('#bottomRating').textContent=`${ratingFor(pool)} rating`;
-  $('#topAvatar').textContent=playerInitials(topName,'OP');
-  $('#bottomAvatar').textContent=playerInitials(ownName,'GU');
+  const opponent=opponentInfo&&opponentInfo.gameId===serverGameId?opponentInfo:null;
+  setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,label:topName});
+  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:ownName});
+  if(serverGameId&&opponentId&&!currentBot)void loadOpponentInfo(serverGameId,opponentId);
   const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
-  setPlayerFlag($('#topFlag'),opponentColor?serverGame?.[`${opponentColor}_country_code`]:null);
+  setPlayerFlag($('#topFlag'),opponent?.country_code||(opponentColor?serverGame?.[`${opponentColor}_country_code`]:null));
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code||(ownColor?serverGame?.[`${ownColor}_country_code`]:null));
   const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
@@ -1015,6 +1151,9 @@ function syncOpponentConnectionToast(state){
 }
 function applyServerState(payload,{animateMove=true}={}){
   const state=payload.game||payload;if(!state)return;
+  // A heartbeat that left before the latest move must not take that move back.
+  if(isStale(provisional,state,performance.now()))return;
+  if(provisional&&(confirms(provisional,state)||isExpired(provisional,performance.now())))clearProvisional();
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
@@ -1056,18 +1195,80 @@ function syncIdentityUI(){
   const user=$('#accountBtn');if(user){user.querySelector('span').textContent=name;user.querySelector('small').textContent=rating+' rating'}
   const bottom=$('#bottomPlayerName');if(bottom)bottom.textContent='You · '+name;
   const bottomRating=$('#bottomRating');if(bottomRating)bottomRating.textContent=rating+' rating';
-  const bottomAvatar=$('#bottomAvatar');if(bottomAvatar)bottomAvatar.textContent=playerInitials(name,'GU');
+  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:name});
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code);
   syncPlayerBars();
-  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';$('#profileMenuAvatar').textContent=playerInitials(name,'GU');$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
+  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),{avatar:currentProfile?.avatar_data,label:name});$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
     for(const pool of ['bullet','blitz','rapid','classical']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
   }
 }
+// ---- Portrait and country flag ----
+// The opponent's flag and portrait come from game_players once per game and seat.
+let opponentInfo=null,opponentInfoKey='';
+async function loadOpponentInfo(gameId,opponentId){
+  const key=`${gameId}:${opponentId}`;if(opponentInfoKey===key)return;opponentInfoKey=key;
+  try{
+    const out=await api.gamePlayers(gameId),them=(out.players||[]).find(p=>p.id===opponentId);
+    opponentInfo=them?{gameId,...them}:null;syncPlayerBars();
+  }catch{opponentInfoKey=''}
+}
+// Country detection asks Netlify's edge for the country code only, and only when the player
+// presses "Detect" (their consent). The code is the only thing we keep.
+async function detectCountry(){
+  const response=await fetch('/api/geo',{cache:'no-store',headers:{accept:'application/json'}});
+  const data=await response.json().catch(()=>({}));
+  const code=String(data?.country||'').toUpperCase();
+  if(!/^[A-Z]{2}$/.test(code)||!FLAG_URL[code])throw new Error('Could not detect your country. Pick it from the list.');
+  return code;
+}
+async function saveProfileChanges(changes){
+  const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
+}
+function flagPromptDone(){try{return !!localStorage.getItem('vanta.flagPrompt')}catch{return true}}
+function scheduleFlagPrompt(){
+  if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending)return;
+  scheduleFlagPrompt.pending=true;setTimeout(showFlagPrompt,2500);
+}
+function showFlagPrompt(){
+  if(flagPromptDone()||currentProfile?.country_code||document.querySelector('.flag-prompt'))return;
+  const card=document.createElement('section');card.className='flag-prompt';card.setAttribute('role','dialog');card.setAttribute('aria-label','Show your country flag');
+  card.innerHTML=`<b>Show your country flag?</b><p>Opponents see it beside your name. "Detect" looks up only your country from your connection; we keep the 2-letter code, never your IP address.</p><div><button type="button" data-flag="detect" class="primary">Detect my country</button><button type="button" data-flag="choose">Choose myself</button><button type="button" data-flag="no">No thanks</button></div>`;
+  const done=()=>{try{localStorage.setItem('vanta.flagPrompt','1')}catch{}card.remove()};
+  card.addEventListener('click',async event=>{
+    const choice=event.target.closest('[data-flag]')?.dataset.flag;if(!choice)return;
+    if(choice==='no'){done();return}
+    if(choice==='choose'){done();void openProfileEditor();return}
+    try{const code=await detectCountry();await saveProfileChanges({country_code:code});done();toast(`Flag set: ${countryName(code)}`)}
+    catch(error){done();toast(error.message);void openProfileEditor()}
+  });
+  document.body.append(card);
+}
+async function openProfileEditor(){
+  const account=!!authSession?.access_token&&!!currentProfile?.account;
+  let avatar=currentProfile?.avatar_data||null,country=currentProfile?.country_code||'';
+  const body=document.createElement('div');body.className='profile-editor';
+  const options=['<option value="">No flag</option>',...countryList().map(([code,name])=>`<option value="${code}">${escapeHtml(name)}</option>`)].join('');
+  body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div>${account?`<label class="pe-upload"><input type="file" accept="image/*" hidden><span>Upload picture</span></label><button type="button" class="pe-remove">Remove picture</button><small>Square crop, 128px. JPEG, PNG or WebP.</small>`:`<small>Sign in to add a profile picture. Guests show an empty portrait.</small>`}</div></div>
+<label class="pe-country"><span>Country flag</span><select>${options}</select></label>
+<button type="button" class="pe-detect">Detect from my connection</button>
+<p class="pe-note">Your flag is shown to opponents. Detect looks up only your country from your connection; we keep the 2-letter code, never your IP address. Choose "No flag" to hide it.</p>`;
+  const preview=body.querySelector('.pe-avatar'),select=body.querySelector('select');
+  const draw=()=>setPortrait(preview,{avatar});draw();select.value=country;
+  select.onchange=()=>{country=select.value};
+  body.querySelector('.pe-detect').onclick=async()=>{try{country=await detectCountry();select.value=country}catch(error){toast(error.message)}};
+  body.querySelector('input[type=file]')?.addEventListener('change',async event=>{try{avatar=await avatarFromFile(event.target.files?.[0]);draw()}catch(error){toast(error.message)}});
+  const remove=body.querySelector('.pe-remove');if(remove)remove.onclick=()=>{avatar=null;draw()};
+  const action=await vchDialog({title:'Portrait & flag',body,actions:[{label:'Cancel',value:false},{label:'Save',value:true,primary:true}]});
+  if(!action)return;
+  const changes={country_code:country||null};
+  if(account&&avatar!==(currentProfile?.avatar_data||null))changes.avatar_data=avatar;
+  try{await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')}catch(error){toast(error.message)}
+}
 async function loadProfile(){
-  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
+  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();scheduleFlagPrompt();return out}
   catch(error){
     if(error.status===401&&authSession&&await refreshAuthSession()){const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
     if(error.status===401&&authSession){saveAuthSession(null);currentProfile=null;syncIdentityUI()}
@@ -1107,9 +1308,35 @@ function sendRealtimePing(){
     if(pingProbe?.nonce===nonce){clearPingProbe();latencyMs=null;syncConnectionUi()}
   });
 }
-function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={}){
+function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={},{early=false}={}){
   if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId)return;
-  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore}}).catch(()=>{});
+  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore,...(early?{provisional:true}:{})}}).catch(()=>{});
+}
+// Provisional moves (see online-sync.js): shown at once, confirmed by the server shortly after.
+function setProvisional(gameId,version){provisional=provisionalMove(gameId,version,performance.now())}
+function clearProvisional(){provisional=null;if(relayConfirm){relayConfirm.resolve();relayConfirm=null}}
+// The opponent's provisional move: wait (briefly) for the server to confirm it, then make
+// sure the board matches the server. Our reply is held until then so its version is right.
+function awaitRelayConfirmation(gameId,version){
+  if(relayConfirm)relayConfirm.resolve('replaced');
+  const wait=waiter(CONFIRM_WAIT_MS);relayConfirm=wait;
+  void wait.promise.then(result=>{
+    if(relayConfirm===wait)relayConfirm=null;
+    if(serverGameId!==gameId)return;
+    // No confirmation in time, or a hint arrived: ask the server (rolls back if it never landed).
+    if(result!=='replaced'&&(result==='timeout'||provisional?.version===version))void refreshServerState();
+  });
+}
+function confirmRelayHint(incoming){
+  if(!provisional||incoming.gameId!==provisional.gameId||incoming.version<provisional.version)return false;
+  if(relayConfirm){relayConfirm.resolve('hint');return true}
+  return false;
+}
+function handleMoveVoid(message){
+  const payload=message?.payload||{};
+  if(payload.gameId!==serverGameId||payload.from===realtimeClientId)return;
+  provisional=null;if(relayConfirm){relayConfirm.resolve('void');relayConfirm=null}
+  void refreshServerState();
 }
 function realtimeMove(message){
   const payload=message?.payload||{},gameState=payload.game||payload,history=Array.isArray(gameState?.move_history)?gameState.move_history:[];
@@ -1120,7 +1347,8 @@ function realtimeMove(message){
     from:payload.from||lastMove.from,
     to:payload.to||lastMove.to,
     promotion:payload.promotion??lastMove.promotion??null,
-    fenBefore:payload.fenBefore||payload.fen_before||lastMove.fenBefore||lastMove.fen_before||gameState?.fenBefore||gameState?.fen_before||''
+    fenBefore:payload.fenBefore||payload.fen_before||lastMove.fenBefore||lastMove.fen_before||gameState?.fenBefore||gameState?.fen_before||'',
+    provisional:payload.provisional===true
   };
   if(!incoming.fenBefore&&incoming.from&&incoming.to&&gameState?.fen){
     try{
@@ -1150,6 +1378,12 @@ function applyRealtimeMove(incoming){
   try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
   rememberLastMove(made);
   serverVersion=incoming.version;selected=null;switchOnlineClockOptimistically();render({hint:made});afterBoardPaint(playTone);
+  if(incoming.provisional){
+    // Shown straight away; the server's confirmation (or its absence) settles it shortly.
+    setProvisional(incoming.gameId,incoming.version);awaitRelayConfirmation(incoming.gameId,incoming.version);
+    playQueuedPremove();
+    return true;
+  }
   const premoveResult=playQueuedPremove();
   if(premoveResult)void Promise.resolve(premoveResult).finally(()=>refreshServerState());else void refreshServerState();
   return true;
@@ -1175,6 +1409,7 @@ function handleRealtimeMessage(message){
   if(!isOnlineGame()||incoming.gameId!==serverGameId)return;
   if(isOwnRealtimeMove(incoming))return;
   if(applyRealtimeMove(incoming))return;
+  if(confirmRelayHint(incoming))return;
   refreshFromRealtime(message);
 }
 function broadcastAux(event,payload={}){
@@ -1201,6 +1436,7 @@ function startRealtime(){
     .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
     .on('broadcast',{event:'state'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'moved'},message=>{handleRealtimeMessage(message)})
+    .on('broadcast',{event:'move_void'},message=>{handleMoveVoid(message)})
     .on('broadcast',{event:'draw_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void refreshServerState()})
     .on('broadcast',{event:'draw_response'},message=>{handleDrawResponse(message)})
     .on('broadcast',{event:'chat_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void loadChat()})
@@ -1233,7 +1469,7 @@ function startPolling(){
     try{
       const payload=await api.heartbeat(serverGameId);
       applyServerState(payload);
-      if(++pollCount%1===0)await loadChat();
+      if(++pollCount%3===0)await loadChat(); // chat_hint broadcasts load new messages at once
     }catch{}
     finally{inFlight=false}
   },5000);
@@ -1326,6 +1562,25 @@ function positionDragFloat(drag,x,y){
   const area=boardPlayArea(),half=drag.size/2;
   const cx=Math.min(Math.max(x,area.left+half),area.left+area.width-half),cy=Math.min(Math.max(y,area.top+half),area.top+area.height-half);
   drag.float.style.transform=`translate(${Math.round(cx-half)}px,${Math.round(cy-half)}px)`;
+  // Sway: the piece hangs from the hand and swings against the motion, settling when it stops.
+  const now=performance.now();
+  if(drag.lastX!==undefined){const dt=Math.max(8,now-drag.lastT);drag.vx=.7*(drag.vx||0)+.3*((cx-drag.lastX)/dt)}
+  drag.lastX=cx;drag.lastT=now;
+  if(!drag.swayLoop&&expressionsEnabled())startSway(drag);
+}
+function startSway(drag){
+  drag.swayLoop=true;drag.angle=0;
+  const art=()=>drag.float?.firstElementChild;
+  const step=now=>{
+    if(!drag.float||!drag.float.isConnected){drag.swayLoop=false;return}
+    if(now-drag.lastT>40)drag.vx*=.85; // pointer stopped: the swing dies down
+    const target=Math.max(-20,Math.min(20,(drag.vx||0)*18));
+    drag.angle+=(target-drag.angle)*.22;
+    const bob=Math.sin(now/180)*1.6;
+    const a=art();if(a){a.style.rotate=`${drag.angle.toFixed(2)}deg`;a.style.translate=`0 ${(bob-4).toFixed(2)}%`}
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 function markDragOver(drag,square){
   if(drag.over===square)return;
@@ -1386,6 +1641,7 @@ function finishPointerDrag(to,{cancelled=false}={}){
       if(boardDom?.pieces.element(drag.from)?.classList.contains('drag-origin'))renderBoard();
       return
     }
+    if(outcome==='return'&&to&&to!==drag.from)rejectMove(drag.from,to);
     selected=outcome==='deselect'?null:drag.from;
     settle();return
   }
@@ -1740,7 +1996,30 @@ function formatPv(pv=''){
     return out.join(' ');
   }catch{return pv}
 }
+// Fair play: no engine help during a live online game (rated or casual, against a person or
+// a matched bot). The evaluation, the best line and per-move evals are hidden and the engine
+// doesn't run; all of it returns when the game ends. Computer games keep it (no one to wrong).
+function engineLocked(){
+  if(reviewState.running||reviewState.viewing)return false;
+  return isOnlineGame()&&!!myColor&&['active','playing','in_progress'].includes(serverGame?.status);
+}
+let engineWasLocked=false;
+function syncEngineLock(){
+  const locked=engineLocked();
+  $('.analysis')?.classList.toggle('engine-locked',locked);
+  $('#engineLockedNote')?.classList.toggle('hidden',!locked);
+  if(locked&&!engineWasLocked){
+    clearTimeout(analysisTimer);analysisRequest=null;
+    try{analysisWorker.postMessage({action:'stop'})}catch{}
+    const depthEl=$('#depth');if(depthEl)depthEl.textContent='—';
+    updateMoves();
+  }
+  if(!locked&&engineWasLocked)updateMoves();
+  engineWasLocked=locked;
+  return locked;
+}
 function updateAnalysisFromUci(text,request){
+  if(engineLocked())return;
   if(reviewState.running||reviewState.viewing){const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);return}
   if(!request||request.fen!==game.fen())return;
   const depth=Number(text.match(/\bdepth (\d+)/)?.[1]||0);
@@ -1764,7 +2043,8 @@ function updateAnalysisFromUci(text,request){
 }
 function scheduleAnalysis({force=false}={}){
   clearTimeout(analysisTimer);
-  if(reviewState.running||reviewState.viewing||mode==='puzzle'||(serverGame?.rated&&serverGame?.status==='active'&&!serverGame?.bot_player_id))return;
+  if(syncEngineLock())return;
+  if(reviewState.running||reviewState.viewing||mode==='puzzle')return;
   analysisTimer=setTimeout(()=>{
     if(botThinking)return;
     const fen=game.fen();
@@ -1921,6 +2201,7 @@ document.addEventListener('pointerdown',event=>{menus.handleOutside(event.target
 $('#closeProfileMenu').onclick=()=>menus.close('profile');
 $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
 $('#profileMenuProfile').onclick=openAccount;
+$('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
 $('#profileMenuSettings').onclick=()=>menus.open('theme');
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
@@ -2013,6 +2294,8 @@ $$('[data-theme]').forEach(input=>input.oninput=()=>{
 });
 savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+$('#expressionsSetting').value=expressionSetting;
+$('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=0;$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');

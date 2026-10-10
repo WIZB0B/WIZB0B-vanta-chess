@@ -1,4 +1,13 @@
 const DEFAULT_ENDPOINT = 'https://ubjldcfiwrwiouwgmduo.supabase.co/functions/v1/chess';
+// The database lives in us-east-2. Without this, Supabase runs the function in the region
+// nearest the player (Frankfurt for West Africa), and every database call inside it then
+// crosses the Atlantic: about a second per move. Pinning the region makes that one hop.
+export const FUNCTION_REGION = 'us-east-2';
+export function regionalEndpoint(endpoint, region = FUNCTION_REGION) {
+  const url = new URL(endpoint);
+  if (region) url.searchParams.set('forceFunctionRegion', region);
+  return url.toString();
+}
 
 export class VchApiError extends Error {
   constructor(message, status, code) {
@@ -14,7 +23,7 @@ export class VchApi {
     if (!/^https:\/\/[a-z0-9.-]+\/functions\/v1\/chess$/.test(endpoint)) {
       throw new Error('Invalid authoritative chess API endpoint');
     }
-    this.endpoint = endpoint;
+    this.endpoint = regionalEndpoint(endpoint);
     this.token = token;
     this.accessToken = accessToken;
   }
@@ -22,8 +31,11 @@ export class VchApi {
   async request(action, payload = {}, { signal } = {}) {
     const headers = { 'content-type': 'application/json', accept: 'application/json' };
     if (this.accessToken) headers.authorization = `Bearer ${this.accessToken}`;
+    // No `cache: 'no-store'`: POST responses are never cached anyway, and in Chrome that
+    // mode also bypasses the CORS preflight cache, adding a full OPTIONS round trip to
+    // every move.
     const response = await fetch(this.endpoint, {
-      method: 'POST', headers, signal, cache: 'no-store', referrerPolicy: 'no-referrer',
+      method: 'POST', headers, signal, referrerPolicy: 'no-referrer',
       body: JSON.stringify({ action, ...(this.token ? { token: this.token } : {}), ...payload }),
     });
     const data = await response.json().catch(() => ({}));
@@ -34,6 +46,8 @@ export class VchApi {
   }
 
   profile(name) { return this.request('profile', { name }); }
+  profileUpdate(changes) { return this.request('profile_update', changes); }
+  gamePlayers(gameId) { return this.request('game_players', { gameId }); }
   create(options) { return this.request('create', options); }
   join(code, name) { return this.request('join', { code, name }); }
   move(gameId, expectedVersion, move) { return this.request('move', { gameId, expectedVersion, ...move }); }
