@@ -11,6 +11,7 @@ async function mockProfile(page){
 }
 
 test('primary menus and study controls are not dead buttons',async({page})=>{
+  test.skip(test.info().project.name==='mobile','Desktop layout; phones are covered by e2e/mobile-shell.spec.js');
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await expect(page.locator('.square')).toHaveCount(64);
 
@@ -65,6 +66,7 @@ test('left panel switches between three distinct play-mode views',async({page})=
 });
 
 test('board controls, theme studio, and local Stockfish computer game work',async({page})=>{
+  test.skip(test.info().project.name==='mobile','Desktop layout; phones are covered by e2e/mobile-shell.spec.js');
   test.setTimeout(45000);
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
 
@@ -128,6 +130,7 @@ test('preview CSP runs Stockfish WebAssembly and Black-side clocks follow player
 });
 
 test('right-panel feature cards open their real destinations',async({page})=>{
+  test.skip(test.info().project.name==='mobile','Desktop layout; phones are covered by e2e/mobile-shell.spec.js');
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await page.locator('.feature-card.opening').click();await expect(page.locator('#dynamicView')).toContainText('Opening Explorer');
   await page.locator('[data-nav="play"]').click();

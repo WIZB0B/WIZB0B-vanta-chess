@@ -2126,6 +2126,96 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
   .board-piece .piece,.board-piece::before{transition:none}
   .board .square.legal::after{animation:none;transition:none}
 }
+/* Piece expressions (src/piece-expressions.js, prototype).
+   Moods animate the artwork's `transform` (hover/press use translate/scale/rotate, so they
+   compose). --amp scales them: Ink sets express less, Regal (3D) more. --toward is the
+   screen angle to the piece's attacker (fear leans away) or target (attack leans in).
+   The fx layer sits between the squares and the pieces: landing rings and shockwaves. */
+:root{--expr-amp:1;--fx-w:255 205 105;--fx-b:176 128 255}
+:root[data-expressions="subtle"]{--expr-amp:.6}
+:root[data-expressions="fair"]{--expr-amp:.55}
+.board-piece{--set-amp:1;--amp:calc(var(--set-amp) * var(--expr-amp))}
+:root[data-piece-style$="-ink"] .board-piece{--set-amp:.65}
+:root[data-piece-style="regal"] .board-piece{--set-amp:1.4}
+.board-piece[data-mood="fear"] .piece{animation:vch-fear 2.6s ease-in-out infinite}
+.board-piece[data-mood="attack"] .piece{animation:vch-attack 2.2s cubic-bezier(.3,.7,.3,1) infinite}
+.board-piece[data-mood="courage"] .piece{animation:vch-courage 3s ease-in-out infinite}
+.board-piece.hovered[data-mood] .piece{animation-duration:1.1s}
+.board-piece.shocked .piece{animation:vch-shock .5s cubic-bezier(.2,.9,.3,1) both}
+@keyframes vch-fear{
+  0%,55%,100%{transform:rotate(calc(sin(var(--toward,0deg)) * -5.5deg * var(--amp))) scale(calc(1 - .04 * var(--amp)))}
+  60%{transform:translateX(calc(-2.2% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -8deg * var(--amp))) scale(calc(1 - .05 * var(--amp)))}
+  65%{transform:translateX(calc(2.2% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -8deg * var(--amp))) scale(calc(1 - .05 * var(--amp)))}
+  70%{transform:translateX(calc(-1.7% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -7deg * var(--amp)))}
+  75%{transform:translateX(calc(1.7% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -7deg * var(--amp)))}
+  80%{transform:translateX(0) rotate(calc(sin(var(--toward,0deg)) * -5.5deg * var(--amp))) scale(calc(1 - .04 * var(--amp)))}
+}
+@keyframes vch-attack{
+  0%,70%,100%{transform:rotate(calc(sin(var(--toward,0deg)) * 6.5deg * var(--amp)))}
+  80%{transform:translate(calc(sin(var(--toward,0deg)) * 8% * var(--amp)),calc(cos(var(--toward,0deg)) * -8% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * 11deg * var(--amp))) scale(calc(1 + .06 * var(--amp)))}
+}
+@keyframes vch-courage{
+  0%,100%{transform:scale(1)}
+  50%{transform:translateY(calc(-3% * var(--amp))) scale(calc(1 + .06 * var(--amp)),calc(1 + .08 * var(--amp)))}
+}
+@keyframes vch-shock{
+  0%{transform:none}
+  20%{transform:translateY(calc(-8% * var(--amp))) scale(calc(1 + .1 * var(--amp)),calc(1 - .1 * var(--amp))) rotate(calc(-6deg * var(--amp)))}
+  45%{transform:translateY(calc(2% * var(--amp))) rotate(calc(5deg * var(--amp)))}
+  70%{transform:rotate(calc(-2deg * var(--amp)))}
+  100%{transform:none}
+}
+.fx-layer{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.fx-ring{
+  position:absolute;width:12.5%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;
+  border:3px solid rgba(255,248,214,.85);box-shadow:0 0 14px rgba(255,236,170,.45),inset 0 0 10px rgba(255,236,170,.35);
+  animation:vch-ring .55s cubic-bezier(.2,.7,.3,1) forwards;
+}
+/* Shockwaves take the mover's team colour: --fx-w / --fx-b (gold and purple by default;
+   a themed set can define its own). */
+.fx-ring.fx-shock{
+  --fx:var(--fx-w);
+  border-width:4px;border-color:rgb(var(--fx) / .95);
+  box-shadow:0 0 26px rgb(var(--fx) / .6),inset 0 0 24px rgb(var(--fx) / .45);
+  animation:vch-shockwave 1.05s cubic-bezier(.15,.75,.3,1) forwards;
+}
+.fx-ring.fx-shock.fx-b{--fx:var(--fx-b)}
+:root[data-expressions="fair"] .fx-ring.fx-shock{animation-duration:.8s}
+@keyframes vch-ring{from{scale:.35;opacity:1}to{scale:1.35;opacity:0}}
+@keyframes vch-shockwave{0%{scale:.3;opacity:1}60%{opacity:.75}100%{scale:5.2;opacity:0;border-width:1px}}
+@media (prefers-reduced-motion:reduce){
+  .board-piece[data-mood] .piece,.board-piece.shocked .piece{animation:none}
+  .fx-ring{display:none}
+}
+/* Game feel (src/game-feel.js).
+   Captured trays sit in each player's meta row; same-type pieces overlap like a hand of cards. */
+.captured-tray{display:inline-flex;align-items:center;gap:5px;margin-left:8px;min-height:18px}
+.captured-tray:empty{display:none}
+.tray-group{display:inline-flex}
+.tray-group img{width:18px;height:18px;object-fit:contain;margin-left:-9px}
+.tray-group img:first-child{margin-left:0}
+.tray-lead{font-size:11px;font-weight:700;color:#c9d3cf;letter-spacing:.3px}
+/* Game end: --wave staggers the cheer across the winner's pieces. */
+.board-piece[data-ending="cheer"] .piece{animation:vch-cheer .62s cubic-bezier(.3,.7,.3,1) var(--wave,0ms) 3 both}
+.board-piece[data-ending="topple"] .piece{transform-origin:50% 95%;animation:vch-topple .9s cubic-bezier(.5,0,.75,.2) .25s forwards}
+.board-piece[data-ending="bow"] .piece{animation:vch-bow 1.1s ease-in-out 2 both}
+@keyframes vch-cheer{0%,100%{transform:none}35%{transform:translateY(-16%) scale(1.06,.96) rotate(-4deg)}60%{transform:translateY(-6%) rotate(3deg)}80%{transform:translateY(1%) scale(1.03,.97)}}
+@keyframes vch-topple{0%{transform:none}20%{transform:rotate(-8deg)}100%{transform:translate(18%,6%) rotate(82deg);opacity:.85}}
+@keyframes vch-bow{0%,100%{transform:none}45%{transform:rotate(14deg) translateY(4%)}}
+/* Review: the moved piece reacts to its grade. */
+.board-piece[data-react="triumph"] .piece{animation:vch-triumph 1.4s ease-in-out infinite}
+.board-piece[data-react="proud"] .piece{animation:vch-courage 2.4s ease-in-out infinite}
+.board-piece[data-react="unsure"] .piece{animation:vch-unsure 2s ease-in-out infinite}
+.board-piece[data-react="slump"] .piece{animation:vch-slump 2.2s ease-in-out infinite}
+.board-piece[data-react="despair"] .piece{animation:vch-despair 1.8s ease-in-out infinite}
+.board-piece[data-react="triumph"]::after{content:"";position:absolute;inset:6%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(120,220,255,.42),transparent 68%);animation:vch-glow 1.4s ease-in-out infinite;z-index:-1}
+@keyframes vch-triumph{0%,100%{transform:none}40%{transform:translateY(-9%) scale(1.07)}60%{transform:translateY(-6%) scale(1.05) rotate(3deg)}}
+@keyframes vch-unsure{0%,100%{transform:none}30%{transform:rotate(-5deg)}60%{transform:rotate(4deg)}}
+@keyframes vch-slump{0%,100%{transform:translateY(4%) rotate(-6deg) scale(.95)}50%{transform:translateY(5%) rotate(-9deg) scale(.94)}}
+@keyframes vch-despair{0%,100%{transform:translateY(6%) rotate(-12deg) scale(.92)}20%{transform:translateY(6%) translateX(-2%) rotate(-12deg) scale(.92)}30%{transform:translateY(6%) translateX(2%) rotate(-12deg) scale(.92)}40%{transform:translateY(6%) rotate(-12deg) scale(.92)}}
+@keyframes vch-glow{0%,100%{opacity:.55;scale:.9}50%{opacity:1;scale:1.12}}
+@media (prefers-reduced-motion:reduce){.board-piece[data-ending] .piece,.board-piece[data-react] .piece,.board-piece[data-react]::after{animation:none}}
 /* V1b: square marks fill the whole square (under the pieces); arrows sit above them, about
    22% of a square thick at .85 opacity. (".shape-mark", not ".mark": that is the brand logo.) */
 .board .square.shape-mark{box-shadow:inset 0 0 0 999px var(--mark-color)!important}
@@ -2146,3 +2236,181 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
    see syncGlassBlur in main.js). At the near-opaque default the blur is invisible but the
    compositor re-blurs every panel on every frame that changes, e.g. each frame of a move. */
 :root[data-glass="solid"] .panel,:root[data-glass="solid"] .game,:root[data-glass="solid"] .topbar{backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* === BOARD FIT: the board is as big as the screen allows (like chess.com) ===
+   --board is the playing area's side: the smaller of
+   - the viewport height minus everything stacked above and below the board (top bar,
+     player bars, coordinates, tools, paddings: --fit-chrome), and
+   - the width left after the side panels (--fit-side) and gaps.
+   The game column is exactly the board plus its coordinate gutter, so the player bars and
+   tools line up with it. Side panels take the rest of the width and scroll inside
+   themselves rather than making the page scroll. Phones keep the full-width board. */
+@media (min-width:801px){
+  :root{--fit-chrome:288px;--fit-pad:14px;--fit-gutter:18px}
+  .shell{padding-top:14px;padding-bottom:12px}
+  main{margin-top:10px}
+  .game{
+    --board:clamp(300px,min(calc(100dvh - var(--fit-chrome)),calc(100vw - var(--fit-side))),1100px);
+    width:calc(var(--board) + var(--fit-gutter) + 2 * var(--fit-pad))!important;
+    min-width:0;min-height:0;
+    padding-left:var(--fit-pad)!important;padding-right:var(--fit-pad)!important;
+  }
+  .game .board-shell{width:calc(var(--board) + var(--fit-gutter))}
+  .lpanel,.rpanel{width:auto!important;min-width:0;min-height:0!important;max-height:calc(100dvh - 104px);overflow-y:auto;scrollbar-width:thin}
+}
+@media (min-width:1181px){
+  :root{--fit-side:calc(96px + 300px + 320px + 2 * 18px + 2 * var(--fit-pad) + var(--fit-gutter))}
+  main{grid-template-columns:minmax(300px,1fr) auto minmax(320px,1fr)!important;column-gap:18px!important}
+}
+@media (min-width:801px) and (max-width:1180px){
+  :root{--fit-side:calc(18px + 280px + 14px + 2 * var(--fit-pad) + var(--fit-gutter))}
+  main{grid-template-columns:minmax(280px,1fr) auto!important}
+  .rpanel{max-height:none}
+}
+@media (max-width:800px){
+  /* Phones: the board spans the screen edge to edge (only the coordinate gutter remains). */
+  .game{margin-left:0!important;margin-right:0!important;max-width:100vw!important;padding:6px 4px!important;border-radius:0!important;border-left:0!important;border-right:0!important}
+}
+
+/* Portraits and flags (src/portrait.js, src/flags.js). */
+.avatar.has-picture,.avatar.is-empty{padding:0;overflow:hidden}
+.avatar.has-picture img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.avatar.is-empty{background:linear-gradient(180deg,#2a3a37,#16211f);color:#7f9590}
+.portrait-silhouette{width:72%;height:72%;fill:currentColor;display:block;margin:auto}
+.portrait-silhouette path{fill:currentColor}
+.player-flag img{width:100%;height:100%;object-fit:cover;border-radius:3px}
+.flag-prompt{position:fixed;left:18px;bottom:18px;z-index:200;width:min(360px,calc(100vw - 36px));padding:14px 16px;border-radius:12px;
+  background:rgba(8,18,19,.96);border:1px solid rgba(229,193,124,.45);box-shadow:0 18px 40px rgba(0,0,0,.5);color:#e9ece8;font-size:12px;
+  animation:vch-prompt-in .28s cubic-bezier(.2,.8,.3,1) both}
+.flag-prompt b{font-size:14px}.flag-prompt p{margin:6px 0 10px;color:#a9b4b1;line-height:1.45}
+.flag-prompt div{display:flex;gap:6px;flex-wrap:wrap}
+.flag-prompt button{padding:7px 10px;border-radius:8px;border:1px solid #3b4b48;background:#13201e;font-size:11px}
+.flag-prompt button.primary{background:linear-gradient(#efd59d,#d5ad64);color:#14140f;border:0;font-weight:700}
+@keyframes vch-prompt-in{from{opacity:0;translate:0 12px}}
+.profile-editor{display:grid;gap:12px;min-width:min(380px,80vw)}
+.pe-portrait{display:flex;gap:14px;align-items:center}
+.pe-avatar{width:72px!important;height:72px!important;flex:0 0 72px;font-size:20px}
+.pe-portrait>div{display:grid;gap:6px;justify-items:start}
+.pe-portrait small,.pe-note{color:#93a19d;font-size:11px;line-height:1.4;margin:0}
+.pe-upload span,.pe-remove,.pe-detect{display:inline-block;padding:7px 11px;border-radius:8px;border:1px solid #3b4b48;background:#13201e;font-size:12px;cursor:pointer;color:#e3e8e5}
+.pe-country{display:grid;gap:5px;font-size:12px}
+.pe-country select{padding:9px;border-radius:8px;background:#0a1514;color:#e9ece9;border:1px solid #3b4848}
+.pe-detect{justify-self:start}
+@media (prefers-reduced-motion:reduce){.flag-prompt{animation:none}}
+
+/* Illegal move: the king's square blinks red twice when the king is why the move fails. */
+.square .illegal-flash{position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:rgb(214 48 42 / .78);box-shadow:inset 0 0 0 4px rgb(255 128 108 / .9);opacity:0;
+  animation:vch-illegal 900ms ease-out both}
+@keyframes vch-illegal{0%{opacity:0}12%{opacity:1}34%{opacity:.25}52%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.square .illegal-flash{animation:vch-illegal-still 900ms linear both}}
+@keyframes vch-illegal-still{0%,80%{opacity:.85}100%{opacity:0}}
+
+/* Fair play: during a live online game the engine panel shows only a note. */
+.analysis.engine-locked .analysis-row,.analysis.engine-locked #advantage,.analysis.engine-locked #line,
+.analysis.engine-locked>small,.analysis.engine-locked header small{display:none}
+.engine-locked-note{margin:12px 0 2px;color:#a9b1b0;line-height:1.45;font-size:13px}
+
+/* Opponent left: same card as a draw offer, a cooler accent. */
+.abandon-card{border-color:rgba(130,237,186,.38)}
+.abandon-card #abandonClaim{background:linear-gradient(#efd59d,#d5ad64);color:#14130f;border-color:transparent}
+.abandon-card .hidden{display:none}
+
+/* === PHONE APP SHELL (src/mobile-shell.js; body.m-app below 760px) ===
+   home   Play screen + bottom tab bar     panel  a section + tab bar
+   game   board only, no page scroll, action bar at the bottom
+   review board, then the review panel (scrolls). Desktop never gets body.m-app. */
+.m-tabs,.m-gamebar,.m-moves,.m-actions,.m-sheet,.m-return{display:none}
+body.m-app{--m-tabs-h:calc(60px + env(safe-area-inset-bottom));--m-gold:#e5c17c;--m-ink:#071112}
+body.m-app .shell{padding:0 0 var(--m-tabs-h)!important;max-width:none!important}
+body.m-app .topbar{position:sticky;top:0;z-index:40;height:auto!important;min-height:54px;margin:0!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px!important;border-radius:0!important;border-width:0 0 1px!important;gap:10px}
+body.m-app .topbar .main-nav,body.m-app #installBtn,body.m-app #notifyBtn{display:none!important}
+body.m-app #accountBtn>span,body.m-app #accountBtn>small,body.m-app #accountBtn .account-chevron{display:none!important}
+body.m-app .topbar .header-actions{margin-left:auto}
+
+body.m-app .m-tabs{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:60;height:var(--m-tabs-h);padding-bottom:env(safe-area-inset-bottom);background:rgba(7,15,15,.97);border-top:1px solid rgba(255,255,255,.08)}
+.m-tabs button,.m-actions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;color:#8d9a97;font-size:10.5px;font-weight:600;letter-spacing:.02em;-webkit-tap-highlight-color:transparent}
+.m-tabs svg,.m-actions svg,.m-gamebar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.m-tabs .on{color:var(--m-gold)}
+body.m-app .m-tabs button,body.m-app .m-actions button{padding:0!important;border:0!important;background:none!important;border-radius:0!important}
+body.m-app .m-tabs button span,body.m-app .m-actions button span{display:block!important}
+.m-tabs button:active,.m-actions button:active{transform:scale(.94)}
+
+/* Home and sections: one column, the page scrolls like an app list. */
+body.m-app .shell:not(.intro-active) main#gameWorkspace{display:block!important;margin:0!important;padding:12px 12px 18px!important}
+body.m-app .shell[data-mview="home"] .game,body.m-app .shell[data-mview="home"] .rpanel,
+body.m-app .shell[data-mview="panel"] .game,body.m-app .shell[data-mview="panel"] .lpanel{display:none!important}
+body.m-app .lpanel,body.m-app .rpanel{width:auto!important;max-height:none!important;overflow:visible!important;margin:0!important}
+body.m-app .shell[data-mview="home"] .hero-art{display:none}
+body.m-app .shell[data-mview="home"] .hero h1{font-size:34px;margin:6px 0 4px}
+body.m-app .shell[data-mview="panel"] .rpanel .live-card,body.m-app .shell[data-mview="panel"] .rpanel>.tabs{display:none}
+body.m-app .m-return{display:block;position:fixed;left:50%;bottom:calc(var(--m-tabs-h) + 10px);z-index:55;translate:-50% 0;padding:11px 20px;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:800;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+body.m-app .m-return.hidden{display:none}
+
+/* Game: the board fills the screen; nothing scrolls. */
+body.m-app .shell[data-mview="game"]{padding:0!important}
+body.m-app .shell[data-mview="game"] .topbar,body.m-app .shell[data-mview="game"] .m-tabs,
+body.m-app .shell[data-mview="game"] .lpanel,body.m-app .shell[data-mview="game"] .rpanel,
+body.m-app .shell[data-mview="game"] .game .tools{display:none!important}
+body.m-app .shell[data-mview="game"] main#gameWorkspace{padding:0!important}
+body.m-app .shell[data-mview="game"] .game{
+  --m-chrome:calc(46px + 2 * 52px + 38px + 62px + env(safe-area-inset-top) + env(safe-area-inset-bottom));
+  position:fixed;inset:0;z-index:30;display:flex!important;flex-direction:column;width:auto!important;max-width:none!important;height:100vh!important;height:100dvh!important;bottom:auto!important;max-height:none!important;min-height:0!important;
+  margin:0!important;padding:env(safe-area-inset-top) 0 0!important;border:0!important;border-radius:0!important;
+  background:radial-gradient(120% 60% at 50% 0%,#12221f,#081314 60%);overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+body.m-app .m-gamebar{display:flex;align-items:center;gap:8px;height:46px;padding:0 8px;flex:none}
+body.m-app .m-gamebar button{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:#dfe7e3}
+body.m-app .m-gamebar b{display:block;font-size:15px;line-height:1.1;color:#eef1ed}
+body.m-app .m-gamebar small{display:block;font-size:11px;color:#8d9a97;margin-top:2px}
+body.m-app .shell[data-mview="game"] .game .player{height:52px;flex:none;padding:0 10px!important;margin:0!important}
+body.m-app .shell[data-mview="game"] .game .board-shell{
+  flex:none;margin:0 auto;width:min(100vw,calc(100dvh - var(--m-chrome) + 16px))!important}
+body.m-app .m-moves{display:flex;align-items:center;gap:4px;height:38px;flex:none;overflow-x:auto;padding:0 12px;white-space:nowrap;scrollbar-width:none;font-size:13px}
+body.m-app .m-moves::-webkit-scrollbar{display:none}
+.m-moves i{font-style:normal;color:#6f7f7b;margin-left:4px}
+.m-moves b{font-weight:600;color:#cfd8d4;padding:3px 6px;border-radius:6px}
+.m-moves b.last{background:rgba(229,193,124,.16);color:#f2dfaf}
+.m-moves-empty{color:#6f7f7b;font-size:12px}
+body.m-app .m-actions{display:flex;margin-top:0;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--m-ink);border-top:1px solid rgba(255,255,255,.07);flex:none}
+.m-actions button{flex:1;color:#a9b4b1}
+.m-actions button.hidden{display:none}
+.m-actions [data-m-action="resign"]{color:#f08c7f}
+.m-actions [data-m-action="review"],.m-actions [data-m-action="new"]{color:var(--m-gold)}
+body.m-app .shell[data-mview="game"] .draw-offer-card{position:fixed;left:10px;right:10px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:35;margin:0}
+body.m-app .shell[data-mview="game"] .draw-offer-card.hidden{display:none}
+body.m-app .shell:not([data-mview="game"]) .m-gamebar,body.m-app .shell:not([data-mview="game"]) .m-moves,body.m-app .shell:not([data-mview="game"]) .m-actions{display:none}
+
+/* Review: board on top, the review panel below; the page scrolls. */
+body.m-app .shell[data-mview="review"]{padding:0!important}
+body.m-app .shell[data-mview="review"] .topbar,body.m-app .shell[data-mview="review"] .m-tabs,
+body.m-app .shell[data-mview="review"] .lpanel,body.m-app .shell[data-mview="review"] .game .tools,
+body.m-app .shell[data-mview="review"] .rpanel .live-card{display:none!important}
+body.m-app .shell[data-mview="review"] main#gameWorkspace{padding:0 0 18px!important}
+body.m-app .shell[data-mview="review"] .game{margin:0!important;border-radius:0!important;border:0!important;padding:env(safe-area-inset-top) 0 6px!important}
+body.m-app .shell[data-mview="review"] .m-gamebar{display:flex}
+body.m-app .shell[data-mview="review"] .rpanel{margin:8px 10px 0!important}
+
+/* Bottom sheets (More, Game options). */
+body.m-app .m-sheet{display:block;position:fixed;inset:0;z-index:300}
+body.m-app .m-sheet[hidden]{display:none}
+.m-sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.m-sheet-card{position:absolute;left:0;right:0;bottom:0;max-height:80dvh;overflow:auto;background:#0b1718;border:1px solid rgba(229,193,124,.28);border-bottom:0;border-radius:18px 18px 0 0;padding:6px 14px calc(14px + env(safe-area-inset-bottom));translate:0 100%;transition:translate .22s cubic-bezier(.2,.8,.3,1)}
+.m-sheet.open .m-sheet-card{translate:0 0}
+.m-sheet-card header{display:flex!important;align-items:center;justify-content:space-between;height:auto!important;padding:10px 2px!important;background:none!important;border:0!important;box-shadow:none!important;border-radius:0!important}
+.m-sheet-card header b{font-size:16px;color:#f2dfaf}
+.m-sheet-card header button{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;color:#cfd8d4}
+.m-sheet-card header svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.m-sheet-items button{display:block;width:100%;text-align:left;padding:14px 12px;border-radius:10px;font-size:15px;color:#e6ece9;border-bottom:1px solid rgba(255,255,255,.06)}
+.m-sheet-items button:active{background:rgba(255,255,255,.05)}
+body.m-app .flag-prompt{left:12px;bottom:calc(var(--m-tabs-h) + 12px)}
+body.m-app #toast.show{bottom:calc(var(--m-tabs-h) + 14px)}
+@media (prefers-reduced-motion:reduce){.m-sheet-card{transition:none}}
+.m-room{color:#a9b4b1;font-size:13px;margin-right:10px}.m-room b{color:#f2dfaf;letter-spacing:.08em;margin-left:4px}
+.m-moves [data-m-copy]{padding:7px 12px;border-radius:9px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:700;font-size:12px}
+
+/* The game cluster (bars, board, moves) sits centred between the top bar and the actions. */
+body.m-app .shell[data-mview="game"] .game .player.top{margin-top:auto!important}
+body.m-app .shell[data-mview="game"] .m-moves{margin-bottom:auto}
+/* Dialogs fit small phones and scroll inside themselves. */
+body.m-app .vch-dialog-panel{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+body.m-app .shell[data-mview="review"] .feature-card{display:none!important}
