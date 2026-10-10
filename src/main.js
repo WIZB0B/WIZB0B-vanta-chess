@@ -29,6 +29,7 @@ import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
 import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
 import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './splash.js';
+import { difficultyForRating, ratingDeltaText, sparklinePoints, themeLabel, weakestThemes } from './puzzle-rating.js';
 import { CHALLENGE_TIMES, VAPID_PUBLIC_KEY, achievementBoard, berserkProgress, canBerserk, challengePayload, clockLabel, dailyDeadlineLabel, pushSupported, sortFriends, timeChoice, timeControlLabel, urlBase64ToBytes } from './social.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -877,11 +878,11 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);toast('Try another move');return}
+async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
-  if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});puzzleSolved();return}
+  if(puzzleSession.index>=puzzleSession.solution.length){await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
-  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
+  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){await recordPuzzle(true);puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){
   if(onlineMovePending)return;
   let legalMove;
@@ -1571,6 +1572,46 @@ function syncGameMoments(){
 setInterval(syncGameMoments,1000);
 document.addEventListener('visibilitychange',syncGameMoments);
 // ---- Puzzle Streak (src/puzzle-streak.js) ----
+// ---- Puzzle rating, daily puzzle and theme stats (src/puzzle-rating.js) ----
+let puzzleAngle=null;
+function puzzleRatingNow(){return Number(currentProfile?.puzzle_rating||1200)}
+function bestStreakShown(){return Math.max(loadBestStreak(),Number(currentProfile?.puzzle_best_streak||0))}
+// Only the first try at a puzzle moves your rating (the server enforces it): a miss counts
+// once, and solving it afterwards just finishes the puzzle.
+async function recordPuzzle(success,move=null){
+  const session=puzzleSession;if(!session||(success&&session.failed&&session.recorded))return;
+  const played=move?[...session.played,`${move.from}${move.to}`]:session.played;
+  try{
+    const out=await api.puzzleAttempt({puzzleId:session.id,success,durationMs:Date.now()-session.started,playedMoves:played});
+    session.recorded=true;
+    if(out?.rating?.counted&&currentProfile){
+      currentProfile={...currentProfile,puzzle_rating:out.rating.after,puzzle_games:Number(currentProfile.puzzle_games||0)+1};
+      const now=$('#puzzleRatingNow'),delta=$('#puzzleRatingDelta');
+      if(now)now.textContent=out.rating.after;
+      if(delta){delta.textContent=ratingDeltaText(out.rating.before,out.rating.after);delta.className=out.rating.after>=out.rating.before?'up':'down'}
+      const pr=$('#ratingPuzzle');if(pr)pr.textContent=out.rating.after;
+    }
+  }catch{}
+}
+function puzzleMiss(move){
+  playIllegalTone();buzz(HAPTICS.illegal);
+  if(!puzzleSession.failed){puzzleSession.failed=true;void recordPuzzle(false,move);toast('Not the move · this one counts as missed. Keep trying.')}
+  else toast('Try another move');
+}
+async function renderPuzzleStats(){
+  setDynamicView('puzzles','Puzzle stats',brandLoading('Loading your puzzle stats…'));
+  try{
+    const st=await api.puzzleStats(),target=$('#dynamicView .view-content');if(!target)return;
+    const points=sparklinePoints(st.history||[],280,64),weak=weakestThemes(st.themes||[]);
+    target.innerHTML=`<article class="puzzle-stats"><div class="puzzle-stat-row"><div><small>RATING</small><b>${st.rating}</b></div><div><small>RATED</small><b>${st.games}</b></div><div><small>BEST STREAK</small><b>${Math.max(st.best_streak||0,loadBestStreak())}</b></div></div>
+      ${points?`<svg class="puzzle-spark" viewBox="0 0 280 64" preserveAspectRatio="none" aria-label="Puzzle rating over your last puzzles"><polyline points="${points}"/></svg>`:'<p class="menu-empty">Solve a few puzzles to see your rating line.</p>'}
+      ${weak.length?`<h4>Practise next</h4><div class="theme-chips">${weak.map(t=>`<button data-theme="${escapeHtml(t.theme)}">${escapeHtml(themeLabel(t.theme))} · ${t.rate}%</button>`).join('')}</div>`:''}
+      <h4>By theme</h4>${(st.themes||[]).length?`<div class="theme-table">${st.themes.map(t=>`<button class="theme-row" data-theme="${escapeHtml(t.theme)}"><span>${escapeHtml(themeLabel(t.theme))}</span><i style="--rate:${t.rate}%"></i><b>${t.rate}%</b><small>${t.solved}/${t.tries}</small></button>`).join('')}</div>`:'<p class="menu-empty">Themes appear after a couple of tries each.</p>'}
+      <button class="primary-action next-puzzle">Back to puzzles</button></article>`;
+    target.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{puzzleAngle=b.dataset.theme;showBackendView('puzzle')});
+    target.querySelector('.next-puzzle').onclick=()=>showBackendView('puzzle');
+  }catch(error){toast(error.message);showBackendView('puzzle')}
+}
 function startStreak(){streakSession={count:0,best:loadBestStreak(),skipUsed:false};puzzleSession=null;showBackendView('streak')}
 function puzzleSolved(){
   const session=puzzleSession;puzzleSession=null;
@@ -1583,10 +1624,11 @@ function endStreak(move){
   const session=streakSession;if(!session)return;streakSession=null;
   if(move){playIllegalTone();buzz(HAPTICS.illegal)}
   const solution=puzzleSession?.solution?.[puzzleSession.index];
-  if(puzzleSession&&move)void api.puzzleAttempt({puzzleId:puzzleSession.id,success:false,durationMs:Date.now()-puzzleSession.started,playedMoves:[...puzzleSession.played,`${move.from}${move.to}`]}).catch(()=>{});
+  if(puzzleSession&&move)void recordPuzzle(false,move);
+  if(session.count>0)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
   if(solution){boardShapes=[{from:solution.slice(0,2),to:solution.slice(2,4),brush:'green'}];render()}
   puzzleSession=null;
-  const best=saveBestStreak(session.count),target=$('#dynamicView .view-content');
+  const best=Math.max(saveBestStreak(session.count),Number(currentProfile?.puzzle_best_streak||0)),target=$('#dynamicView .view-content');
   if(target)target.innerHTML=`<article class="puzzle-info streak-info streak-over"><div class="streak-count"><small>STREAK</small><b>${session.count}</b><span>Best ${best}</span></div><h4>${move?'Streak over':'Streak ended'}</h4><p>${move&&solution?'The green arrow shows the move that kept it going.':session.count?'Well played.':'Have another go.'}</p><div class="streak-actions"><button class="primary-action start-streak">Start again</button><button class="next-puzzle">Back to training</button></div></article>`;
   $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
   $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
@@ -2863,23 +2905,27 @@ function brandLoading(label){
   return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
 }
 async function showBackendView(kind){
-  if(kind==='puzzle'||kind==='streak'){
+  if(kind==='puzzle-stats')return void renderPuzzleStats();
+  if(kind==='puzzle'||kind==='streak'||kind==='daily'){
     cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
-    const streak=kind==='streak';if(!streak)streakSession=null;
-    setDynamicView('puzzles',streak?'Puzzle Streak':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:'Loading a real tactical position…'));
+    const streak=kind==='streak',daily=kind==='daily';if(!streak)streakSession=null;if(streak||daily)puzzleAngle=null;
+    setDynamicView('puzzles',streak?'Puzzle Streak':daily?'Daily Puzzle':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:daily?"Loading today's puzzle…":'Loading a real tactical position…'));
     try{
-      const data=await api.puzzleNext(streak?streakDifficulty(streakSession.count):'normal',1400),puzzle=data.puzzle||data;
+      const data=daily?await api.puzzleDaily():await api.puzzleNext(streak?streakDifficulty(streakSession.count):difficultyForRating(puzzleRatingNow()),puzzleRatingNow(),streak?null:puzzleAngle),puzzle=data.puzzle||data;
       if(streak&&!streakSession)return;
       game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;
       flipped=game.turn()==='b';orientationSet=true; // you play the side to move
-      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now()};
+      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now(),failed:false,daily};
       render();
       const side=game.turn()==='w'?'White':'Black';
       $('#dynamicView .view-content').innerHTML=streak
         ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
-        :`<article class="puzzle-info"><small>LIVE PUZZLE · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).join(' · ')||'Tactical training')}</p><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><button class="start-streak">Start a Puzzle Streak · best ${loadBestStreak()}</button></article>`;
+        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button></article>`;
       $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
       $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
+      $('#dynamicView .daily-puzzle')?.addEventListener('click',()=>showBackendView('daily'));
+      $('#dynamicView .puzzle-stats')?.addEventListener('click',()=>showBackendView('puzzle-stats'));
+      $('#dynamicView .clear-theme')?.addEventListener('click',()=>{puzzleAngle=null;showBackendView('puzzle')});
       $('#dynamicView .skip-puzzle')?.addEventListener('click',()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;showBackendView('streak')});
       $('#dynamicView .end-streak')?.addEventListener('click',()=>endStreak(null));
     }catch(error){toast(error.message);showMovesView()}

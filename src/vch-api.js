@@ -67,7 +67,7 @@ export class VchApi {
   drawRespond(gameId, accept) { return this.request('draw_respond', { gameId, accept }); }
   chatList(gameId, limit = 60) { return this.request('chat_list', { gameId, limit }); }
   chatSend(gameId, message, clientNonce = crypto.randomUUID()) { return this.request('chat_send', { gameId, message, clientNonce }); }
-  puzzleNext(difficulty = 'normal', rating = 1400) { return this.request('puzzle_next', { difficulty, rating }); }
+  puzzleNext(difficulty = 'normal', rating = 1400, angle = null) { return this.request('puzzle_next', { difficulty, rating, ...(angle ? { angle } : {}) }); }
   puzzleAttempt(payload) { return this.request('puzzle_attempt', payload); }
   queueJoin(options) { return this.request('queue_join', options); }
   queueStatus(rated = false) { return this.request('queue_status', { rated, allowBots: !rated }); }

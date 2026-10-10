@@ -546,10 +546,13 @@ async function dailyGames(req:Request,b:any){
 }
 // ---- Puzzles: daily puzzle, themes, streak record ----
 async function puzzleDaily(req:Request,b:any){
-  const {count}=await admin.from("chess_puzzles").select("id",{count:"exact",head:true});
-  if(!count)throw fail("No puzzles yet.",404);
-  const today=nowIso().slice(0,10),idx=dailyIndex(today,Number(count));
-  const {data,error}=await admin.from("chess_puzzles").select("*").order("id").range(idx,idx);if(error)throw error;
+  // Chosen among puzzles cached before today (and of middling difficulty), so the pick
+  // stays the same all day even as new puzzles are cached.
+  const today=nowIso().slice(0,10),pool=()=>admin.from("chess_puzzles").select("id",{count:"exact",head:true}).lt("fetched_at",today+"T00:00:00Z").gte("rating",1300).lte("rating",2100);
+  const {count}=await pool();
+  if(!count)throw fail("No daily puzzle yet. Try the regular puzzles.",404);
+  const idx=dailyIndex(today,Number(count));
+  const {data,error}=await admin.from("chess_puzzles").select("*").lt("fetched_at",today+"T00:00:00Z").gte("rating",1300).lte("rating",2100).order("id").range(idx,idx);if(error)throw error;
   const pick=data?.[0];if(!pick)throw fail("No puzzle today.",404);
   let solved=false;try{const p=await playerFor(req,b,false,{touch:false});const {data:a}=await admin.from("chess_puzzle_attempts").select("id").eq("player_id",p.id).eq("puzzle_id",pick.id).eq("success",true).gte("created_at",today+"T00:00:00Z").limit(1);solved=!!a?.length}catch{}
   return {date:today,solved,puzzle:{id:pick.id,fen:pick.fen,solution:pick.solution,rating:pick.rating,plays:pick.plays,themes:pick.themes,source:pick.source}}
