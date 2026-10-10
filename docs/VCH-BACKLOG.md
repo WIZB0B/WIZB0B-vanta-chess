@@ -204,3 +204,35 @@ audit; chat content limits; basic anti-cheat flags noted for later.
 
 ## C1. Competitor comparison
 Feature matrix vs chess.com, lichess and others; list gaps.
+
+## Done 2026-10-09 (live in production via release PR #9)
+- Pieces (PR #7): Vanta (default) and Vanta Ink with bold dark outlines, fixed bishops, more
+  detailed Ink; new top-down 3D set Regal; filled selected square; selection clears after a move.
+- Piece reactions (PR #8): per-piece hover gestures, lean toward the cursor, press pull, touch
+  tap reaction, swelling legal-move dots.
+- Board fits the screen (PR #10, in review): board side = min(free height, free width).
+
+## E. Expressions (prototype PR, owner reviewing the demo video)
+Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
+- E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
+- E2 Landing ring on every drop; shockwave across the board when the mover is ahead and lands
+  within 2 squares of enemy pieces, which flinch nearest first. (prototype; "ahead" = material)
+- E3 Moods: fear (attacked, not safely defended; king in check), attack (leans toward a bigger
+  or undefended target), courage (attacked but defended), shock. Hover intensifies. 3D sets
+  express more than Ink sets. (prototype)
+- E4 Fair play: moods are OFF in online games (they would flag hanging pieces). Engine-based
+  "who is winning" never drives effects in live games; it may in bot games, analysis, review
+  and spectating. Owner to confirm.
+- E5 More expressions: strength/triumph after a capture, despair for a lone king, victory and
+  defeat poses at game end, idle breathing.
+- E6 Setting: Expressions Off / Subtle / Full; separate toggle for shockwaves.
+- E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
+
+## P. Piece sets, themes and store (later; owner will send references)
+- P1 More piece sets, each in a 3D and a 2D version, all supporting expressions (3D fuller).
+- P2 Themed sets generated in Higgsfield: each theme = pieces + board + background + its own
+  theme song; users can still mix and customise.
+- P3 Medieval realistic 3D set: real soldiers with shields, swords and helmets as the pieces,
+  the king behind the lines. Owner will send a reference before we start.
+- P4 Premium piece sets and skins behind a paywall, better than anything on chess.com. Last
+  part of the project (needs payments, entitlements and a store page).

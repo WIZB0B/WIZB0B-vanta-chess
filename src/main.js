@@ -12,6 +12,7 @@ import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag
 import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
 import { PieceLayer } from './piece-layer.js';
 import { PieceReactions } from './piece-reactions.js';
+import { analyzeMoods, bearing, landingImpact } from './piece-expressions.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -335,10 +336,11 @@ function ensureBoardDom(){
     const arrowLayer=document.createElementNS('http://www.w3.org/2000/svg','svg');
     arrowLayer.setAttribute('class','arrow-layer');arrowLayer.setAttribute('viewBox','0 0 8 8');arrowLayer.setAttribute('preserveAspectRatio','none');arrowLayer.setAttribute('aria-hidden','true');
     const badge=document.createElement('div');badge.className='board-badge hidden';pieceLayer.append(badge);
-    board.replaceChildren(pieceLayer,arrowLayer);
+    const fxLayer=document.createElement('div');fxLayer.className='fx-layer';fxLayer.setAttribute('aria-hidden','true');
+    board.replaceChildren(fxLayer,pieceLayer,arrowLayer);
     let dragLayer=document.querySelector('.drag-layer');
     if(!dragLayer){dragLayer=document.createElement('div');dragLayer.className='drag-layer';dragLayer.setAttribute('aria-hidden','true');document.body.append(dragLayer)}
-    boardDom={board,pieceLayer,arrowLayer,dragLayer,badge,badgeKey:'',arrowsHtml:'',pieces:new PieceLayer(pieceLayer),squares:new Map(),squaresFlipped:null};
+    boardDom={board,fxLayer,moodKey:'',pieceLayer,arrowLayer,dragLayer,badge,badgeKey:'',arrowsHtml:'',pieces:new PieceLayer(pieceLayer),squares:new Map(),squaresFlipped:null};
   }
   if(boardDom.squaresFlipped!==flipped){
     const order=flipped?[...Array(64).keys()].reverse():[...Array(64).keys()],fragment=document.createDocumentFragment();
@@ -377,6 +379,39 @@ function renderArrows(dom=ensureBoardDom()){
   const html=arrowsSvg(boardShapes,shapeDraft,flipped);
   if(html!==dom.arrowsHtml){dom.arrowsHtml=html;dom.arrowLayer.innerHTML=html}
 }
+// ---- Piece expressions (src/piece-expressions.js) ----
+// Moods are shown in local, bot and review games. In online games they stay off: a piece
+// trembling because it is hanging would warn a player about a blunder (fair play). The
+// landing ring and shockwave stay on everywhere: they react to a move already made.
+function expressionsEnabled(){return !prefersReducedMotion()&&motionScale()>0}
+function moodsAllowed(){return expressionsEnabled()&&!(serverGameId&&!localGameOver)}
+function applyMoods(dom,boardGame,placement){
+  const key=moodsAllowed()?`${placement}|${boardGame.turn()}|${flipped}`:'off';
+  if(key===dom.moodKey)return;dom.moodKey=key;
+  const moods=key==='off'?new Map():analyzeMoods(boardGame);
+  for(const [sq,el] of dom.pieces.elements){
+    const m=moods.get(sq);
+    if(!m){if(el.dataset.mood){delete el.dataset.mood;el.style.removeProperty('--toward')}continue}
+    if(el.dataset.mood!==m.mood)el.dataset.mood=m.mood;
+    if(m.toward)el.style.setProperty('--toward',`${bearing(sq,m.toward,flipped)}deg`);else el.style.removeProperty('--toward');
+  }
+}
+function squareCenter(square){
+  const f=square.charCodeAt(0)-97,r=Number(square[1])-1;
+  return {x:((flipped?7-f:f)+.5)*12.5,y:((flipped?r:7-r)+.5)*12.5};
+}
+function landingFx(made){
+  const dom=boardDom;if(!dom||!expressionsEnabled())return;
+  const impact=landingImpact(game,made.to,made.color),c=squareCenter(made.to);
+  const ring=document.createElement('i');ring.className=`fx-ring${impact.shock?' fx-shock':''} fx-${made.color}`;
+  ring.style.left=c.x+'%';ring.style.top=c.y+'%';
+  dom.fxLayer.append(ring);ring.addEventListener('animationend',()=>ring.remove(),{once:true});
+  setTimeout(()=>ring.remove(),1600);
+  for(const {square,distance} of impact.hit){
+    const el=dom.pieces.element(square);if(!el)continue;
+    setTimeout(()=>{el.classList.remove('shocked');void el.offsetWidth;el.classList.add('shocked');setTimeout(()=>el.classList.remove('shocked'),520)},90+distance*110);
+  }
+}
 function renderBoard({hint=null,instant=false}={}){
   const scale=instant?0:motionScale(),dom=ensureBoardDom();
   const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
@@ -403,6 +438,8 @@ function renderBoard({hint=null,instant=false}={}){
   // Touch: the selected piece gestures once and stays lifted while it is selected.
   if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started)reactions.pick(selected);else reactions.unpick();
   if(motion.animated){boardMotion=motion.finished;boardMotionUntil=performance.now()+motion.durationMs}
+  applyMoods(dom,boardGame,placement);
+  if(hint?.to&&!reviewState.viewing){const made=hint;if(motion.animated)motion.finished.then(()=>landingFx(made));else landingFx(made)}
   const hidden=pointerDrag?.started?pointerDrag.from:null;
   for(const [sq,el] of dom.pieces.elements)el.classList.toggle('drag-origin',sq===hidden);
   dom.board.dataset.grab=grabbableColor()||'';
@@ -1326,6 +1363,25 @@ function positionDragFloat(drag,x,y){
   const area=boardPlayArea(),half=drag.size/2;
   const cx=Math.min(Math.max(x,area.left+half),area.left+area.width-half),cy=Math.min(Math.max(y,area.top+half),area.top+area.height-half);
   drag.float.style.transform=`translate(${Math.round(cx-half)}px,${Math.round(cy-half)}px)`;
+  // Sway: the piece hangs from the hand and swings against the motion, settling when it stops.
+  const now=performance.now();
+  if(drag.lastX!==undefined){const dt=Math.max(8,now-drag.lastT);drag.vx=.7*(drag.vx||0)+.3*((cx-drag.lastX)/dt)}
+  drag.lastX=cx;drag.lastT=now;
+  if(!drag.swayLoop&&expressionsEnabled())startSway(drag);
+}
+function startSway(drag){
+  drag.swayLoop=true;drag.angle=0;
+  const art=()=>drag.float?.firstElementChild;
+  const step=now=>{
+    if(!drag.float||!drag.float.isConnected){drag.swayLoop=false;return}
+    if(now-drag.lastT>40)drag.vx*=.85; // pointer stopped: the swing dies down
+    const target=Math.max(-16,Math.min(16,(drag.vx||0)*14));
+    drag.angle+=(target-drag.angle)*.22;
+    const bob=Math.sin(now/180)*1.6;
+    const a=art();if(a){a.style.rotate=`${drag.angle.toFixed(2)}deg`;a.style.translate=`0 ${(bob-4).toFixed(2)}%`}
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 function markDragOver(drag,square){
   if(drag.over===square)return;

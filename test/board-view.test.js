@@ -107,8 +107,9 @@ test('colours: orange arrows and red squares by default, Shift/Ctrl/Alt change t
   assert.equal(brushFor('square',{altKey:true}),'yellow');
 });
 
-test('the board is layered: squares, one piece layer, the arrow layer, a drag layer',()=>{
-  assert.match(main,/board\.replaceChildren\(pieceLayer,arrowLayer\)/);
+test('the board is layered: squares, the effects layer, one piece layer, the arrow layer, a drag layer',()=>{
+  assert.match(main,/board\.replaceChildren\(fxLayer,pieceLayer,arrowLayer\)/);
+  assert.match(css,/\.fx-layer\{position:absolute;inset:0;z-index:1;pointer-events:none/);
   assert.match(main,/dragLayer\.className='drag-layer'/);
   assert.doesNotMatch(main,/board\.innerHTML=''/,'the board is no longer rebuilt on every render');
   assert.match(layer,/const target=pieceTransform\(square,this\.flipped\);/);

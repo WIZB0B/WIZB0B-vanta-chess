@@ -2126,6 +2126,60 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
   .board-piece .piece,.board-piece::before{transition:none}
   .board .square.legal::after{animation:none;transition:none}
 }
+/* Piece expressions (src/piece-expressions.js, prototype).
+   Moods animate the artwork's `transform` (hover/press use translate/scale/rotate, so they
+   compose). --amp scales them: Ink sets express less, Regal (3D) more. --toward is the
+   screen angle to the piece's attacker (fear leans away) or target (attack leans in).
+   The fx layer sits between the squares and the pieces: landing rings and shockwaves. */
+.board-piece{--amp:1}
+:root[data-piece-style$="-ink"] .board-piece{--amp:.65}
+:root[data-piece-style="regal"] .board-piece{--amp:1.4}
+.board-piece[data-mood="fear"] .piece{animation:vch-fear 2.6s ease-in-out infinite}
+.board-piece[data-mood="attack"] .piece{animation:vch-attack 2.2s cubic-bezier(.3,.7,.3,1) infinite}
+.board-piece[data-mood="courage"] .piece{animation:vch-courage 3s ease-in-out infinite}
+.board-piece.hovered[data-mood] .piece{animation-duration:1.1s}
+.board-piece.shocked .piece{animation:vch-shock .5s cubic-bezier(.2,.9,.3,1) both}
+@keyframes vch-fear{
+  0%,55%,100%{transform:rotate(calc(sin(var(--toward,0deg)) * -4deg * var(--amp))) scale(calc(1 - .03 * var(--amp)))}
+  60%{transform:translateX(calc(-1.6% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -6deg * var(--amp))) scale(calc(1 - .04 * var(--amp)))}
+  65%{transform:translateX(calc(1.6% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -6deg * var(--amp))) scale(calc(1 - .04 * var(--amp)))}
+  70%{transform:translateX(calc(-1.2% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -5deg * var(--amp)))}
+  75%{transform:translateX(calc(1.2% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -5deg * var(--amp)))}
+  80%{transform:translateX(0) rotate(calc(sin(var(--toward,0deg)) * -4deg * var(--amp))) scale(calc(1 - .03 * var(--amp)))}
+}
+@keyframes vch-attack{
+  0%,70%,100%{transform:rotate(calc(sin(var(--toward,0deg)) * 5deg * var(--amp)))}
+  80%{transform:translate(calc(sin(var(--toward,0deg)) * 6% * var(--amp)),calc(cos(var(--toward,0deg)) * -6% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * 9deg * var(--amp))) scale(calc(1 + .05 * var(--amp)))}
+}
+@keyframes vch-courage{
+  0%,100%{transform:scale(1)}
+  50%{transform:translateY(calc(-2% * var(--amp))) scale(calc(1 + .045 * var(--amp)),calc(1 + .06 * var(--amp)))}
+}
+@keyframes vch-shock{
+  0%{transform:none}
+  20%{transform:translateY(calc(-8% * var(--amp))) scale(calc(1 + .1 * var(--amp)),calc(1 - .1 * var(--amp))) rotate(calc(-6deg * var(--amp)))}
+  45%{transform:translateY(calc(2% * var(--amp))) rotate(calc(5deg * var(--amp)))}
+  70%{transform:rotate(calc(-2deg * var(--amp)))}
+  100%{transform:none}
+}
+.fx-layer{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.fx-ring{
+  position:absolute;width:12.5%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;
+  border:3px solid rgba(255,248,214,.85);box-shadow:0 0 14px rgba(255,236,170,.45),inset 0 0 10px rgba(255,236,170,.35);
+  animation:vch-ring .55s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.fx-ring.fx-shock{
+  border-width:4px;border-color:rgba(255,214,120,.95);
+  box-shadow:0 0 26px rgba(255,190,80,.6),inset 0 0 24px rgba(255,190,80,.45);
+  animation:vch-shockwave 1.05s cubic-bezier(.15,.75,.3,1) forwards;
+}
+.fx-ring.fx-shock.fx-b{border-color:rgba(190,150,255,.95);box-shadow:0 0 26px rgba(150,100,255,.6),inset 0 0 24px rgba(150,100,255,.45)}
+@keyframes vch-ring{from{scale:.35;opacity:1}to{scale:1.35;opacity:0}}
+@keyframes vch-shockwave{0%{scale:.3;opacity:1}60%{opacity:.75}100%{scale:5.2;opacity:0;border-width:1px}}
+@media (prefers-reduced-motion:reduce){
+  .board-piece[data-mood] .piece,.board-piece.shocked .piece{animation:none}
+  .fx-ring{display:none}
+}
 /* V1b: square marks fill the whole square (under the pieces); arrows sit above them, about
    22% of a square thick at .85 opacity. (".shape-mark", not ".mark": that is the brand logo.) */
 .board .square.shape-mark{box-shadow:inset 0 0 0 999px var(--mark-color)!important}
