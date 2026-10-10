@@ -191,7 +191,7 @@ test('a selected square is filled like the last move, and a local move clears th
   const css=await (await import('node:fs/promises')).readFile(new URL('../src/style.css',import.meta.url),'utf8');
   assert.ok(css.includes('.board .square.selected,.board .square.last-move.selected{box-shadow:inset 0 0 0 999px rgba(200,216,61,.56)}'));
   const main=await (await import('node:fs/promises')).readFile(new URL('../src/main.js',import.meta.url),'utf8');
-  assert.ok(main.includes("localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});"));
+  assert.ok(main.includes("localClockState.startedAt=performance.now();localClockState.running=game.history().length>=2}selected=null;render({hint:made,instant:instantMoveAnimation});"));
 });
 
 test('the board is sized to the screen: the smaller of the free height and the free width',async()=>{

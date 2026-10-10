@@ -17,7 +17,8 @@ export function createClockSnapshot(payload, receivedAt = Date.now()) {
     lastMoveAt: Date.parse(game?.last_move_at || '') || serverNow,
     serverOffset: serverNow - receivedAt,
     active: String(game?.fen || '').split(' ')[1] || 'w',
-    running: ['active', 'playing', 'in_progress'].includes(game?.status),
+    // Clocks run once both sides have made their first move (daily games: always).
+    running: ['active', 'playing', 'in_progress'].includes(game?.status) && (!!game?.daily_days || Number(game?.move_count || 0) >= 2),
   };
 }
 

@@ -2730,3 +2730,8 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .reaction-float{position:absolute;bottom:10%;z-index:5;padding:4px 10px;border-radius:999px;background:#0d1718e6;border:1px solid var(--gold);color:var(--gold);font-weight:800;pointer-events:none;animation:reaction-rise 2.4s ease-out forwards}
 @keyframes reaction-rise{from{transform:translateY(0);opacity:0}15%{opacity:1}to{transform:translateY(-220px);opacity:0}}
 @media (prefers-reduced-motion:reduce){.reaction-float{animation-duration:1.2s}}
+
+/* === First moves and premove chains === */
+.first-move-card{align-items:center}
+.first-move-card strong{font:700 22px 'DM Sans',monospace;color:var(--gold);min-width:2ch;text-align:right}
+.first-move-card.urgent{border-color:rgba(255,120,100,.55)}.first-move-card.urgent strong{color:#ff9b88}

@@ -38,7 +38,7 @@ test('the mover relays the move to the opponent before the server round trip', (
   assert.ok(relay > 0 && request > relay, 'early relay must go out before the move request');
   assert.match(body, /setProvisional\(moveGameId,expectedVersion\+1\)/);
   assert.match(body, /broadcastAux\('move_void',\{from:realtimeClientId,version:expectedVersion\+1\}\)/, 'a rejected move is withdrawn');
-  assert.match(body, /if\(relayConfirm\)await relayConfirm\.promise;[\s\S]{0,40}const state=await api\.move\(/, 'a reply to an unconfirmed move waits briefly for it');
+  assert.doesNotMatch(body, /if\(relayConfirm\)await relayConfirm\.promise;/, 'a reply to an unconfirmed move is sent at once; the server waits for the move it answers');
 });
 
 test('the opponent shows a provisional move at once and the server state stays the authority', () => {

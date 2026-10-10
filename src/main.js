@@ -7,7 +7,7 @@ import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server
 import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
 import { migratePieceStyle, normalizePieceStyle, pieceAssetFor, pieceStyleOptions } from './piece-styles.js';
-import { PremoveQueue, consumeLegalPremove } from './premove.js';
+import { PremoveQueue, consumeLegalPremove, premovedPieceAt } from './premove.js';
 import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
 import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
 import { PieceLayer } from './piece-layer.js';
@@ -235,6 +235,7 @@ ${splashMarkup(splash)}
         <div><b>Draw offer</b><small>Your opponent offered a draw · <span id="drawOfferCountdown">10s</span></small></div>
         <div><button id="declineDrawOffer" type="button">Decline</button><button id="acceptDrawOffer" type="button">Accept</button></div>
       </div>
+      <div id="firstMoveCard" class="draw-offer-card first-move-card hidden" role="status" aria-live="polite"><div><b id="firstMoveTitle">Your first move</b><small id="firstMoveText">The clocks start after both first moves.</small></div><strong id="firstMoveCount">30</strong></div>
       <div id="abandonCard" class="draw-offer-card abandon-card hidden" role="status" aria-live="polite">
         <div><b>Your opponent left</b><small id="abandonText">You can claim the win in 30s if they don't come back</small></div>
         <div><button id="abandonDraw" type="button" class="hidden">Call it a draw</button><button id="abandonClaim" type="button" class="hidden">Claim win</button></div>
@@ -545,7 +546,7 @@ function renderBoard({hint=null,instant=false}={}){
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
     const key=position.get(sq),mark=marks.get(sq);
-    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.move&&(premoves.move.from===sq||premoves.move.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
+    const cls=`square ${el.dataset.shade}${key?' occupied':''}${lastMove&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.moves.some(m=>m.from===sq||m.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
     if(el.className!==cls)el.className=cls;
     const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
     if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
@@ -630,6 +631,7 @@ function normalizedEndReason(value=''){
   if(reason.includes('checkmate'))return 'by checkmate';
   if(reason.includes('timeout')||reason.includes('time'))return 'on time';
   if(reason.includes('resign'))return 'by resignation';
+  if(reason.includes('abort'))return 'aborted';
   if(reason.includes('abandon')||reason.includes('disconnect'))return 'by abandonment';
   if(reason.includes('stalemate'))return 'by stalemate';
   if(reason.includes('repetition'))return 'by repetition';
@@ -680,6 +682,7 @@ function gameOverInfo(){
   return {online:true,key:`online:${serverGame.id}:${serverGame.version}:${status}:${result}`,result,reason,myColor,whiteName:serverGame.white_name||(myColor==='w'?ownPlayerName():'White'),blackName:serverGame.black_name||(myColor==='b'?ownPlayerName():'Black'),whiteRating:ratingSummary(serverGame,'w'),blackRating:ratingSummary(serverGame,'b')};
 }
 function gameOverTitle(info){
+  if(info.reason==='aborted'||info.result==='*')return 'Game aborted';
   if(info.result==='1/2-1/2')return 'Draw';
   const won=(info.result==='1-0'&&info.myColor==='w')||(info.result==='0-1'&&info.myColor==='b');
   return won?'You won':'You lost';
@@ -773,7 +776,8 @@ async function clickSquare(sq,p,{instant=false}={}){
   if(canQueuePremove()){
     const color=premovePlayerColor();
     if(!premoves.selected){
-      if(p?.color===color){premoves.select(sq);selected=null;render()}
+      const piece=premoves.moves.length?premovedPieceAt(game,premoves.moves,sq):p; // a premove chain: the piece may already be premoved here
+      if(piece?.color===color){premoves.select(sq);selected=null;render()}
       return
     }
     if(sq===premoves.selected){cancelPremove();return}
@@ -800,23 +804,24 @@ function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');
 function resetLocalClock(){
   const seconds=mode==='computer'?600:timeChoice($('#time').value).seconds;
   clocks=initialClocks(seconds);
-  localClockState={w:clocks.w,b:clocks.b,active:game.turn(),startedAt:performance.now()};
+  localClockState={w:clocks.w,b:clocks.b,active:game.turn(),startedAt:performance.now(),running:false}; // runs after both first moves
   syncClockBars(clocks,localClockState.active);
 }
 function settleLocalClock(){
   if(!localClockState)return;
   const now=performance.now(),elapsed=(now-localClockState.startedAt)/1000;
-  localClockState[localClockState.active]=Math.max(0,localClockState[localClockState.active]-elapsed);
+  if(localClockState.running)localClockState[localClockState.active]=Math.max(0,localClockState[localClockState.active]-elapsed);
   localClockState.startedAt=now;
 }
 function switchLocalClock(){
   if(!localClockState)return;
-  settleLocalClock();localClockState.active=game.turn();localClockState.startedAt=performance.now();
+  settleLocalClock();localClockState.active=game.turn();localClockState.startedAt=performance.now();localClockState.running=game.history().length>=2;
 }
 function switchOnlineClockOptimistically(){
   if(!clockSnapshot)return;
   const clientNow=Date.now(),value=projectedClocks(clockSnapshot,clientNow);
-  clockSnapshot={...clockSnapshot,whiteMs:value.w,blackMs:value.b,active:game.turn(),lastMoveAt:clientNow+Number(clockSnapshot.serverOffset||0)};
+  const plies=Math.max(Number(serverGame?.move_count||0)+1,currentHistory().length);
+  clockSnapshot={...clockSnapshot,whiteMs:value.w,blackMs:value.b,active:game.turn(),lastMoveAt:clientNow+Number(clockSnapshot.serverOffset||0),running:clockSnapshot.running||!!serverGame?.daily_days||plies>=2};
 }
 function updateOnlineCount(value){
   const el=$('#playersOnline');if(el)el.textContent=String(value??'—');
@@ -933,8 +938,8 @@ async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)re
   broadcastMoved(moveGameId,expectedVersion+1,lastLocalRealtimeMove,{early:true});
   try{
     await nextFrames(2); // the slide is under way before the request is built and sent
-    // Replying to a move the server hasn't confirmed yet: give it a moment so our version matches.
-    if(relayConfirm)await relayConfirm.promise;
+    // Replying to a move the server hasn't confirmed yet: send now; the server waits briefly
+    // for that move to land (round 7), so both requests travel at the same time.
     const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
     const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
     if(lastLocalRealtimeMove&&lastLocalRealtimeMove.gameId===moveGameId)lastLocalRealtimeMove={...lastLocalRealtimeMove,version:incomingVersion||lastLocalRealtimeMove.version};
@@ -952,7 +957,7 @@ async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)re
     }
   }finally{onlineMovePending=false}
   if(resendStaleMove)return makeMove(move,false,false);
-  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&made)void coachAfterMove(made);if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now();localClockState.running=game.history().length>=2}selected=null;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&made)void coachAfterMove(made);if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -1060,8 +1065,8 @@ function playerBarClockColors(){
 function activeClockColor(){
   if(mode==='watch')return watchSession&&['active','playing','in_progress'].includes(watchSession.state?.status)&&!browse?game.turn():null;
   if(reviewState.viewing||localGameOver||game.isGameOver())return null;
-  if(mode==='computer')return computerStarted?game.turn():null;
-  return serverGameId&&['active','playing','in_progress'].includes(serverGame?.status)?game.turn():null;
+  if(mode==='computer')return computerStarted&&localClockState?.running?game.turn():null;
+  return serverGameId&&['active','playing','in_progress'].includes(serverGame?.status)&&clockSnapshot?.running!==false?game.turn():null;
 }
 function currentClockSeconds(){
   if(clockSnapshot){
@@ -1071,8 +1076,8 @@ function currentClockSeconds(){
   if(mode==='computer'&&localClockState){
     const elapsed=(performance.now()-localClockState.startedAt)/1000;
     return {
-      w:Math.max(0,localClockState.w-(localClockState.active==='w'?elapsed:0)),
-      b:Math.max(0,localClockState.b-(localClockState.active==='b'?elapsed:0))
+      w:Math.max(0,localClockState.w-(localClockState.running&&localClockState.active==='w'?elapsed:0)),
+      b:Math.max(0,localClockState.b-(localClockState.running&&localClockState.active==='b'?elapsed:0))
     };
   }
   return {w:Math.max(0,clocks.w),b:Math.max(0,clocks.b)};
@@ -1602,8 +1607,20 @@ function syncWakeLock(){
     navigator.wakeLock.request('screen').then(lock=>{wakeLock=lock;lock.addEventListener('release',()=>{if(wakeLock===lock)wakeLock=null})}).catch(()=>{}).finally(()=>{wakeLockPending=false});
   }else if(!want&&wakeLock){const lock=wakeLock;wakeLock=null;lock.release().catch(()=>{})}
 }
+// First moves: untimed, but the game is aborted if the side to move doesn't start in 30s.
+function syncFirstMoveCard(){
+  const card=$('#firstMoveCard');if(!card)return;
+  const show=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.daily_days&&Number(serverGame?.move_count||0)<2&&currentHistory().length<2;
+  card.classList.toggle('hidden',!show);if(!show)return;
+  const since=Date.parse(serverGame.last_move_at||''),now=Date.now()+(Number(clockSnapshot?.serverOffset)||0),left=Math.max(0,Math.ceil((30000-(now-since))/1000));
+  const mine=game.turn()===myColor;
+  $('#firstMoveTitle').textContent=mine?'Your first move':'Waiting for the first move';
+  $('#firstMoveText').textContent=mine?'The clocks start after both first moves. No move, no game.':'If your opponent doesn\'t move in time, the game is aborted.';
+  $('#firstMoveCount').textContent=Number.isFinite(left)?String(left):'';
+  card.classList.toggle('urgent',mine&&left<=10);
+}
 function syncGameMoments(){
-  syncAbandonCard();syncWakeLock();
+  syncAbandonCard();syncWakeLock();syncFirstMoveCard();
   const yourTurn=liveGameOn()&&myColor===game.turn()&&mode!=='computer';
   const title=tabTitle(baseTitle,{hidden:document.hidden,yourTurn});if(document.title!==title)document.title=title;
 }
