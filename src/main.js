@@ -21,6 +21,7 @@ import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-mome
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
 import { browseLine, browseStep, browseTo, undoPlies } from './move-browse.js';
 import { arenaPhase, isWeeklyArena, sortArenas, standingsRows } from './arena.js';
+import { archiveEntryFromServer, chapterAccuracy, formInsights, keyMoments, loadLocalArchive, loadReviewCache, outcomeFor, sansFromPgn, saveLocalGame, saveReviewSummary, storyChapters, storyDelayMs, worstMoment } from './game-story.js';
 import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
@@ -45,6 +46,7 @@ const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
+let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
@@ -261,6 +263,7 @@ ${splashMarkup(splash)}
             <small>Principal variation</small><p id="line">Analysis begins after your move.</p>
             <button id="reviewGame" class="review-game hidden" type="button"><img src="/assets/vch/icons/review.svg" alt="">Review game</button>
             <section id="reviewDashboard" class="review-dashboard hidden" aria-label="Game review">
+              <section id="storyCard" class="story-card hidden" aria-label="Game story"></section>
               <div class="review-accuracy">
                 <div><small>White accuracy</small><b id="whiteAccuracy">—</b></div>
                 <div><small>Black accuracy</small><b id="blackAccuracy">—</b></div>
@@ -404,7 +407,8 @@ function boardLastMove(){
   return reviewLast||serverLast||localLastMove();
 }
 function grabbableColor(){
-  if(browse||mode==='watch')return '';
+  if(retrySession)return game.turn();
+  if(browse||mode==='watch'||mode==='archive')return '';
   if(canQueuePremove())return premovePlayerColor();
   if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return '';
   return game.turn();
@@ -688,7 +692,11 @@ async function joinRematchFromPeer(payload){
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
-  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';playUiSound(title==='Draw'?'draw':won?'win':'lose');
+  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';
+  if(!info.online&&mode==='computer'){
+    lastLocalArchiveId=`local-${Date.now()}`;
+    saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason});
+  }playUiSound(title==='Draw'?'draw':won?'win':'lose');
   await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
   const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
@@ -727,6 +735,7 @@ function playQueuedPremove(){
 async function clickSquare(sq,p,{instant=false}={}){
   if(browse){exitBrowse();return} // a tap on the board while looking back returns to the game
   if(mode==='watch')return; // spectators can't move
+  if(mode==='archive'&&!retrySession)return;
   if(premoves.move?.from===sq){cancelPremove();return}
   if(canQueuePremove()){
     const color=premovePlayerColor();
@@ -737,7 +746,7 @@ async function clickSquare(sq,p,{instant=false}={}){
     if(sq===premoves.selected){cancelPremove();return}
     premoves.queue(sq,'q');selected=null;render();return
   }
-  if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return;
+  if(!retrySession&&(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))))return;
   premoves.cancel();
   if(!selected){if(p?.color===game.turn()){selected=sq;render()}return}
   if(sq===selected){selected=null;render();return}
@@ -834,7 +843,7 @@ function selectedComputerSide(){
   return computerSideChoice;
 }
 function startComputerGame(){
-  if(watchSession)stopWatching();
+  if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;lowTimeWarned=false;computerStarted=true;computerSide=selectedComputerSide();premoves.cancel();
@@ -845,7 +854,7 @@ function startComputerGame(){
 }
 async function activateLeftMode(next){
   if(!['match','room','computer'].includes(next))return;
-  if(watchSession)stopWatching();
+  if(watchSession)stopWatching();if(archiveSession)leaveArchive();
   const previous=mode;
   if(searching&&next!=='match')await cancelMatchSearch({announce:false});
   if(previous==='computer'&&next!=='computer'&&computerStarted){
@@ -857,7 +866,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
+async function makeMove(move,remote=false,retry=true){if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected){toast('Try another move');return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){await api.puzzleAttempt({puzzleId:puzzleSession.id,success:true,durationMs:Date.now()-puzzleSession.started,playedMoves:puzzleSession.played});toast('Puzzle solved');puzzleSession=null;return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -918,6 +927,7 @@ function recordEval(record,index){
     }
   }
   const cached=moveEvalByPly[index];
+  if(Number.isFinite(cached)&&Math.abs(cached)>=90)return cached>0?'+M':'−M'; // a forced mate, not "+1000.0"
   return Number.isFinite(cached)?(cached>=0?'+':'')+cached.toFixed(1):'—';
 }
 function recordTime(record,index){
@@ -1126,6 +1136,7 @@ function syncConnectionUi(){
 }
 function syncPlayerBars(){
   if(watchSession){syncWatchBars();syncClockBars();return}
+  if(archiveSession){syncArchiveBars();return}
   const opponentId=serverGame&&(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id);
   const opponentName=serverGame&&(myColor==='w'?serverGame.black_name:serverGame.white_name);
   const topName=currentBot?.display_name||currentBot?.name||(mode==='computer'?'Choose an opponent':opponentName||(opponentId?'Opponent connected':'Waiting for opponent'));
@@ -1202,6 +1213,7 @@ function syncOpponentConnectionToast(state){
 function applyServerState(payload,{animateMove=true}={}){
   const state=payload.game||payload;if(!state)return;
   if(watchSession)stopWatching({reset:false}); // your own game takes over the board
+  if(archiveSession)leaveArchive({reset:false});
   // A heartbeat that left before the latest move must not take that move back.
   if(isStale(provisional,state,performance.now()))return;
   if(provisional&&(confirms(provisional,state)||isExpired(provisional,performance.now())))clearProvisional();
@@ -1544,6 +1556,143 @@ function syncGameMoments(){
 }
 setInterval(syncGameMoments,1000);
 document.addEventListener('visibilitychange',syncGameMoments);
+// ---- Game archive and Game Story (src/game-story.js) ----
+const archiveAgo=iso=>{const t=Date.parse(iso||'');if(!Number.isFinite(t))return '';const m=Math.round((Date.now()-t)/60000);if(m<60)return `${Math.max(1,m)}m ago`;const h=Math.round(m/60);if(h<48)return `${h}h ago`;return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'})};
+let archiveEntries=[],archiveFilter='all';
+async function renderArchive(){
+  cancelPremove(false);
+  setDynamicView('review','My games',brandLoading('Opening your game archive…'));
+  let online=[];
+  try{const out=await api.archive(60),me=currentProfile?.id||currentPlayerId;online=(out.games||[]).filter(g=>g.move_count>0&&!['waiting','active'].includes(g.status)).map(g=>archiveEntryFromServer(g,me))}catch{}
+  if(currentRightView!=='review')return;
+  archiveEntries=[...online,...loadLocalArchive()].sort((a,b)=>Date.parse(b.date||0)-Date.parse(a.date||0));
+  drawArchive();
+}
+function drawArchive(){
+  const target=$('#dynamicView .view-content');if(!target)return;
+  const reviews=loadReviewCache(),insight=formInsights(archiveEntries,reviews,detectOpening);
+  const keep=e=>archiveFilter==='all'||(archiveFilter==='computer'?e.source==='computer':outcomeFor(e.result,e.myColor)===archiveFilter);
+  const rows=archiveEntries.map((e,i)=>({e,i})).filter(({e})=>keep(e));
+  const dots=insight.form.map(o=>`<i class="form-dot ${o}" title="${o}"></i>`).join('');
+  const current=currentHistory().length&&isGameFinishedForReview()&&mode!=='archive';
+  target.innerHTML=`<div class="archive">
+    <section class="archive-form" aria-label="Your form">
+      <div><small>Last ${insight.form.length||0} games</small><span class="form-dots">${dots||'<em>No finished games yet</em>'}</span></div>
+      <div><small>Score</small><b>${insight.winRate===null?'—':insight.winRate+'%'}</b></div>
+      <div><small>Reviewed accuracy</small><b>${insight.accuracy===null?'—':insight.accuracy+'%'}</b></div>
+      <div class="archive-signature"><small>Signature opening</small><b>${insight.topOpening?escapeHtml(insight.topOpening.name):'—'}</b>${insight.topOpening?`<em>${insight.topOpening.games} games · ${insight.topOpening.percent}%</em>`:''}</div>
+    </section>
+    ${current?'<button type="button" class="archive-current">Tell the story of the game you just played</button>':''}
+    <div class="archive-filters" role="tablist">${['all','win','loss','draw','computer'].map(f=>`<button type="button" data-archive-filter="${f}" class="${archiveFilter===f?'on':''}">${{all:'All',win:'Wins',loss:'Losses',draw:'Draws',computer:'vs Computer'}[f]}</button>`).join('')}</div>
+    <div class="archive-list">${rows.map(({e,i})=>{
+      const o=outcomeFor(e.result,e.myColor),opp=e.myColor==='w'?e.black:e.white,oppRating=e.myColor==='w'?e.blackRating:e.whiteRating,acc=reviews[e.id]?.accuracy?.[e.myColor],opening=detectOpening(sansFromPgn(e.pgn))?.name;
+      return `<button type="button" class="archive-row outcome-${o}" data-archive="${i}"><span class="archive-result">${{win:'W',loss:'L',draw:'D'}[o]||'·'}</span><span class="archive-main"><b>vs ${escapeHtml(opp)}${oppRating?` <em>${escapeHtml(String(oppRating))}</em>`:''}</b><small>${e.source==='computer'?'Computer':e.source==='arena'?'Arena':e.rated?'Rated':'Casual'} · ${formatTimeControl(e.base,e.inc)} · ${Math.ceil((e.moves||0)/2)} moves${opening?` · ${escapeHtml(opening)}`:''}</small></span><span class="archive-side">${e.ratingDelta!=null?`<em class="${e.ratingDelta>=0?'up':'down'}">${e.ratingDelta>=0?'+':''}${e.ratingDelta}</em>`:''}${Number.isFinite(acc)?`<i>${acc.toFixed(1)}%</i>`:'<i class="todo">Not reviewed</i>'}<small>${archiveAgo(e.date)}</small></span></button>`;
+    }).join('')||'<p class="archive-empty">Your finished games appear here, online and against the computer. Play one, then open it to see its story.</p>'}</div>
+  </div>`;
+  target.querySelectorAll('[data-archive-filter]').forEach(b=>b.onclick=()=>{archiveFilter=b.dataset.archiveFilter;drawArchive()});
+  target.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>void openArchivedGame(archiveEntries[Number(b.dataset.archive)]));
+  target.querySelector('.archive-current')?.addEventListener('click',()=>void startGameReview());
+}
+async function openArchivedGame(entry){
+  if(!entry)return;
+  const loaded=new Chess();try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}
+  if(!loaded.history().length)return toast('This game has no moves to review');
+  if(searching)await cancelMatchSearch({announce:false});
+  if(watchSession)stopWatching({reset:false});
+  stopOnlineSync();stopStory();retrySession=null;
+  const prevMode=archiveSession?.prevMode||(['match','room','computer'].includes(mode)?mode:'room');
+  serverGameId=null;serverGame=null;currentBot=null;puzzleSession=null;computerStarted=false;localGameOver=false;localClockState=null;clockSnapshot=null;premoves.cancel();selected=null;browse=null;
+  resetReviewState();
+  game.reset();game.loadPgn(entry.pgn);lastMoveCache={fen:'',move:null};
+  mode='archive';myColor=entry.myColor;flipped=entry.myColor==='b';orientationSet=true;
+  archiveSession={entry,prevMode};document.body.dataset.archive='1';
+  syncPlayerBars();render({instant:true});updateMoves();
+  await startGameReview();
+  if(archiveSession?.entry===entry&&!isMobileApp())$('#storyCard')?.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function leaveArchive({reset=true}={}){
+  const session=archiveSession;if(!session)return;
+  stopStory();retrySession=null;archiveSession=null;delete document.body.dataset.archive;
+  if(mode==='archive')mode=session.prevMode||'room';
+  resetReviewState();
+  if(reset){myColor=null;flipped=false;orientationSet=false;game.reset();lastMoveCache={fen:'',move:null};render({instant:true});updateMoves();syncPlayerBars()}
+}
+function syncArchiveBars(){
+  const e=archiveSession.entry,top=flipped?'w':'b',bottom=flipped?'b':'w';
+  const name=c=>c==='w'?e.white:e.black,rating=c=>c==='w'?e.whiteRating:e.blackRating;
+  $('#topPlayerName').textContent=name(top);$('#bottomPlayerName').textContent=name(bottom);
+  $('#topRating').textContent=rating(top)?`${rating(top)} rating`:'—';$('#bottomRating').textContent=rating(bottom)?`${rating(bottom)} rating`:'—';
+  setPortrait($('#topAvatar'),{label:name(top)});setPortrait($('#bottomAvatar'),{label:name(bottom)});
+  setPlayerFlag($('#topFlag'),null);setPlayerFlag($('#bottomFlag'),null);
+  setPresence($('#topPresence'),'STORY',false);setPresence($('#bottomPresence'),'STORY',false);
+  $('#bottomConnection')?.classList.add('hidden');
+}
+// The story card: chapters with each side's accuracy, the moments that decided the game,
+// a narrated playback, and a replay of your worst moment.
+function storyData(){
+  const moves=reviewState.moves,results=reviewState.results;
+  const book=moves.map((_,i)=>isBookMove(moves,i));
+  const chapters=storyChapters(reviewState.positions,book),moments=keyMoments(results,moves);
+  const mine=archiveSession?.entry.myColor||myColor||computerSide||'w';
+  return {chapters,moments,mine,worst:worstMoment(results,moves,mine)};
+}
+function renderStoryCard(){
+  const card=$('#storyCard');if(!card)return;
+  const show=reviewState.viewing&&reviewState.results.length>0;card.classList.toggle('hidden',!show);if(!show)return;
+  const {chapters,moments,mine,worst}=storyData(),them=mine==='w'?'b':'w',pct=v=>v===null?'—':`${v.toFixed(0)}%`;
+  const ply=reviewState.currentPly,inChapter=c=>ply>=c.from&&ply<=c.to;
+  const key=`${reviewState.signature}:${ply}:${!!storyTimer}:${!!retrySession}`;if(card.dataset.key===key)return;card.dataset.key=key;
+  card.innerHTML=`<header><b>The story of this game</b><span>${storyTimer?'<button type="button" data-story="stop">Pause</button>':'<button type="button" data-story="play">Play the story</button>'}</span></header>
+    <ol class="story-chapters">${chapters.map(c=>`<li class="${inChapter(c)?'on':''}"><button type="button" data-story-ply="${c.from}"><b>${c.title}</b><small>moves ${Math.ceil(c.from/2)}–${Math.ceil(c.to/2)}</small><span><em>You ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,mine))}</em><em>Them ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,them))}</em></span></button></li>`).join('')}</ol>
+    ${moments.length?`<div class="story-moments"><small>Moments that decided it</small>${moments.map(m=>`<button type="button" data-story-ply="${m.ply}" class="moment ${m.color===mine?'mine':'theirs'}${ply===m.ply?' on':''}"><b>${escapeHtml(m.label)}</b><span>${Math.ceil(m.ply/2)}${m.color==='w'?'.':'…'} ${escapeHtml(m.san)}</span><em>${m.color===mine?'you':'them'} · −${Math.round(m.loss)}%</em></button>`).join('')}</div>`:'<p class="story-quiet">A clean game: no single move swung it.</p>'}
+    ${worst?`<button type="button" class="story-retry" data-story="retry">${retrySession?'Replaying your moment…':`Replay your toughest moment (move ${Math.ceil(worst.ply/2)})`}</button>`:''}`;
+  card.querySelectorAll('[data-story-ply]').forEach(b=>b.onclick=()=>{stopStory();setReviewPly(Number(b.dataset.storyPly))});
+  card.querySelector('[data-story="play"]')?.addEventListener('click',playStory);
+  card.querySelector('[data-story="stop"]')?.addEventListener('click',()=>{stopStory();renderReviewDashboard()});
+  card.querySelector('[data-story="retry"]')?.addEventListener('click',()=>{if(!retrySession)startRetry(worst)});
+}
+function playStory(){
+  stopStory();const {moments}=storyData();
+  if(reviewState.currentPly>=reviewState.moves.length)setReviewPly(0);
+  const step=()=>{
+    if(!reviewState.viewing){stopStory();return}
+    const next=reviewState.currentPly+1;if(next>reviewState.moves.length){stopStory();renderReviewDashboard();return}
+    setReviewPly(next);const moment=moments.find(m=>m.ply===next);if(moment)toast(`${moment.label} · ${Math.ceil(next/2)}${moment.color==='w'?'.':'…'} ${moment.san}`,{duration:2400});
+    storyTimer=setTimeout(step,storyDelayMs(next,moments));
+  };
+  storyTimer=setTimeout(step,500);renderReviewDashboard();
+}
+function stopStory(){if(storyTimer){clearTimeout(storyTimer);storyTimer=null}}
+// Replay the moment: the board goes back to the position before your costliest move and
+// you try to find the engine's choice. Two tries, then it is shown.
+function startRetry(worst){
+  stopStory();if(!worst)return;
+  const fen=reviewState.positions[worst.ply-1];if(!fen)return;
+  // Put the real game back afterwards: its moves (local and archived games) or its position (online).
+  retrySession={...worst,fen,tries:0,returnPly:reviewState.currentPly,restorePgn:serverGameId?null:game.pgn(),restoreFen:game.fen()};
+  reviewState.viewing=false;try{game.load(fen)}catch{}lastMoveCache={fen:'',move:null};selected=null;boardShapes=[];
+  render({instant:true});renderStoryCard();toast(`Your move ${Math.ceil(worst.ply/2)}: find something better than ${worst.san}`,{duration:3200});
+}
+function retryAttempt(move){
+  const session=retrySession;if(!session)return;
+  const uci=`${move.from}${move.to}${move.promotion&&move.promotion!=='q'?move.promotion:''}`,best=String(session.bestMove).toLowerCase();
+  const right=uci===best||`${move.from}${move.to}${move.promotion||''}`===best||`${move.from}${move.to}`===best.slice(0,4)&&best.length===4;
+  if(right){
+    try{rememberLastMove(game.move({from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch{}
+    render();afterBoardPaint(playTone);toast('That is the move. Well found.',{duration:2200});setTimeout(()=>endRetry(),1600);return;
+  }
+  session.tries++;playIllegalTone();buzz(HAPTICS.illegal);
+  if(session.tries<2){toast('Not this one. One more try.');selected=null;render();return}
+  boardShapes=[{from:best.slice(0,2),to:best.slice(2,4),brush:'green'}];render();
+  toast('The engine liked the green arrow. Study it, then the story goes on.',{duration:3200});setTimeout(()=>endRetry(),3200);
+}
+function endRetry(){
+  const session=retrySession;retrySession=null;if(!session)return;
+  boardShapes=[];
+  try{if(session.restorePgn)game.loadPgn(session.restorePgn);else game.load(session.restoreFen)}catch{}
+  lastMoveCache={fen:'',move:null};setReviewPly(session.ply);
+}
+
 // ---- Takebacks (casual games between two people; the server checks the rules) ----
 let takebackWasMine=null;
 function takebackAvailable(){return isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame.rated&&!serverGame.bot_player_id&&!serverGame.tournament_id&&!currentBot}
@@ -1581,7 +1730,7 @@ async function renderWatch(){
 }
 async function startWatching(id){
   try{
-    const out=await api.watchState(id);
+    const out=await api.watchState(id);if(archiveSession)leaveArchive({reset:false});
     if(searching)await cancelMatchSearch({announce:false});
     stopWatching({reset:false});stopOnlineSync();
     const prevMode=['match','room','computer'].includes(mode)?mode:'room';
@@ -1684,6 +1833,7 @@ $('#undoMove').onclick=undoComputerMove;
 function isMobileApp(){mobileMedia??=matchMedia(MOBILE_QUERY);return mobileMedia.matches}
 function currentGameKey(){
   if(watchSession)return `watch:${watchSession.id}`;
+  if(archiveSession)return `archive:${archiveSession.entry.id}`;
   if(puzzleSession)return `puzzle:${puzzleSession.id}`;
   if(liveGameOn())return lastGameStartKey||`game:${serverGameId||'computer'}`;
   if(serverGameId&&serverGame?.status==='waiting')return `waiting:${serverGameId}`;
@@ -1726,12 +1876,12 @@ function syncMobileShell(){
   show('review',over);show('rematch',over&&human);show('new',over);
   const title=$('#mGameTitle'),sub=$('#mGameSub');
   if(title){
-    const t=watchSession?'Watching':puzzleSession?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
+    const t=archiveSession?'Game story':watchSession?'Watching':puzzleSession?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
     if(title.textContent!==t)title.textContent=t;
   }
   if(sub){
     const tc=serverGame?formatTimeControl(serverGame.time_control_seconds||600,serverGame.increment_seconds||0):'';
-    const t=watchSession?`${watchSession.state?.white_name||'White'} vs ${watchSession.state?.black_name||'Black'}`:over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
+    const t=archiveSession?`${archiveSession.entry.white} vs ${archiveSession.entry.black}`:watchSession?`${watchSession.state?.white_name||'White'} vs ${watchSession.state?.black_name||'Black'}`:over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
     if(sub.textContent!==t)sub.textContent=t;
   }
   $('#mReturnGame')?.classList.toggle('hidden',!(live&&mView!=='game'&&mView!=='review'));
@@ -1752,7 +1902,7 @@ function openMoreSheet(){
     {label:'Arena & tournaments',run:()=>openSection('arena')},
     {label:'Openings',run:()=>openSection('openings')},
     {label:'Famous games',run:()=>openSection('famous')},
-    {label:'Review a game',run:()=>openSection('review')},
+    {label:'My games & Game Story',run:()=>openSection('review')},
     {label:'Board & pieces',run:()=>$('#theme').click()},
     {label:'Portrait & flag',run:()=>void openProfileEditor()},
     {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
@@ -1790,7 +1940,7 @@ $$('[data-m-tab]').forEach(button=>button.onclick=()=>{
   if(tab==='play'){mTab='play';activateNav('play');setMView(viewForTab('play',{gameLive:liveGameOn()}));return}
   openSection(tab);
 });
-$('#mBack').onclick=()=>{if(watchSession){stopWatching();openSection('watch');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
+$('#mBack').onclick=()=>{if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
 $('#mReturnGame').onclick=()=>setMView('game');
 $$('#mSheet [data-m-close]').forEach(el=>el.onclick=closeSheet);
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheet()});
@@ -2141,6 +2291,7 @@ function resetReviewState(){
   const progress=$('#reviewProgress');progress?.classList.add('hidden');
 }
 function isGameFinishedForReview(){
+  if(mode==='archive')return true;
   if(localGameOver||game.isGameOver())return true;
   return !!(serverGame&&serverGameId&&!['active','playing','in_progress','waiting'].includes(serverGame.status));
 }
@@ -2261,13 +2412,14 @@ function renderReviewGraph(){
 }
 function renderReviewDashboard(){
   const dashboard=$('#reviewDashboard');if(!dashboard)return;
+  $('.analysis')?.classList.toggle('reviewing',reviewState.viewing&&reviewState.results.length>0);
   dashboard.classList.toggle('hidden',!reviewState.viewing||!reviewState.results.length);
   if(!reviewState.viewing||!reviewState.results.length)return;
   $('#whiteAccuracy').textContent=`${reviewAccuracyFor('w').toFixed(1)}%`;
   $('#blackAccuracy').textContent=`${reviewAccuracyFor('b').toFixed(1)}%`;
   const label=$('#reviewPlyLabel');if(label)label.textContent=reviewState.currentPly?`Move ${Math.ceil(reviewState.currentPly/2)} · ${reviewState.moves[reviewState.currentPly-1]?.san||''}`:'Start';
   const explanation=$('#reviewExplanation');if(explanation)explanation.textContent=reviewState.currentPly?reviewExplanation(reviewState.currentPly-1):'Start position — use Next to step through the review.';
-  renderReviewCounts();renderReviewGraph();
+  renderReviewCounts();renderReviewGraph();renderStoryCard();
   $('#reviewFirst').disabled=reviewState.currentPly===0;$('#reviewPrev').disabled=reviewState.currentPly===0;
   $('#reviewNext').disabled=reviewState.currentPly>=reviewState.moves.length;$('#reviewLast').disabled=reviewState.currentPly>=reviewState.moves.length;
 }
@@ -2306,6 +2458,8 @@ async function startGameReview(){
     });
     reviewState.running=false;
     moveEvalByPly=reviewState.results.map(result=>result.afterCp/100);
+    const archiveId=archiveSession?.entry.id||serverGameId||lastLocalArchiveId;
+    if(archiveId)saveReviewSummary(archiveId,{accuracy:{w:reviewAccuracyFor('w'),b:reviewAccuracyFor('b')}});
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');
     if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
     setReviewPly(reviewState.moves.length);
@@ -2533,7 +2687,7 @@ function activateNav(kind){
   if(kind==='learn')renderLearn();
   if(kind==='openings')renderOpenings();
   if(kind==='famous')renderFamous();
-  if(kind==='review')renderReview();
+  if(kind==='review')void renderArchive();
 }
 function setPrimaryScreen(screen,{remember=false}={}){
   const shell=$('.shell'),menu=$('#mainMenu'),workspace=$('#gameWorkspace'),showGame=screen==='game';
@@ -2580,7 +2734,7 @@ $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset
 $('#reviewGame').onclick=startGameReview;
 $('#reviewFirst').onclick=()=>setReviewPly(0);
 $('#reviewPrev').onclick=()=>setReviewPly(reviewState.currentPly-1);
-$('#reviewNext').onclick=()=>setReviewPly(reviewState.currentPly+1);
+$('#reviewNext').onclick=()=>{stopStory();setReviewPly(reviewState.currentPly+1)};
 $('#reviewLast').onclick=()=>setReviewPly(reviewState.moves.length);
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&menus.handleEscape()){event.preventDefault();return}

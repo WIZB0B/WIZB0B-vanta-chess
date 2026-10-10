@@ -2456,3 +2456,54 @@ body.m-app .m-movebar button{width:40px;height:38px;flex:none;display:grid;place
 
 /* Takeback request: same card as a draw offer. */
 .takeback-card{border-color:rgba(130,237,186,.35)}
+
+/* Game archive ("My games") and the Game Story card (src/game-story.js). */
+.archive{display:grid;gap:12px}
+.archive-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;padding:12px;border-radius:14px;border:1px solid rgba(229,193,124,.3);background:radial-gradient(120% 140% at 0% 0%,rgba(229,193,124,.12),transparent 55%),#0c1817}
+.archive-form>div{display:grid;gap:4px;align-content:start}
+.archive-form small{color:#8d9a97;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+.archive-form b{font-size:20px;color:#f2dfaf}.archive-form em{font-style:normal;color:#93a29d;font-size:11px}
+.archive-signature b{font-size:14px;line-height:1.25}
+.form-dots{display:flex;gap:4px;flex-wrap:wrap;min-height:14px}.form-dots em{font-size:11px}
+.form-dot{width:12px;height:12px;border-radius:50%;display:inline-block;background:#5d6b68}
+.form-dot.win{background:#82edba}.form-dot.loss{background:#e9786b}.form-dot.draw{background:#c7c2a8}
+.archive-current{padding:11px 14px;border-radius:11px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:800}
+.archive-filters{display:flex;gap:6px;flex-wrap:wrap}
+.archive-filters button{padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.12);color:#b9c4c0;font-size:12px}
+.archive-filters button.on{border-color:rgba(229,193,124,.6);color:#f2dfaf;background:rgba(229,193,124,.1)}
+.archive-list{display:grid;gap:6px}
+.archive-row{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:#0c1716;text-align:left;color:#dfe7e3}
+.archive-row:hover{border-color:rgba(229,193,124,.45)}
+.archive-result{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:900;background:#2a3533}
+.outcome-win .archive-result{background:rgba(130,237,186,.18);color:#82edba}
+.outcome-loss .archive-result{background:rgba(233,120,107,.16);color:#f0a093}
+.outcome-draw .archive-result{background:rgba(199,194,168,.16);color:#d8d3bb}
+.archive-main{display:grid;gap:3px;min-width:0}
+.archive-main b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.archive-main b em{font-style:normal;color:#8d9a97;font-weight:500}
+.archive-main small{color:#8d9a97;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.archive-side{display:grid;justify-items:end;gap:2px;font-size:11px}
+.archive-side em{font-style:normal;font-weight:800}.archive-side em.up{color:#82edba}.archive-side em.down{color:#f0a093}
+.archive-side i{font-style:normal;color:#f2dfaf;font-weight:700}.archive-side i.todo{color:#6f7f7b;font-weight:500}
+.archive-side small{color:#6f7f7b}
+.archive-empty{color:#93a29d;font-size:13px;line-height:1.5}
+
+.story-card{display:grid;gap:10px;margin-bottom:12px;padding:12px;border-radius:14px;border:1px solid rgba(229,193,124,.35);background:linear-gradient(180deg,rgba(229,193,124,.08),rgba(8,18,18,.9))}
+.story-card.hidden{display:none}
+.story-card header{display:flex!important;align-items:center;justify-content:space-between;height:auto!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
+.story-card header b{color:#f2dfaf;font-size:14px}
+.story-card header button,.story-retry{padding:7px 12px;border-radius:9px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:800;font-size:12px}
+.story-chapters{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;margin:0;padding:0;list-style:none}
+.story-chapters button{width:100%;display:grid;gap:3px;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:#0d1918;text-align:left;color:#dfe7e3}
+.story-chapters li.on button{border-color:rgba(130,237,186,.55);box-shadow:inset 0 0 0 1px rgba(130,237,186,.2)}
+.story-chapters small{color:#7f9590;font-size:10.5px}
+.story-chapters span{display:flex;justify-content:space-between;gap:4px;font-size:11px}.story-chapters em{font-style:normal;color:#cfd8d4}
+.story-moments{display:grid;gap:5px}.story-moments>small{color:#8d9a97;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+.moment{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:7px 9px;border-radius:9px;border:1px solid rgba(255,255,255,.07);background:#0d1918;color:#dfe7e3;text-align:left;font-size:12px}
+.moment b{color:#f2dfaf}.moment.mine b{color:#f0a093}.moment em{font-style:normal;color:#7f9590}
+.moment.on{border-color:rgba(229,193,124,.6)}
+.story-quiet{color:#93a29d;font-size:12px;margin:0}
+.story-retry{justify-self:start}
+body[data-archive="1"] #topClock,body[data-archive="1"] #bottomClock{visibility:hidden}
+
+/* While reviewing, the live-analysis numbers above are stale: the review card speaks instead. */
+.analysis.reviewing .analysis-row,.analysis.reviewing #advantage,.analysis.reviewing #line,.analysis.reviewing>small{display:none}

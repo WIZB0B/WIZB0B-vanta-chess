@@ -54,6 +54,7 @@ export class VchApi {
   botMove(gameId, expectedVersion, move) { return this.request('bot_move', { gameId, expectedVersion, ...move }); }
   state(gameId) { return this.request('state', { gameId }); }
   history(gameId) { return this.request('history', { gameId }); }
+  archive(limit = 60) { return this.request('history', { limit }); }
   heartbeat(gameId) { return this.request('heartbeat', { gameId }); }
   resign(gameId) { return this.request('resign', { gameId }); }
   claimWin(gameId, outcome = 'win') { return this.request('claim_win', { gameId, outcome }); }

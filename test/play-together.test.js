@@ -36,6 +36,6 @@ test('server: weekly arena every Saturday 18:00 UTC, and arenas only open in the
 
 test('client: spectators cannot move and get no engine help', () => {
   assert.match(main, /if\(mode==='watch'\)return; \/\/ spectators can't move/);
-  assert.match(main, /if\(browse\|\|mode==='watch'\)return '';/);
+  assert.match(main, /if\(browse\|\|mode==='watch'\|\|mode==='archive'\)return '';/);
   assert.match(main, /if\(mode==='watch'\)return \['active','playing','in_progress'\]\.includes\(watchSession\?\.state\?\.status\);/);
 });

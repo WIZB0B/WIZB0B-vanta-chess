@@ -35,7 +35,7 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
   await expect(page.locator('.start-puzzle')).toBeVisible();
 
   await page.locator('[data-nav="review"]').click();
-  await expect(page.locator('#dynamicView')).toContainText('Post-Game Review');
+  await expect(page.locator('#dynamicView')).toContainText('My games');
 
   await page.locator('#searchBtn').click();
   await page.locator('#searchInput').fill('Ruy Lopez');
@@ -138,7 +138,7 @@ test('right-panel feature cards open their real destinations',async({page})=>{
   await page.locator('[data-nav="play"]').click();
   await page.locator('.feature-card.practice').click();await expect(page.locator('#dynamicView')).toContainText('Practice & Learn');
   await page.locator('[data-nav="play"]').click();
-  await page.locator('.feature-card.review').click();await expect(page.locator('#dynamicView')).toContainText('Post-Game Review');
+  await page.locator('.feature-card.review').click();await expect(page.locator('#dynamicView')).toContainText('My games');
 });
 
 
