@@ -212,6 +212,26 @@ Feature matrix vs chess.com, lichess and others; list gaps.
   tap reaction, swelling legal-move dots.
 - Board fits the screen (PR #10, in review): board side = min(free height, free width).
 
+## N. Network and fair play (owner live test 2026-10-10)
+- N1 Instant online moves (PR #13): function pinned to us-east-2 next to the database; no
+  per-request CORS preflight; the mover relays each move over Realtime the moment it is played
+  (server stays the authority, `move_void` on rejection); 2 database round trips per move
+  instead of 5 (edge-function deploy needs owner approval).
+- N2 Fair play (PR #14): no engine analysis during live online games; returns at game end.
+- N3 Illegal-move feedback (PR #14): low double knock, king square blinks red when the king is
+  the reason.
+
+## MB. Mobile app layout (owner request 2026-10-10; plan to approve first)
+Desktop stays as it is. On phones the site should feel like the lichess / chess.com apps:
+- MB1 Bottom tab bar (Play, Puzzles, Learn, Watch, More) instead of the scrolling page; slim
+  top bar (logo, search, account). Menus open as bottom sheets.
+- MB2 Game screen with no scrolling: opponent bar (portrait, flag, tray, clock), board edge to
+  edge, own bar, a swipeable move strip, and an action bar (Options, Draw, Resign, Chat).
+  Top navigation hides while a game is on; the screen stays awake (Wake Lock).
+- MB3 Play home: one big Play button with a time sheet (Bullet / Blitz / Rapid), Play a friend,
+  Play the computer, Tournaments; below it a daily puzzle and live games.
+- MB4 App feel: safe areas, no pull-to-refresh or overscroll during a game, installable (PWA).
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
