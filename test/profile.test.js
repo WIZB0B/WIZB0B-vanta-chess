@@ -21,7 +21,8 @@ test('server: profile_update validates the flag and portrait; game_players is fo
   assert.match(fn,/if\(!p\.auth_user_id\)throw fail\("Sign in to add a profile picture\.",401\);/);
   assert.match(fn,/const AVATAR_MAX=48000;/);
   assert.match(fn,/async function gamePlayers\(req:Request,b:any\)\{\s*const \{g\}=await assertGameParticipant\(req,b\);/);
-  assert.match(fn,/const publicPlayer=[^\n]*country_code:p\.country_code\|\|null,has_avatar:!!p\.avatar_data\}\);/,'portraits are not sent with every heartbeat');
+  const pub=fn.match(/const publicPlayer=[^\n]*/)[0];
+  assert.match(pub,/has_avatar:!!p\.avatar_data[,}]/);assert.doesNotMatch(pub,/avatar_data:p\.avatar_data/,'portraits are not sent with every heartbeat');
   assert.match(sql,/country_code ~ '\^\[A-Z\]\{2\}\$'/);assert.match(sql,/length\(avatar_data\) <= 48000/);
 });
 
