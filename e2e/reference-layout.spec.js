@@ -8,7 +8,7 @@ async function mockApi(page){
   });
 }
 
-test('desktop geometry is locked to the supplied 1672x941 reference', async ({ browser })=>{
+test('desktop geometry at 1672x941: board fills the screen height between the panels', async ({ browser })=>{
   // Pixel-exact geometry against the 1672x941 mockup. It depends on the browser build and
   // installed fonts (no web fonts are bundled), so it is a local design check, not a CI gate.
   // CI still enforces the hard rules: 64 squares, aspect-ratio 1, and no page scroll at
@@ -23,12 +23,15 @@ test('desktop geometry is locked to the supplied 1672x941 reference', async ({ b
     return {top:box('.topbar'),left:box('.lpanel'),game:box('.game'),right:box('.rpanel'),board:box('.board')};
   });
   const near=(actual,target,tolerance)=>expect(Math.abs(actual-target)).toBeLessThanOrEqual(tolerance);
-  near(boxes.top.x,48,4); near(boxes.top.y,28,3); near(boxes.top.w,1576,8); near(boxes.top.h,58,3);
-  near(boxes.left.x,48,5); near(boxes.left.y,102,5); near(boxes.left.w,427,14);
-  near(boxes.game.x,495,12); near(boxes.game.y,102,5); near(boxes.game.w,660,18);
-  near(boxes.right.x,1175,15); near(boxes.right.y,102,5); near(boxes.right.w,449,18);
-  near(boxes.board.x,526,14); near(boxes.board.y,168,14); near(boxes.board.w,600,20);
-  near(boxes.board.h,boxes.board.w,2);
+  near(boxes.top.x,48,4); near(boxes.top.h,58,3);
+  // The board now fills the screen height (owner request, 2026-10-09), so it is larger than
+  // the mockup's 600px: 941px tall viewport minus the bars and tools = 653px.
+  near(boxes.board.w,653,12); near(boxes.board.h,boxes.board.w,2);
+  expect(boxes.board.y+boxes.board.h).toBeLessThanOrEqual(941);
+  // Panels sit either side of the game column, which hugs the board.
+  expect(boxes.left.x+boxes.left.w).toBeLessThan(boxes.game.x);
+  expect(boxes.game.x+boxes.game.w).toBeLessThan(boxes.right.x);
+  expect(boxes.game.w-boxes.board.w).toBeLessThan(70);
   const viewport=await page.evaluate(()=>({inner:innerHeight,scroll:document.documentElement.scrollHeight,screen:document.body.dataset.screen}));
   expect(viewport.screen).toBe('game');
   expect(viewport.scroll).toBeLessThanOrEqual(viewport.inner);
