@@ -232,7 +232,8 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   const {data,error}=await admin.from("chess_games").update({
     fen:c.fen(),pgn:c.pgn(),move_history:[...history,{from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,
-    white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null
+    white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,
+    ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
   }).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("Move conflict. Syncing latest position.",409);
   const nextGame=o.result==="*"?data:await settleRatings(data);
@@ -254,6 +255,24 @@ async function botMove(req:Request,b:any){
   const bot=await botByPlayerId(g.bot_player_id);if(!bot)throw fail("Bot is unavailable.",409);
   const color=g.white_player_id===g.bot_player_id?"w":"b";
   return applyMove(g,color,b)
+}
+// An opponent who has been gone (no heartbeat or move) for CLAIM_AFTER_MS can be claimed
+// against: a win, or a draw if the claimant asks for one or has no way to checkmate.
+const CLAIM_AFTER_MS=30000;
+async function claimWin(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);
+  if(g.status!=="active")throw fail("Game is not active.",409);
+  if(g.bot_player_id)throw fail("Games against a bot can't be claimed.",409);
+  const seat=g.white_player_id===p.id?"w":"b";
+  const seen=Date.parse((seat==="w"?g.black_last_seen_at:g.white_last_seen_at)||"")||0;
+  if(Date.now()-seen<CLAIM_AFTER_MS)throw fail("Your opponent is still connected.",409);
+  const draw=b.outcome==="draw"||!sideCanPossiblyMate(new Chess(g.fen),seat as "w"|"b");
+  const patch=draw?{status:"draw",result:"1/2-1/2"}:seat==="w"?{status:"white_won",result:"1-0"}:{status:"black_won",result:"0-1"};
+  const {data,error}=await admin.from("chess_games").update({...patch,end_reason:"abandoned",draw_offer_by:null,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
+  const settled=await settleRatings(data);
+  EdgeRuntime.waitUntil(broadcastGameState(settled));
+  return {game:settled,claimed:draw?"draw":"win"}
 }
 async function resign(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")return {game:g};let patch:any;
@@ -398,13 +417,13 @@ async function puzzleAttempt(req:Request,b:any){
 }
 
 async function heartbeat(req:Request,b:any){
-  const p=await playerFor(req,b),raw=await gameById(b.gameId);
+  const [p,raw]=await Promise.all([playerFor(req,b),gameById(b.gameId)]);
   if(!raw)throw fail("Game not found.",404);
   const seat=raw.white_player_id===p.id?"w":raw.black_player_id===p.id?"b":null;
   if(!seat)throw fail("You are not a player in this game.",403);
   const patch:any=seat==="w"?{white_last_seen_at:nowIso()}:{black_last_seen_at:nowIso()};
-  await admin.from("chess_games").update(patch).eq("id",raw.id);
-  const game=await resolveTimeout(await gameById(raw.id));
+  const {data:seen}=await admin.from("chess_games").update(patch).eq("id",raw.id).select().maybeSingle();
+  const game=await resolveTimeout(seen||raw);
   return {ok:true,game,player:publicPlayer(p),seat}
 }
 async function gameState(req:Request,b:any){
@@ -513,6 +532,7 @@ Deno.serve(async(req)=>{
       case "move":out=await makeMove(req,b,serverReceivedMs);break;
       case "bot_move":out=await botMove(req,b);break;
       case "resign":out=await resign(req,b);break;
+      case "claim_win":out=await claimWin(req,b);break;
       case "draw_offer":out=await offerDraw(req,b);break;
       case "draw_cancel":out=await cancelDraw(req,b);break;
       case "draw_respond":out=await respondDraw(req,b);break;
