@@ -2414,3 +2414,19 @@ body.m-app .shell[data-mview="game"] .m-moves{margin-bottom:auto}
 /* Dialogs fit small phones and scroll inside themselves. */
 body.m-app .vch-dialog-panel{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
 body.m-app .shell[data-mview="review"] .feature-card{display:none!important}
+
+/* === END PHONE APP SHELL === */
+
+/* Looking back through the game (src/move-browse.js). */
+.move-nav{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:6px;margin-top:8px}
+.move-nav button{height:36px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#122120;color:#cfd8d4}
+.move-nav svg,.m-movebar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.move-nav button.glow,.m-movebar button.glow{color:#f2dfaf;border-color:rgba(229,193,124,.55);box-shadow:0 0 0 1px rgba(229,193,124,.25)}
+.move-nav .undo-move{padding:0 14px;font-weight:700;color:#f2dfaf}
+.move-nav .undo-move.hidden{display:none}
+.board.browsing{outline:2px solid rgba(229,193,124,.55);outline-offset:-2px}
+.m-movebar{display:none}
+body.m-app .shell[data-mview="game"] .m-movebar{display:flex;align-items:center;flex:none;margin-bottom:auto}
+body.m-app .shell[data-mview="game"] .m-movebar .m-moves{flex:1;margin-bottom:0}
+body.m-app .m-movebar button{width:40px;height:38px;flex:none;display:grid;place-items:center;color:#cfd8d4;border-radius:10px}
+.m-moves b[data-ply]{cursor:pointer}

@@ -19,6 +19,7 @@ import { avatarFromFile, setPortrait } from './portrait.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
+import { browseLine, browseStep, browseTo, undoPlies } from './move-browse.js';
 import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
@@ -43,6 +44,7 @@ const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
+let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
 let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
 let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
@@ -226,8 +228,8 @@ ${splashMarkup(splash)}
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
       <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
-      <div id="mMoves" class="m-moves" aria-label="Moves"></div>
-      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
+      <div class="m-movebar"><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><div id="mMoves" class="m-moves" aria-label="Moves"></div><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
     </section>
 
     <aside class="rpanel panel">
@@ -242,6 +244,7 @@ ${splashMarkup(splash)}
         <div id="movesView" class="right-view">
           <div class="moves-head"><span>#</span><span>White</span><span>Black</span></div>
           <div id="moves" class="moves"><span>Game ready — make a move.</span></div>
+          <div class="move-nav" aria-label="Move navigation"><button type="button" data-browse="first" aria-label="First move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-7 6 7 6"/></svg></button><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button type="button" data-browse="live" aria-label="Back to the live position"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l7 6-7 6"/></svg></button><button type="button" id="undoMove" class="undo-move hidden">Undo</button></div>
           <div class="analysis">
             <header><b><img class="analysis-title-icon" src="/assets/vch/icons/review.svg" alt="">Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
             <div id="reviewProgress" class="review-progress hidden" aria-live="polite"><span><b id="reviewProgressLabel">Analyzing game</b><em id="reviewProgressCount">0 / 0</em></span><div><i id="reviewProgressFill"></i></div></div>
@@ -381,18 +384,20 @@ function ensureBoardDom(){
 }
 // chess.js replays the whole game for history(), so the last move is remembered when it is
 // played and only recomputed when the position came from somewhere else.
-function rememberLastMove(made){if(made)lastMoveCache={fen:game.fen(),move:made};return made}
+function rememberLastMove(made){if(made){lastMoveCache={fen:game.fen(),move:made};if(browse){browse=null;syncBrowseUi()}}return made}
 function localLastMove(){
   const fen=game.fen();
   if(lastMoveCache.fen!==fen)lastMoveCache={fen,move:game.history({verbose:true}).at(-1)||null};
   return lastMoveCache.move;
 }
 function boardLastMove(){
+  if(browse&&!reviewState.viewing)return browse.ply>0?browse.moves[browse.ply-1]:null;
   const reviewLast=reviewState.viewing&&reviewState.currentPly>0?reviewState.moves[reviewState.currentPly-1]:null;
   const serverLast=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.at(-1):null;
   return reviewLast||serverLast||localLastMove();
 }
 function grabbableColor(){
+  if(browse)return '';
   if(canQueuePremove())return premovePlayerColor();
   if(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide)))return '';
   return game.turn();
@@ -484,9 +489,11 @@ function buzz(pattern){
 function renderBoard({hint=null,instant=false}={}){
   const scale=instant?0:motionScale(),dom=ensureBoardDom();
   const reviewFen=reviewState.viewing?reviewState.positions[reviewState.currentPly]:null;
-  const boardGame=reviewFen?new Chess(reviewFen):game,placement=boardGame.fen().split(' ')[0];
+  const browseFen=!reviewFen&&browse?browse.positions[browse.ply]:null;
+  const boardGame=reviewFen||browseFen?new Chess(reviewFen||browseFen):game,placement=boardGame.fen().split(' ')[0];
+  dom.board.classList.toggle('browsing',!!browseFen);
   if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
-  const legal=new Set(reviewState.viewing||!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
+  const legal=new Set(reviewState.viewing||browse||!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
   const lastMove=boardLastMove(),position=positionMap(boardGame.board());
   let checked=null;
   if(boardGame.inCheck())for(const [sq,key] of position)if(key===boardGame.turn()+'k')checked=sq;
@@ -711,6 +718,7 @@ function playQueuedPremove(){
   return makeMove(move);
 }
 async function clickSquare(sq,p,{instant=false}={}){
+  if(browse){exitBrowse();return} // a tap on the board while looking back returns to the game
   if(premoves.move?.from===sq){cancelPremove();return}
   if(canQueuePremove()){
     const color=premovePlayerColor();
@@ -916,7 +924,7 @@ function moveCell(record,index,records,signature){
   const san=escapeHtml(record.san||record.lan||''),reviewResult=reviewState.signature===signature?reviewState.results[index]:null;
   const bookMove=isBookMove(records,index),book=bookMove&&reviewResult?.classification!=='book'?'<img class="book-icon" src="/assets/vch/icons/book.svg" alt="Book move">':'';
   const badge=reviewResult?reviewBadgeMarkup(reviewResult):bookMove?'<span class="classification-badge classification-book" title="Book"><img src="/assets/vch/icons/book.svg" alt="Book"></span>':'';
-  const current=reviewState.viewing&&reviewState.currentPly===index+1?' current':'';
+  const current=(reviewState.viewing&&reviewState.currentPly===index+1)||(!reviewState.viewing&&browse?.ply===index+1)?' current':'';
   return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
 function updateMoves(){
@@ -931,7 +939,7 @@ function updateMoves(){
   target.innerHTML=rows.join('');
   target.scrollTop=0;
   $$('#moves [data-review-ply]').forEach(cell=>{
-    const jump=()=>{if(reviewState.results.length)setReviewPly(Number(cell.dataset.reviewPly))};
+    const jump=()=>{if(reviewState.results.length)setReviewPly(Number(cell.dataset.reviewPly));else browseGoTo(Number(cell.dataset.reviewPly))};
     cell.onclick=jump;cell.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();jump()}};
   });
 }
@@ -1128,6 +1136,7 @@ function syncPlayerBars(){
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
   $('#hint')?.classList.toggle('hidden',mode!=='computer');
+  $('#undoMove')?.classList.toggle('hidden',mode!=='computer');
   syncConnectionUi();syncClockBars();
 }
 function syncRoomUi(){
@@ -1183,6 +1192,7 @@ function applyServerState(payload,{animateMove=true}={}){
   if(isStale(provisional,state,performance.now()))return;
   if(provisional&&(confirms(provisional,state)||isExpired(provisional,performance.now())))clearProvisional();
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
+  if(browse&&(state.id!==previousGameId||Number(state.version)>previousVersion)){browse=null;syncBrowseUi()} // a new move returns to the live position
   if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
@@ -1520,6 +1530,53 @@ function syncGameMoments(){
 }
 setInterval(syncGameMoments,1000);
 document.addEventListener('visibilitychange',syncGameMoments);
+// ---- Looking back through the game (src/move-browse.js) and Undo against the computer ----
+function liveLine(){
+  const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true});
+  return browseLine(records,game.fen());
+}
+function browseAction(kind){
+  if(reviewState.viewing){
+    const map={first:0,prev:reviewState.currentPly-1,next:reviewState.currentPly+1,live:reviewState.moves.length};
+    return setReviewPly(map[kind]);
+  }
+  const line=browse?{positions:browse.positions,moves:browse.moves}:liveLine(),last=line.positions.length-1;
+  if(last<1)return;
+  const ply=kind==='first'?browseTo(0,last):kind==='live'?null:browseStep(browse?.ply??null,kind==='prev'?-1:1,last);
+  setBrowse(ply,line);
+}
+function browseGoTo(ply){
+  const line=browse?{positions:browse.positions,moves:browse.moves}:liveLine();
+  setBrowse(browseTo(ply,line.positions.length-1),line);
+}
+function setBrowse(ply,line){
+  const next=ply===null?null:{ply,positions:line.positions,moves:line.moves};
+  if((browse?.ply??null)===(next?.ply??null))return;
+  browse=next;selected=null;reactions.unpick?.();
+  render({instant:true});updateMoves();syncBrowseUi();
+}
+function exitBrowse(){if(browse)setBrowse(null,null)}
+function syncBrowseUi(){
+  $('.game')?.classList.toggle('browsing',!!browse);
+  $$('[data-browse="live"],[data-browse="next"]').forEach(button=>button.classList.toggle('glow',!!browse));
+}
+function canUndo(){return mode==='computer'&&computerStarted&&!localGameOver&&!reviewState.viewing&&game.history().length>0}
+function undoComputerMove(){
+  if(!canUndo())return toast('Undo is for games against the computer');
+  const plies=undoPlies(game.turn(),computerSide,game.history().length);if(!plies)return toast('Nothing to take back yet');
+  if(enginePending){try{stockfish.postMessage({action:'stop'})}catch{}}
+  browse=null;premoves.cancel();selected=null;boardShapes=[];
+  if(localClockState)settleLocalClock();
+  for(let i=0;i<plies;i++)game.undo();
+  const length=game.history().length;moveTimeByPly.length=Math.min(moveTimeByPly.length,length);moveEvalByPly.length=Math.min(moveEvalByPly.length,length);
+  lastMoveCache={fen:'',move:null};
+  if(localClockState){localClockState.active=game.turn();localClockState.startedAt=performance.now()}
+  render({instant:true});updateMoves();syncBrowseUi();toast(plies===2?'Took back your move and the reply':'Took back your move');
+  if(game.turn()!==computerSide)setTimeout(engineMove,300);
+}
+$$('[data-browse]').forEach(button=>button.onclick=()=>browseAction(button.dataset.browse));
+$('#mMoves')?.addEventListener('click',event=>{const chip=event.target.closest('[data-ply]');if(chip)browseGoTo(Number(chip.dataset.ply))});
+$('#undoMove').onclick=undoComputerMove;
 // ---- Phone layout (src/mobile-shell.js): app-style views, tab bar, action bar ----
 function isMobileApp(){mobileMedia??=matchMedia(MOBILE_QUERY);return mobileMedia.matches}
 function currentGameKey(){
@@ -1541,8 +1598,8 @@ function syncMoveStrip(records){
   if(serverGameId&&Array.isArray(serverGame?.move_history))sans.push(...game.history());
   // Waiting for an opponent: the strip shows the room code and a copy button instead.
   const waiting=serverGameId&&serverGame?.status==='waiting'&&mode!=='computer';
-  const html=waiting?`<span class="m-room">Room <b>${escapeHtml(serverGame.invite_code||'')}</b></span><button type="button" data-m-copy>Copy invite link</button>`:moveStripHtml(sans);
-  if(strip.innerHTML!==html){strip.innerHTML=html;strip.scrollLeft=waiting?0:strip.scrollWidth;strip.querySelector('[data-m-copy]')?.addEventListener('click',()=>$('#copy').click())}
+  const html=waiting?`<span class="m-room">Room <b>${escapeHtml(serverGame.invite_code||'')}</b></span><button type="button" data-m-copy>Copy invite link</button>`:moveStripHtml(sans,browse?.ply??null);
+  if(strip.innerHTML!==html){strip.innerHTML=html;const viewed=browse?strip.querySelector('b.last'):null;strip.scrollLeft=waiting?0:viewed?viewed.offsetLeft-strip.clientWidth/2:strip.scrollWidth;strip.querySelector('[data-m-copy]')?.addEventListener('click',()=>$('#copy').click())}
 }
 function syncMobileShell(){
   const shell=$('.shell');if(!shell)return;
@@ -1560,7 +1617,7 @@ function syncMobileShell(){
   const over=gameFinished(),live=liveGameOn(),online=!!serverGameId&&mode!=='computer',human=online&&!serverGame?.bot_player_id&&!currentBot;
   shell.classList.toggle('m-over',over);
   const show=(action,visible)=>$(`[data-m-action="${action}"]`)?.classList.toggle('hidden',!visible);
-  show('options',true);show('draw',human&&live);show('resign',live);show('chat',human);show('hint',mode==='computer'&&live);
+  show('options',true);show('draw',human&&live);show('resign',live);show('chat',human);show('hint',mode==='computer'&&live);show('undo',mode==='computer'&&live);
   show('review',over);show('rematch',over&&human);show('new',over);
   const title=$('#mGameTitle'),sub=$('#mGameSub');
   if(title){
@@ -1612,6 +1669,7 @@ const M_ACTIONS={
   resign:()=>$('#resign').click(),
   chat:()=>$('#openChat').click(),
   hint:()=>void showHint(),
+  undo:undoComputerMove,
   review:()=>void startGameReview(),
   rematch:()=>void startOnlineRematch(),
   new:async()=>{await resetFinishedGame();mLastGameKey=null;setMView('home')},
@@ -2404,7 +2462,13 @@ $('#reviewLast').onclick=()=>setReviewPly(reviewState.moves.length);
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&menus.handleEscape()){event.preventDefault();return}
   if(event.key==='Escape'&&cancelPremove()){event.preventDefault();return}
-  if(!reviewState.viewing||event.metaKey||event.ctrlKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName||''))return;
+  if(event.metaKey||event.ctrlKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName||''))return;
+  if(!reviewState.viewing){
+    // Not reviewing: the arrows look back through the game without taking anything back.
+    const keys={ArrowLeft:'prev',ArrowRight:'next',Home:'first',End:'live'};
+    if(keys[event.key]&&currentHistory().length){event.preventDefault();browseAction(keys[event.key])}
+    return;
+  }
   if(event.key==='ArrowLeft'){event.preventDefault();setReviewPly(reviewState.currentPly-1)}
   if(event.key==='ArrowRight'){event.preventDefault();setReviewPly(reviewState.currentPly+1)}
   if(event.key==='Home'){event.preventDefault();setReviewPly(0)}

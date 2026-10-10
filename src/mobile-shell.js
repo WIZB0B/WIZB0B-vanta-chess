@@ -24,8 +24,8 @@ export function moveStripItems(sans = []) {
 }
 
 const esc = value => String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-export function moveStripHtml(sans = []) {
+export function moveStripHtml(sans = [], viewing = null) {
   const items = moveStripItems(sans);
   if (!items.length) return '<span class="m-moves-empty">Moves appear here</span>';
-  return items.map((item, i) => `${item.number ? `<i>${item.number}</i>` : ''}<b${i === items.length - 1 ? ' class="last"' : ''}>${esc(item.san)}</b>`).join('');
+  return items.map((item, i) => `${item.number ? `<i>${item.number}</i>` : ''}<b data-ply="${item.ply}"${(viewing === null ? i === items.length - 1 : item.ply === viewing) ? ' class="last"' : ''}>${esc(item.san)}</b>`).join('');
 }
