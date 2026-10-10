@@ -30,6 +30,7 @@ import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engin
 import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
 import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './splash.js';
 import { openingName, trainerReport } from './opening-trainer.js';
+import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
 import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
 import { difficultyForRating, ratingDeltaText, sparklinePoints, themeLabel, weakestThemes } from './puzzle-rating.js';
@@ -336,6 +337,7 @@ ${splashMarkup(splash)}
     <p id="berserkStatus" class="berserk-status"></p>
     <h4 class="achievement-title">Achievements <small id="achievementCount"></small></h4>
     <div id="achievementGrid" class="achievement-grid"></div>
+    <button id="viewMyProfile" class="secondary-action" type="button">View my public profile</button>
     <button id="signOutBtn" class="secondary-action" type="button">Sign out</button>
   </div>
 </dialog>
@@ -1164,6 +1166,7 @@ function syncPlayerBars(){
   $('#topRating').textContent=`${topRating} rating`;
   $('#bottomRating').textContent=`${ratingFor(pool)} rating`;
   const opponent=opponentInfo&&opponentInfo.gameId===serverGameId?opponentInfo:null;
+  {const link=!currentBot&&!serverGame?.bot_player_id&&opponent?.account?opponentUsername(serverGame,myColor):null,tn=$('#topPlayerName');tn.dataset.profile=link||'';tn.classList.toggle('pp-link',!!link);tn.title=link?'View profile':''}
   setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,label:topName});
   setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:ownName});
   if(serverGameId&&opponentId&&!currentBot)void loadOpponentInfo(serverGameId,opponentId);
@@ -1968,7 +1971,7 @@ function renderAchievements(){
 function signedIn(){return !!authSession?.access_token&&!!currentProfile?.account}
 let socialState={incoming:[],outgoing:[],daily:[],seenAccepted:new Set(),timer:null,channel:null,channelFor:null};
 function friendRow(f,{search=false}={}){
-  return `<article class="friend-row" data-friend="${escapeHtml(f.id)}"><span class="presence-dot${f.online?' on':''}" aria-label="${f.online?'Online':'Offline'}"></span><div><b>${escapeHtml(f.name)}</b><small>${f.rating} rapid${f.online?' · online':''}</small></div><div>${search?`<button class="friend-follow" data-following="${f.following?'1':''}">${f.following?'Following':'Follow'}</button>`:'<button class="friend-unfollow" aria-label="Unfollow">Unfollow</button>'}<button class="friend-challenge">Challenge</button></div></article>`;
+  return `<article class="friend-row" data-friend="${escapeHtml(f.id)}"><span class="presence-dot${f.online?' on':''}" aria-label="${f.online?'Online':'Offline'}"></span><div><button class="friend-name" type="button">${escapeHtml(f.name)}</button><small>${f.rating} rapid${f.online?' · online':''}</small></div><div>${search?`<button class="friend-follow" data-following="${f.following?'1':''}">${f.following?'Following':'Follow'}</button>`:'<button class="friend-unfollow" aria-label="Unfollow">Unfollow</button>'}<button class="friend-challenge">Challenge</button></div></article>`;
 }
 async function openChallengeDialog(player){
   const body=document.createElement('div');body.className='challenge-form';
@@ -2059,6 +2062,7 @@ function wireFriendRows(root,list){
   root.querySelectorAll('[data-friend]').forEach(row=>{
     const f=list.find(x=>x.id===row.dataset.friend);if(!f)return;
     row.querySelector('.friend-challenge')?.addEventListener('click',()=>openChallengeDialog(f));
+    row.querySelector('.friend-name')?.addEventListener('click',()=>void openProfile(f.name));
     const follow=row.querySelector('.friend-follow');
     if(follow)follow.onclick=async()=>{const on=!follow.dataset.following;try{await api.follow(f.id,on);follow.dataset.following=on?'1':'';follow.textContent=on?'Following':'Follow';f.following=on;void loadFriendList()}catch(error){toast(error.message)}};
     row.querySelector('.friend-unfollow')?.addEventListener('click',async()=>{try{await api.follow(f.id,false);toast(`Unfollowed ${f.name}`);void loadFriendList()}catch(error){toast(error.message)}});
@@ -2118,6 +2122,76 @@ async function togglePush(){
   }catch(error){toast(error.message)}
   finally{button.disabled=false;void syncPushButton()}
 }
+// ---- Public profiles (src/profile-view.js): rating line, best wins, head-to-head ----
+let profileData=null,profilePool=null;
+async function openProfile(username){
+  if(!username)return;
+  if(watchSession)stopWatching();
+  setPrimaryScreen('game');if(isMobileApp()){mTab='more';setMView('panel')}
+  setDynamicView('profile',username,brandLoading('Opening the profile…'));
+  try{profileData=await api.publicProfile(username);profilePool=poolsPlayed(profileData.history)[0]||null;drawProfile()}
+  catch(error){const t=$('#dynamicView .view-content');if(t)t.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}
+}
+function profileChartHtml(){
+  const d=profileData,model=profilePool?ratingChartModel(d.history,profilePool):null;
+  if(!model)return '<p class="menu-empty">The rating line appears after two rated games in a pool.</p>';
+  const pts=model.points.map(p=>`${p.x},${p.y}`).join(' '),last=model.points.at(-1),grid=[model.max,model.mid,model.min];
+  return `<svg class="pp-chart-svg" viewBox="0 0 ${model.width} ${model.height}" role="img" aria-label="${escapeHtml(profilePool)} rating over the last ${model.points.length} rated games, from ${model.first} to ${model.last}">
+    ${grid.map(v=>`<line class="pp-grid" x1="${model.padX}" x2="${model.width-8}" y1="${model.yOf(v)}" y2="${model.yOf(v)}"/><text class="pp-axis" x="${model.padX-8}" y="${model.yOf(v)+4}" text-anchor="end">${v}</text>`).join('')}
+    <polyline class="pp-line" points="${pts}"/>
+    <circle class="pp-last" cx="${last.x}" cy="${last.y}" r="4"/>
+    <line class="pp-cross hidden" y1="8" y2="${model.height-8}"/><circle class="pp-dot hidden" r="4"/>
+    <rect class="pp-hit" x="0" y="0" width="${model.width}" height="${model.height}"/>
+  </svg><div class="pp-tip" hidden></div>
+  <details class="pp-table"><summary>Show as a table</summary><table><thead><tr><th>Date</th><th>Rating</th></tr></thead><tbody>${model.points.slice(-20).reverse().map(p=>`<tr><td>${escapeHtml(new Date(p.at).toLocaleDateString())}</td><td>${p.rating}</td></tr>`).join('')}</tbody></table></details>`;
+}
+function wireProfileChart(){
+  const box=$('#dynamicView .pp-chart'),svg=box?.querySelector('svg');if(!svg)return;
+  const model=ratingChartModel(profileData.history,profilePool),tip=box.querySelector('.pp-tip'),cross=svg.querySelector('.pp-cross'),dot=svg.querySelector('.pp-dot');
+  const show=event=>{
+    const r=svg.getBoundingClientRect(),x=(event.clientX-r.left)*model.width/r.width;
+    const p=model.points.reduce((a,b)=>Math.abs(b.x-x)<Math.abs(a.x-x)?b:a);
+    cross.setAttribute('x1',p.x);cross.setAttribute('x2',p.x);dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.y);cross.classList.remove('hidden');dot.classList.remove('hidden');
+    tip.hidden=false;tip.innerHTML=`<b>${p.rating}</b><span>${escapeHtml(new Date(p.at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}))}</span>`;
+    const left=Math.min(Math.max(p.x*r.width/model.width,40),r.width-40);tip.style.left=`${left}px`;tip.style.top=`${p.y*r.height/model.height-8}px`;
+  };
+  const hide=()=>{tip.hidden=true;cross.classList.add('hidden');dot.classList.add('hidden')};
+  svg.addEventListener('pointermove',show);svg.addEventListener('pointerdown',show);svg.addEventListener('pointerleave',hide);
+}
+function drawProfile(){
+  const target=$('#dynamicView .view-content'),d=profileData;if(!target||!d)return;
+  const p=d.player,h=d.headToHead,pools=poolsPlayed(d.history),earned=achievementBoard(p.achievements).filter(a=>a.earned);
+  const seasons=(p.achievements||[]).filter(a=>String(a?.id||'').startsWith('season-')).map(a=>a.id.replace(/^season-/,'').split('-')).map(([y,m,div])=>({label:`${div[0].toUpperCase()+div.slice(1)} · ${y}-${m}`,div}));
+  target.innerHTML=`<article class="pp">
+    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · <button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small></div></header>
+    <div class="pp-actions">${d.self?'':`<button class="pp-follow">${d.following?'Following':'Follow'}</button><button class="pp-challenge primary">Challenge</button>`}<button class="pp-copy">Copy link</button>${d.self?'':'<button class="pp-report">Report</button>'}</div>
+    ${h?`<div class="pp-h2h"><small>YOU VS ${escapeHtml(p.username.toUpperCase())}</small><b>${recordText(h)}</b><span>${h.wins+h.draws+h.losses?`${Math.round(100*(h.wins+h.draws/2)/(h.wins+h.draws+h.losses))}% score`:'No games yet'}</span></div>`:''}
+    <div class="rating-grid">${['bullet','blitz','rapid','classical','daily'].map(pool=>`<div><small>${pool}</small><b>${Number(p.ratings?.[pool]??1200)}</b><em>${Number(p.provisional_games?.[pool]||0)} games</em></div>`).join('')}<div><small>Puzzles</small><b>${p.puzzle_rating}</b><em>${recordText(p)}</em></div></div>
+    <section class="pp-chart"><div class="pp-pools">${pools.map(pool=>`<button data-pp-pool="${pool}" class="${pool===profilePool?'on':''}">${pool}</button>`).join('')}</div>${profileChartHtml()}</section>
+    ${d.bestWins.length?`<h4>Best wins</h4><div class="pp-list">${d.bestWins.map(w=>`<div><b>${escapeHtml(w.opponent||'Player')}</b><span>${w.opponent_rating} · ${escapeHtml(w.pool)}</span><small>${escapeHtml(new Date(w.at).toLocaleDateString())}</small></div>`).join('')}</div>`:''}
+    ${d.recent.length?`<h4>Recent rated games</h4><div class="pp-list">${d.recent.map(g=>`<div class="r-${g.result}"><b>${escapeHtml(g.opponent||'Player')}</b><span>${g.result} · ${g.opponent_rating} · ${escapeHtml(g.pool)}</span><small>${escapeHtml(new Date(g.at).toLocaleDateString())}</small></div>`).join('')}</div>`:''}
+    <h4>Achievements <small>${earned.length}</small></h4><div class="pp-badges">${earned.map(a=>`<span class="achievement earned" title="${escapeHtml(a.text)}"><span class="achievement-mark">${escapeHtml(a.mark)}</span><b>${escapeHtml(a.title)}</b></span>`).join('')}${seasons.map(s=>`<span class="achievement earned season-${escapeHtml(s.div)}"><span class="achievement-mark">S</span><b>${escapeHtml(s.label)}</b></span>`).join('')||(earned.length?'':'<p class="menu-empty">None yet.</p>')}</div>
+  </article>`;
+  setPortrait(target.querySelector('.pp-avatar'),{avatar:p.avatar_data,label:p.username});setPlayerFlag(target.querySelector('.pp-flag'),p.country_code);
+  target.querySelectorAll('[data-pp-pool]').forEach(b=>b.onclick=()=>{profilePool=b.dataset.ppPool;drawProfile()});
+  wireProfileChart();
+  target.querySelector('.pp-copy').onclick=async()=>{try{await navigator.clipboard.writeText(profileUrl(p.username));toast('Profile link copied')}catch{toast(profileUrl(p.username))}};
+  target.querySelector('.pp-follow')?.addEventListener('click',async()=>{if(!signedIn())return openAccount();try{await api.follow(p.id,!d.following);d.following=!d.following;drawProfile()}catch(error){toast(error.message)}});
+  target.querySelector('.pp-challenge')?.addEventListener('click',()=>{if(!signedIn())return openAccount();void openChallengeDialog({id:p.id,name:p.username})});
+  target.querySelector('.pp-report')?.addEventListener('click',()=>void openReportDialog(p));
+  target.querySelector('.pp-club')?.addEventListener('click',e=>typeof openClub==='function'&&openClub(e.currentTarget.dataset.club));
+}
+async function openReportDialog(p,gameId=null){
+  if(!signedIn())return openAccount();
+  const body=document.createElement('div');body.className='report-form';
+  body.innerHTML=`<p>Reports go to a person who reviews the games. Nothing happens automatically.</p><label><span>Reason</span><select><option value="engine">Using an engine or outside help</option><option value="abuse">Abusive chat or name</option><option value="sandbagging">Losing on purpose</option><option value="other">Something else</option></select></label><label><span>Details (optional)</span><textarea maxlength="500" rows="3"></textarea></label>`;
+  const send=await vchDialog({title:`Report ${p.username}`,body,actions:[{label:'Cancel',value:false},{label:'Send report',value:true,primary:true}]});
+  if(!send)return;
+  try{await api.reportPlayer({playerId:p.id,gameId:gameId||serverGameId||undefined,reason:body.querySelector('select').value,note:body.querySelector('textarea').value});toast('Report sent. Thank you')}catch(error){toast(error.message)}
+}
+$('#topPlayerName').addEventListener('click',event=>{const u=event.currentTarget.dataset.profile;if(u)void openProfile(u)});
+$('#viewMyProfile')?.addEventListener('click',()=>{menus.close('account');void openProfile(currentProfile?.username)});
+if(params.get('player'))setTimeout(()=>void openProfile(String(params.get('player')).slice(0,20)),500);
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
