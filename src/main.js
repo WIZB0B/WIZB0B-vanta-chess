@@ -18,6 +18,7 @@ import { FLAG_URL, countryList, countryName } from './flags.js';
 import { avatarFromFile, setPortrait } from './portrait.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
+import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
 import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
@@ -40,6 +41,8 @@ let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),c
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+// Phone layout state (see the Phone layout section).
+let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
 let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
 let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
@@ -187,6 +190,7 @@ ${splashMarkup(splash)}
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
     <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+      <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
         <div class="player-info">
@@ -222,6 +226,8 @@ ${splashMarkup(splash)}
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
       <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
+      <div id="mMoves" class="m-moves" aria-label="Moves"></div>
+      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
     </section>
 
     <aside class="rpanel panel">
@@ -271,6 +277,9 @@ ${splashMarkup(splash)}
       </div>
     </aside>
   </main>
+  <button id="mReturnGame" class="m-return hidden" type="button">Back to your game</button>
+  <nav class="m-tabs" aria-label="Sections"><button type="button" data-m-tab="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg><span>Play</span></button><button type="button" data-m-tab="puzzles"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v4.2a2.8 2.8 0 1 0 4 0V4h6v6h-4.2a2.8 2.8 0 1 0 0 4H20v6h-6v-4.2a2.8 2.8 0 1 0-4 0V20H4v-6h4.2a2.8 2.8 0 1 0 0-4H4V4Z"/></svg><span>Puzzles</span></button><button type="button" data-m-tab="learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A3.5 3.5 0 0 1 7 2h4v18H7a3.5 3.5 0 0 0-3.5 3V5.5ZM20.5 5.5A3.5 3.5 0 0 0 17 2h-4v18h4a3.5 3.5 0 0 1 3.5 3V5.5Z"/></svg><span>Learn</span></button><button type="button" data-m-tab="famous"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18M12 8h4M12 12h4M12 16h3"/></svg><span>Games</span></button><button type="button" data-m-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>More</span></button></nav>
+  <div id="mSheet" class="m-sheet" hidden><div class="m-sheet-backdrop" data-m-close></div><section class="m-sheet-card" role="dialog" aria-modal="true" aria-labelledby="mSheetTitle"><header><b id="mSheetTitle">More</b><button type="button" data-m-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><div id="mSheetItems" class="m-sheet-items"></div></section></div>
 </div>
 
 <div id="toast"></div>
@@ -535,7 +544,7 @@ function renderStatus(){
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
   renderReviewBoardDecorations();syncClockBars();
-  updateOpeningLabel();scheduleAnalysis();void maybeShowGameOver();
+  updateOpeningLabel();scheduleAnalysis();void maybeShowGameOver();syncMobileShell();
 }
 // The board updates now; status text, review decorations, opening name, analysis and the
 // game-over check follow once the frame with the board change has been painted.
@@ -912,6 +921,7 @@ function moveCell(record,index,records,signature){
 }
 function updateMoves(){
   const records=serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true});
+  syncMoveStrip(records);
   const target=$('#moves');if(!target)return;
   if(!records.length){target.innerHTML='<span class="moves-empty">Game ready — make a move.</span>';target.scrollTop=0;return}
   const signature=moveRecordSignature(records),rows=[];
@@ -1510,6 +1520,115 @@ function syncGameMoments(){
 }
 setInterval(syncGameMoments,1000);
 document.addEventListener('visibilitychange',syncGameMoments);
+// ---- Phone layout (src/mobile-shell.js): app-style views, tab bar, action bar ----
+function isMobileApp(){mobileMedia??=matchMedia(MOBILE_QUERY);return mobileMedia.matches}
+function currentGameKey(){
+  if(puzzleSession)return `puzzle:${puzzleSession.id}`;
+  if(liveGameOn())return lastGameStartKey||`game:${serverGameId||'computer'}`;
+  if(serverGameId&&serverGame?.status==='waiting')return `waiting:${serverGameId}`;
+  return null;
+}
+function gameFinished(){
+  if(puzzleSession)return false;
+  if(mode==='computer')return computerStarted&&(localGameOver||game.isGameOver());
+  return !!serverGameId&&!!serverGame&&!['waiting','active','playing','in_progress'].includes(serverGame.status);
+}
+function setMView(view){if(view){mView=view;syncMobileShell();window.scrollTo(0,0)}}
+function syncMoveStrip(records){
+  const strip=$('#mMoves');if(!strip||!isMobileApp())return;
+  // Online, the server list lags a move that is still on its way: add what's only on the board.
+  const sans=records.map(record=>record.san||record.lan||'');
+  if(serverGameId&&Array.isArray(serverGame?.move_history))sans.push(...game.history());
+  // Waiting for an opponent: the strip shows the room code and a copy button instead.
+  const waiting=serverGameId&&serverGame?.status==='waiting'&&mode!=='computer';
+  const html=waiting?`<span class="m-room">Room <b>${escapeHtml(serverGame.invite_code||'')}</b></span><button type="button" data-m-copy>Copy invite link</button>`:moveStripHtml(sans);
+  if(strip.innerHTML!==html){strip.innerHTML=html;strip.scrollLeft=waiting?0:strip.scrollWidth;strip.querySelector('[data-m-copy]')?.addEventListener('click',()=>$('#copy').click())}
+}
+function syncMobileShell(){
+  const shell=$('.shell');if(!shell)return;
+  const mobile=isMobileApp();document.body.classList.toggle('m-app',mobile);
+  if(!mobile){delete shell.dataset.mview;return}
+  const key=currentGameKey();
+  if(key&&key!==mLastGameKey){mLastGameKey=key;mView='game'} // a new game, room or puzzle opens the board
+  const reviewing=reviewState.running||reviewState.viewing;
+  if(reviewing&&!mReviewShown){mReviewShown=true;mView='review'}
+  if(!reviewing){mReviewShown=false;if(mView==='review')mView='game'}
+  if(shell.dataset.mview!==mView)shell.dataset.mview=mView;
+  if(key?.startsWith('waiting:'))syncMoveStrip([]);
+  const tab=mView==='game'||mView==='review'?'play':mTab;
+  $$('[data-m-tab]').forEach(button=>button.classList.toggle('on',button.dataset.mTab===tab));
+  const over=gameFinished(),live=liveGameOn(),online=!!serverGameId&&mode!=='computer',human=online&&!serverGame?.bot_player_id&&!currentBot;
+  shell.classList.toggle('m-over',over);
+  const show=(action,visible)=>$(`[data-m-action="${action}"]`)?.classList.toggle('hidden',!visible);
+  show('options',true);show('draw',human&&live);show('resign',live);show('chat',human);show('hint',mode==='computer'&&live);
+  show('review',over);show('rematch',over&&human);show('new',over);
+  const title=$('#mGameTitle'),sub=$('#mGameSub');
+  if(title){
+    const t=puzzleSession?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
+    if(title.textContent!==t)title.textContent=t;
+  }
+  if(sub){
+    const tc=serverGame?formatTimeControl(serverGame.time_control_seconds||600,serverGame.increment_seconds||0):'';
+    const t=over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
+    if(sub.textContent!==t)sub.textContent=t;
+  }
+  $('#mReturnGame')?.classList.toggle('hidden',!(live&&mView!=='game'&&mView!=='review'));
+}
+function openSheet(title,items){
+  const sheet=$('#mSheet'),list=$('#mSheetItems');if(!sheet||!list)return;
+  $('#mSheetTitle').textContent=title;
+  list.replaceChildren(...items.filter(Boolean).map(item=>{
+    const button=document.createElement('button');button.type='button';button.textContent=item.label;
+    button.onclick=()=>{closeSheet();item.run()};return button;
+  }));
+  sheet.hidden=false;requestAnimationFrame(()=>sheet.classList.add('open'));list.querySelector('button')?.focus({preventScroll:true});
+}
+function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return false;sheet.classList.remove('open');sheet.hidden=true;return true}
+function openSection(kind){mTab=['puzzles','learn','famous'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
+function openMoreSheet(){
+  openSheet('More',[
+    {label:'Arena & tournaments',run:()=>openSection('arena')},
+    {label:'Openings',run:()=>openSection('openings')},
+    {label:'Review a game',run:()=>openSection('review')},
+    {label:'Board & pieces',run:()=>$('#theme').click()},
+    {label:'Portrait & flag',run:()=>void openProfileEditor()},
+    {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
+    {label:'Notifications',run:()=>$('#notifyBtn').click()},
+    {label:'Install the app',run:()=>$('#installBtn').click()},
+  ]);
+}
+function openGameOptions(){
+  const soundOff=!!$('#sound')?.dataset.off;
+  openSheet('Game options',[
+    {label:'Flip board',run:()=>$('#flip').click()},
+    {label:soundOff?'Sound: off (turn on)':'Sound: on (turn off)',run:()=>$('#sound').click()},
+    {label:'Board & pieces',run:()=>$('#theme').click()},
+    mode!=='computer'&&serverGameId?{label:'Share room link',run:()=>$('#copy').click()}:null,
+  ]);
+}
+const M_ACTIONS={
+  options:openGameOptions,
+  draw:()=>$('#draw').click(),
+  resign:()=>$('#resign').click(),
+  chat:()=>$('#openChat').click(),
+  hint:()=>void showHint(),
+  review:()=>void startGameReview(),
+  rematch:()=>void startOnlineRematch(),
+  new:async()=>{await resetFinishedGame();mLastGameKey=null;setMView('home')},
+};
+$$('[data-m-action]').forEach(button=>button.onclick=()=>M_ACTIONS[button.dataset.mAction]?.());
+$$('[data-m-tab]').forEach(button=>button.onclick=()=>{
+  const tab=button.dataset.mTab;
+  if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});
+  if(tab==='more'){openMoreSheet();return}
+  if(tab==='play'){mTab='play';activateNav('play');setMView(viewForTab('play',{gameLive:liveGameOn()}));return}
+  openSection(tab);
+});
+$('#mBack').onclick=()=>{if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
+$('#mReturnGame').onclick=()=>setMView('game');
+$$('#mSheet [data-m-close]').forEach(el=>el.onclick=closeSheet);
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheet()});
+isMobileApp();mobileMedia.addEventListener?.('change',syncMobileShell);syncMobileShell();
 async function claimAbandoned(outcome){
   if(!serverGameId)return;
   try{const out=await api.claimWin(serverGameId,outcome);applyServerState(out);broadcastAux('draw_hint',{from:realtimeClientId});toast(out.claimed==='draw'?'Game drawn':'You win · your opponent left')}

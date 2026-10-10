@@ -2315,3 +2315,102 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 .abandon-card{border-color:rgba(130,237,186,.38)}
 .abandon-card #abandonClaim{background:linear-gradient(#efd59d,#d5ad64);color:#14130f;border-color:transparent}
 .abandon-card .hidden{display:none}
+
+/* === PHONE APP SHELL (src/mobile-shell.js; body.m-app below 760px) ===
+   home   Play screen + bottom tab bar     panel  a section + tab bar
+   game   board only, no page scroll, action bar at the bottom
+   review board, then the review panel (scrolls). Desktop never gets body.m-app. */
+.m-tabs,.m-gamebar,.m-moves,.m-actions,.m-sheet,.m-return{display:none}
+body.m-app{--m-tabs-h:calc(60px + env(safe-area-inset-bottom));--m-gold:#e5c17c;--m-ink:#071112}
+body.m-app .shell{padding:0 0 var(--m-tabs-h)!important;max-width:none!important}
+body.m-app .topbar{position:sticky;top:0;z-index:40;height:auto!important;min-height:54px;margin:0!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px!important;border-radius:0!important;border-width:0 0 1px!important;gap:10px}
+body.m-app .topbar .main-nav,body.m-app #installBtn,body.m-app #notifyBtn{display:none!important}
+body.m-app #accountBtn>span,body.m-app #accountBtn>small,body.m-app #accountBtn .account-chevron{display:none!important}
+body.m-app .topbar .header-actions{margin-left:auto}
+
+body.m-app .m-tabs{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:60;height:var(--m-tabs-h);padding-bottom:env(safe-area-inset-bottom);background:rgba(7,15,15,.97);border-top:1px solid rgba(255,255,255,.08)}
+.m-tabs button,.m-actions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;color:#8d9a97;font-size:10.5px;font-weight:600;letter-spacing:.02em;-webkit-tap-highlight-color:transparent}
+.m-tabs svg,.m-actions svg,.m-gamebar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.m-tabs .on{color:var(--m-gold)}
+body.m-app .m-tabs button,body.m-app .m-actions button{padding:0!important;border:0!important;background:none!important;border-radius:0!important}
+body.m-app .m-tabs button span,body.m-app .m-actions button span{display:block!important}
+.m-tabs button:active,.m-actions button:active{transform:scale(.94)}
+
+/* Home and sections: one column, the page scrolls like an app list. */
+body.m-app .shell:not(.intro-active) main#gameWorkspace{display:block!important;margin:0!important;padding:12px 12px 18px!important}
+body.m-app .shell[data-mview="home"] .game,body.m-app .shell[data-mview="home"] .rpanel,
+body.m-app .shell[data-mview="panel"] .game,body.m-app .shell[data-mview="panel"] .lpanel{display:none!important}
+body.m-app .lpanel,body.m-app .rpanel{width:auto!important;max-height:none!important;overflow:visible!important;margin:0!important}
+body.m-app .shell[data-mview="home"] .hero-art{display:none}
+body.m-app .shell[data-mview="home"] .hero h1{font-size:34px;margin:6px 0 4px}
+body.m-app .shell[data-mview="panel"] .rpanel .live-card,body.m-app .shell[data-mview="panel"] .rpanel>.tabs{display:none}
+body.m-app .m-return{display:block;position:fixed;left:50%;bottom:calc(var(--m-tabs-h) + 10px);z-index:55;translate:-50% 0;padding:11px 20px;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:800;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+body.m-app .m-return.hidden{display:none}
+
+/* Game: the board fills the screen; nothing scrolls. */
+body.m-app .shell[data-mview="game"]{padding:0!important}
+body.m-app .shell[data-mview="game"] .topbar,body.m-app .shell[data-mview="game"] .m-tabs,
+body.m-app .shell[data-mview="game"] .lpanel,body.m-app .shell[data-mview="game"] .rpanel,
+body.m-app .shell[data-mview="game"] .game .tools{display:none!important}
+body.m-app .shell[data-mview="game"] main#gameWorkspace{padding:0!important}
+body.m-app .shell[data-mview="game"] .game{
+  --m-chrome:calc(46px + 2 * 52px + 38px + 62px + env(safe-area-inset-top) + env(safe-area-inset-bottom));
+  position:fixed;inset:0;z-index:30;display:flex!important;flex-direction:column;width:auto!important;max-width:none!important;height:100vh!important;height:100dvh!important;bottom:auto!important;max-height:none!important;min-height:0!important;
+  margin:0!important;padding:env(safe-area-inset-top) 0 0!important;border:0!important;border-radius:0!important;
+  background:radial-gradient(120% 60% at 50% 0%,#12221f,#081314 60%);overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+body.m-app .m-gamebar{display:flex;align-items:center;gap:8px;height:46px;padding:0 8px;flex:none}
+body.m-app .m-gamebar button{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:#dfe7e3}
+body.m-app .m-gamebar b{display:block;font-size:15px;line-height:1.1;color:#eef1ed}
+body.m-app .m-gamebar small{display:block;font-size:11px;color:#8d9a97;margin-top:2px}
+body.m-app .shell[data-mview="game"] .game .player{height:52px;flex:none;padding:0 10px!important;margin:0!important}
+body.m-app .shell[data-mview="game"] .game .board-shell{
+  flex:none;margin:0 auto;width:min(100vw,calc(100dvh - var(--m-chrome) + 16px))!important}
+body.m-app .m-moves{display:flex;align-items:center;gap:4px;height:38px;flex:none;overflow-x:auto;padding:0 12px;white-space:nowrap;scrollbar-width:none;font-size:13px}
+body.m-app .m-moves::-webkit-scrollbar{display:none}
+.m-moves i{font-style:normal;color:#6f7f7b;margin-left:4px}
+.m-moves b{font-weight:600;color:#cfd8d4;padding:3px 6px;border-radius:6px}
+.m-moves b.last{background:rgba(229,193,124,.16);color:#f2dfaf}
+.m-moves-empty{color:#6f7f7b;font-size:12px}
+body.m-app .m-actions{display:flex;margin-top:0;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--m-ink);border-top:1px solid rgba(255,255,255,.07);flex:none}
+.m-actions button{flex:1;color:#a9b4b1}
+.m-actions button.hidden{display:none}
+.m-actions [data-m-action="resign"]{color:#f08c7f}
+.m-actions [data-m-action="review"],.m-actions [data-m-action="new"]{color:var(--m-gold)}
+body.m-app .shell[data-mview="game"] .draw-offer-card{position:fixed;left:10px;right:10px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:35;margin:0}
+body.m-app .shell[data-mview="game"] .draw-offer-card.hidden{display:none}
+body.m-app .shell:not([data-mview="game"]) .m-gamebar,body.m-app .shell:not([data-mview="game"]) .m-moves,body.m-app .shell:not([data-mview="game"]) .m-actions{display:none}
+
+/* Review: board on top, the review panel below; the page scrolls. */
+body.m-app .shell[data-mview="review"]{padding:0!important}
+body.m-app .shell[data-mview="review"] .topbar,body.m-app .shell[data-mview="review"] .m-tabs,
+body.m-app .shell[data-mview="review"] .lpanel,body.m-app .shell[data-mview="review"] .game .tools,
+body.m-app .shell[data-mview="review"] .rpanel .live-card{display:none!important}
+body.m-app .shell[data-mview="review"] main#gameWorkspace{padding:0 0 18px!important}
+body.m-app .shell[data-mview="review"] .game{margin:0!important;border-radius:0!important;border:0!important;padding:env(safe-area-inset-top) 0 6px!important}
+body.m-app .shell[data-mview="review"] .m-gamebar{display:flex}
+body.m-app .shell[data-mview="review"] .rpanel{margin:8px 10px 0!important}
+
+/* Bottom sheets (More, Game options). */
+body.m-app .m-sheet{display:block;position:fixed;inset:0;z-index:300}
+body.m-app .m-sheet[hidden]{display:none}
+.m-sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.m-sheet-card{position:absolute;left:0;right:0;bottom:0;max-height:80dvh;overflow:auto;background:#0b1718;border:1px solid rgba(229,193,124,.28);border-bottom:0;border-radius:18px 18px 0 0;padding:6px 14px calc(14px + env(safe-area-inset-bottom));translate:0 100%;transition:translate .22s cubic-bezier(.2,.8,.3,1)}
+.m-sheet.open .m-sheet-card{translate:0 0}
+.m-sheet-card header{display:flex!important;align-items:center;justify-content:space-between;height:auto!important;padding:10px 2px!important;background:none!important;border:0!important;box-shadow:none!important;border-radius:0!important}
+.m-sheet-card header b{font-size:16px;color:#f2dfaf}
+.m-sheet-card header button{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;color:#cfd8d4}
+.m-sheet-card header svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.m-sheet-items button{display:block;width:100%;text-align:left;padding:14px 12px;border-radius:10px;font-size:15px;color:#e6ece9;border-bottom:1px solid rgba(255,255,255,.06)}
+.m-sheet-items button:active{background:rgba(255,255,255,.05)}
+body.m-app .flag-prompt{left:12px;bottom:calc(var(--m-tabs-h) + 12px)}
+body.m-app #toast.show{bottom:calc(var(--m-tabs-h) + 14px)}
+@media (prefers-reduced-motion:reduce){.m-sheet-card{transition:none}}
+.m-room{color:#a9b4b1;font-size:13px;margin-right:10px}.m-room b{color:#f2dfaf;letter-spacing:.08em;margin-left:4px}
+.m-moves [data-m-copy]{padding:7px 12px;border-radius:9px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:700;font-size:12px}
+
+/* The game cluster (bars, board, moves) sits centred between the top bar and the actions. */
+body.m-app .shell[data-mview="game"] .game .player.top{margin-top:auto!important}
+body.m-app .shell[data-mview="game"] .m-moves{margin-bottom:auto}
+/* Dialogs fit small phones and scroll inside themselves. */
+body.m-app .vch-dialog-panel{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+body.m-app .shell[data-mview="review"] .feature-card{display:none!important}

@@ -221,7 +221,7 @@ Feature matrix vs chess.com, lichess and others; list gaps.
 - N3 Illegal-move feedback (PR #14): low double knock, king square blinks red when the king is
   the reason.
 
-## MB. Mobile app layout (owner request 2026-10-10; plan to approve first)
+## MB. Mobile app layout (owner approved 2026-10-10; built in PR claude/mobile-app-layout)
 Desktop stays as it is. On phones the site should feel like the lichess / chess.com apps:
 - MB1 Bottom tab bar (Play, Puzzles, Learn, Watch, More) instead of the scrolling page; slim
   top bar (logo, search, account). Menus open as bottom sheets.
@@ -231,6 +231,18 @@ Desktop stays as it is. On phones the site should feel like the lichess / chess.
 - MB3 Play home: one big Play button with a time sheet (Bullet / Blitz / Rapid), Play a friend,
   Play the computer, Tournaments; below it a daily puzzle and live games.
 - MB4 App feel: safe areas, no pull-to-refresh or overscroll during a game, installable (PWA).
+- Built: body.m-app below 760px (src/mobile-shell.js). Views home / panel / game / review;
+  tabs Play, Puzzles, Learn, Games (famous games), More (sheet: Arena, Openings, Review, Board &
+  pieces, Portrait & flag, Account, Notifications, Install). Game view: back bar, player bars,
+  board, move strip (room code + copy while waiting), action bar Options / Draw / Resign / Chat /
+  Hint, and Review / Rematch / New game after the end. "Back to your game" pill on other screens.
+- Later: a Watch tab with live games once spectating exists; swipe through moves on the strip.
+
+## G. Game moments (owner approved 2026-10-10; PR #15)
+- G1 Claim win / draw 30s after the opponent leaves (server claim_win, deployed v17).
+- G2 Low-time tick under 10s. G3 Hint in computer games. G4 Screen stays awake. G5 "Your move"
+  tab title. Next ideas: takeback requests in casual games, a pre-move confirmation option for
+  slow connections, puzzle streaks, and a weekly arena.
 
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).

@@ -34,10 +34,11 @@ test('computer game: Hint draws the engine move as a green arrow; hidden in onli
   await page.addInitScript(() => localStorage.setItem('vch.intro-seen','1'));
   await page.goto('/');
   await expect(page.locator('#hint')).toBeHidden();
+  await expect(page.locator('[data-m-action="hint"]')).toBeHidden();
   await page.locator('[data-mode="computer"]').click();
   await page.locator('#computerStart').click();
   await expect(page.locator('.board-piece')).toHaveCount(32);
-  await page.locator('.game-more>summary').click();
-  await page.locator('#hint').click();
+  if (test.info().project.name === 'mobile') await page.locator('[data-m-action="hint"]').click();
+  else { await page.locator('.game-more>summary').click(); await page.locator('#hint').click(); }
   await expect(page.locator('.arrow-layer .arrow-green')).toHaveCount(1, { timeout: 8000 });
 });

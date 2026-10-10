@@ -26,9 +26,14 @@ test('live online game: engine analysis is hidden, an illegal try in check flash
   await page.locator('#create').click();
   await expect(page.locator('.board-piece[data-square="a1"]')).toBeVisible();
   await expect(page.locator('.analysis')).toHaveClass(/engine-locked/);
-  await expect(page.locator('#engineLockedNote')).toBeVisible();
-  await expect(page.locator('#score')).toBeHidden();
-  await expect(page.locator('#line')).toBeHidden();
+  if (test.info().project.name === 'mobile') {
+    // Phones show the board alone during a game; the engine panel isn't on screen at all.
+    await expect(page.locator('.rpanel')).toBeHidden();
+  } else {
+    await expect(page.locator('#engineLockedNote')).toBeVisible();
+    await expect(page.locator('#score')).toBeHidden();
+    await expect(page.locator('#line')).toBeHidden();
+  }
 
   // Rook a1 -> a5 is illegal (the king is in check): the rook stays and e1 flashes.
   // Drag with a mouse on desktop; tap, tap on the phone.
