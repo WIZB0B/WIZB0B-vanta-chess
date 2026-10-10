@@ -155,3 +155,34 @@ export function matchConditional(lines = [], uci) {
   return { reply, rest };
 }
 export const CONDITIONAL_MAX_LINES = 10, CONDITIONAL_MAX_PLIES = 12;
+
+// ---- Swiss pairing ----
+// players: ranked best first, each {id, opponents:[ids], whites, games, byes}. The lowest
+// ranked player without a bye sits out an odd round. Pairs avoid rematches (backtracking,
+// with a step limit; past it, rematches are allowed). White goes to whoever has had White
+// less often. Returns {pairs:[[whiteId, blackId]], bye}.
+export function swissPairs(players = []) {
+  const pool = players.map(p => ({ ...p, opponents: p.opponents || [], whites: Number(p.whites || 0), games: Number(p.games || 0), byes: Number(p.byes || 0) }));
+  let bye = null;
+  if (pool.length % 2 === 1) {
+    let idx = -1;
+    for (let i = pool.length - 1; i >= 0; i--) if (!pool[i].byes) { idx = i; break; }
+    bye = pool.splice(idx < 0 ? pool.length - 1 : idx, 1)[0].id;
+  }
+  let steps = 0;
+  const solve = rest => {
+    if (!rest.length) return [];
+    if (++steps > 20000) return null;
+    const [a, ...others] = rest;
+    for (let i = 0; i < others.length; i++) {
+      if (a.opponents.includes(others[i].id)) continue;
+      const sub = solve(others.filter((_, j) => j !== i));
+      if (sub) return [[a, others[i]], ...sub];
+    }
+    return null;
+  };
+  let res = solve(pool);
+  if (!res) { res = []; for (let i = 0; i + 1 < pool.length; i += 2) res.push([pool[i], pool[i + 1]]); }
+  const balance = p => p.whites - (p.games - p.whites);
+  return { pairs: res.map(([a, b]) => (balance(a) <= balance(b) ? [a.id, b.id] : [b.id, a.id])), bye };
+}
