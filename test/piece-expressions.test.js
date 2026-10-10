@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Chess } from 'chess.js';
-import { SHOCK_LEAD, analyzeMoods, bearing, distance, landingImpact, materialBalance } from '../src/piece-expressions.js';
+import { SHOCK_LEAD, analyzeMoods, bearing, distance, fairMoods, landingImpact, materialBalance } from '../src/piece-expressions.js';
 
 const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
 
@@ -43,8 +43,27 @@ test('helpers: material, distance and screen bearing (flipped boards mirror it)'
   assert.equal(bearing('e4','e5'),0);assert.equal(bearing('e4','f4'),90);assert.equal(Math.abs(bearing('e4','e5',true)),180);
 });
 
-test('moods stay off in online games (fair play); landings and drag sway are wired',()=>{
-  assert.ok(main.includes('function moodsAllowed(){return expressionsEnabled()&&!(serverGameId&&!localGameOver)}'));
+test('rated games: only contact threats and checks show; long-range captures stay a surprise',()=>{
+  // 1.e4 d5 2.exd5 Qxd5 3.Nc3: queen attacked by a knight two squares away -> hidden.
+  const c=new Chess();for(const m of ['e4','d5','exd5','Qxd5','Nc3'])c.move(m);
+  const fair=fairMoods(analyzeMoods(c),c);
+  assert.equal(fair.get('d5'),undefined,'no hanging-piece warning');
+  assert.equal(fair.get('c3'),undefined,'a knight two squares away does not telegraph');
+  // A bishop on the long diagonal eyeing an undefended rook: hidden in rated games.
+  const b=new Chess('7r/8/k7/8/8/8/1B6/2K5 w - - 0 1');
+  assert.equal(analyzeMoods(b).get('b2')?.mood,'attack');assert.equal(fairMoods(analyzeMoods(b),b).get('b2'),undefined);
+  // Contact: pawns face to face diagonally, and a checked king, still show.
+  const k=new Chess('4k3/8/8/1B1p4/4P3/8/8/6K1 b - - 0 1');
+  const kf=fairMoods(analyzeMoods(k),k);
+  assert.equal(kf.get('e8')?.mood,'fear');assert.equal(kf.has('d5'),false,'a hanging pawn is never flagged');
+  const p=new Chess('4k3/8/8/3p4/4P3/5P2/8/6K1 w - - 0 1');
+  assert.equal(fairMoods(analyzeMoods(p),p).get('e4')?.mood,'attack','pawns face to face is plain contact');
+});
+
+test('expression levels: Full/Subtle/Off setting, rated games use "fair"; drag sway and landings are wired',()=>{
+  assert.ok(main.includes("if(ratedLiveGame())return 'fair';"));
+  assert.ok(main.includes('const moods=level===\'fair\'?fairMoods(all,boardGame):all;'));
+  assert.ok(main.includes('<select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select>'));
   assert.ok(main.includes('if(motion.animated)motion.finished.then(()=>landingFx(made));else landingFx(made)'));
   assert.ok(main.includes('if(!drag.swayLoop&&expressionsEnabled())startSway(drag);'));
 });

@@ -65,9 +65,27 @@ export function analyzeMoods(chess){
       }
     }
     if(target){moods.set(square,{mood:'attack',toward:target});continue}
-    if(attackers.length)moods.set(square,{mood:'courage'});
+    if(attackers.length){
+      const nearest=attackers.reduce((a,b)=>distance(square,b)<distance(square,a)?b:a);
+      moods.set(square,{mood:'courage',toward:nearest});
+    }
   }
   return moods;
+}
+
+// Rated games: expressions stay on but never give a plan away. A mood is kept only when
+// the threat behind it is in plain contact (the two pieces are next to each other), or a
+// king is in check (already announced). Long-range bishop, rook and queen threats stay
+// hidden, so those captures can still come as a surprise, and no hanging piece is flagged.
+export function fairMoods(moods,chess){
+  const fair=new Map();
+  for(const [square,m] of moods){
+    const piece=chess.get(square);
+    if(piece?.type==='k'&&m.mood==='fear'){fair.set(square,m);continue}
+    if(m.mood==='fear')continue;
+    if(m.toward&&distance(square,m.toward)<=1)fair.set(square,m);
+  }
+  return fair;
 }
 
 // What a landing on `to` by `color` sets off, given the position after the move.

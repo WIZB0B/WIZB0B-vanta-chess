@@ -12,7 +12,7 @@ import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag
 import { arrowsSvg, brushFor, moveDurationMs, pieceKey, pieceTransform, positionMap, toggleShape } from './board-view.js';
 import { PieceLayer } from './piece-layer.js';
 import { PieceReactions } from './piece-reactions.js';
-import { analyzeMoods, bearing, landingImpact } from './piece-expressions.js';
+import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -35,6 +35,7 @@ if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
+let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
 let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
 // Piece reactions (src/piece-reactions.js): hover gestures, lean, press pull and hint swell.
 const reactions=new PieceReactions({
@@ -269,7 +270,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -380,15 +381,23 @@ function renderArrows(dom=ensureBoardDom()){
   if(html!==dom.arrowsHtml){dom.arrowsHtml=html;dom.arrowLayer.innerHTML=html}
 }
 // ---- Piece expressions (src/piece-expressions.js) ----
-// Moods are shown in local, bot and review games. In online games they stay off: a piece
-// trembling because it is hanging would warn a player about a blunder (fair play). The
-// landing ring and shockwave stay on everywhere: they react to a move already made.
-function expressionsEnabled(){return !prefersReducedMotion()&&motionScale()>0}
-function moodsAllowed(){return expressionsEnabled()&&!(serverGameId&&!localGameOver)}
+// Setting (Theme Studio): Full (default), Subtle or Off. A rated game in progress uses the
+// "fair" level: softer, and only moods that give nothing away (see fairMoods). Landing rings
+// and shockwaves react to a move already made, so they stay on at every level but Off.
+function ratedLiveGame(){return !!(serverGameId&&serverGame?.rated&&!localGameOver&&serverGame?.status==='active'&&!serverGame?.bot_player_id)}
+function expressionLevel(){
+  if(prefersReducedMotion()||motionScale()<=0||expressionSetting==='off')return 'off';
+  if(ratedLiveGame())return 'fair';
+  return expressionSetting==='subtle'?'subtle':'full';
+}
+function expressionsEnabled(){return expressionLevel()!=='off'}
 function applyMoods(dom,boardGame,placement){
-  const key=moodsAllowed()?`${placement}|${boardGame.turn()}|${flipped}`:'off';
+  const level=expressionLevel();
+  if(document.documentElement.dataset.expressions!==level)document.documentElement.dataset.expressions=level;
+  const key=level==='off'?'off':`${level}|${placement}|${boardGame.turn()}|${flipped}`;
   if(key===dom.moodKey)return;dom.moodKey=key;
-  const moods=key==='off'?new Map():analyzeMoods(boardGame);
+  const all=level==='off'?new Map():analyzeMoods(boardGame);
+  const moods=level==='fair'?fairMoods(all,boardGame):all;
   for(const [sq,el] of dom.pieces.elements){
     const m=moods.get(sq);
     if(!m){if(el.dataset.mood){delete el.dataset.mood;el.style.removeProperty('--toward')}continue}
@@ -1375,7 +1384,7 @@ function startSway(drag){
   const step=now=>{
     if(!drag.float||!drag.float.isConnected){drag.swayLoop=false;return}
     if(now-drag.lastT>40)drag.vx*=.85; // pointer stopped: the swing dies down
-    const target=Math.max(-16,Math.min(16,(drag.vx||0)*14));
+    const target=Math.max(-20,Math.min(20,(drag.vx||0)*18));
     drag.angle+=(target-drag.angle)*.22;
     const bob=Math.sin(now/180)*1.6;
     const a=art();if(a){a.style.rotate=`${drag.angle.toFixed(2)}deg`;a.style.translate=`0 ${(bob-4).toFixed(2)}%`}
@@ -2069,6 +2078,8 @@ $$('[data-theme]').forEach(input=>input.oninput=()=>{
 });
 savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+$('#expressionsSetting').value=expressionSetting;
+$('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=0;$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');

@@ -220,12 +220,15 @@ Pieces show how their position feels; landings can shock the enemy. Owner's idea
 - E3 Moods: fear (attacked, not safely defended; king in check), attack (leans toward a bigger
   or undefended target), courage (attacked but defended), shock. Hover intensifies. 3D sets
   express more than Ink sets. (prototype)
-- E4 Fair play: moods are OFF in online games (they would flag hanging pieces). Engine-based
-  "who is winning" never drives effects in live games; it may in bot games, analysis, review
-  and spectating. Owner to confirm.
+- E4 Fair play (owner decision 2026-10-10): expressions stay ON in rated games, softer ("fair"
+  level), and decide automatically what to show: only contact threats (pieces next to each
+  other) and checks. Long-range bishop/rook/queen threats and hanging pieces are never shown,
+  so captures can still be a surprise. All other modes get full expressions. Players can set
+  Full / Subtle / Off in Theme Studio. Engine evaluation never drives effects in live games.
+  (prototype)
 - E5 More expressions: strength/triumph after a capture, despair for a lone king, victory and
   defeat poses at game end, idle breathing.
-- E6 Setting: Expressions Off / Subtle / Full; separate toggle for shockwaves.
+- E6 Setting: Expressions Full / Subtle / Off (prototype in Theme Studio); later in the Settings page, plus a separate shockwave toggle.
 - E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
 
 ## P. Piece sets, themes and store (later; owner will send references)
@@ -236,3 +239,19 @@ Pieces show how their position feels; landings can shock the enemy. Owner's idea
   the king behind the lines. Owner will send a reference before we start.
 - P4 Premium piece sets and skins behind a paywall, better than anything on chess.com. Last
   part of the project (needs payments, entitlements and a store page).
+
+## A. Accounts, profile and legal (owner request 2026-10-10)
+- A1 Player portraits: guests show an empty silhouette portrait (not initials); signed-in
+  players can upload a picture or pick an avatar (Supabase Storage + migration: owner approval).
+- A2 Country flag beside every name. Detected from the connection only after the player agrees,
+  keeping just the 2-letter country code (never the IP address); players can change or hide it.
+  Needs a country column and edge-function change (owner approval to deploy).
+- A3 Terms and conditions, privacy policy (what we store, why, how to delete it) and a cookie /
+  storage notice if analytics are ever added. Linked from sign-up and the footer.
+- A4 Backend security pass later (see S1): RLS review, rate limits, anti-cheat signals.
+
+## I. Ideas proposed by Claude (owner to pick)
+- I1 Captured-pieces tray by each player bar with the material difference (+3).
+- I2 Game-end cinematic: the winner's pieces cheer, the losing king topples (uses expressions).
+- I3 Review mode: pieces react to move quality (brilliant glow, blunder slump).
+- I4 Haptics on phones: light buzz on pick-up, firmer on capture and check.
