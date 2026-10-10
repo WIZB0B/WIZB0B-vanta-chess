@@ -21,6 +21,7 @@
   "dependencies": {
     "@supabase/supabase-js": "2.109.0",
     "chess.js": "^1.4.0",
+    "flag-icons": "^7.5.0",
     "stockfish": "19.0.0"
   },
   "devDependencies": {

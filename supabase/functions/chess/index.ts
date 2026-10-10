@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
 import { calculateMoveTiming } from "./latency.js";
+import { arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, kMultiplier, newAchievements, puzzleRatingUpdate, verifyJwt } from "./rules.js";
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -26,10 +27,11 @@ const corsFor=(req:Request)=>{
     "Access-Control-Allow-Methods":"POST,OPTIONS",
     "Access-Control-Max-Age":"86400",
     "Content-Type":"application/json",
+    "Cache-Control":"no-store",
   };
 };
 const START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const POOLS=["bullet","blitz","rapid","classical"];
+const POOLS=["bullet","blitz","rapid","classical","daily"];
 const nowIso=()=>new Date().toISOString();
 async function broadcastGameState(game:any){
   if(!game?.id)return;
@@ -53,7 +55,12 @@ const poolFor=(base:number,inc=0)=>{const e=Number(base)+(Number(inc)*40);return
 const ratingOf=(p:any,pool:string)=>Number(p?.ratings?.[pool]??p?.rating??1200);
 const gamesOf=(p:any,pool:string)=>Number(p?.provisional_games?.[pool]??0);
 const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
-const publicPlayer=(p:any)=>({id:p.id,username:p.username,display_name:p.display_name,rating:p.rating,ratings:p.ratings,provisional_games:p.provisional_games,wins:p.wins,losses:p.losses,draws:p.draws,bot_stats:p.bot_stats,smurf_score:Number(p.smurf_score||0),account:!!p.auth_user_id});
+const publicPlayer=(p:any)=>({id:p.id,username:p.username,display_name:p.display_name,rating:p.rating,ratings:p.ratings,provisional_games:p.provisional_games,wins:p.wins,losses:p.losses,draws:p.draws,bot_stats:p.bot_stats,smurf_score:Number(p.smurf_score||0),account:!!p.auth_user_id,country_code:p.country_code||null,has_avatar:!!p.avatar_data,puzzle_rating:Number(p.puzzle_rating||1200),achievements:Array.isArray(p.achievements)?p.achievements:[]});
+// The player's own profile also carries their portrait (a small data: image, see profileUpdate).
+const ownPlayer=(p:any)=>({...publicPlayer(p),avatar_data:p.avatar_data||null,berserk_ready:!!p.berserk_ready,rated_win_streak:Number(p.rated_win_streak||0),puzzle_games:Number(p.puzzle_games||0),puzzle_best_streak:Number(p.puzzle_best_streak||0)});
+// Portraits: small inline images only (data: URLs, so the site's CSP needs no new origin).
+const AVATAR_MAX=48000;
+const AVATAR_RE=/^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+\/]+={0,2}$/;
 const outcome=(c:Chess)=>!c.isGameOver()?{status:"active",result:"*"}:c.isCheckmate()?(c.turn()==="w"?{status:"black_won",result:"0-1"}:{status:"white_won",result:"1-0"}):{status:"draw",result:"1/2-1/2"};
 const expected=(ra:number,rb:number)=>1/(1+Math.pow(10,(rb-ra)/400));
 const scoreFor=(result:string,color:string)=>result==="1/2-1/2"?.5:(result===(color==="w"?"1-0":"0-1")?1:0);
@@ -79,11 +86,30 @@ async function uniqueUsername(raw:string,fallback="player"){
   for(let i=0;i<20;i++){const candidate=i?((base.slice(0,15)+"_"+Math.floor(1000+Math.random()*9000)).slice(0,20)):base;const {data}=await admin.from("chess_players").select("id").ilike("username",candidate).limit(1);if(!data?.length)return candidate}
   throw fail("Could not allocate a username.",409)
 }
-async function playerFor(req:Request,b:any={},requireAccount=false){
+// The token's subject, read without trusting it: only used to start the player lookup while
+// auth.getUser verifies the token in parallel (the result is used only if they match).
+const jwtSubject=(token:string)=>{try{const part=token.split(".")[1]||"";const json=JSON.parse(atob(part.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(part.length/4)*4,"=")));return typeof json.sub==="string"?json.sub:""}catch{return ""}};
+// Supabase Auth's public signing key (published at /auth/v1/.well-known/jwks.json). With it
+// the access token is checked here, without a round trip to Auth; a rotated key or any
+// doubt falls back to auth.getUser.
+const AUTH_JWKS={keys:[{kty:"EC",crv:"P-256",alg:"ES256",kid:"a9866e4c-e626-4a70-a1e7-6a813b36ff65",x:"IkLIAweoLCD52n5JjVzJ87XDrL5UCE_f2i_b29XMKLo",y:"D9kYIjEy_GonOhL8Uml_H-3i6Dt2AqK0WraWmnetrcs"}]};
+const AUTH_ISSUER=(Deno.env.get("SUPABASE_URL")||"")+"/auth/v1";
+// touch=false skips the last-seen write (moves: the heartbeat keeps last-seen fresh), so a
+// move costs two database round trips instead of five.
+async function playerFor(req:Request,b:any={},requireAccount=false,{touch=true}:{touch?:boolean}={}){
   const auth=req.headers.get("authorization")||"";const bearer=auth.toLowerCase().startsWith("bearer ")?auth.slice(7).trim():"";
   if(bearer){
-    const {data,error}=await admin.auth.getUser(bearer);if(error||!data.user)throw fail("Invalid or expired sign-in.",401);
-    const user=data.user;let p=await one("chess_players","auth_user_id",user.id);
+    const sub=jwtSubject(bearer);
+    const [claims,early]=await Promise.all([verifyJwt(bearer,AUTH_JWKS,{issuer:AUTH_ISSUER}),sub?one("chess_players","auth_user_id",sub).catch(()=>null):Promise.resolve(null)]);
+    let user:any=null;
+    if(claims&&early&&early.auth_user_id===claims.sub){user={id:claims.sub,email:claims.email,user_metadata:claims.user_metadata||{}}}
+    else{
+      if(!claims&&sub)console.warn("local token check fell back to auth.getUser");
+      const {data,error}=await admin.auth.getUser(bearer);if(error||!data.user)throw fail("Invalid or expired sign-in.",401);
+      user=data.user;
+    }
+    let p=early&&early.auth_user_id===user.id?early:await one("chess_players","auth_user_id",user.id);
+    if(p&&!touch&&!b.name&&!b.username)return p;
     if(!p){
       const seed=b.username||user.user_metadata?.username||String(user.email||"player").split("@")[0],username=await uniqueUsername(seed,"player");
       const {data:made,error:e}=await admin.from("chess_players").insert({auth_user_id:user.id,device_hash:await hash("auth:"+user.id),username,display_name:cleanName(b.name||username),account_created_at:nowIso(),last_seen_at:nowIso()}).select().single();
@@ -98,6 +124,7 @@ async function playerFor(req:Request,b:any={},requireAccount=false){
   if(requireAccount)throw fail("Sign in to use rated play.",401);
   const token=String(b.token||"");if(token.length<20)throw fail("Player identity is missing.");
   const dh=await hash(token);let p=await one("chess_players","device_hash",dh);
+  if(p&&!touch)return p;
   if(!p){
     const {data,error}=await admin.from("chess_players").insert({device_hash:dh,display_name:cleanName(b.name),last_seen_at:nowIso()}).select().single();
     if(error){
@@ -109,28 +136,102 @@ async function playerFor(req:Request,b:any={},requireAccount=false){
   }
   return p
 }
+// Edit your own profile. country_code: a 2-letter ISO code or null to hide the flag (guests
+// too). avatar_data: signed-in accounts only, a small data: image or null to remove it.
+async function profileUpdate(req:Request,b:any){
+  const p=await playerFor(req,b);const patch:any={updated_at:nowIso()};
+  if("country_code" in b){
+    const c=b.country_code==null||b.country_code===""?null:String(b.country_code).toUpperCase();
+    if(c!==null&&!/^[A-Z]{2}$/.test(c))throw fail("Country must be a 2-letter code.");
+    patch.country_code=c;
+  }
+  if("avatar_data" in b){
+    if(!p.auth_user_id)throw fail("Sign in to add a profile picture.",401);
+    const a=b.avatar_data==null||b.avatar_data===""?null:String(b.avatar_data);
+    if(a!==null&&(a.length>AVATAR_MAX||!AVATAR_RE.test(a)))throw fail("Profile picture must be a small WebP, JPEG or PNG image.");
+    patch.avatar_data=a;
+  }
+  const {data,error}=await admin.from("chess_players").update(patch).eq("id",p.id).select().single();if(error)throw error;
+  return {player:ownPlayer(data)}
+}
+// Names, flags and portraits of the two players in a game the caller is playing.
+async function gamePlayers(req:Request,b:any){
+  const {g}=await assertGameParticipant(req,b);
+  const ids=[g.white_player_id,g.black_player_id].filter(Boolean);
+  const {data,error}=ids.length?await admin.from("chess_players").select("id,username,display_name,country_code,avatar_data").in("id",ids):{data:[],error:null};
+  if(error)throw error;
+  return {players:(data||[]).map((x:any)=>({id:x.id,name:x.username||x.display_name,country_code:x.country_code||null,avatar_data:x.avatar_data||null,seat:x.id===g.white_player_id?"w":"b"}))}
+}
+// ---- Achievements (rules.js ACHIEVEMENTS) ----
+async function awardAchievements(p:any,extra:any={}){
+  if(!p?.id)return [];
+  const ids=newAchievements(p.achievements,p,extra);if(!ids.length)return [];
+  const at=nowIso(),next=[...(Array.isArray(p.achievements)?p.achievements:[]),...ids.map(id=>({id,at}))];
+  await admin.from("chess_players").update({achievements:next}).eq("id",p.id);
+  return ids;
+}
+// ---- Web push ("your move" in daily games, challenges) ----
+let vapidCache:any=null;
+async function vapid(){
+  if(vapidCache)return vapidCache;
+  const {data}=await admin.from("chess_server_secrets").select("name,value").in("name",["vapid_public","vapid_private","vapid_subject"]);
+  const m=Object.fromEntries((data||[]).map((r:any)=>[r.name,r.value]));
+  vapidCache=m.vapid_private&&m.vapid_public?m:null;return vapidCache;
+}
+async function notifyPlayer(playerId:string,payload:any){
+  try{
+    if(!playerId)return;
+    const {data:subs}=await admin.from("chess_push_subscriptions").select("id,endpoint,p256dh,auth").eq("player_id",playerId).limit(10);
+    if(!subs?.length)return;
+    const keys=await vapid();if(!keys)return;
+    const webpush=(await import("npm:web-push@3.6.7")).default;
+    webpush.setVapidDetails(keys.vapid_subject||"https://vanta-chess-play.netlify.app",keys.vapid_public,keys.vapid_private);
+    await Promise.all(subs.map(async(sub:any)=>{
+      try{await webpush.sendNotification({endpoint:sub.endpoint,keys:{p256dh:sub.p256dh,auth:sub.auth}},JSON.stringify(payload),{TTL:86400})}
+      catch(e:any){if(e?.statusCode===404||e?.statusCode===410)await admin.from("chess_push_subscriptions").delete().eq("id",sub.id);else console.error("push failed",e?.statusCode||e)}
+    }));
+  }catch(e){console.error("notify failed",e)}
+}
+async function pushSubscribe(req:Request,b:any){
+  const p=await playerFor(req,b),endpoint=String(b.endpoint||""),p256dh=String(b.keys?.p256dh||""),auth=String(b.keys?.auth||"");
+  if(!/^https:\/\/[^\s]{10,990}$/.test(endpoint)||!p256dh||p256dh.length>200||!auth||auth.length>100)throw fail("Invalid push subscription.");
+  const {error}=await admin.from("chess_push_subscriptions").upsert({player_id:p.id,endpoint,p256dh,auth},{onConflict:"endpoint"});if(error)throw error;
+  return {subscribed:true}
+}
+async function pushUnsubscribe(req:Request,b:any){
+  const p=await playerFor(req,b);await admin.from("chess_push_subscriptions").delete().eq("player_id",p.id).eq("endpoint",String(b.endpoint||""));return {subscribed:false}
+}
 async function settleTournament(g:any){
   if(!g.tournament_id||g.result==="*")return;
   for(const pid of [g.white_player_id,g.black_player_id].filter(Boolean)){
     const {data:e}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",g.tournament_id).eq("player_id",pid).maybeSingle();if(!e)continue;
-    const s=scoreFor(g.result,pid===g.white_player_id?"w":"b");
-    await admin.from("chess_tournament_entries").update({points:Number(e.points)+(s===1?2:s===.5?1:0),games:Number(e.games)+1,wins:Number(e.wins)+(s===1?1:0),draws:Number(e.draws)+(s===.5?1:0),losses:Number(e.losses)+(s===0?1:0)}).eq("tournament_id",g.tournament_id).eq("player_id",pid)
+    const color=pid===g.white_player_id?"w":"b",s=scoreFor(g.result,color),berserk=!!(color==="w"?g.white_berserk:g.black_berserk);
+    const arena=arenaScore({score:s,streakBefore:Number(e.streak||0),berserk});
+    await admin.from("chess_tournament_entries").update({points:Number(e.points)+arena.points,streak:arena.streak,berserks:Number(e.berserks||0)+(berserk?1:0),games:Number(e.games)+1,wins:Number(e.wins)+(s===1?1:0),draws:Number(e.draws)+(s===.5?1:0),losses:Number(e.losses)+(s===0?1:0)}).eq("tournament_id",g.tournament_id).eq("player_id",pid)
   }
 }
 async function settleRatings(g:any){
   if(!g.rated||!g.white_player_id||!g.black_player_id||g.result==="*"||g.white_rating_delta!=null)return g;
   const [w,b]=await Promise.all([playerById(g.white_player_id),playerById(g.black_player_id)]);if(!w||!b)return g;
   const pool=POOLS.includes(g.pool)?g.pool:"rapid",rw=ratingOf(w,pool),rb=ratingOf(b,pool),sw=scoreFor(g.result,"w"),sb=1-sw,nw=gamesOf(w,pool),nb=gamesOf(b,pool);
-  const kw=(nw<10?64:32)*(nw<10&&Number(w.rated_win_streak||0)>=2&&sw===1?1.5:1),kb=(nb<10?64:32)*(nb<10&&Number(b.rated_win_streak||0)>=2&&sb===1?1.5:1);
+  // Berserk raises the stakes both ways (rules.js): 1.25 times the rating change, win or lose.
+  const kw=(nw<10?64:32)*(nw<10&&Number(w.rated_win_streak||0)>=2&&sw===1?1.5:1)*kMultiplier({berserk:!!g.white_berserk}),kb=(nb<10?64:32)*(nb<10&&Number(b.rated_win_streak||0)>=2&&sb===1?1.5:1)*kMultiplier({berserk:!!g.black_berserk});
+  const streakW=sw===1?Number(w.rated_win_streak||0)+1:0,streakB=sb===1?Number(b.rated_win_streak||0)+1:0;
   const dw=Math.round(kw*(sw-expected(rw,rb))),db=Math.round(kb*(sb-expected(rb,rw)));
   const nextW={...(w.ratings||{}),[pool]:Math.max(100,rw+dw)},nextB={...(b.ratings||{}),[pool]:Math.max(100,rb+db)};
   const pgW={...(w.provisional_games||{}),[pool]:nw+1},pgB={...(b.provisional_games||{}),[pool]:nb+1};
   await Promise.all([
-    admin.from("chess_players").update({ratings:nextW,provisional_games:pgW,rating:nextW.rapid??rw,wins:Number(w.wins)+(sw===1?1:0),losses:Number(w.losses)+(sw===0?1:0),draws:Number(w.draws)+(sw===.5?1:0),rated_games:Number(w.rated_games)+1,rated_win_streak:sw===1?Number(w.rated_win_streak||0)+1:0,smurf_score:Math.max(0,Number(w.smurf_score||0)+(nw<10&&sw===1&&rb>=rw-100?.45:-.15)),color_balance:Number(w.color_balance||0)+1,updated_at:nowIso()}).eq("id",w.id),
-    admin.from("chess_players").update({ratings:nextB,provisional_games:pgB,rating:nextB.rapid??rb,wins:Number(b.wins)+(sb===1?1:0),losses:Number(b.losses)+(sb===0?1:0),draws:Number(b.draws)+(sb===.5?1:0),rated_games:Number(b.rated_games)+1,rated_win_streak:sb===1?Number(b.rated_win_streak||0)+1:0,smurf_score:Math.max(0,Number(b.smurf_score||0)+(nb<10&&sb===1&&rw>=rb-100?.45:-.15)),color_balance:Number(b.color_balance||0)-1,updated_at:nowIso()}).eq("id",b.id)
+    admin.from("chess_players").update({ratings:nextW,provisional_games:pgW,rating:nextW.rapid??rw,wins:Number(w.wins)+(sw===1?1:0),losses:Number(w.losses)+(sw===0?1:0),draws:Number(w.draws)+(sw===.5?1:0),rated_games:Number(w.rated_games)+1,rated_win_streak:streakW,berserk_ready:berserkAfter({ready:!!w.berserk_ready,score:sw,newStreak:streakW}),smurf_score:Math.max(0,Number(w.smurf_score||0)+(nw<10&&sw===1&&rb>=rw-100?.45:-.15)),color_balance:Number(w.color_balance||0)+1,updated_at:nowIso()}).eq("id",w.id),
+    admin.from("chess_players").update({ratings:nextB,provisional_games:pgB,rating:nextB.rapid??rb,wins:Number(b.wins)+(sb===1?1:0),losses:Number(b.losses)+(sb===0?1:0),draws:Number(b.draws)+(sb===.5?1:0),rated_games:Number(b.rated_games)+1,rated_win_streak:streakB,berserk_ready:berserkAfter({ready:!!b.berserk_ready,score:sb,newStreak:streakB}),smurf_score:Math.max(0,Number(b.smurf_score||0)+(nb<10&&sb===1&&rw>=rb-100?.45:-.15)),color_balance:Number(b.color_balance||0)-1,updated_at:nowIso()}).eq("id",b.id)
   ]);
   const {data}=await admin.from("chess_games").update({white_rating_before:rw,black_rating_before:rb,white_rating_delta:dw,black_rating_delta:db,ended_at:g.ended_at||nowIso(),updated_at:nowIso()}).eq("id",g.id).is("white_rating_delta",null).select().maybeSingle();
-  const settled=data||g;await settleTournament(settled);return settled
+  const settled=data||g;await settleTournament(settled);
+  // Achievements from the new totals; beating someone 200+ rated higher is a giant slaying.
+  await Promise.all([
+    awardAchievements({...w,wins:Number(w.wins)+(sw===1?1:0),rated_games:Number(w.rated_games)+1,rated_win_streak:streakW},{giantSlayer:sw===1&&rb-rw>=200}),
+    awardAchievements({...b,wins:Number(b.wins)+(sb===1?1:0),rated_games:Number(b.rated_games)+1,rated_win_streak:streakB},{giantSlayer:sb===1&&rw-rb>=200})
+  ]).catch(e=>console.error("achievements",e));
+  return settled
 }
 function sideCanPossiblyMate(c:Chess,color:"w"|"b"){
   const own:any[]=[];const opp:any[]=[];
@@ -158,12 +259,14 @@ async function resolveTimeout(g:any){
 async function freshGame(id:string){return resolveTimeout(await gameById(id))}
 async function createGame(req:Request,b:any,{players=null,source="private",tournamentId=null,bot=null}:any={}){
   let white:any,black:any;if(players)[white,black]=players;else white=await playerFor(req,b,!!b.rated);
-  let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),pool=poolFor(base,inc),active=!!black;
+  let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),active=!!black;
+  // Daily games: days per move instead of a clock, rated in their own "daily" pool.
+  const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":poolFor(base,inc),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
   const {data,error}=await admin.from("chess_games").insert({
     invite_code:code,white_player_id:white.id,black_player_id:black?.id||null,
     white_name:white.username||white.display_name,black_name:black?(black.username||black.display_name):null,
     fen:START_FEN,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,
-    time_control_seconds:base,increment_seconds:inc,white_time_ms:base*1000,black_time_ms:base*1000,
+    time_control_seconds:dailyDays?dailyDays*86400:base,increment_seconds:dailyDays?0:inc,white_time_ms:moveMs,black_time_ms:moveMs,daily_days:dailyDays,challenge_id:b.challengeId||null,
     last_move_at:active?nowIso():null,started_at:active?nowIso():null,white_last_seen_at:nowIso(),black_last_seen_at:black?nowIso():null,
     bot_player_id:bot?.player_id||null,bot_elo:bot?.elo||null,bot_style:bot?.style||null
   }).select().single();if(error)throw error;return {game:data,player:publicPlayer(white),seat:data.white_player_id===white.id?"w":data.black_player_id===white.id?"b":null,bot:bot?{slug:bot.slug,display_name:bot.display_name,elo:bot.elo,engine_skill:bot.engine_skill,style:bot.style,blurb:bot.blurb}:null}
@@ -188,18 +291,26 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
     return {game:timedOutGame,move:null,timedOut:true};
   }
   const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;const o=outcome(c),history=Array.isArray(g.move_history)?g.move_history:[];
+  if(g.daily_days){wt=dailyMoveMs(g.daily_days);bt=wt} // each move gets the full days again
   const {data,error}=await admin.from("chess_games").update({
     fen:c.fen(),pgn:c.pgn(),move_history:[...history,{from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,
-    white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null
+    white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,takeback_offer_by:null,takeback_offer_version:null,
+    ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
   }).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("Move conflict. Syncing latest position.",409);
   const nextGame=o.result==="*"?data:await settleRatings(data);
   EdgeRuntime.waitUntil(broadcastGameState(nextGame));
+  if(g.daily_days){
+    const next=color==="w"?g.black_player_id:g.white_player_id,name=color==="w"?g.white_name:g.black_name;
+    EdgeRuntime.waitUntil(notifyPlayer(next,{title:o.result==="*"?"Your move":"Game over",body:o.result==="*"?`${name||"Your opponent"} played ${m.san}`:`${name||"Your opponent"} played ${m.san} · ${o.result}`,url:`/?game=${g.invite_code}`,tag:`game-${g.id}`}));
+    if(o.result!=="*")EdgeRuntime.waitUntil(Promise.all([g.white_player_id,g.black_player_id].map(async(id:string)=>awardAchievements(await playerById(id),{dailyFinished:true}))).then(()=>{}).catch(()=>{}));
+  }
   return {game:nextGame,move:m}
 }
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
-  const p=await playerFor(req,b);const g=await gameById(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")throw fail("Game is not active.",409);
+  // Player and game are fetched at the same time; nothing else is read before the move is written.
+  const [p,g]=await Promise.all([playerFor(req,b,false,{touch:false}),gameById(b.gameId)]);if(!g)throw fail("Game not found.",404);if(g.status!=="active")throw fail("Game is not active.",409);
   const color=g.white_player_id===p.id?"w":g.black_player_id===p.id?"b":null;if(!color)throw fail("You are not a player in this game.",403);
   if(g.bot_player_id===p.id)throw fail("Bot seats cannot be controlled by player credentials.",403);
   return applyMove(g,color,b,serverReceivedMs)
@@ -212,6 +323,256 @@ async function botMove(req:Request,b:any){
   const bot=await botByPlayerId(g.bot_player_id);if(!bot)throw fail("Bot is unavailable.",409);
   const color=g.white_player_id===g.bot_player_id?"w":"b";
   return applyMove(g,color,b)
+}
+// An opponent who has been gone (no heartbeat or move) for CLAIM_AFTER_MS can be claimed
+// against: a win, or a draw if the claimant asks for one or has no way to checkmate.
+const CLAIM_AFTER_MS=30000;
+async function claimWin(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);
+  if(g.status!=="active")throw fail("Game is not active.",409);
+  if(g.bot_player_id)throw fail("Games against a bot can't be claimed.",409);
+  if(g.daily_days)throw fail("Daily games are won on time, not by claiming.",409);
+  const seat=g.white_player_id===p.id?"w":"b";
+  const seen=Date.parse((seat==="w"?g.black_last_seen_at:g.white_last_seen_at)||"")||0;
+  if(Date.now()-seen<CLAIM_AFTER_MS)throw fail("Your opponent is still connected.",409);
+  const draw=b.outcome==="draw"||!sideCanPossiblyMate(new Chess(g.fen),seat as "w"|"b");
+  const patch=draw?{status:"draw",result:"1/2-1/2"}:seat==="w"?{status:"white_won",result:"1-0"}:{status:"black_won",result:"0-1"};
+  const {data,error}=await admin.from("chess_games").update({...patch,end_reason:"abandoned",draw_offer_by:null,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
+  const settled=await settleRatings(data);
+  EdgeRuntime.waitUntil(broadcastGameState(settled));
+  return {game:settled,claimed:draw?"draw":"win"}
+}
+// Takebacks: casual games between two people only (never rated, bot or tournament games).
+// The requester takes back their own last move: one ply if the opponent hasn't replied yet,
+// two if they have. The offer lapses when anyone moves (applyMove clears it).
+function takebackPlies(g:any,requesterColor:string){
+  const turn=new Chess(g.fen).turn(),history=Array.isArray(g.move_history)?g.move_history:[];
+  const plies=turn===requesterColor?2:1;
+  if(history.length<plies)return 0;
+  if(history[history.length-plies]?.color!==requesterColor)return 0;
+  return plies;
+}
+function takebackAllowed(g:any){
+  if(g.status!=="active")throw fail("Game is not active.",409);
+  if(g.rated||g.bot_player_id||g.tournament_id)throw fail("Takebacks are for casual games between two players.",409);
+}
+async function takebackOffer(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);takebackAllowed(g);
+  const color=g.white_player_id===p.id?"w":"b";
+  if(!takebackPlies(g,color))throw fail("You have no move to take back yet.",409);
+  if(g.takeback_offer_by===p.id)return {game:g,offered:true};
+  const {data,error}=await admin.from("chess_games").update({takeback_offer_by:p.id,takeback_offer_version:Number(g.version),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
+  EdgeRuntime.waitUntil(broadcastGameState(data));
+  return {game:data,offered:true}
+}
+async function takebackRespond(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);takebackAllowed(g);
+  const asker=g.takeback_offer_by;
+  if(!asker||asker===p.id||Number(g.takeback_offer_version)!==Number(g.version))throw fail("There is no takeback request to answer.",409);
+  if(!b.accept){
+    const {data,error}=await admin.from("chess_games").update({takeback_offer_by:null,takeback_offer_version:null,updated_at:nowIso()}).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
+    if(error)throw error;const out=data||g;EdgeRuntime.waitUntil(broadcastGameState(out));return {game:out,accepted:false}
+  }
+  const askerColor=asker===g.white_player_id?"w":"b",plies=takebackPlies(g,askerColor);
+  if(!plies)throw fail("There is no move to take back.",409);
+  const history=(Array.isArray(g.move_history)?g.move_history:[]).slice(0,-plies),c=new Chess();
+  for(const m of history){try{c.move({from:m.from,to:m.to,promotion:m.promotion||undefined})}catch{throw fail("Could not rebuild the position.",500)}}
+  const {data,error}=await admin.from("chess_games").update({
+    fen:c.fen(),pgn:c.pgn(),move_history:history,move_count:history.length,version:Number(g.version)+1,
+    last_move_at:nowIso(),updated_at:nowIso(),takeback_offer_by:null,takeback_offer_version:null,draw_offer_by:null
+  }).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
+  EdgeRuntime.waitUntil(broadcastGameState(data));
+  return {game:data,accepted:true,plies}
+}
+// Watch: recent public games (matchmaking and tournament games; private rooms are never
+// listed). Spectators get the board, names, ratings and clocks, nothing else.
+const WATCH_FIELDS="id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
+const publicGame=(g:any)=>{const {bot_player_id,...rest}=g;return {...rest,bot:!!bot_player_id}};
+async function liveGames(){
+  const since=new Date(Date.now()-3*60000).toISOString();
+  const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("status","active").in("source",["queue","tournament"]).gte("updated_at",since).gt("move_count",0).order("updated_at",{ascending:false}).limit(30);
+  if(error)throw error;
+  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=publicGame(g);return {...rest,last_move:Array.isArray(move_history)?move_history.at(-1)||null:null}})}
+}
+async function watchState(b:any){
+  const id=String(b.gameId||"");if(!/^[0-9a-f-]{36}$/i.test(id))throw fail("Game not found.",404);
+  const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("id",id).in("source",["queue","tournament"]).maybeSingle();
+  if(error)throw error;if(!data)throw fail("This game can't be watched.",404);
+  return {game:publicGame(await resolveTimeout(data))}
+}
+// The weekly arena: every Saturday 18:00 UTC for 90 minutes, rated 3+2 blitz. tournaments()
+// makes sure this week's (or next week's) exists and moves arenas through their statuses.
+const WEEKLY_ARENA={hourUtc:18,minutes:90,base:180,inc:2,pool:"blitz"};
+function weeklyArenaWindow(now=new Date()){
+  const start=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),WEEKLY_ARENA.hourUtc));
+  start.setUTCDate(start.getUTCDate()+((6-start.getUTCDay()+7)%7));
+  let end=new Date(start.getTime()+WEEKLY_ARENA.minutes*60000);
+  if(end<=now){start.setUTCDate(start.getUTCDate()+7);end=new Date(start.getTime()+WEEKLY_ARENA.minutes*60000)}
+  return {start,end};
+}
+async function ensureWeeklyArena(){
+  const {start,end}=weeklyArenaWindow(),slug="weekly-arena-"+start.toISOString().slice(0,10);
+  await admin.from("chess_tournaments").upsert({slug,name:"VCH Weekly Arena",description:"Every Saturday · 90 minutes · rated 3+2 blitz. Win to score 2, draw for 1. Most points takes the week.",format:"arena",status:Date.now()>=start.getTime()?"active":"scheduled",rated:true,pool:WEEKLY_ARENA.pool,base_seconds:WEEKLY_ARENA.base,increment_seconds:WEEKLY_ARENA.inc,starts_at:start.toISOString(),ends_at:end.toISOString()},{onConflict:"slug",ignoreDuplicates:true});
+  const now=nowIso();
+  await Promise.all([
+    admin.from("chess_tournaments").update({status:"active"}).like("slug","weekly-arena-%").eq("status","scheduled").lte("starts_at",now).gt("ends_at",now),
+    admin.from("chess_tournaments").update({status:"finished"}).like("slug","weekly-arena-%").in("status",["scheduled","active"]).lte("ends_at",now)
+  ]);
+}
+function arenaOpen(t:any){
+  const now=Date.now();
+  if(t.starts_at&&now<Date.parse(t.starts_at))throw fail("The arena hasn't started yet. You're registered; come back when it opens.",409);
+  if(t.ends_at&&now>=Date.parse(t.ends_at))throw fail("This arena has ended.",409);
+}
+// ---- Berserk (rules.js) ----
+async function goBerserk(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);
+  if(g.status!=="active"||!g.rated||g.daily_days||g.bot_player_id)throw fail("Berserk is for live rated games.",409);
+  const color=g.white_player_id===p.id?"w":"b",flag=color==="w"?"white_berserk":"black_berserk",timeKey=color==="w"?"white_time_ms":"black_time_ms";
+  if(g[flag])return {game:g,berserk:true};
+  if((Array.isArray(g.move_history)?g.move_history:[]).some((m:any)=>m.color===color))throw fail("Berserk only before your first move.",409);
+  if(!p.berserk_ready)throw fail("Win three rated games in a row to earn Berserk.",409);
+  const {data:spent}=await admin.from("chess_players").update({berserk_ready:false}).eq("id",p.id).eq("berserk_ready",true).select("id").maybeSingle();
+  if(!spent)throw fail("Berserk is not available.",409);
+  const {data,error}=await admin.from("chess_games").update({[flag]:true,[timeKey]:berserkClock(g[timeKey]),version:Number(g.version)+1,updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error||!data){await admin.from("chess_players").update({berserk_ready:true}).eq("id",p.id);if(error)throw error;throw fail("The game changed. Try again.",409)}
+  EdgeRuntime.waitUntil(broadcastGameState(data));
+  return {game:data,berserk:true}
+}
+// ---- Friends and challenges ----
+const ONLINE_MS=120000;
+const friendCard=(x:any,following=false)=>({id:x.id,name:x.username||x.display_name||"Player",account:!!x.auth_user_id,rating:ratingOf(x,"rapid"),ratings:x.ratings||{},country_code:x.country_code||null,online:!!x.last_seen_at&&Date.now()-Date.parse(x.last_seen_at)<ONLINE_MS,following});
+const FRIEND_FIELDS="id,username,display_name,auth_user_id,ratings,rating,country_code,last_seen_at";
+async function playerSearch(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),q=cleanUsername(b.q).toLowerCase();
+  if(q.length<2)return {players:[]};
+  const [{data,error},{data:mine}]=await Promise.all([
+    admin.from("chess_players").select(FRIEND_FIELDS).ilike("username",`${q}%`).neq("id",p.id).not("auth_user_id","is",null).limit(12),
+    admin.from("chess_follows").select("followee_id").eq("follower_id",p.id)
+  ]);
+  if(error)throw error;const following=new Set((mine||[]).map((x:any)=>x.followee_id));
+  return {players:(data||[]).map((x:any)=>friendCard(x,following.has(x.id)))}
+}
+async function follow(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),id=String(b.playerId||"");
+  if(!/^[0-9a-f-]{36}$/i.test(id)||id===p.id)throw fail("Player not found.",404);
+  if(b.on===false){await admin.from("chess_follows").delete().eq("follower_id",p.id).eq("followee_id",id);return {following:false}}
+  const target=await playerById(id);if(!target)throw fail("Player not found.",404);
+  const {count}=await admin.from("chess_follows").select("followee_id",{count:"exact",head:true}).eq("follower_id",p.id);
+  if(Number(count||0)>=500)throw fail("You follow the maximum number of players.",409);
+  const {error}=await admin.from("chess_follows").upsert({follower_id:p.id,followee_id:id},{onConflict:"follower_id,followee_id",ignoreDuplicates:true});if(error)throw error;
+  EdgeRuntime.waitUntil(awardAchievements(p,{followed:true}).then(()=>{}).catch(()=>{}));
+  return {following:true}
+}
+async function friends(req:Request,b:any){
+  const p=await playerFor(req,b);
+  const [{data:out},{count:followers}]=await Promise.all([
+    admin.from("chess_follows").select("followee_id").eq("follower_id",p.id).limit(500),
+    admin.from("chess_follows").select("follower_id",{count:"exact",head:true}).eq("followee_id",p.id)
+  ]);
+  const ids=(out||[]).map((x:any)=>x.followee_id);
+  const {data}=ids.length?await admin.from("chess_players").select(FRIEND_FIELDS).in("id",ids):{data:[]};
+  const list=(data||[]).map((x:any)=>friendCard(x,true)).sort((a:any,c:any)=>Number(c.online)-Number(a.online)||a.name.localeCompare(c.name));
+  return {friends:list,followers:Number(followers||0)}
+}
+async function challengeSend(req:Request,b:any){
+  const p=await playerFor(req,b),to=String(b.toPlayerId||"");
+  if(!/^[0-9a-f-]{36}$/i.test(to)||to===p.id)throw fail("Player not found.",404);
+  const target=await playerById(to);if(!target)throw fail("Player not found.",404);
+  const rated=!!b.rated,dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null;
+  if(rated&&(!p.auth_user_id||!target.auth_user_id))throw fail("Rated challenges are between signed-in players.",401);
+  const {count}=await admin.from("chess_challenges").select("id",{count:"exact",head:true}).eq("from_player_id",p.id).eq("status","pending").gt("expires_at",nowIso());
+  if(Number(count||0)>=5)throw fail("You have too many open challenges.",429);
+  const color=["w","b"].includes(b.color)?b.color:"random";
+  const {data,error}=await admin.from("chess_challenges").insert({from_player_id:p.id,to_player_id:to,base_seconds:Math.max(30,Math.min(7200,Number(b.seconds||600))),increment_seconds:Math.max(0,Math.min(60,Number(b.increment||0))),daily_days:dailyDays,rated,color,expires_at:new Date(Date.now()+(dailyDays?3*86400000:10*60000)).toISOString()}).select().single();
+  if(error)throw error;
+  EdgeRuntime.waitUntil(Promise.all([
+    broadcastTo("player:"+to,"challenge",{id:data.id}),
+    notifyPlayer(to,{title:"New challenge",body:`${p.username||p.display_name||"A player"} challenges you to ${dailyDays?`a daily game (${dailyDays}d/move)`:`${Math.round(data.base_seconds/60)}+${data.increment_seconds}`}${rated?" · rated":""}`,url:"/?challenges=1",tag:"challenge-"+data.id})
+  ]).then(()=>{}));
+  return {challenge:data}
+}
+async function broadcastTo(topic:string,event:string,payload:any){
+  const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!url||!key)return;
+  try{await fetch(url+"/realtime/v1/api/broadcast",{method:"POST",headers:{apikey:key,authorization:"Bearer "+key,"content-type":"application/json"},body:JSON.stringify({messages:[{topic,event,payload}]})})}catch{}
+}
+async function challengeList(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),now=nowIso();
+  await admin.from("chess_challenges").update({status:"expired"}).eq("status","pending").lte("expires_at",now).or(`from_player_id.eq.${p.id},to_player_id.eq.${p.id}`);
+  const {data,error}=await admin.from("chess_challenges").select("*").eq("status","pending").or(`from_player_id.eq.${p.id},to_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(30);
+  if(error)throw error;
+  const ids=[...new Set((data||[]).flatMap((c:any)=>[c.from_player_id,c.to_player_id]))];
+  const {data:players}=ids.length?await admin.from("chess_players").select(FRIEND_FIELDS).in("id",ids):{data:[]};
+  const map=new Map((players||[]).map((x:any)=>[x.id,friendCard(x)]));
+  const card=(c:any)=>({id:c.id,from:map.get(c.from_player_id)||null,to:map.get(c.to_player_id)||null,base_seconds:c.base_seconds,increment_seconds:c.increment_seconds,daily_days:c.daily_days,rated:c.rated,color:c.color,expires_at:c.expires_at});
+  return {incoming:(data||[]).filter((c:any)=>c.to_player_id===p.id).map(card),outgoing:(data||[]).filter((c:any)=>c.from_player_id===p.id).map(card)}
+}
+async function challengeRespond(req:Request,b:any){
+  const p=await playerFor(req,b),c=await one("chess_challenges","id",String(b.challengeId||""));
+  if(!c||c.to_player_id!==p.id)throw fail("Challenge not found.",404);
+  if(c.status!=="pending"||Date.parse(c.expires_at)<=Date.now())throw fail("This challenge is no longer open.",409);
+  if(!b.accept){await admin.from("chess_challenges").update({status:"declined"}).eq("id",c.id).eq("status","pending");EdgeRuntime.waitUntil(broadcastTo("player:"+c.from_player_id,"challenge_answer",{id:c.id,accepted:false}));return {declined:true}}
+  const {data:claimed}=await admin.from("chess_challenges").update({status:"accepted"}).eq("id",c.id).eq("status","pending").select().maybeSingle();
+  if(!claimed)throw fail("This challenge is no longer open.",409);
+  const from=await playerById(c.from_player_id);if(!from)throw fail("The challenger is gone.",404);
+  if(c.rated&&(!from.auth_user_id||!p.auth_user_id))throw fail("Rated challenges are between signed-in players.",401);
+  const fromWhite=c.color==="w"?true:c.color==="b"?false:crypto.getRandomValues(new Uint8Array(1))[0]%2===0;
+  const made=await createGame(req,{seconds:c.base_seconds,increment:c.increment_seconds,rated:c.rated,dailyDays:c.daily_days,challengeId:c.id},{players:fromWhite?[from,p]:[p,from],source:"private"});
+  await admin.from("chess_challenges").update({game_id:made.game.id}).eq("id",c.id);
+  EdgeRuntime.waitUntil(Promise.all([
+    broadcastTo("player:"+c.from_player_id,"challenge_answer",{id:c.id,accepted:true,code:made.game.invite_code}),
+    notifyPlayer(c.from_player_id,{title:"Challenge accepted",body:`${p.username||p.display_name||"Your opponent"} accepted. ${c.daily_days?"Your game is ready.":"Join now."}`,url:`/?game=${made.game.invite_code}`,tag:"challenge-"+c.id})
+  ]).then(()=>{}));
+  return {game:made.game,player:publicPlayer(p),seat:made.game.white_player_id===p.id?"w":"b"}
+}
+async function challengeCancel(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  await admin.from("chess_challenges").update({status:"cancelled"}).eq("id",String(b.challengeId||"")).eq("from_player_id",p.id).eq("status","pending");
+  return {cancelled:true}
+}
+// ---- Daily games: the ones you're in, with whose turn it is ----
+async function dailyGames(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,fen,daily_days,last_move_at,move_count,rated").not("daily_days","is",null).in("status",["active","waiting"]).or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("last_move_at",{ascending:true}).limit(50);
+  if(error)throw error;
+  return {games:(data||[]).map((g:any)=>{const seat=g.white_player_id===p.id?"w":"b",turn=String(g.fen||"").split(" ")[1]||"w";return {id:g.id,code:g.invite_code,opponent:seat==="w"?g.black_name:g.white_name,seat,yourTurn:g.status==="active"&&turn===seat,status:g.status,fen:g.fen,daily_days:g.daily_days,deadline:g.last_move_at?new Date(Date.parse(g.last_move_at)+dailyMoveMs(g.daily_days)).toISOString():null,moves:g.move_count,rated:g.rated}})}
+}
+// ---- Puzzles: daily puzzle, themes, streak record ----
+async function puzzleDaily(req:Request,b:any){
+  const {count}=await admin.from("chess_puzzles").select("id",{count:"exact",head:true});
+  if(!count)throw fail("No puzzles yet.",404);
+  const today=nowIso().slice(0,10),idx=dailyIndex(today,Number(count));
+  const {data,error}=await admin.from("chess_puzzles").select("*").order("id").range(idx,idx);if(error)throw error;
+  const pick=data?.[0];if(!pick)throw fail("No puzzle today.",404);
+  let solved=false;try{const p=await playerFor(req,b,false,{touch:false});const {data:a}=await admin.from("chess_puzzle_attempts").select("id").eq("player_id",p.id).eq("puzzle_id",pick.id).eq("success",true).gte("created_at",today+"T00:00:00Z").limit(1);solved=!!a?.length}catch{}
+  return {date:today,solved,puzzle:{id:pick.id,fen:pick.fen,solution:pick.solution,rating:pick.rating,plays:pick.plays,themes:pick.themes,source:pick.source}}
+}
+async function puzzleStats(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  const {data:attempts,error}=await admin.from("chess_puzzle_attempts").select("puzzle_id,success,rating_after,created_at").eq("player_id",p.id).order("created_at",{ascending:false}).limit(300);
+  if(error)throw error;
+  const ids=[...new Set((attempts||[]).map((a:any)=>a.puzzle_id))];
+  const {data:puzzles}=ids.length?await admin.from("chess_puzzles").select("id,themes").in("id",ids):{data:[]};
+  const themesOf=new Map((puzzles||[]).map((x:any)=>[x.id,Array.isArray(x.themes)?x.themes:[]]));
+  const agg=new Map<string,{theme:string,tries:number,solved:number}>();
+  for(const a of attempts||[])for(const t of themesOf.get(a.puzzle_id)||[]){const r=agg.get(t)||{theme:t,tries:0,solved:0};r.tries++;if(a.success)r.solved++;agg.set(t,r)}
+  const themes=[...agg.values()].filter(r=>r.tries>=2).map(r=>({...r,rate:Math.round(100*r.solved/r.tries)})).sort((a,c)=>c.tries-a.tries).slice(0,24);
+  const history=(attempts||[]).filter((a:any)=>Number.isFinite(a.rating_after)).slice(0,60).reverse().map((a:any)=>a.rating_after);
+  return {rating:Number(p.puzzle_rating||1200),games:Number(p.puzzle_games||0),best_streak:Number(p.puzzle_best_streak||0),themes,history}
+}
+async function puzzleStreakRecord(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),n=Math.max(0,Math.min(500,Math.floor(Number(b.count)||0)));
+  if(n<=Number(p.puzzle_best_streak||0))return {best:Number(p.puzzle_best_streak||0)};
+  await admin.from("chess_players").update({puzzle_best_streak:n}).eq("id",p.id);
+  await awardAchievements({...p,puzzle_best_streak:n});
+  return {best:n}
+}
+async function achievementsFor(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  return {achievements:Array.isArray(p.achievements)?p.achievements:[]}
 }
 async function resign(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")return {game:g};let patch:any;
@@ -251,7 +612,7 @@ async function respondDraw(req:Request,b:any){
 }
 async function gameHistory(req:Request,b:any){
   const p=await playerFor(req,b),limit=Math.max(1,Math.min(100,Number(b.limit||30)));
-  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
+  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
   if(error)throw error;return {games:data||[]}
 }
 
@@ -344,25 +705,29 @@ async function puzzleAttempt(req:Request,b:any){
   const id=String(b.puzzleId||"").slice(0,32);if(!id)throw fail("Puzzle is missing.");
   const puzzle=await one("chess_puzzles","id",id);if(!puzzle)throw fail("Puzzle not found.",404);
   const played=Array.isArray(b.playedMoves)?b.playedMoves.map((x:any)=>String(x).slice(0,8)).slice(0,30):[];
+  // Puzzle rating: only the first attempt at a puzzle counts.
+  const {data:seen}=await admin.from("chess_puzzle_attempts").select("id").eq("player_id",p.id).eq("puzzle_id",id).limit(1);
+  const before=Number(p.puzzle_rating||1200),after=seen?.length?before:puzzleRatingUpdate(before,Number(p.puzzle_games||0),Number(puzzle.rating||1500),!!b.success);
+  if(!seen?.length){await admin.from("chess_players").update({puzzle_rating:after,puzzle_games:Number(p.puzzle_games||0)+1}).eq("id",p.id);EdgeRuntime.waitUntil(awardAchievements({...p,puzzle_games:Number(p.puzzle_games||0)+1}).then(()=>{}).catch(()=>{}))}
   const {data,error}=await admin.from("chess_puzzle_attempts").insert({
-    player_id:p.id,puzzle_id:id,success:!!b.success,
+    player_id:p.id,puzzle_id:id,success:!!b.success,rating_before:before,rating_after:after,
     duration_ms:b.durationMs==null?null:Math.max(0,Math.min(3600000,Number(b.durationMs)||0)),
     played_moves:played
   }).select("id,success,duration_ms,created_at").single();
   if(error)throw error;
   const {data:stats,error:se}=await admin.from("chess_puzzle_attempts").select("success").eq("player_id",p.id);
   if(se)throw se;const attempts=stats||[],solved=attempts.filter((x:any)=>x.success).length;
-  return {attempt:data,stats:{attempts:attempts.length,solved,accuracy:attempts.length?Math.round(1000*solved/attempts.length)/10:0}}
+  return {attempt:data,rating:{before,after,counted:!seen?.length},stats:{attempts:attempts.length,solved,accuracy:attempts.length?Math.round(1000*solved/attempts.length)/10:0}}
 }
 
 async function heartbeat(req:Request,b:any){
-  const p=await playerFor(req,b),raw=await gameById(b.gameId);
+  const [p,raw]=await Promise.all([playerFor(req,b),gameById(b.gameId)]);
   if(!raw)throw fail("Game not found.",404);
   const seat=raw.white_player_id===p.id?"w":raw.black_player_id===p.id?"b":null;
   if(!seat)throw fail("You are not a player in this game.",403);
   const patch:any=seat==="w"?{white_last_seen_at:nowIso()}:{black_last_seen_at:nowIso()};
-  await admin.from("chess_games").update(patch).eq("id",raw.id);
-  const game=await resolveTimeout(await gameById(raw.id));
+  const {data:seen}=await admin.from("chess_games").update(patch).eq("id",raw.id).select().maybeSingle();
+  const game=await resolveTimeout(seen||raw);
   return {ok:true,game,player:publicPlayer(p),seat}
 }
 async function gameState(req:Request,b:any){
@@ -374,7 +739,7 @@ async function gameState(req:Request,b:any){
 }
 async function queueJoin(req:Request,b:any){
   const p=await playerFor(req,b,!!b.rated);const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0)));let pool=poolFor(base,inc),rated=!!b.rated,tournament:any=null;
-  if(b.tournamentId){tournament=await one("chess_tournaments","id",b.tournamentId);if(!tournament||!["active","scheduled"].includes(tournament.status))throw fail("Tournament is not available.",409);pool=tournament.pool;rated=tournament.rated;if(rated&&!p.auth_user_id)throw fail("Sign in to play this rated tournament.",401)}
+  if(b.tournamentId){tournament=await one("chess_tournaments","id",b.tournamentId);if(!tournament||!["active","scheduled"].includes(tournament.status))throw fail("Tournament is not available.",409);arenaOpen(tournament);pool=tournament.pool;rated=tournament.rated;if(rated&&!p.auth_user_id)throw fail("Sign in to play this rated tournament.",401)}
   await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");
   const r=ratingOf(p,pool),er=effectiveRating(p,pool);const {data:q,error}=await admin.from("chess_matchmaking_queue").insert({player_id:p.id,rated,pool,base_seconds:tournament?.base_seconds||base,increment_seconds:tournament?.increment_seconds||inc,rating:r,effective_rating:er,tournament_id:tournament?.id||null,state:"searching",heartbeat_at:nowIso()}).select().single();if(error)throw error;
   const cutoff=new Date(Date.now()-90000).toISOString();let query=admin.from("chess_matchmaking_queue").select("*").eq("state","searching").eq("rated",rated).eq("pool",pool).neq("player_id",p.id).gte("heartbeat_at",cutoff).order("created_at").limit(60);const {data:raw,error:e2}=await query;if(e2)throw e2;let candidates=raw||[];
@@ -435,9 +800,10 @@ async function queueStatus(req:Request,b:any){
   return {state:q.state,queue:q}
 }
 async function queueLeave(req:Request,b:any){const p=await playerFor(req,b);await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");return {state:"cancelled"}}
-async function tournaments(req:Request,b:any){const {data:list,error}=await admin.from("chess_tournaments").select("*").in("status",["scheduled","active"]).order("starts_at").limit(30);if(error)throw error;let memberships:any[]=[];try{const p=await playerFor(req,b);const {data}=await admin.from("chess_tournament_entries").select("tournament_id,points,games,wins,draws,losses").eq("player_id",p.id);memberships=data||[]}catch{}return {tournaments:list||[],memberships}}
+async function tournaments(req:Request,b:any){try{await ensureWeeklyArena()}catch(e){console.error("weekly arena",e)}const recent=new Date(Date.now()-3*86400000).toISOString();const {data:list,error}=await admin.from("chess_tournaments").select("*").or(`status.in.(scheduled,active),and(status.eq.finished,ends_at.gte.${recent})`).order("starts_at").limit(30);if(error)throw error;let memberships:any[]=[];try{const p=await playerFor(req,b);const {data}=await admin.from("chess_tournament_entries").select("tournament_id,points,games,wins,draws,losses").eq("player_id",p.id);memberships=data||[]}catch{}return {tournaments:list||[],memberships}}
 async function tournamentJoin(req:Request,b:any){const t=await one("chess_tournaments","id",b.tournamentId);if(!t)throw fail("Tournament not found.",404);const p=await playerFor(req,b,!!t.rated);const {data:exists}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",t.id).eq("player_id",p.id).maybeSingle();if(!exists){const {error}=await admin.from("chess_tournament_entries").insert({tournament_id:t.id,player_id:p.id});if(error)throw error}return {joined:true,tournament:t,player:publicPlayer(p)}}
-async function tournamentStandings(b:any){const {data:e,error}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",b.tournamentId).order("points",{ascending:false}).order("wins",{ascending:false}).order("joined_at").limit(100);if(error)throw error;const ids=(e||[]).map((x:any)=>x.player_id),{data:players}=ids.length?await admin.from("chess_players").select("id,username,display_name,ratings").in("id",ids):{data:[]};const map=new Map((players||[]).map((p:any)=>[p.id,p]));return {standings:(e||[]).map((x:any)=>{const p:any=map.get(x.player_id);return {...x,username:p?.username||p?.display_name||"Player",rating:ratingOf(p,"blitz")}})}}
+async function tournamentStandings(b:any){const {data:e,error}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",b.tournamentId).order("points",{ascending:false}).order("wins",{ascending:false}).order("joined_at").limit(100);if(error)throw error;
+  try{const t=await one("chess_tournaments","id",b.tournamentId);if(t?.status==="finished")for(const x of (e||[]).filter((x:any)=>x.games>0).slice(0,3)){const pl=await playerById(x.player_id);await awardAchievements(pl,{arenaPodium:true})}}catch(err){console.error("podium",err)}const ids=(e||[]).map((x:any)=>x.player_id),{data:players}=ids.length?await admin.from("chess_players").select("id,username,display_name,ratings").in("id",ids):{data:[]};const map=new Map((players||[]).map((p:any)=>[p.id,p]));return {standings:(e||[]).map((x:any)=>{const p:any=map.get(x.player_id);return {...x,username:p?.username||p?.display_name||"Player",rating:ratingOf(p,"blitz"),on_fire:Number(x.streak||0)>=3}})}}
 async function leaderboard(b:any){const pool=POOLS.includes(b.pool)?b.pool:"rapid";const {data,error}=await admin.from("chess_players").select("id,username,display_name,ratings,provisional_games,wins,losses,draws,rated_games,smurf_score").not("auth_user_id","is",null).limit(300);if(error)throw error;return {pool,leaderboard:(data||[]).map((p:any)=>({...publicPlayer(p),pool_rating:ratingOf(p,pool),pool_games:gamesOf(p,pool)})).filter((x:any)=>x.pool_games>0).sort((a:any,bx:any)=>bx.pool_rating-a.pool_rating).slice(0,100)}}
 async function botCatalog(){
   const {data,error}=await admin.from("chess_bots").select("slug,display_name,elo,engine_skill,style,blurb").eq("enabled",true).order("elo");
@@ -463,12 +829,34 @@ Deno.serve(async(req)=>{
     if(b.action==="ping") return send(req,{pong:true});
     switch(b.action){
       case "config":out=await publicConfig();break;
-      case "profile":out={player:publicPlayer(await playerFor(req,b))};break;
+      case "profile":out={player:ownPlayer(await playerFor(req,b))};break;
+      case "profile_update":out=await profileUpdate(req,b);break;
+      case "game_players":out=await gamePlayers(req,b);break;
       case "create":out=await createGame(req,b);break;
       case "join":out=await joinGame(req,b);break;
       case "move":out=await makeMove(req,b,serverReceivedMs);break;
       case "bot_move":out=await botMove(req,b);break;
       case "resign":out=await resign(req,b);break;
+      case "claim_win":out=await claimWin(req,b);break;
+      case "takeback_offer":out=await takebackOffer(req,b);break;
+      case "berserk":out=await goBerserk(req,b);break;
+      case "player_search":out=await playerSearch(req,b);break;
+      case "follow":out=await follow(req,b);break;
+      case "friends":out=await friends(req,b);break;
+      case "challenge_send":out=await challengeSend(req,b);break;
+      case "challenges":out=await challengeList(req,b);break;
+      case "challenge_respond":out=await challengeRespond(req,b);break;
+      case "challenge_cancel":out=await challengeCancel(req,b);break;
+      case "daily_games":out=await dailyGames(req,b);break;
+      case "push_subscribe":out=await pushSubscribe(req,b);break;
+      case "push_unsubscribe":out=await pushUnsubscribe(req,b);break;
+      case "puzzle_daily":out=await puzzleDaily(req,b);break;
+      case "puzzle_stats":out=await puzzleStats(req,b);break;
+      case "puzzle_streak_record":out=await puzzleStreakRecord(req,b);break;
+      case "achievements":out=await achievementsFor(req,b);break;
+      case "takeback_respond":out=await takebackRespond(req,b);break;
+      case "live_games":out=await liveGames();break;
+      case "watch_state":out=await watchState(b);break;
       case "draw_offer":out=await offerDraw(req,b);break;
       case "draw_cancel":out=await cancelDraw(req,b);break;
       case "draw_respond":out=await respondDraw(req,b);break;

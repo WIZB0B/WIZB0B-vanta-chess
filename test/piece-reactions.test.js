@@ -67,6 +67,6 @@ test('touch: a selected piece gestures once and stays lifted until deselected',(
   assert.equal(pawn.animations.length,1,'re-rendering the same selection does not replay it');
   assert.equal(pawn.animations[0].frames,GESTURES.p);
   r.unpick();assert.ok(!pawn.classList.has('picked'));
-  assert.ok(main.includes("if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started)reactions.pick(selected);else reactions.unpick();"));
+  assert.ok(main.includes("if(selected&&lastPointerType!=='mouse'&&!pointerDrag?.started){if(reactions.picked!==reactions.pieceAt(selected))buzz(HAPTICS.pick);reactions.pick(selected)}else reactions.unpick();"));
   assert.ok(css.includes('.board-piece.picked .piece{translate:0 -3%;scale:1.04}'));
 });
