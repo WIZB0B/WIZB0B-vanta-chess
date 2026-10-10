@@ -1,6 +1,7 @@
 // Arena listing helpers: where an arena is in its life and how to say so.
 
 export const isWeeklyArena = t => String(t?.slug || '').startsWith('weekly-arena-');
+export const isClubBattle = t => t?.kind === 'club_battle' || String(t?.slug || '').startsWith('club-battle-');
 
 function span(ms) {
   const m = Math.max(0, Math.round(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
@@ -21,7 +22,7 @@ export function arenaPhase(t, now = Date.now()) {
 
 // Weekly arena first, then live, upcoming, finished.
 export function sortArenas(list = [], now = Date.now()) {
-  const rank = t => (isWeeklyArena(t) ? 0 : 10) + { live: 0, upcoming: 1, finished: 2 }[arenaPhase(t, now).phase];
+  const rank = t => (isWeeklyArena(t) ? 0 : isClubBattle(t) ? 1 : 10) + { live: 0, upcoming: 1, finished: 2 }[arenaPhase(t, now).phase];
   return [...list].sort((a, b) => rank(a) - rank(b) || Date.parse(a.starts_at || 0) - Date.parse(b.starts_at || 0));
 }
 

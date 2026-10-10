@@ -139,7 +139,7 @@ ${splashMarkup(splash)}
       <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg></span>Play</button>
       <button data-nav="arena"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>Arena</button>
       <button data-nav="watch"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>Watch</button>
-      <button data-nav="friends"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.4 3-5.2 6-5.2s5.4 1.8 6 5.2"/><path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 13.9c1.9.6 3.1 2.4 3.5 5.1"/></svg></span>Friends</button>
+      <button data-nav="friends"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.4 3-5.2 6-5.2s5.4 1.8 6 5.2"/><path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 13.9c1.9.6 3.1 2.4 3.5 5.1"/></svg></span>Community</button>
       <button data-nav="puzzles"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v4.2a2.8 2.8 0 1 0 4 0V4h6v6h-4.2a2.8 2.8 0 1 0 0 4H20v6h-6v-4.2a2.8 2.8 0 1 0-4 0V20H4v-6h4.2a2.8 2.8 0 1 0 0-4H4V4Z"/></svg></span>Puzzles</button>
       <button data-nav="learn"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A3.5 3.5 0 0 1 7 2h4v18H7a3.5 3.5 0 0 0-3.5 3V5.5ZM20.5 5.5A3.5 3.5 0 0 0 17 2h-4v18h4a3.5 3.5 0 0 1 3.5 3V5.5Z"/></svg></span>Learn</button>
       <button data-nav="openings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h3v3h2V3h3v3h2v4l-2 2v5H8v-5l-2-2V6h2V3ZM6 20h12M8 17h8"/></svg></span>Openings</button>
@@ -2080,17 +2080,18 @@ async function loadFriendList(){
 async function renderFriends(){
   if(watchSession)stopWatching();
   if(!signedIn()){
-    setDynamicView('friends','Friends',`<article class="friends-signin"><h4>Play your friends</h4><p>Sign in to follow players, see who is online, send challenges and play daily games.</p><button class="primary-action friends-signin-btn">Sign in</button></article>`);
-    $('#dynamicView .friends-signin-btn').onclick=()=>openAccount();return;
+    setDynamicView('friends','Community',communityTabs('friends')+`<article class="friends-signin"><h4>Play your friends</h4><p>Sign in to follow players, see who is online, send challenges and play daily games.</p><button class="primary-action friends-signin-btn">Sign in</button></article>`);
+    $('#dynamicView .friends-signin-btn').onclick=()=>openAccount();wireCommunityTabs();return;
   }
-  setDynamicView('friends','Friends',`<div class="friends-view">
+  closeClubChannel();
+  setDynamicView('friends','Community',communityTabs('friends')+`<div class="friends-view">
     <section class="friends-block"><h4>Challenges</h4><div id="challengeList"><p class="menu-empty">Loading…</p></div></section>
     <section class="friends-block"><h4>Daily games</h4><div id="dailyList"><p class="menu-empty">Loading…</p></div></section>
     <section class="friends-block"><h4>Find players</h4><input id="friendSearch" type="search" autocomplete="off" maxlength="20" placeholder="Search by username"><div id="friendResults"></div></section>
     <section class="friends-block"><h4>Following <small id="followerCount"></small></h4><div id="friendList"><p class="menu-empty">Loading…</p></div></section>
     <section class="friends-block push-block"><h4>Notifications</h4><p>Get a notification when it's your move in a daily game, or when someone challenges you.</p><button id="pushToggle" type="button">Turn on notifications</button></section>
   </div>`);
-  drawFriendsLists();void refreshSocial();void loadFriendList();void syncPushButton();
+  wireCommunityTabs();drawFriendsLists();void refreshSocial();void loadFriendList();void syncPushButton();
   let searchTimer=null;
   $('#friendSearch').addEventListener('input',event=>{
     clearTimeout(searchTimer);const q=event.target.value.trim(),slot=$('#friendResults');
@@ -2192,6 +2193,85 @@ async function openReportDialog(p,gameId=null){
 $('#topPlayerName').addEventListener('click',event=>{const u=event.currentTarget.dataset.profile;if(u)void openProfile(u)});
 $('#viewMyProfile')?.addEventListener('click',()=>{menus.close('account');void openProfile(currentProfile?.username)});
 if(params.get('player'))setTimeout(()=>void openProfile(String(params.get('player')).slice(0,20)),500);
+// ---- Community: Friends | Clubs | League ----
+function communityTabs(active){
+  return `<div class="community-tabs" role="tablist">${[['friends','Friends'],['clubs','Clubs'],['league','League']].map(([k,l])=>`<button type="button" role="tab" data-community="${k}" class="${k===active?'on':''}" aria-selected="${k===active}">${l}</button>`).join('')}</div>`;
+}
+function wireCommunityTabs(){
+  $$('#dynamicView [data-community]').forEach(b=>b.onclick=()=>{const k=b.dataset.community;if(k==='friends')void renderFriends();if(k==='clubs')void renderClubs();if(k==='league')void renderLeague()});
+}
+let clubChannel=null,clubOpen=null;
+function closeClubChannel(){if(clubChannel){realtimeClient.removeChannel(clubChannel).catch(()=>{});clubChannel=null}}
+async function renderClubs(){
+  closeClubChannel();clubOpen=null;
+  setDynamicView('friends','Community',communityTabs('clubs')+brandLoading('Loading clubs…'));wireCommunityTabs();
+  try{
+    const out=await api.clubList(),target=$('#dynamicView .view-content');if(!target||currentRightView!=='friends')return;
+    const list=c=>`<article class="club-row" data-club="${escapeHtml(c.slug)}"><div><b>${escapeHtml(c.name)}</b><small>${c.member_count} ${c.member_count===1?'member':'members'}${c.description?` · ${escapeHtml(c.description)}`:''}</small></div><button class="club-open">Open</button></article>`;
+    target.innerHTML=communityTabs('clubs')+`<div class="friends-view">
+      ${out.mine?`<section class="friends-block my-club"><h4>Your club</h4>${list(out.mine)}</section>`:''}
+      <section class="friends-block"><h4>Club battle</h4><p class="arena-rules">Every Sunday 18:00 UTC · 90 minutes · rated 5+0. Your club scores its best five players' arena points, and you never meet your own club. Register in Arena.</p></section>
+      <section class="friends-block"><h4>Find a club</h4><input id="clubSearch" type="search" maxlength="40" placeholder="Search clubs"><div id="clubList">${out.clubs.map(list).join('')||'<p class="menu-empty">No clubs yet. Start the first one.</p>'}</div></section>
+      ${!out.mine?`<section class="friends-block"><h4>Start a club</h4>${signedIn()?`<form id="clubCreate" class="club-form"><input name="name" maxlength="40" placeholder="Club name" required><input name="slug" maxlength="32" placeholder="Link (letters, numbers, dashes)"><textarea name="description" maxlength="280" rows="2" placeholder="What is the club about? (optional)"></textarea><button class="primary-action" type="submit">Create club</button></form>`:'<p class="menu-empty">Sign in to start or join a club.</p>'}</section>`:''}
+    </div>`;
+    wireCommunityTabs();
+    const wireRows=root=>root.querySelectorAll('[data-club]').forEach(r=>r.querySelector('.club-open').onclick=()=>void openClub(r.dataset.club));
+    wireRows(target);
+    let timer=null;$('#clubSearch').addEventListener('input',e=>{clearTimeout(timer);timer=setTimeout(async()=>{try{const res=await api.clubList(e.target.value.trim()),slot=$('#clubList');slot.innerHTML=res.clubs.map(list).join('')||'<p class="menu-empty">No clubs found.</p>';wireRows(slot)}catch(error){toast(error.message)}},300)});
+    $('#clubCreate')?.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);try{const res=await api.clubCreate({name:f.get('name'),slug:f.get('slug')||undefined,description:f.get('description')});toast('Club created');void openClub(res.club.slug)}catch(error){toast(error.message)}});
+  }catch(error){toast(error.message)}
+}
+async function openClub(slug){
+  if(!slug)return;closeClubChannel();
+  setPrimaryScreen('game');if(isMobileApp()){mTab='more';setMView('panel')}
+  setDynamicView('friends','Community',communityTabs('clubs')+brandLoading('Opening the club…'));wireCommunityTabs();
+  try{
+    const d=await api.clubView(slug),target=$('#dynamicView .view-content');if(!target)return;clubOpen=d.club.slug;
+    target.innerHTML=communityTabs('clubs')+`<article class="club">
+      <header><h4>${escapeHtml(d.club.name)}</h4><small>${d.club.member_count} members${d.role==='owner'?' · you run this club':''}</small>${d.club.description?`<p>${escapeHtml(d.club.description)}</p>`:''}</header>
+      <div class="pp-actions">${d.member?'<button class="club-leave">Leave club</button>':'<button class="club-join primary">Join club</button>'}<button class="club-copy">Copy invite link</button><button class="club-back">All clubs</button></div>
+      ${d.member?`<section class="friends-block club-chat"><h4>Club chat</h4><div class="club-messages">${d.messages.map(m=>`<p class="${m.mine?'mine':''}"><b>${escapeHtml(m.name)}</b> ${escapeHtml(m.body)}</p>`).join('')||'<p class="menu-empty">Say hello to your club.</p>'}</div><form class="club-say"><input maxlength="280" placeholder="Message your club" required><button type="submit">Send</button></form></section>`:''}
+      <section class="friends-block"><h4>Members</h4>${d.members.map(m=>`<article class="friend-row"><span class="presence-dot${m.online?' on':''}"></span><div><button class="friend-name" data-name="${escapeHtml(m.name)}">${escapeHtml(m.name)}</button><small>${m.rating} rapid${m.role==='owner'?' · owner':''}</small></div></article>`).join('')}</section>
+    </article>`;
+    wireCommunityTabs();
+    const box=target.querySelector('.club-messages');if(box)box.scrollTop=box.scrollHeight;
+    target.querySelectorAll('.friend-name').forEach(b=>b.onclick=()=>void openProfile(b.dataset.name));
+    target.querySelector('.club-back').onclick=()=>void renderClubs();
+    target.querySelector('.club-copy').onclick=async()=>{const url=`${location.origin}/?club=${encodeURIComponent(d.club.slug)}`;try{await navigator.clipboard.writeText(url);toast('Invite link copied')}catch{toast(url)}};
+    target.querySelector('.club-join')?.addEventListener('click',async()=>{if(!signedIn())return openAccount();try{await api.clubJoin(d.club.slug);toast(`Welcome to ${d.club.name}`);void openClub(d.club.slug)}catch(error){toast(error.message)}});
+    target.querySelector('.club-leave')?.addEventListener('click',async()=>{const ok=await vchDialog({title:'Leave the club?',body:d.role==='owner'?'The longest-standing member takes over. If you are the last member, the club closes.':'You can join again later.',actions:[{label:'Stay',value:false},{label:'Leave',value:true,primary:true}]});if(!ok)return;try{await api.clubLeave();toast('You left the club');void renderClubs()}catch(error){toast(error.message)}});
+    target.querySelector('.club-say')?.addEventListener('submit',async e=>{e.preventDefault();const input=e.target.querySelector('input'),body=input.value.trim();if(!body)return;input.value='';try{await api.clubChat(d.club.slug,body);void refreshClubChat()}catch(error){toast(error.message);input.value=body}});
+    if(d.member)clubChannel=realtimeClient.channel(`club:${d.club.id}`).on('broadcast',{event:'message'},()=>void refreshClubChat()).subscribe();
+  }catch(error){toast(error.message);void renderClubs()}
+}
+async function refreshClubChat(){
+  if(!clubOpen||currentRightView!=='friends')return closeClubChannel();
+  try{const d=await api.clubView(clubOpen),box=$('#dynamicView .club-messages');if(!box)return;box.innerHTML=d.messages.map(m=>`<p class="${m.mine?'mine':''}"><b>${escapeHtml(m.name)}</b> ${escapeHtml(m.body)}</p>`).join('');box.scrollTop=box.scrollHeight}catch{}
+}
+// ---- Monthly league (server rules.js) ----
+let leagueDivision=null;
+async function renderLeague(division=leagueDivision){
+  closeClubChannel();
+  setDynamicView('friends','Community',communityTabs('league')+brandLoading('Loading the league…'));wireCommunityTabs();
+  try{
+    const d=await api.league(division),target=$('#dynamicView .view-content');if(!target||currentRightView!=='friends')return;
+    leagueDivision=d.division;
+    const days=Math.max(0,Math.ceil((Date.parse(d.ends)-Date.now())/86400000)),up=d.division<d.divisions.length-1?d.zones.promote:0,down=d.division>0?d.zones.relegate:0;
+    const zone=r=>r.rank<=up?'up':down&&r.rank>d.total-down?'down':'';
+    const mine=d.standings.find(r=>r.me);
+    target.innerHTML=communityTabs('league')+`<article class="league">
+      <div class="league-head"><div><small>SEASON ${escapeHtml(d.season)}</small><b>${escapeHtml(d.divisions[d.division])} division</b><span>${days} ${days===1?'day':'days'} left · ${d.total} players</span></div><div class="league-me">${mine?`<small>YOU</small><b>#${mine.rank}</b><span>${mine.points} pts · ${mine.games} games</span>`:signedIn()?`<small>YOU</small><b>${escapeHtml(d.divisions[d.myDivision])}</b><span>Play a rated game to join</span>`:'<small>LEAGUE</small><b>Sign in</b><span>to compete</span>'}</div></div>
+      <div class="league-divisions">${d.divisions.map((n,i)=>`<button data-division="${i}" class="div-${i}${i===d.division?' on':''}">${escapeHtml(n)}</button>`).join('')}</div>
+      <p class="arena-rules">Rated games score 3 for a win and 1 for a draw. At the end of the month the top fifth of each division (with at least ${d.minGames} games) moves up and the bottom fifth moves down. Everyone with ${d.minGames}+ games earns a season badge.</p>
+      <div class="league-table">${d.standings.map(r=>`<div class="${zone(r)}${r.me?' me':''}"><span>${r.rank}</span><b>${escapeHtml(r.name)}</b><em>${r.games} g</em><strong>${r.points}</strong></div>`).join('')||'<p class="menu-empty">No games in this division yet this season.</p>'}</div>
+      ${d.badges.length?`<h4>Your season badges</h4><div class="pp-badges">${d.badges.map(b=>{const [y,m,div]=b.id.replace(/^season-/,'').split('-');return `<span class="achievement earned"><span class="achievement-mark">S</span><b>${escapeHtml(div[0].toUpperCase()+div.slice(1))} · ${y}-${m}</b></span>`}).join('')}</div>`:''}
+    </article>`;
+    wireCommunityTabs();
+    target.querySelectorAll('[data-division]').forEach(b=>b.onclick=()=>void renderLeague(Number(b.dataset.division)));
+    target.querySelectorAll('.league-table b').forEach(b=>{b.classList.add('pp-link');b.onclick=()=>void openProfile(b.textContent)});
+  }catch(error){toast(error.message)}
+}
+if(params.get('club'))setTimeout(()=>void openClub(String(params.get('club')).slice(0,32)),500);
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
@@ -2379,6 +2459,8 @@ function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:
 function openMoreSheet(){
   openSheet('More',[
     {label:'Friends & challenges',run:()=>openSection('friends')},
+    {label:'Clubs',run:()=>{openSection('friends');void renderClubs()}},
+    {label:'League',run:()=>{openSection('friends');void renderLeague()}},
     {label:'Arena & tournaments',run:()=>openSection('arena')},
     {label:'Openings',run:()=>openSection('openings')},
     {label:'Famous games',run:()=>openSection('famous')},
@@ -3169,7 +3251,8 @@ async function showBackendView(kind){
       const card=(t,i)=>{
         const phase=arenaPhase(t),joined=mine.get(t.id),weekly=isWeeklyArena(t);
         const action=phase.phase==='finished'?'':phase.phase==='upcoming'?(joined?'<button class="arena-join" disabled>Registered</button>':'<button class="arena-join">Register</button>'):'<button class="arena-join">Play now</button>';
-        return `<article data-arena="${i}" class="arena-card${weekly?' weekly':''} phase-${phase.phase}"><div>${weekly?'<span class="arena-badge">Weekly</span>':''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
+        const battle=t.kind==='club_battle';
+        return `<article data-arena="${i}" class="arena-card${weekly||battle?' weekly':''}${battle?' club-battle':''} phase-${phase.phase}"><div>${battle?'<span class="arena-badge">Club battle</span>':weekly?'<span class="arena-badge">Weekly</span>':''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
       };
       target.innerHTML=`<div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
       [...target.querySelectorAll('[data-arena]')].forEach((row,i)=>{
@@ -3182,7 +3265,7 @@ async function showBackendView(kind){
             const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000);
           }catch(error){toast(error.message)}
         };
-        row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=standingsRows(result.standings||[]).slice(0,10).map(p=>`<p><span>${p.rank}.</span> ${escapeHtml(p.name)}${p.fire?' <span class="fire-tag">On fire</span>':''} <b>${p.points} pts</b> <small>${p.record}</small></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
+        row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=((result.clubs||[]).length?`<div class="club-table"><small>CLUBS · best five count</small>${result.clubs.slice(0,8).map((c,i)=>`<p><span>${i+1}.</span> ${escapeHtml(c.name)} <b>${c.points} pts</b> <small>${c.players} players</small></p>`).join('')}</div>`:'')+standingsRows(result.standings||[]).slice(0,10).map(p=>`<p><span>${p.rank}.</span> ${escapeHtml(p.name)}${p.fire?' <span class="fire-tag">On fire</span>':''} <b>${p.points} pts</b> <small>${p.record}</small></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
       });
       const tick=setInterval(()=>{if(currentRightView!=='arena'||!document.body.contains(target))return clearInterval(tick);events.forEach((t,i)=>{const el=target.querySelector(`[data-arena-when="${i}"]`);if(el)el.textContent=arenaPhase(t).label})},30000);
     }catch(error){toast(error.message);showMovesView()}

@@ -52,3 +52,12 @@ test('server wiring: new actions, server-only tables, club battles never pair cl
   assert.match(sql, /with \(security_invoker = true\)/);
   assert.match(sql, /revoke all on public\.chess_fairplay_review from anon, authenticated/);
 });
+
+test('client: Community tabs, club battle first after the weekly arena', async () => {
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const { sortArenas } = await import('../src/arena.js');
+  assert.match(main, /data-community="\$\{k\}"/);
+  const now = Date.parse('2026-10-10T12:00:00Z');
+  const list = [{ slug: 'x', starts_at: '2026-10-10T13:00:00Z', ends_at: '2026-10-10T14:00:00Z' }, { slug: 'club-battle-2026-10-11', kind: 'club_battle', starts_at: '2026-10-11T18:00:00Z', ends_at: '2026-10-11T19:30:00Z' }, { slug: 'weekly-arena-2026-10-10', starts_at: '2026-10-10T18:00:00Z', ends_at: '2026-10-10T19:30:00Z' }];
+  assert.deepEqual(sortArenas(list, now).map(t => t.slug), ['weekly-arena-2026-10-10', 'club-battle-2026-10-11', 'x']);
+});
