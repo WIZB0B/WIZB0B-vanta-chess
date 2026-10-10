@@ -2126,6 +2126,67 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
   .board-piece .piece,.board-piece::before{transition:none}
   .board .square.legal::after{animation:none;transition:none}
 }
+/* Piece expressions (src/piece-expressions.js, prototype).
+   Moods animate the artwork's `transform` (hover/press use translate/scale/rotate, so they
+   compose). --amp scales them: Ink sets express less, Regal (3D) more. --toward is the
+   screen angle to the piece's attacker (fear leans away) or target (attack leans in).
+   The fx layer sits between the squares and the pieces: landing rings and shockwaves. */
+:root{--expr-amp:1;--fx-w:255 205 105;--fx-b:176 128 255}
+:root[data-expressions="subtle"]{--expr-amp:.6}
+:root[data-expressions="fair"]{--expr-amp:.55}
+.board-piece{--set-amp:1;--amp:calc(var(--set-amp) * var(--expr-amp))}
+:root[data-piece-style$="-ink"] .board-piece{--set-amp:.65}
+:root[data-piece-style="regal"] .board-piece{--set-amp:1.4}
+.board-piece[data-mood="fear"] .piece{animation:vch-fear 2.6s ease-in-out infinite}
+.board-piece[data-mood="attack"] .piece{animation:vch-attack 2.2s cubic-bezier(.3,.7,.3,1) infinite}
+.board-piece[data-mood="courage"] .piece{animation:vch-courage 3s ease-in-out infinite}
+.board-piece.hovered[data-mood] .piece{animation-duration:1.1s}
+.board-piece.shocked .piece{animation:vch-shock .5s cubic-bezier(.2,.9,.3,1) both}
+@keyframes vch-fear{
+  0%,55%,100%{transform:rotate(calc(sin(var(--toward,0deg)) * -5.5deg * var(--amp))) scale(calc(1 - .04 * var(--amp)))}
+  60%{transform:translateX(calc(-2.2% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -8deg * var(--amp))) scale(calc(1 - .05 * var(--amp)))}
+  65%{transform:translateX(calc(2.2% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -8deg * var(--amp))) scale(calc(1 - .05 * var(--amp)))}
+  70%{transform:translateX(calc(-1.7% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -7deg * var(--amp)))}
+  75%{transform:translateX(calc(1.7% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * -7deg * var(--amp)))}
+  80%{transform:translateX(0) rotate(calc(sin(var(--toward,0deg)) * -5.5deg * var(--amp))) scale(calc(1 - .04 * var(--amp)))}
+}
+@keyframes vch-attack{
+  0%,70%,100%{transform:rotate(calc(sin(var(--toward,0deg)) * 6.5deg * var(--amp)))}
+  80%{transform:translate(calc(sin(var(--toward,0deg)) * 8% * var(--amp)),calc(cos(var(--toward,0deg)) * -8% * var(--amp))) rotate(calc(sin(var(--toward,0deg)) * 11deg * var(--amp))) scale(calc(1 + .06 * var(--amp)))}
+}
+@keyframes vch-courage{
+  0%,100%{transform:scale(1)}
+  50%{transform:translateY(calc(-3% * var(--amp))) scale(calc(1 + .06 * var(--amp)),calc(1 + .08 * var(--amp)))}
+}
+@keyframes vch-shock{
+  0%{transform:none}
+  20%{transform:translateY(calc(-8% * var(--amp))) scale(calc(1 + .1 * var(--amp)),calc(1 - .1 * var(--amp))) rotate(calc(-6deg * var(--amp)))}
+  45%{transform:translateY(calc(2% * var(--amp))) rotate(calc(5deg * var(--amp)))}
+  70%{transform:rotate(calc(-2deg * var(--amp)))}
+  100%{transform:none}
+}
+.fx-layer{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.fx-ring{
+  position:absolute;width:12.5%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;
+  border:3px solid rgba(255,248,214,.85);box-shadow:0 0 14px rgba(255,236,170,.45),inset 0 0 10px rgba(255,236,170,.35);
+  animation:vch-ring .55s cubic-bezier(.2,.7,.3,1) forwards;
+}
+/* Shockwaves take the mover's team colour: --fx-w / --fx-b (gold and purple by default;
+   a themed set can define its own). */
+.fx-ring.fx-shock{
+  --fx:var(--fx-w);
+  border-width:4px;border-color:rgb(var(--fx) / .95);
+  box-shadow:0 0 26px rgb(var(--fx) / .6),inset 0 0 24px rgb(var(--fx) / .45);
+  animation:vch-shockwave 1.05s cubic-bezier(.15,.75,.3,1) forwards;
+}
+.fx-ring.fx-shock.fx-b{--fx:var(--fx-b)}
+:root[data-expressions="fair"] .fx-ring.fx-shock{animation-duration:.8s}
+@keyframes vch-ring{from{scale:.35;opacity:1}to{scale:1.35;opacity:0}}
+@keyframes vch-shockwave{0%{scale:.3;opacity:1}60%{opacity:.75}100%{scale:5.2;opacity:0;border-width:1px}}
+@media (prefers-reduced-motion:reduce){
+  .board-piece[data-mood] .piece,.board-piece.shocked .piece{animation:none}
+  .fx-ring{display:none}
+}
 /* V1b: square marks fill the whole square (under the pieces); arrows sit above them, about
    22% of a square thick at .85 opacity. (".shape-mark", not ".mark": that is the brand logo.) */
 .board .square.shape-mark{box-shadow:inset 0 0 0 999px var(--mark-color)!important}
@@ -2146,3 +2207,38 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
    see syncGlassBlur in main.js). At the near-opaque default the blur is invisible but the
    compositor re-blurs every panel on every frame that changes, e.g. each frame of a move. */
 :root[data-glass="solid"] .panel,:root[data-glass="solid"] .game,:root[data-glass="solid"] .topbar{backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* === BOARD FIT: the board is as big as the screen allows (like chess.com) ===
+   --board is the playing area's side: the smaller of
+   - the viewport height minus everything stacked above and below the board (top bar,
+     player bars, coordinates, tools, paddings: --fit-chrome), and
+   - the width left after the side panels (--fit-side) and gaps.
+   The game column is exactly the board plus its coordinate gutter, so the player bars and
+   tools line up with it. Side panels take the rest of the width and scroll inside
+   themselves rather than making the page scroll. Phones keep the full-width board. */
+@media (min-width:801px){
+  :root{--fit-chrome:288px;--fit-pad:14px;--fit-gutter:18px}
+  .shell{padding-top:14px;padding-bottom:12px}
+  main{margin-top:10px}
+  .game{
+    --board:clamp(300px,min(calc(100dvh - var(--fit-chrome)),calc(100vw - var(--fit-side))),1100px);
+    width:calc(var(--board) + var(--fit-gutter) + 2 * var(--fit-pad))!important;
+    min-width:0;min-height:0;
+    padding-left:var(--fit-pad)!important;padding-right:var(--fit-pad)!important;
+  }
+  .game .board-shell{width:calc(var(--board) + var(--fit-gutter))}
+  .lpanel,.rpanel{width:auto!important;min-width:0;min-height:0!important;max-height:calc(100dvh - 104px);overflow-y:auto;scrollbar-width:thin}
+}
+@media (min-width:1181px){
+  :root{--fit-side:calc(96px + 300px + 320px + 2 * 18px + 2 * var(--fit-pad) + var(--fit-gutter))}
+  main{grid-template-columns:minmax(300px,1fr) auto minmax(320px,1fr)!important;column-gap:18px!important}
+}
+@media (min-width:801px) and (max-width:1180px){
+  :root{--fit-side:calc(18px + 280px + 14px + 2 * var(--fit-pad) + var(--fit-gutter))}
+  main{grid-template-columns:minmax(280px,1fr) auto!important}
+  .rpanel{max-height:none}
+}
+@media (max-width:800px){
+  /* Phones: the board spans the screen edge to edge (only the coordinate gutter remains). */
+  .game{margin-left:0!important;margin-right:0!important;max-width:100vw!important;padding:6px 4px!important;border-radius:0!important;border-left:0!important;border-right:0!important}
+}

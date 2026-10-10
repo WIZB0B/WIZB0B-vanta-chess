@@ -204,3 +204,54 @@ audit; chat content limits; basic anti-cheat flags noted for later.
 
 ## C1. Competitor comparison
 Feature matrix vs chess.com, lichess and others; list gaps.
+
+## Done 2026-10-09 (live in production via release PR #9)
+- Pieces (PR #7): Vanta (default) and Vanta Ink with bold dark outlines, fixed bishops, more
+  detailed Ink; new top-down 3D set Regal; filled selected square; selection clears after a move.
+- Piece reactions (PR #8): per-piece hover gestures, lean toward the cursor, press pull, touch
+  tap reaction, swelling legal-move dots.
+- Board fits the screen (PR #10, in review): board side = min(free height, free width).
+
+## E. Expressions (prototype PR, owner reviewing the demo video)
+Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
+- E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
+- E2 Landing ring on every drop; shockwave across the board when the mover is ahead and lands
+  within 2 squares of enemy pieces, which flinch nearest first. (prototype; "ahead" = material)
+- E3 Moods: fear (attacked, not safely defended; king in check), attack (leans toward a bigger
+  or undefended target), courage (attacked but defended), shock. Hover intensifies. 3D sets
+  express more than Ink sets. (prototype)
+- E4 Fair play (owner decision 2026-10-10): expressions stay ON in rated games, softer ("fair"
+  level), and decide automatically what to show: only contact threats (pieces next to each
+  other) and checks. Long-range bishop/rook/queen threats and hanging pieces are never shown,
+  so captures can still be a surprise. All other modes get full expressions. Players can set
+  Full / Subtle / Off in Theme Studio. Engine evaluation never drives effects in live games.
+  (prototype)
+- E5 More expressions: strength/triumph after a capture, despair for a lone king, victory and
+  defeat poses at game end, idle breathing.
+- E6 Setting: Expressions Full / Subtle / Off (prototype in Theme Studio); later in the Settings page, plus a separate shockwave toggle.
+- E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
+
+## P. Piece sets, themes and store (later; owner will send references)
+- P1 More piece sets, each in a 3D and a 2D version, all supporting expressions (3D fuller).
+- P2 Themed sets generated in Higgsfield: each theme = pieces + board + background + its own
+  theme song; users can still mix and customise.
+- P3 Medieval realistic 3D set: real soldiers with shields, swords and helmets as the pieces,
+  the king behind the lines. Owner will send a reference before we start.
+- P4 Premium piece sets and skins behind a paywall, better than anything on chess.com. Last
+  part of the project (needs payments, entitlements and a store page).
+
+## A. Accounts, profile and legal (owner request 2026-10-10)
+- A1 Player portraits: guests show an empty silhouette portrait (not initials); signed-in
+  players can upload a picture or pick an avatar (Supabase Storage + migration: owner approval).
+- A2 Country flag beside every name. Detected from the connection only after the player agrees,
+  keeping just the 2-letter country code (never the IP address); players can change or hide it.
+  Needs a country column and edge-function change (owner approval to deploy).
+- A3 Terms and conditions, privacy policy (what we store, why, how to delete it) and a cookie /
+  storage notice if analytics are ever added. Linked from sign-up and the footer.
+- A4 Backend security pass later (see S1): RLS review, rate limits, anti-cheat signals.
+
+## I. Ideas proposed by Claude (owner to pick)
+- I1 Captured-pieces tray by each player bar with the material difference (+3).
+- I2 Game-end cinematic: the winner's pieces cheer, the losing king topples (uses expressions).
+- I3 Review mode: pieces react to move quality (brilliant glow, blunder slump).
+- I4 Haptics on phones: light buzz on pick-up, firmer on capture and check.

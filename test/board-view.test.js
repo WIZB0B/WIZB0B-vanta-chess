@@ -107,8 +107,9 @@ test('colours: orange arrows and red squares by default, Shift/Ctrl/Alt change t
   assert.equal(brushFor('square',{altKey:true}),'yellow');
 });
 
-test('the board is layered: squares, one piece layer, the arrow layer, a drag layer',()=>{
-  assert.match(main,/board\.replaceChildren\(pieceLayer,arrowLayer\)/);
+test('the board is layered: squares, the effects layer, one piece layer, the arrow layer, a drag layer',()=>{
+  assert.match(main,/board\.replaceChildren\(fxLayer,pieceLayer,arrowLayer\)/);
+  assert.match(css,/\.fx-layer\{position:absolute;inset:0;z-index:1;pointer-events:none/);
   assert.match(main,/dragLayer\.className='drag-layer'/);
   assert.doesNotMatch(main,/board\.innerHTML=''/,'the board is no longer rebuilt on every render');
   assert.match(layer,/const target=pieceTransform\(square,this\.flipped\);/);
@@ -191,4 +192,13 @@ test('a selected square is filled like the last move, and a local move clears th
   assert.ok(css.includes('.board .square.selected,.board .square.last-move.selected{box-shadow:inset 0 0 0 999px rgba(200,216,61,.56)}'));
   const main=await (await import('node:fs/promises')).readFile(new URL('../src/main.js',import.meta.url),'utf8');
   assert.ok(main.includes("localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});"));
+});
+
+test('the board is sized to the screen: the smaller of the free height and the free width',async()=>{
+  const css=await (await import('node:fs/promises')).readFile(new URL('../src/style.css',import.meta.url),'utf8');
+  const fit=css.slice(css.indexOf('/* === BOARD FIT'));
+  assert.ok(fit.length>100,'board-fit block exists');
+  assert.match(fit,/--board:clamp\(300px,min\(calc\(100dvh - var\(--fit-chrome\)\),calc\(100vw - var\(--fit-side\)\)\),1100px\)/);
+  assert.match(fit,/\.game \.board-shell\{width:calc\(var\(--board\) \+ var\(--fit-gutter\)\)\}/);
+  assert.match(fit,/main\{grid-template-columns:minmax\(300px,1fr\) auto minmax\(320px,1fr\)!important/);
 });
