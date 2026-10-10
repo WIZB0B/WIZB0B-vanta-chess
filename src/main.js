@@ -36,6 +36,8 @@ import { lazyWorker } from './lazy-worker.js';
 import { applyCastle, castleForMove, castleOptions, replay960 } from './castle960.js';
 import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
+import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
+import { explorerRows } from './explorer-view.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
 import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
@@ -913,7 +915,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -1264,7 +1266,7 @@ function applyServerState(payload,{animateMove=true}={}){
   if(archiveSession)leaveArchive({reset:false});
   // A heartbeat that left before the latest move must not take that move back.
   if(isStale(provisional,state,performance.now()))return;
-  if(studySession)endStudy({restore:false});
+  if(studySession)endStudy({restore:false});if(exploreSession)endExplore({restore:false});
   if(planSession){
     if(state.id===planSession.gameId&&Number(state.version)===Number(planSession.version)){serverGame={...serverGame,...state};return}
     planSession=null;toast('Your opponent moved; planning closed');
@@ -2066,9 +2068,11 @@ function wireSocialActions(root){
 function renderNotifyList(){
   const list=$('#notifyList');if(!list)return;
   const yourTurn=socialState.daily.filter(g=>g.yourTurn),items=[...socialState.incoming.map(c=>challengeHtml(c,true)),...yourTurn.map(dailyHtml)];
-  list.innerHTML=items.join('')||'<p class="menu-empty">No notifications yet. Challenges and your-move alerts in daily games appear here.</p>';
-  wireSocialActions(list);
-  const n=socialState.incoming.length+yourTurn.length,badge=$('#notifyCount');
+  const recent=inboxState.items.slice(0,6).map(inboxHtml).join('');
+  list.innerHTML=(items.join('')+(recent?`<h5 class="inbox-sub">Recent</h5>${recent}`:''))||'<p class="menu-empty">No notifications yet. Challenges, your move in daily games, tournament rounds, club messages and achievements appear here.</p>';
+  if(signedIn())list.insertAdjacentHTML('beforeend','<button class="inbox-all" type="button">See all notifications</button>');
+  wireSocialActions(list);wireInbox(list);list.querySelector('.inbox-all')?.addEventListener('click',()=>void openNotifications());
+  const n=badgeCount({unread:inboxState.unread,incoming:socialState.incoming.length,yourTurn:yourTurn.length,inboxAvailable:inboxState.available&&inboxState.items.length>0}),badge=$('#notifyCount');
   if(badge){badge.textContent=n>9?'9+':String(n);badge.classList.toggle('hidden',!n)}
 }
 async function refreshSocial(){
@@ -2080,7 +2084,7 @@ async function refreshSocial(){
       if(socialState.seenAccepted.has(a.id))continue;socialState.seenAccepted.add(a.id);
       if(!a.daily_days&&!isOnlineGame()&&mode!=='computer'){toast('Challenge accepted · opening the game');openGameCode(a.code);return}
     }
-    renderNotifyList();
+    renderNotifyList();void refreshInbox();
     if(currentRightView==='friends')drawFriendsLists();
   }catch{}
 }
@@ -2091,6 +2095,7 @@ function startSocial(){
     if(socialState.channel)realtimeClient.removeChannel(socialState.channel).catch(()=>{});
     socialState.channelFor=currentProfile.id;
     socialState.channel=realtimeClient.channel(`player:${currentProfile.id}`)
+      .on('broadcast',{event:'notify'},()=>void refreshInbox())
       .on('broadcast',{event:'tournament_game'},message=>{const code=message?.payload?.code;if(!code)return;toast(`Round ${message.payload.round} is ready`);if(!isOnlineGame()&&mode!=='computer')setTimeout(()=>{location.search='?game='+encodeURIComponent(code)},1200)})
       .on('broadcast',{event:'challenge'},()=>{toast('New challenge');void refreshSocial()})
       .on('broadcast',{event:'challenge_answer'},message=>{
@@ -2474,7 +2479,7 @@ async function castleOnline(opt){
 }
 // ---- Studies (src/study.js): annotate a line, share it by link ----
 let studySession=null;
-function freeBoard(){return !!planSession||!!studySession?.editing}
+function freeBoard(){return !!planSession||!!studySession?.editing||!!exploreSession}
 function endStudy({restore=true}={}){
   if(!studySession)return;studySession=null;
   if(mode==='study'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
@@ -2630,6 +2635,71 @@ function showReaction(id){
   const chip=document.createElement('span');chip.className='reaction-float';chip.textContent=label;chip.style.left=`${15+Math.random()*70}%`;
   chip.addEventListener('animationend',()=>chip.remove(),{once:true});setTimeout(()=>chip.remove(),3000);shell.append(chip);
 }
+// ---- Opening explorer from VCH games (server: opening_explorer) ----
+let exploreSession=null;
+function endExplore({restore=true}={}){
+  if(!exploreSession)return;exploreSession=null;
+  if(mode==='explore'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
+}
+function startExplorer(){
+  if(liveGameOn()&&mode!=='computer')return toast('The explorer opens after your game');
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  puzzleSession=null;streakSession=null;planSession=null;if(studySession)endStudy({restore:false});
+  if(mode==='computer'&&computerStarted){computerStarted=false;currentBot=null;myColor=null}
+  exploreSession={start:game.fen(),line:[]};mode='explore';orientationSet=true;
+  setPrimaryScreen('game');render();void drawExplorer();
+}
+function exploreMove(move){
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||'q'})}catch{}
+  if(!made)return rejectMove(move.from,move.to);
+  exploreSession.line.push(made.san);rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);void drawExplorer();
+}
+async function drawExplorer(){
+  if(!exploreSession)return;
+  const fen=game.fen(),html=`<article class="explorer"><p class="trainer-intro">What VCH players chose in this position, and how it went. Play moves on the board or tap a row.</p><div class="explorer-line">${exploreSession.line.length?escapeHtml(exploreSession.line.join(' ')):'Start position'}</div><div class="pp-actions"><button class="ex-back"${exploreSession.line.length?'':' disabled'}>Back one move</button><button class="ex-reset">Start position</button><button class="ex-close">Close</button></div><div class="explorer-table">${brandLoading('Looking up games…')}</div></article>`;
+  if(currentRightView!=='explorer')setDynamicView('explorer','VCH explorer',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const t=$('#dynamicView .view-content');if(!t)return;
+  t.querySelector('.ex-back').onclick=()=>{if(!exploreSession.line.length)return;game.undo();exploreSession.line.pop();boardShapes=[];render();void drawExplorer()};
+  t.querySelector('.ex-reset').onclick=()=>{game.reset();exploreSession.line=[];render();void drawExplorer()};
+  t.querySelector('.ex-close').onclick=()=>{endExplore();showMovesView()};
+  try{
+    const out=await api.openingExplorer(fen);if(!exploreSession||game.fen()!==fen)return;
+    const rows=explorerRows(out.moves||[]),slot=t.querySelector('.explorer-table');
+    slot.innerHTML=rows.length?`<div class="ex-head"><span>Move</span><span>Games</span><span>White · Draw · Black</span></div>${rows.map(r=>`<button class="ex-row" data-san="${escapeHtml(r.san)}"><b>${escapeHtml(r.san)}</b><span>${r.games} <small>${r.share}%</small></span><span class="ex-bar" aria-label="White ${r.white}%, draws ${r.draws}%, Black ${r.black}%"><i class="w" style="width:${r.white}%">${r.white>=14?r.white+'%':''}</i><i class="d" style="width:${r.draws}%">${r.draws>=14?r.draws+'%':''}</i><i class="b" style="width:${r.black}%">${r.black>=14?r.black+'%':''}</i></span></button>`).join('')}<p class="ex-total">${out.total} games from this position</p>`:'<p class="menu-empty">No VCH games reached this position yet.</p>';
+    slot.querySelectorAll('[data-san]').forEach(b=>b.onclick=()=>{let made=null;try{made=game.move(b.dataset.san)}catch{}if(!made)return;exploreSession.line.push(made.san);rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);void drawExplorer()});
+  }catch(error){const slot=t.querySelector('.explorer-table');if(slot)slot.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}
+}
+// ---- Notifications inbox (bell + full page) ----
+let inboxState={items:[],unread:0,available:true};
+async function refreshInbox(){
+  if(!signedIn())return;
+  try{const out=await api.notifications();inboxState={items:out.notifications||[],unread:Number(out.unread||0),available:true}}catch{inboxState.available=false}
+  renderNotifyList();if(currentRightView==='notifications')drawNotificationsPage();
+}
+function inboxHtml(n){
+  return `<button class="inbox-row${n.read_at?'':' unread'}" data-inbox="${escapeHtml(n.id)}" data-url="${escapeHtml(safeNotificationUrl(n.url))}"><i class="inbox-kind k-${escapeHtml(n.kind)}">${escapeHtml(KIND_LABEL[n.kind]||'VCH')}</i><span><b>${escapeHtml(n.title)}</b>${n.body?`<small>${escapeHtml(n.body)}</small>`:''}</span><em>${escapeHtml(timeAgo(n.created_at))}</em></button>`;
+}
+function wireInbox(root){
+  root.querySelectorAll('[data-inbox]').forEach(b=>b.onclick=async()=>{
+    const url=safeNotificationUrl(b.dataset.url);
+    void api.notificationsRead([b.dataset.inbox]).catch(()=>{});
+    if(url==='/'){b.classList.remove('unread');return void refreshInbox()}
+    location.assign(url);
+  });
+}
+async function drawNotificationsPage(){
+  const html=`<article class="inbox-page"><div class="pp-actions"><button class="inbox-readall"${inboxState.unread?'':' disabled'}>Mark all as read</button></div><div class="inbox-list">${inboxState.items.map(inboxHtml).join('')||'<p class="menu-empty">Nothing yet. Challenges, your-move alerts, tournament rounds, club messages and achievements land here.</p>'}</div></article>`;
+  if(currentRightView!=='notifications')setDynamicView('notifications','Notifications',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const t=$('#dynamicView .view-content');if(!t)return;wireInbox(t);
+  t.querySelector('.inbox-readall').onclick=async()=>{try{await api.notificationsRead();await refreshInbox()}catch(error){toast(error.message)}};
+}
+async function openNotifications(){
+  if(!signedIn())return openAccount();
+  menus.close('notifications');setPrimaryScreen('game');if(isMobileApp()){mTab='more';setMView('panel')}
+  setDynamicView('notifications','Notifications',brandLoading('Loading…'));await refreshInbox();drawNotificationsPage();
+}
+if(params.get('profile'))setTimeout(()=>{if(signedIn())openAccount()},900);
+if(params.get('league'))setTimeout(()=>{openSection('friends');void renderLeague()},900);
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
@@ -2829,7 +2899,7 @@ function openMoreSheet(){
     {label:'Board & pieces',run:()=>$('#theme').click()},
     {label:'Portrait & flag',run:()=>void openProfileEditor()},
     {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
-    {label:'Notifications',run:()=>$('#notifyBtn').click()},
+    {label:'Notifications',run:()=>void openNotifications()},
     {label:'Install the app',run:()=>$('#installBtn').click()},
   ]);
 }
@@ -3522,7 +3592,7 @@ function scheduleAnalysis({force=false,need=false}={}){
   },220);
 }
 function showMovesView(){
-  if(studySession)endStudy();
+  if(studySession)endStudy();if(exploreSession)endExplore();
   currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
   if(reviewState.viewing){reviewState.viewing=false;renderReviewDashboard();render()}
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
@@ -3530,6 +3600,7 @@ function showMovesView(){
 }
 function setDynamicView(kind,title,html){
   if(kind!=='study'&&studySession)endStudy();
+  if(kind!=='explorer'&&exploreSession)endExplore();
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
@@ -3568,8 +3639,10 @@ function renderStudy(kind,title,moves,meta=''){
 function renderOpenings(){
   const current=detectOpening(currentHistory());
   setDynamicView('openings','Opening Explorer',`
+    <button class="explorer-open">VCH explorer · what players here choose in any position</button>
     ${current?`<article class="current-opening"><small>CURRENT POSITION</small><h4>${escapeHtml(current.name)} <span>${current.eco}</span></h4><p>${escapeHtml(current.idea)}</p></article>`:''}
     <div class="library-list">${OPENINGS.map((o,i)=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p><button class="library-action" data-opening="${i}">Study this line</button></article>`).join('')}</div>`);
+  $('#dynamicView .explorer-open')?.addEventListener('click',startExplorer);
   $$('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }
 function renderFamous(){

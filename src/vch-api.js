@@ -115,6 +115,10 @@ export class VchApi {
   tournamentCreate(payload) { return this.request('tournament_create', payload); }
   accountExport() { return this.request('account_export'); }
   accountDelete(confirm) { return this.request('account_delete', { confirm }); }
+  notifications() { return this.request('notifications'); }
+  notificationsRead(ids = null) { return this.request('notifications_read', ids ? { ids } : {}); }
+  openingExplorer(fen) { return this.request('opening_explorer', { fen }); }
+  explorerBackfill() { return this.request('explorer_backfill'); }
 }
 
 export function stableGuestToken(storage = localStorage) {
