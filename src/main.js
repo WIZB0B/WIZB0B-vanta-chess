@@ -17,6 +17,7 @@ import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from 
 import { FLAG_URL, countryList, countryName } from './flags.js';
 import { avatarFromFile, setPortrait } from './portrait.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
+import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
 import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
@@ -205,6 +206,10 @@ ${splashMarkup(splash)}
         <div><b>Draw offer</b><small>Your opponent offered a draw · <span id="drawOfferCountdown">10s</span></small></div>
         <div><button id="declineDrawOffer" type="button">Decline</button><button id="acceptDrawOffer" type="button">Accept</button></div>
       </div>
+      <div id="abandonCard" class="draw-offer-card abandon-card hidden" role="status" aria-live="polite">
+        <div><b>Your opponent left</b><small id="abandonText">You can claim the win in 30s if they don't come back</small></div>
+        <div><button id="abandonDraw" type="button" class="hidden">Call it a draw</button><button id="abandonClaim" type="button" class="hidden">Claim win</button></div>
+      </div>
       <div class="player bottom" data-player-bar="local">
         <span class="avatar light" id="bottomAvatar">GU</span>
         <div class="player-info">
@@ -216,7 +221,7 @@ ${splashMarkup(splash)}
         </div>
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
-      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
+      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
     </section>
 
     <aside class="rpanel panel">
@@ -1010,6 +1015,18 @@ function syncLowTimeWarning(values,active){
   const seconds=live?Number(values?.[own]):Infinity,low=live&&seconds>0&&seconds<10;
   $('#bottomClock')?.classList.toggle('low-time',low);
   if(low&&!lowTimeWarned){lowTimeWarned=true;toast('Low time · under 10 seconds');playUiSound('warning')}
+  // Under 10 seconds on your own running clock: a soft tick every second.
+  const tick=tickSecond(seconds,live&&active===own);
+  if(tick!==null&&tick!==lastTickSecond){if(lastTickSecond!==null)playTick();lastTickSecond=tick}else if(tick===null)lastTickSecond=null;
+}
+let lastTickSecond=null;
+function playTick(){
+  if($('#sound')?.dataset.off)return;
+  try{
+    const a=audioContext(),t=a.currentTime,o=a.createOscillator(),g=a.createGain();
+    o.type='square';o.frequency.setValueAtTime(1650,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.035,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+.035);
+    o.connect(g).connect(a.destination);o.start(t);o.stop(t+.04);
+  }catch{}
 }
 function checkLocalTimeout(){
   if(mode!=='computer'||!computerStarted||localGameOver||game.isGameOver()||!localClockState)return;
@@ -1100,6 +1117,7 @@ function syncPlayerBars(){
   const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
+  $('#hint')?.classList.toggle('hidden',mode!=='computer');
   syncConnectionUi();syncClockBars();
 }
 function syncRoomUi(){
@@ -1460,12 +1478,62 @@ function startRealtime(){
       }
     });
 }
+// ---- Game moments: opponent left, "your move" tab title, screen kept awake ----
+const baseTitle=document.title;let wakeLock=null,wakeLockPending=false;
+function liveGameOn(){
+  if(mode==='computer')return computerStarted&&!localGameOver&&!game.isGameOver();
+  return isOnlineGame()&&!!myColor&&['active','playing','in_progress'].includes(serverGame?.status);
+}
+function syncAbandonCard(){
+  const card=$('#abandonCard');if(!card)return;
+  const online=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.bot_player_id&&!currentBot;
+  const opponentSeen=online?(myColor==='w'?serverGame.black_last_seen_at:serverGame.white_last_seen_at):null;
+  const opponentId=online?(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id):null;
+  const info=online&&opponentId?abandonState(opponentSeen,Date.now()+(Number(clockSnapshot?.serverOffset)||0)):{state:'here'};
+  card.classList.toggle('hidden',info.state==='here');
+  $('#abandonClaim')?.classList.toggle('hidden',info.state!=='claimable');
+  $('#abandonDraw')?.classList.toggle('hidden',info.state!=='claimable');
+  const text=$('#abandonText');
+  if(text)text.textContent=info.state==='claimable'?'Claim the win, or call it a draw':`You can claim the win in ${info.secondsLeft}s if they don't come back`;
+}
+function syncWakeLock(){
+  const want=liveGameOn()&&!document.hidden;
+  if(want&&!wakeLock&&!wakeLockPending&&navigator.wakeLock?.request){
+    wakeLockPending=true;
+    navigator.wakeLock.request('screen').then(lock=>{wakeLock=lock;lock.addEventListener('release',()=>{if(wakeLock===lock)wakeLock=null})}).catch(()=>{}).finally(()=>{wakeLockPending=false});
+  }else if(!want&&wakeLock){const lock=wakeLock;wakeLock=null;lock.release().catch(()=>{})}
+}
+function syncGameMoments(){
+  syncAbandonCard();syncWakeLock();
+  const yourTurn=liveGameOn()&&myColor===game.turn()&&mode!=='computer';
+  const title=tabTitle(baseTitle,{hidden:document.hidden,yourTurn});if(document.title!==title)document.title=title;
+}
+setInterval(syncGameMoments,1000);
+document.addEventListener('visibilitychange',syncGameMoments);
+async function claimAbandoned(outcome){
+  if(!serverGameId)return;
+  try{const out=await api.claimWin(serverGameId,outcome);applyServerState(out);broadcastAux('draw_hint',{from:realtimeClientId});toast(out.claimed==='draw'?'Game drawn':'You win · your opponent left')}
+  catch(error){toast(error.message);void refreshServerState()}
+}
+// Hint (computer games only): the engine's best move as a green arrow.
+async function showHint(){
+  if(mode!=='computer'||!computerStarted||localGameOver||game.isGameOver())return toast('Hints are for games against the computer');
+  if(game.turn()!==computerSide)return toast('Wait for your turn');
+  const fen=game.fen();
+  if(analysisBest?.fen!==fen){
+    scheduleAnalysis({force:true});toast('Thinking…',{duration:1200});
+    for(let i=0;i<30&&analysisBest?.fen!==fen;i++)await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  if(game.fen()!==fen||analysisBest?.fen!==fen)return toast('No hint yet, try again');
+  boardShapes=[...boardShapes.filter(shape=>shape.brush!=='green'),{from:analysisBest.from,to:analysisBest.to,brush:'green'}];renderBoard();
+}
 function startPolling(){
   if(!isOnlineGame()){stopPolling();return}
   if(pollTimer)return;
   pollCount=0;let inFlight=false;
   pollTimer=setInterval(async()=>{
-    if(document.hidden||!isOnlineGame()||inFlight)return;inFlight=true;
+    // Keeps beating in a background tab: a player who glances at another app isn't "gone".
+    if(!isOnlineGame()||inFlight)return;inFlight=true;
     try{
       const payload=await api.heartbeat(serverGameId);
       applyServerState(payload);
@@ -2003,7 +2071,7 @@ function engineLocked(){
   if(reviewState.running||reviewState.viewing)return false;
   return isOnlineGame()&&!!myColor&&['active','playing','in_progress'].includes(serverGame?.status);
 }
-let engineWasLocked=false;
+let engineWasLocked=false,analysisBest=null;
 function syncEngineLock(){
   const locked=engineLocked();
   $('.analysis')?.classList.toggle('engine-locked',locked);
@@ -2040,6 +2108,7 @@ function updateAnalysisFromUci(text,request){
   }
   const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(depth);
   const line=$('#line');if(line&&pv)line.textContent=formatPv(pv);
+  const best=firstMoveOfLine(pv);if(best&&depth>=6)analysisBest={fen:request.fen,depth,...best};
 }
 function scheduleAnalysis({force=false}={}){
   clearTimeout(analysisTimer);
@@ -2223,6 +2292,8 @@ document.addEventListener('keydown',event=>{
   if(event.key==='End'){event.preventDefault();setReviewPly(reviewState.moves.length)}
 });
 $('#acceptDrawOffer').onclick=()=>respondToDrawOffer(true,'accepted');
+$('#abandonClaim').onclick=()=>claimAbandoned('win');$('#abandonDraw').onclick=()=>claimAbandoned('draw');
+$('#hint').onclick=()=>{$('.game-more')?.removeAttribute('open');void showHint()};
 $('#declineDrawOffer').onclick=()=>respondToDrawOffer(false,'declined');
 $('#openChat').onclick=openChatDrawer;
 $('#closeChat').onclick=closeChatDrawer;

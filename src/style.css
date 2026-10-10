@@ -2310,3 +2310,8 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 .analysis.engine-locked .analysis-row,.analysis.engine-locked #advantage,.analysis.engine-locked #line,
 .analysis.engine-locked>small,.analysis.engine-locked header small{display:none}
 .engine-locked-note{margin:12px 0 2px;color:#a9b1b0;line-height:1.45;font-size:13px}
+
+/* Opponent left: same card as a draw offer, a cooler accent. */
+.abandon-card{border-color:rgba(130,237,186,.38)}
+.abandon-card #abandonClaim{background:linear-gradient(#efd59d,#d5ad64);color:#14130f;border-color:transparent}
+.abandon-card .hidden{display:none}
