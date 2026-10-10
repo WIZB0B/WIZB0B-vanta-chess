@@ -204,3 +204,115 @@ audit; chat content limits; basic anti-cheat flags noted for later.
 
 ## C1. Competitor comparison
 Feature matrix vs chess.com, lichess and others; list gaps.
+
+## Done 2026-10-09 (live in production via release PR #9)
+- Pieces (PR #7): Vanta (default) and Vanta Ink with bold dark outlines, fixed bishops, more
+  detailed Ink; new top-down 3D set Regal; filled selected square; selection clears after a move.
+- Piece reactions (PR #8): per-piece hover gestures, lean toward the cursor, press pull, touch
+  tap reaction, swelling legal-move dots.
+- Board fits the screen (PR #10, in review): board side = min(free height, free width).
+
+## N. Network and fair play (owner live test 2026-10-10)
+- N1 Instant online moves (PR #13): function pinned to us-east-2 next to the database; no
+  per-request CORS preflight; the mover relays each move over Realtime the moment it is played
+  (server stays the authority, `move_void` on rejection); 2 database round trips per move
+  instead of 5 (edge-function deploy needs owner approval).
+- N2 Fair play (PR #14): no engine analysis during live online games; returns at game end.
+- N3 Illegal-move feedback (PR #14): low double knock, king square blinks red when the king is
+  the reason.
+
+## MB. Mobile app layout (owner approved 2026-10-10; built in PR claude/mobile-app-layout)
+Desktop stays as it is. On phones the site should feel like the lichess / chess.com apps:
+- MB1 Bottom tab bar (Play, Puzzles, Learn, Watch, More) instead of the scrolling page; slim
+  top bar (logo, search, account). Menus open as bottom sheets.
+- MB2 Game screen with no scrolling: opponent bar (portrait, flag, tray, clock), board edge to
+  edge, own bar, a swipeable move strip, and an action bar (Options, Draw, Resign, Chat).
+  Top navigation hides while a game is on; the screen stays awake (Wake Lock).
+- MB3 Play home: one big Play button with a time sheet (Bullet / Blitz / Rapid), Play a friend,
+  Play the computer, Tournaments; below it a daily puzzle and live games.
+- MB4 App feel: safe areas, no pull-to-refresh or overscroll during a game, installable (PWA).
+- Built: body.m-app below 760px (src/mobile-shell.js). Views home / panel / game / review;
+  tabs Play, Puzzles, Learn, Games (famous games), More (sheet: Arena, Openings, Review, Board &
+  pieces, Portrait & flag, Account, Notifications, Install). Game view: back bar, player bars,
+  board, move strip (room code + copy while waiting), action bar Options / Draw / Resign / Chat /
+  Hint, and Review / Rematch / New game after the end. "Back to your game" pill on other screens.
+- Later: a Watch tab with live games once spectating exists; swipe through moves on the strip.
+
+## G. Game moments (owner approved 2026-10-10; PR #15)
+- G1 Claim win / draw 30s after the opponent leaves (server claim_win, deployed v17).
+- G2 Low-time tick under 10s. G3 Hint in computer games. G4 Screen stays awake. G5 "Your move"
+  tab title. Next ideas: takeback requests in casual games, a pre-move confirmation option for
+  slow connections, puzzle streaks, and a weekly arena.
+
+## R. Round 3 (owner approved 2026-10-10)
+- R1 Look back through any game without taking back; Undo against the computer (PR #17).
+- R2 Takeback requests in casual games; Watch tab for public live games; weekly arena every
+  Saturday 18:00 UTC (PR #18; chess v18 and migration takeback_offers deployed).
+- R3 My games + Game Story: archive with form insights, chapters, key moments, story
+  playback, replay your toughest moment (PR #19).
+- R4 Puzzle Streak, harder every three solves, one skip (PR #20). Fixed: tapped puzzle moves
+  never matched because taps always send a queen promotion.
+
+## S. Round 4 (owner approved 2026-10-10)
+Server code is in PR #21; the migration `20261010180000_round4_social_daily_berserk` and
+chess v19 are NOT deployed yet (owner cancelled the migration step; waiting for approval).
+- S1 Berserk: one charge at every 3rd straight rated win (never stacked); a loss removes an
+  unspent charge, a draw keeps it. Spend it before your first move in a live rated game:
+  half your clock, rating change x1.25 win or lose (same stakes both ways, so no free Elo).
+  Arena: 3 wins in a row = on fire (wins 4, draws 2); a Berserk win adds 1. (PR #21, #22)
+- S2 Friends: search, follow, online status, direct challenges (live or daily, casual or
+  rated, colour), bell notifications, realtime hints on `player:<id>`. (PR #22)
+- S3 Daily games: 1/3/7 days per move, own "daily" rating pool, no abandon claims; web push
+  for your move and challenges (VAPID private key only in `chess_server_secrets`). (PR #22)
+- S4 Achievements (11 badges) on the profile. (PR #21, #22)
+- S5 Puzzle rating (first try only), difficulty from your rating, daily puzzle, theme stats
+  and theme training, server streak record. (PR #23)
+- S6 Opening trainer from your own games; share Game Story as an image card or clip. (PR #24)
+- S7 Sign-in checked locally (ES256 JWKS) with a getUser fallback, to cut a round trip per
+  request. Verify after deploy: logs should rarely show "fell back to auth.getUser".
+
+## E. Expressions (prototype PR, owner reviewing the demo video)
+Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
+- E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
+- E2 Landing ring on every drop; shockwave across the board when the mover is ahead and lands
+  within 2 squares of enemy pieces, which flinch nearest first. (prototype; "ahead" = material)
+- E3 Moods: fear (attacked, not safely defended; king in check), attack (leans toward a bigger
+  or undefended target), courage (attacked but defended), shock. Hover intensifies. 3D sets
+  express more than Ink sets. (prototype)
+- E4 Fair play (owner decision 2026-10-10): expressions stay ON in rated games, softer ("fair"
+  level), and decide automatically what to show: only contact threats (pieces next to each
+  other) and checks. Long-range bishop/rook/queen threats and hanging pieces are never shown,
+  so captures can still be a surprise. All other modes get full expressions. Players can set
+  Full / Subtle / Off in Theme Studio. Engine evaluation never drives effects in live games.
+  (prototype)
+- E5 More expressions: strength/triumph after a capture, despair for a lone king, victory and
+  defeat poses at game end, idle breathing.
+- E6 Setting: Expressions Full / Subtle / Off (prototype in Theme Studio); later in the Settings page, plus a separate shockwave toggle.
+- E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
+
+## P. Piece sets, themes and store (later; owner will send references)
+- P1 More piece sets, each in a 3D and a 2D version, all supporting expressions (3D fuller).
+- P2 Themed sets generated in Higgsfield: each theme = pieces + board + background + its own
+  theme song; users can still mix and customise.
+- P3 Medieval realistic 3D set: real soldiers with shields, swords and helmets as the pieces,
+  the king behind the lines. Owner will send a reference before we start.
+- P4 Premium piece sets and skins behind a paywall, better than anything on chess.com. Last
+  part of the project (needs payments, entitlements and a store page).
+
+## A. Accounts, profile and legal (owner request 2026-10-10)
+- A1 Player portraits (done 2026-10-10, PR claude/game-feel): guests show an empty silhouette;
+  signed-in players upload a picture (cropped to 128px, stored as a small inline image in
+  `chess_players.avatar_data`, so the CSP needs no new origin). Later: pick a VCH avatar.
+- A2 Country flag beside every name (done 2026-10-10, same PR): a one-time prompt and the
+  "Edit portrait & flag" menu. "Detect" asks `/api/geo` (Netlify edge) only when pressed and keeps
+  just the 2-letter code (`chess_players.country_code`, never the IP); players can change or hide
+  it. Migration applied and `chess` function v16 deployed with owner approval.
+- A3 Terms and conditions, privacy policy (what we store, why, how to delete it) and a cookie /
+  storage notice if analytics are ever added. Linked from sign-up and the footer.
+- A4 Backend security pass later (see S1): RLS review, rate limits, anti-cheat signals.
+
+## I. Ideas proposed by Claude (approved 2026-10-10; done in PR claude/game-feel)
+- I1 Captured-pieces tray by each player bar with the material difference (+3).
+- I2 Game-end cinematic: the winner's pieces cheer, the losing king topples (uses expressions).
+- I3 Review mode: pieces react to move quality (brilliant glow, blunder slump).
+- I4 Haptics on phones: light buzz on pick-up, firmer on capture and check.
