@@ -13,7 +13,7 @@ test('online games use one Realtime channel and a 5s heartbeat fallback',()=>{
   assert.match(main,/\.channel\(\`game:\$\{gameId\}\`,\{config:\{broadcast:\{self:true\}\}\}\)/);
   assert.match(main,/\.on\('broadcast',\{event:'state'\},message=>\{handleRealtimeMessage\(message\)\}\)/);
   assert.match(main,/\.on\('broadcast',\{event:'moved'\},message=>\{handleRealtimeMessage\(message\)\}\)/);
-  assert.match(main,/realtimeChannel\.send\(\{type:'broadcast',event:'moved',payload:\{gameId,version:Number\(version\),from,to,promotion:promotion\|\|null,fenBefore\}\}\)/);
+  assert.match(main,/realtimeChannel\.send\(\{type:'broadcast',event:'moved',payload:\{gameId,version:Number\(version\),from,to,promotion:promotion\|\|null,fenBefore,\.\.\.\(early\?\{provisional:true\}:\{\}\)\}\}\)/);
   assert.match(main,/const authoritative=await api\.heartbeat\(requestedGameId\)/);
   assert.match(main,/if\(authoritativeVersion>serverVersion\)\{applyServerState\(authoritative\);playTone\(\)\}/);
   assert.doesNotMatch(main,/\.on\('broadcast',\{event:'state'\},message=>\{[\s\S]{0,400}applyServerState\(/);
