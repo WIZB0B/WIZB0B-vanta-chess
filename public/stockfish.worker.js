@@ -62,8 +62,8 @@ function start(request){
 
 self.onmessage=({data})=>{
   try{
+    if(data?.action==='stop'){queued=null;if(engine&&searching)engine.postMessage('stop');return} // nothing to stop yet
     const worker=ensureEngine();
-    if(data?.action==='stop'){queued=null;if(searching)worker.postMessage('stop');return}
     if(!data?.fen)return;
     const request={mode:data.mode==='analysis'?'analysis':'bot',fen:String(data.fen),elo:data.elo,nodes:data.nodes,depth:data.depth,requestId:data.requestId??null};
     if(searching){queued=request;worker.postMessage('stop');return}

@@ -18,13 +18,25 @@ export function outcomeFor(result, myColor) {
 export function archiveEntryFromServer(g, myId) {
   const myColor = g.white_player_id === myId ? 'w' : g.black_player_id === myId ? 'b' : 'w';
   return {
-    id: g.id, source: g.source === 'tournament' ? 'arena' : 'online', pgn: g.pgn || '', result: g.result || '*',
+    id: g.id, source: g.source === 'tournament' ? 'arena' : 'online', pgn: Array.isArray(g.sans) && g.sans.length ? pgnFromSans(g.sans, g.start_fen, g.result, g.white_name, g.black_name) || g.pgn || '' : g.pgn || '', result: g.result || '*',
     white: g.white_name || 'White', black: g.black_name || 'Black', myColor,
     whiteRating: g.white_rating_before ?? null, blackRating: g.black_rating_before ?? null,
     ratingDelta: myColor === 'w' ? g.white_rating_delta ?? null : g.black_rating_delta ?? null,
     rated: !!g.rated, base: Number(g.time_control_seconds || 600), inc: Number(g.increment_seconds || 0),
     date: g.ended_at || g.created_at || null, moves: Number(g.move_count || 0),
   };
+}
+
+// The server's stored PGN only held the last move for games before 2026-10-10, so the
+// archive rebuilds every game from its move list.
+export function pgnFromSans(sans = [], startFen = null, result = '*', white = 'White', black = 'Black') {
+  try {
+    const c = startFen ? new Chess(startFen) : new Chess();
+    for (const san of sans) c.move(san);
+    c.setHeader('White', String(white || 'White')); c.setHeader('Black', String(black || 'Black'));
+    if (['1-0', '0-1', '1/2-1/2'].includes(result)) c.setHeader('Result', result);
+    return c.pgn();
+  } catch { return ''; }
 }
 
 // Computer games live only in this browser.

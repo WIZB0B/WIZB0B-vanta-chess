@@ -32,6 +32,7 @@ import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './
 import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
+import { lazyWorker } from './lazy-worker.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
 import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
@@ -82,9 +83,11 @@ let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
 let moveEvalByPly=[],moveTimeByPly=[];
 let reviewState={running:false,viewing:false,currentPly:0,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
 let reviewPending=null;
-const stockfish=new Worker('/stockfish.worker.js');
-const analysisWorker=new Worker('/stockfish.worker.js');
-const reviewWorker=new Worker('/stockfish.worker.js');
+// Engine workers start on first real use, so the first page load only downloads what the
+// screen shows (the 1.8 MB engine waits until a bot move, analysis or review needs it).
+const stockfish=lazyWorker('/stockfish.worker.js');
+const analysisWorker=lazyWorker('/stockfish.worker.js');
+const reviewWorker=lazyWorker('/stockfish.worker.js');
 // Bot moves, live analysis and game review each own a separate Stockfish worker, so the
 // bot and analysis never share one engine.
 let engineRequestSeq=0,analysisRequest=null;
@@ -841,7 +844,7 @@ async function beginMatchSearch(){
 function renderComputerBots(){
   const grid=$('#botGrid');if(!grid)return;
   if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=computerBots.find(bot=>Number(bot.elo)===1500)?.slug||computerBots[0]?.slug||'';
-  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt=""></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
+  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
   $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;renderComputerBots()});
 }
 async function loadComputerBots(){
@@ -2911,7 +2914,13 @@ async function showAuthLinkError(error){
   }
 }
 
-if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
+// The service worker (offline play, push) installs once the page is idle, so its downloads
+// never compete with the first screen.
+if('serviceWorker' in navigator){
+  const registerSw=()=>navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  const whenIdle=()=>(window.requestIdleCallback?requestIdleCallback(registerSw,{timeout:8000}):setTimeout(registerSw,3000));
+  if(document.readyState==='complete')setTimeout(whenIdle,1500);else window.addEventListener('load',()=>setTimeout(whenIdle,1500),{once:true});
+}
 
 function escapeHtml(value=''){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
 function moveRecordSignature(records=[]){return records.map(record=>`${record.from||''}${record.to||''}${record.promotion||''}:${normalizedSan(record.san||record.lan||'')}`).join('|')}
@@ -3199,6 +3208,7 @@ function scheduleAnalysis({force=false}={}){
   analysisTimer=setTimeout(()=>{
     if(botThinking)return;
     const fen=game.fen();
+    if(!currentHistory().length)return; // "Analysis begins after your move": no engine download before then
     if(!force&&analysisRequest?.fen===fen)return;
     analysisRequest={id:`analysis-${++engineRequestSeq}`,fen,ply:currentHistory().length,depth:0};
     analysisWorker.postMessage({mode:'analysis',fen,depth:ANALYSIS_MAX_DEPTH,requestId:analysisRequest.id});

@@ -1,4 +1,4 @@
-const CACHE = 'vanta-shell-v2';
+const CACHE = 'vanta-shell-v3';
 // Offline play: the engine and the built app bundles are cached at install, so the
 // computer opponent works with no connection.
 const ENGINE = ['/stockfish.worker.js', '/engines/stockfish-19-lite-single.js', '/engines/stockfish-19-lite-single.wasm'];
@@ -8,7 +8,7 @@ async function appBundles() {
     return [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map(m => m[1]))];
   } catch { return []; }
 }
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/assets/vch/brand/vch-metal.svg', '/assets/vch/brand/vch-logo-light.svg', '/assets/vch/brand/brand-atmosphere.png', '/assets/vch/pieces/wk.webp', '/assets/vch/pieces/wq.webp', '/assets/vch/pieces/wr.webp', '/assets/vch/pieces/wb.webp', '/assets/vch/pieces/wn.webp', '/assets/vch/pieces/wp.webp', '/assets/vch/pieces/bk.webp', '/assets/vch/pieces/bq.webp', '/assets/vch/pieces/br.webp', '/assets/vch/pieces/bb.webp', '/assets/vch/pieces/bn.webp', '/assets/vch/pieces/bp.webp', '/assets/vch/wallpapers/wallpaper-emerald.webp', '/assets/vch/ui/hero-knight.webp', '/assets/vch/ui/opening-card.webp', '/assets/vch/ui/famous-card.webp', '/assets/vch/ui/review-card.webp', '/assets/vch/ui/practice-card.webp', '/assets/vch/ui/live-banner.webp'];
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/assets/vch/brand/vch-metal.svg', '/assets/vch/brand/vch-logo-light.svg', '/assets/vch/brand/brand-atmosphere.png', '/assets/vch/pieces/vanta-3d-1x.png', '/assets/vch/pieces/vanta-3d.png', '/assets/vch/wallpapers/wallpaper-emerald.webp', '/assets/vch/ui/hero-knight.webp', '/assets/vch/ui/opening-card.webp', '/assets/vch/ui/famous-card.webp', '/assets/vch/ui/review-card.webp', '/assets/vch/ui/practice-card.webp', '/assets/vch/ui/live-banner.webp'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(async cache => {
   await cache.addAll(SHELL);
   await Promise.all([...ENGINE, ...(await appBundles())].map(url => cache.add(url).catch(() => {})));

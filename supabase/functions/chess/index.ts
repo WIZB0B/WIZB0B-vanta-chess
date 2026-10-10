@@ -296,7 +296,7 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;const o=outcome(c),history=Array.isArray(g.move_history)?g.move_history:[];
   if(g.daily_days){wt=dailyMoveMs(g.daily_days);bt=wt} // each move gets the full days again
   const {data,error}=await admin.from("chess_games").update({
-    fen:c.fen(),pgn:c.pgn(),move_history:[...history,{from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
+    fen:c.fen(),pgn:o.result==="*"?c.pgn():fullPgn(g,[...history,m],o.result),move_history:[...history,{from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,
     white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,takeback_offer_by:null,takeback_offer_version:null,
     ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
@@ -313,6 +313,16 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   }
   if(g.variant==="freestyle"&&o.result!=="*")EdgeRuntime.waitUntil(Promise.all([g.white_player_id,g.black_player_id].filter(Boolean).map(async(id:string)=>awardAchievements(await playerById(id),{freestyleFinished:true}))).then(()=>{}).catch(()=>{}));
   return {game:nextGame,move:m}
+}
+// The whole game as PGN (each move is applied to a board built from the stored FEN, so
+// c.pgn() alone only holds the last move). Written when the game ends.
+function fullPgn(g:any,moves:any[],result:string){
+  try{
+    const c=new Chess(g.start_fen||START_FEN);
+    for(const m of moves)c.move({from:m.from,to:m.to,promotion:m.promotion||undefined});
+    c.setHeader("White",String(g.white_name||"White"));c.setHeader("Black",String(g.black_name||"Black"));c.setHeader("Result",result);c.setHeader("Site","VCH");
+    return c.pgn();
+  }catch{return ""}
 }
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
   // Player and game are fetched at the same time; nothing else is read before the move is written.
@@ -859,8 +869,9 @@ async function respondDraw(req:Request,b:any){
 }
 async function gameHistory(req:Request,b:any){
   const p=await playerFor(req,b),limit=Math.max(1,Math.min(100,Number(b.limit||30)));
-  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
-  if(error)throw error;return {games:data||[]}
+  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen,move_history").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
+  if(error)throw error;
+  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=g;return {...rest,sans:Array.isArray(move_history)?move_history.map((m:any)=>m.san||"").filter(Boolean):[]}})}
 }
 
 const cleanChat=(v:any)=>String(v||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\s+/g," ").trim().slice(0,280);

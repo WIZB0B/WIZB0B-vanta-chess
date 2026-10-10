@@ -58,3 +58,10 @@ test('key moments, the worst moment and the story pace', () => {
   assert.ok(storyDelayMs(4, moments) > storyDelayMs(3, moments));
   assert.equal(chapterAccuracy(results, moves, { from: 1, to: 1 }, 'b'), null);
 });
+
+test('archive: online games are rebuilt from the full move list, not the one-move PGN', async () => {
+  const { archiveEntryFromServer, sansFromPgn } = await import('../src/game-story.js');
+  const g = { id: 'g', white_player_id: 'me', black_player_id: 'x', white_name: 'Me', black_name: 'X', result: '1-0', pgn: '[SetUp "1"]\n[FEN "rnbqkbnr/pppp1ppp/8/4p3/4P3/5Q2/PPPP1PPP/RNB1KBNR w KQkq - 2 3"]\n\n3. Qxf7# *', sans: ['e4', 'e5', 'Qf3', 'Nc6', 'Bc4', 'Nd4', 'Qxf7#'] };
+  const e = archiveEntryFromServer(g, 'me');
+  assert.deepEqual(sansFromPgn(e.pgn), g.sans);
+});

@@ -28,7 +28,7 @@ test('offline: the app opens from the cache and the computer plays without a con
   await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', route => route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ player: { id: 'me' }, bots: [] }) }));
   await page.goto('/');
   await page.evaluate(async () => { const reg = await navigator.serviceWorker.ready; await new Promise(r => setTimeout(r, 500)); return !!reg.active });
-  await expect.poll(() => page.evaluate(async () => (await (await caches.open('vanta-shell-v2')).keys()).some(r => r.url.endsWith('.wasm')))).toBe(true);
+  await expect.poll(() => page.evaluate(async () => (await (await caches.open('vanta-shell-v3')).keys()).some(r => r.url.endsWith('.wasm')))).toBe(true);
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('#offlineBar')).toBeVisible();
