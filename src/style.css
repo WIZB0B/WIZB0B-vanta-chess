@@ -2691,3 +2691,20 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .mod-case small{display:block;color:var(--muted);font-size:11px}.mod-case em{font-style:normal;color:var(--gold);font-size:11px}
 .mod-head h4{margin:0;font-size:18px}.mod-head small{color:var(--muted)}.mod-flag{color:#ff9b88}
 .mod h4{margin:14px 0 6px}.mod-games span{font-size:11px}
+
+/* === Studies === */
+.study-panel{display:grid;gap:8px}
+.study-panel h4{margin:0;font-size:18px}.study-by{color:var(--muted)}
+.study-title,.study-intro,.study-comment textarea,.study-open input{width:100%;padding:9px 11px;border-radius:8px;border:1px solid #3b4848;background:#091416;color:var(--text);font:inherit;resize:vertical}
+.study-title{font-weight:700;font-size:15px}
+.study-comment{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.study-panel .study-moves{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#0b1715;min-height:44px}
+.study-panel .study-moves button{padding:4px 7px;border-radius:6px;font-size:12px}
+.study-panel .study-moves button.current{background:#1f3a31;box-shadow:inset 0 0 0 1px var(--mint)}
+.study-panel .study-moves button.has-note{text-decoration:underline dotted var(--gold);text-underline-offset:3px}
+.study-panel .study-controls{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.study-panel .study-controls button{padding:8px;border:1px solid var(--line);border-radius:7px;background:#14211f}
+.study-note{margin:0;padding:8px 10px;border-left:3px solid var(--gold);background:#14211f;border-radius:0 8px 8px 0;font-size:13px}
+.study-intro-text{margin:0;color:var(--muted)}
+.studies .club-row button.study-del{color:#ff9b88}
+.study-open{margin:6px 0}

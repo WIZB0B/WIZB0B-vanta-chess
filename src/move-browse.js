@@ -1,4 +1,5 @@
 import { Chess } from 'chess.js';
+import { replay960 } from './castle960.js';
 
 // Looking back through a game without taking anything back (chess.com's arrows). The board
 // shows an earlier position; moves can't be made from it, and any new move (yours or the
@@ -7,7 +8,16 @@ import { Chess } from 'chess.js';
 // Positions after each move of `records` (SAN or {from,to,promotion}); positions[0] is the
 // start. If the live position is further along than the records (a move still on its way to
 // the server), it is added as the last position.
+const isCastleRecord = r => !!r?.castle || /^O-O/.test(typeof r === 'string' ? r : r?.san || '');
 export function browseLine(records = [], liveFen = null, startFen = undefined) {
+  // Chess960 castles (Freestyle) aren't chess.js moves: replay those games with castle960.
+  if (startFen && records.some(isCastleRecord)) {
+    const out = replay960(Chess, startFen, records), placement = fen => String(fen || '').split(' ')[0];
+    const moves = out.moves.map(m => ({ from: m.from, to: m.to, san: m.san, color: m.color, piece: m.piece, captured: m.captured || null }));
+    const positions = out.positions;
+    if (liveFen && placement(positions.at(-1)) !== placement(liveFen)) { positions.push(liveFen); moves.push(null); }
+    return { positions, moves };
+  }
   const position = startFen ? new Chess(startFen) : new Chess(), positions = [position.fen()], moves = [];
   for (const record of records) {
     let made = null;

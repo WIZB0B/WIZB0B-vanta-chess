@@ -24,6 +24,7 @@ export function archiveEntryFromServer(g, myId) {
     ratingDelta: myColor === 'w' ? g.white_rating_delta ?? null : g.black_rating_delta ?? null,
     rated: !!g.rated, base: Number(g.time_control_seconds || 600), inc: Number(g.increment_seconds || 0),
     date: g.ended_at || g.created_at || null, moves: Number(g.move_count || 0),
+    variant: g.variant || 'standard', startFen: g.start_fen || null, sans: Array.isArray(g.sans) ? g.sans : null,
   };
 }
 

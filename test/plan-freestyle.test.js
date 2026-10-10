@@ -24,5 +24,5 @@ test('wiring: plans take over the board only while planning; reviews use the rea
   assert.match(main, /if\(planSession&&!remote\)return planMove\(move\);/);
   assert.match(main, /if\(state\.id===planSession\.gameId&&Number\(state\.version\)===Number\(planSession\.version\)\)\{serverGame=\{\.\.\.serverGame,\.\.\.state\};return\}/);
   assert.match(main, /function buildReviewGame\(records=currentReviewRecords\(\),startFen=reviewStartFen\(\)\)/);
-  assert.match(main, /rated:rated&&\$\('#variant'\)\.value!=='freestyle'/, 'Freestyle rooms are casual');
+  assert.match(main, /rated,variant:\$\('#variant'\)\.value\}/, 'Freestyle rooms can be rated (own pool)');
 });
