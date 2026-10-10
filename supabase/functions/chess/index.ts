@@ -26,6 +26,7 @@ const corsFor=(req:Request)=>{
     "Access-Control-Allow-Methods":"POST,OPTIONS",
     "Access-Control-Max-Age":"86400",
     "Content-Type":"application/json",
+    "Cache-Control":"no-store",
   };
 };
 const START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -84,11 +85,19 @@ async function uniqueUsername(raw:string,fallback="player"){
   for(let i=0;i<20;i++){const candidate=i?((base.slice(0,15)+"_"+Math.floor(1000+Math.random()*9000)).slice(0,20)):base;const {data}=await admin.from("chess_players").select("id").ilike("username",candidate).limit(1);if(!data?.length)return candidate}
   throw fail("Could not allocate a username.",409)
 }
-async function playerFor(req:Request,b:any={},requireAccount=false){
+// The token's subject, read without trusting it: only used to start the player lookup while
+// auth.getUser verifies the token in parallel (the result is used only if they match).
+const jwtSubject=(token:string)=>{try{const part=token.split(".")[1]||"";const json=JSON.parse(atob(part.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(part.length/4)*4,"=")));return typeof json.sub==="string"?json.sub:""}catch{return ""}};
+// touch=false skips the last-seen write (moves: the heartbeat keeps last-seen fresh), so a
+// move costs two database round trips instead of five.
+async function playerFor(req:Request,b:any={},requireAccount=false,{touch=true}:{touch?:boolean}={}){
   const auth=req.headers.get("authorization")||"";const bearer=auth.toLowerCase().startsWith("bearer ")?auth.slice(7).trim():"";
   if(bearer){
-    const {data,error}=await admin.auth.getUser(bearer);if(error||!data.user)throw fail("Invalid or expired sign-in.",401);
-    const user=data.user;let p=await one("chess_players","auth_user_id",user.id);
+    const sub=jwtSubject(bearer);
+    const [verified,early]=await Promise.all([admin.auth.getUser(bearer),sub?one("chess_players","auth_user_id",sub).catch(()=>null):Promise.resolve(null)]);
+    const {data,error}=verified;if(error||!data.user)throw fail("Invalid or expired sign-in.",401);
+    const user=data.user;let p=early&&early.auth_user_id===user.id?early:await one("chess_players","auth_user_id",user.id);
+    if(p&&!touch&&!b.name&&!b.username)return p;
     if(!p){
       const seed=b.username||user.user_metadata?.username||String(user.email||"player").split("@")[0],username=await uniqueUsername(seed,"player");
       const {data:made,error:e}=await admin.from("chess_players").insert({auth_user_id:user.id,device_hash:await hash("auth:"+user.id),username,display_name:cleanName(b.name||username),account_created_at:nowIso(),last_seen_at:nowIso()}).select().single();
@@ -103,6 +112,7 @@ async function playerFor(req:Request,b:any={},requireAccount=false){
   if(requireAccount)throw fail("Sign in to use rated play.",401);
   const token=String(b.token||"");if(token.length<20)throw fail("Player identity is missing.");
   const dh=await hash(token);let p=await one("chess_players","device_hash",dh);
+  if(p&&!touch)return p;
   if(!p){
     const {data,error}=await admin.from("chess_players").insert({device_hash:dh,display_name:cleanName(b.name),last_seen_at:nowIso()}).select().single();
     if(error){
@@ -230,7 +240,8 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   return {game:nextGame,move:m}
 }
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
-  const p=await playerFor(req,b);const g=await gameById(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")throw fail("Game is not active.",409);
+  // Player and game are fetched at the same time; nothing else is read before the move is written.
+  const [p,g]=await Promise.all([playerFor(req,b,false,{touch:false}),gameById(b.gameId)]);if(!g)throw fail("Game not found.",404);if(g.status!=="active")throw fail("Game is not active.",409);
   const color=g.white_player_id===p.id?"w":g.black_player_id===p.id?"b":null;if(!color)throw fail("You are not a player in this game.",403);
   if(g.bot_player_id===p.id)throw fail("Bot seats cannot be controlled by player credentials.",403);
   return applyMove(g,color,b,serverReceivedMs)

@@ -16,6 +16,7 @@ import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-express
 import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
 import { FLAG_URL, countryList, countryName } from './flags.js';
 import { avatarFromFile, setPortrait } from './portrait.js';
+import { CONFIRM_WAIT_MS, confirms, isExpired, isStale, provisionalMove, waiter } from './online-sync.js';
 import { vchDialog } from './vch-dialog.js';
 import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
@@ -36,7 +37,7 @@ const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{p
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
 let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
 let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
@@ -841,9 +842,14 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
   onlineMovePending=true;let resendStaleMove=false;
   lastLocalRealtimeMove={gameId:moveGameId,version:expectedVersion+1,from:made.from,to:made.to,promotion:made.promotion||null,fenBefore};
   rememberLastMove(made);
+  setProvisional(moveGameId,expectedVersion+1);
   selected=null;switchOnlineClockOptimistically();render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
+  // The opponent sees the move now, not after the server round trip.
+  broadcastMoved(moveGameId,expectedVersion+1,lastLocalRealtimeMove,{early:true});
   try{
     await nextFrames(2); // the slide is under way before the request is built and sent
+    // Replying to a move the server hasn't confirmed yet: give it a moment so our version matches.
+    if(relayConfirm)await relayConfirm.promise;
     const state=await api.move(moveGameId,expectedVersion,{from:move.from,to:move.to,promotion:made.promotion||undefined,clientMoveAt});
     const acceptedGame=state.game||state,incomingVersion=Number(acceptedGame?.version??0),movedGameId=acceptedGame?.id||moveGameId;
     if(lastLocalRealtimeMove&&lastLocalRealtimeMove.gameId===moveGameId)lastLocalRealtimeMove={...lastLocalRealtimeMove,version:incomingVersion||lastLocalRealtimeMove.version};
@@ -851,6 +857,8 @@ async function makeMove(move,remote=false,retry=true){if(puzzleSession&&!remote)
     if(moveGameId===serverGameId&&incomingVersion>serverVersion)applyServerState(state,{animateMove:false});
   }catch(error){
     if(lastLocalRealtimeMove?.gameId===moveGameId)lastLocalRealtimeMove=null;
+    if(provisional?.gameId===moveGameId)provisional=null;
+    broadcastAux('move_void',{from:realtimeClientId,version:expectedVersion+1});
     if(moveGameId===serverGameId){
       await refreshServerState();render();
       // A 409 means our version was stale (e.g. the opponent's join bumped it); resend once if the move is still ours and legal.
@@ -1114,6 +1122,9 @@ function syncOpponentConnectionToast(state){
 }
 function applyServerState(payload,{animateMove=true}={}){
   const state=payload.game||payload;if(!state)return;
+  // A heartbeat that left before the latest move must not take that move back.
+  if(isStale(provisional,state,performance.now()))return;
+  if(provisional&&(confirms(provisional,state)||isExpired(provisional,performance.now())))clearProvisional();
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
@@ -1268,9 +1279,35 @@ function sendRealtimePing(){
     if(pingProbe?.nonce===nonce){clearPingProbe();latencyMs=null;syncConnectionUi()}
   });
 }
-function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={}){
+function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={},{early=false}={}){
   if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId)return;
-  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore}}).catch(()=>{});
+  realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore,...(early?{provisional:true}:{})}}).catch(()=>{});
+}
+// Provisional moves (see online-sync.js): shown at once, confirmed by the server shortly after.
+function setProvisional(gameId,version){provisional=provisionalMove(gameId,version,performance.now())}
+function clearProvisional(){provisional=null;if(relayConfirm){relayConfirm.resolve();relayConfirm=null}}
+// The opponent's provisional move: wait (briefly) for the server to confirm it, then make
+// sure the board matches the server. Our reply is held until then so its version is right.
+function awaitRelayConfirmation(gameId,version){
+  if(relayConfirm)relayConfirm.resolve('replaced');
+  const wait=waiter(CONFIRM_WAIT_MS);relayConfirm=wait;
+  void wait.promise.then(result=>{
+    if(relayConfirm===wait)relayConfirm=null;
+    if(serverGameId!==gameId)return;
+    // No confirmation in time, or a hint arrived: ask the server (rolls back if it never landed).
+    if(result!=='replaced'&&(result==='timeout'||provisional?.version===version))void refreshServerState();
+  });
+}
+function confirmRelayHint(incoming){
+  if(!provisional||incoming.gameId!==provisional.gameId||incoming.version<provisional.version)return false;
+  if(relayConfirm){relayConfirm.resolve('hint');return true}
+  return false;
+}
+function handleMoveVoid(message){
+  const payload=message?.payload||{};
+  if(payload.gameId!==serverGameId||payload.from===realtimeClientId)return;
+  provisional=null;if(relayConfirm){relayConfirm.resolve('void');relayConfirm=null}
+  void refreshServerState();
 }
 function realtimeMove(message){
   const payload=message?.payload||{},gameState=payload.game||payload,history=Array.isArray(gameState?.move_history)?gameState.move_history:[];
@@ -1281,7 +1318,8 @@ function realtimeMove(message){
     from:payload.from||lastMove.from,
     to:payload.to||lastMove.to,
     promotion:payload.promotion??lastMove.promotion??null,
-    fenBefore:payload.fenBefore||payload.fen_before||lastMove.fenBefore||lastMove.fen_before||gameState?.fenBefore||gameState?.fen_before||''
+    fenBefore:payload.fenBefore||payload.fen_before||lastMove.fenBefore||lastMove.fen_before||gameState?.fenBefore||gameState?.fen_before||'',
+    provisional:payload.provisional===true
   };
   if(!incoming.fenBefore&&incoming.from&&incoming.to&&gameState?.fen){
     try{
@@ -1311,6 +1349,12 @@ function applyRealtimeMove(incoming){
   try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
   rememberLastMove(made);
   serverVersion=incoming.version;selected=null;switchOnlineClockOptimistically();render({hint:made});afterBoardPaint(playTone);
+  if(incoming.provisional){
+    // Shown straight away; the server's confirmation (or its absence) settles it shortly.
+    setProvisional(incoming.gameId,incoming.version);awaitRelayConfirmation(incoming.gameId,incoming.version);
+    playQueuedPremove();
+    return true;
+  }
   const premoveResult=playQueuedPremove();
   if(premoveResult)void Promise.resolve(premoveResult).finally(()=>refreshServerState());else void refreshServerState();
   return true;
@@ -1336,6 +1380,7 @@ function handleRealtimeMessage(message){
   if(!isOnlineGame()||incoming.gameId!==serverGameId)return;
   if(isOwnRealtimeMove(incoming))return;
   if(applyRealtimeMove(incoming))return;
+  if(confirmRelayHint(incoming))return;
   refreshFromRealtime(message);
 }
 function broadcastAux(event,payload={}){
@@ -1362,6 +1407,7 @@ function startRealtime(){
     .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
     .on('broadcast',{event:'state'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'moved'},message=>{handleRealtimeMessage(message)})
+    .on('broadcast',{event:'move_void'},message=>{handleMoveVoid(message)})
     .on('broadcast',{event:'draw_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void refreshServerState()})
     .on('broadcast',{event:'draw_response'},message=>{handleDrawResponse(message)})
     .on('broadcast',{event:'chat_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void loadChat()})
@@ -1394,7 +1440,7 @@ function startPolling(){
     try{
       const payload=await api.heartbeat(serverGameId);
       applyServerState(payload);
-      if(++pollCount%1===0)await loadChat();
+      if(++pollCount%3===0)await loadChat(); // chat_hint broadcasts load new messages at once
     }catch{}
     finally{inFlight=false}
   },5000);
