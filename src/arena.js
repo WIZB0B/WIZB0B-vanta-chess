@@ -26,5 +26,5 @@ export function sortArenas(list = [], now = Date.now()) {
 }
 
 export function standingsRows(standings = []) {
-  return standings.map((p, i) => ({ rank: i + 1, name: p.username || p.display_name || 'Player', points: Number(p.points || 0), record: `${p.wins || 0}W ${p.draws || 0}D ${p.losses || 0}L` }));
+  return standings.map((p, i) => ({ rank: i + 1, name: p.username || p.display_name || 'Player', points: Number(p.points || 0), record: `${p.wins || 0}W ${p.draws || 0}D ${p.losses || 0}L`, fire: !!p.on_fire || Number(p.streak || 0) >= 3, berserks: Number(p.berserks || 0) }));
 }

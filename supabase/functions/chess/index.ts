@@ -508,7 +508,11 @@ async function challengeList(req:Request,b:any){
   const {data:players}=ids.length?await admin.from("chess_players").select(FRIEND_FIELDS).in("id",ids):{data:[]};
   const map=new Map((players||[]).map((x:any)=>[x.id,friendCard(x)]));
   const card=(c:any)=>({id:c.id,from:map.get(c.from_player_id)||null,to:map.get(c.to_player_id)||null,base_seconds:c.base_seconds,increment_seconds:c.increment_seconds,daily_days:c.daily_days,rated:c.rated,color:c.color,expires_at:c.expires_at});
-  return {incoming:(data||[]).filter((c:any)=>c.to_player_id===p.id).map(card),outgoing:(data||[]).filter((c:any)=>c.from_player_id===p.id).map(card)}
+  // Your challenges accepted in the last 10 minutes, with the game to open (in case the realtime hint was missed).
+  const {data:acc}=await admin.from("chess_challenges").select("id,game_id,daily_days").eq("from_player_id",p.id).eq("status","accepted").not("game_id","is",null).gte("created_at",new Date(Date.now()-600000).toISOString()).limit(5);
+  const gids=(acc||[]).map((c:any)=>c.game_id),{data:ag}=gids.length?await admin.from("chess_games").select("id,invite_code,status").in("id",gids):{data:[]};
+  const accepted=(acc||[]).map((c:any)=>{const g=(ag||[]).find((x:any)=>x.id===c.game_id);return g&&g.status==="active"?{id:c.id,code:g.invite_code,daily_days:c.daily_days}:null}).filter(Boolean);
+  return {incoming:(data||[]).filter((c:any)=>c.to_player_id===p.id).map(card),outgoing:(data||[]).filter((c:any)=>c.from_player_id===p.id).map(card),accepted}
 }
 async function challengeRespond(req:Request,b:any){
   const p=await playerFor(req,b),c=await one("chess_challenges","id",String(b.challengeId||""));

@@ -29,6 +29,7 @@ import { MenuController, backdropHit } from './menus.js';
 import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engine-config.js';
 import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
 import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './splash.js';
+import { CHALLENGE_TIMES, VAPID_PUBLIC_KEY, achievementBoard, berserkProgress, canBerserk, challengePayload, clockLabel, dailyDeadlineLabel, pushSupported, sortFriends, timeChoice, timeControlLabel, urlBase64ToBytes } from './social.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
@@ -133,6 +134,7 @@ ${splashMarkup(splash)}
       <button class="active" data-nav="play"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg></span>Play</button>
       <button data-nav="arena"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>Arena</button>
       <button data-nav="watch"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>Watch</button>
+      <button data-nav="friends"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.4 3-5.2 6-5.2s5.4 1.8 6 5.2"/><path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 13.9c1.9.6 3.1 2.4 3.5 5.1"/></svg></span>Friends</button>
       <button data-nav="puzzles"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v4.2a2.8 2.8 0 1 0 4 0V4h6v6h-4.2a2.8 2.8 0 1 0 0 4H20v6h-6v-4.2a2.8 2.8 0 1 0-4 0V20H4v-6h4.2a2.8 2.8 0 1 0 0-4H4V4Z"/></svg></span>Puzzles</button>
       <button data-nav="learn"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A3.5 3.5 0 0 1 7 2h4v18H7a3.5 3.5 0 0 0-3.5 3V5.5ZM20.5 5.5A3.5 3.5 0 0 0 17 2h-4v18h4a3.5 3.5 0 0 1 3.5 3V5.5Z"/></svg></span>Learn</button>
       <button data-nav="openings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h3v3h2V3h3v3h2v4l-2 2v5H8v-5l-2-2V6h2V3ZM6 20h12M8 17h8"/></svg></span>Openings</button>
@@ -142,14 +144,14 @@ ${splashMarkup(splash)}
     <div class="header-actions">
       <button id="searchBtn" class="icon-btn search-btn" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.7" cy="10.7" r="6.3"/><path d="m16 16 4.2 4.2"/></svg></button>
       <button id="installBtn" class="install-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M5 18v2h14v-2"/></svg><span>Install App</span></button>
-      <button id="notifyBtn" class="icon-btn bell-btn" type="button" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifyMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 5-2 6.5-3 8h18c-1-1.5-3-3-3-8M10 21h4"/></svg></button>
+      <button id="notifyBtn" class="icon-btn bell-btn" type="button" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifyMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 5-2 6.5-3 8h18c-1-1.5-3-3-3-8M10 21h4"/></svg><i id="notifyCount" class="notify-count hidden" aria-hidden="true"></i></button>
       <button id="accountBtn" class="user" type="button" aria-label="Account" aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu">
         <i aria-hidden="true"></i><span>${guestName}</span><small>1200 rating</small>
         <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
       </button>
       <section id="notifyMenu" class="header-menu notify-menu" aria-label="Notifications" hidden>
         <header><b>Notifications</b><button id="closeNotifyMenu" class="menu-close" type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
-        <p class="menu-empty">No notifications yet. Game invites and your-turn alerts will appear here.</p>
+        <div id="notifyList"><p class="menu-empty">No notifications yet. Challenges and your-move alerts in daily games appear here.</p></div>
       </section>
       <section id="profileMenu" class="header-menu profile-menu" aria-label="Account menu" hidden>
         <header><span id="profileMenuAvatar" class="avatar light" aria-hidden="true">GU</span><div><b id="profileMenuName">${guestName}</b><small id="profileMenuRating">1200 rating</small></div><button id="closeProfileMenu" class="menu-close" type="button" aria-label="Close account menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
@@ -198,7 +200,7 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -226,6 +228,10 @@ ${splashMarkup(splash)}
       <div id="takebackCard" class="draw-offer-card takeback-card hidden" role="status" aria-live="polite">
         <div><b>Takeback request</b><small>Your opponent wants to take back their last move</small></div>
         <div><button id="declineTakeback" type="button">Decline</button><button id="acceptTakeback" type="button">Accept</button></div>
+      </div>
+      <div id="berserkCard" class="draw-offer-card berserk-card hidden" role="status" aria-live="polite">
+        <div><b>Berserk ready</b><small>Half your clock. Rating change ×1.25, win or lose. Before your first move only.</small></div>
+        <div><button id="goBerserk" type="button">Go Berserk</button></div>
       </div>
       <div class="player bottom" data-player-bar="local">
         <span class="avatar light" id="bottomAvatar">GU</span>
@@ -322,7 +328,10 @@ ${splashMarkup(splash)}
   </div>
   <div id="accountSigned" class="hidden">
     <div class="profile-card"><span class="avatar light">VC</span><div><b id="profileName">Player</b><small id="profileRating">1200 rapid</small></div></div>
-    <div class="rating-grid"><div><small>Bullet</small><b id="ratingBullet">1200</b></div><div><small>Blitz</small><b id="ratingBlitz">1200</b></div><div><small>Rapid</small><b id="ratingRapid">1200</b></div><div><small>Classical</small><b id="ratingClassical">1200</b></div></div>
+    <div class="rating-grid"><div><small>Bullet</small><b id="ratingBullet">1200</b></div><div><small>Blitz</small><b id="ratingBlitz">1200</b></div><div><small>Rapid</small><b id="ratingRapid">1200</b></div><div><small>Classical</small><b id="ratingClassical">1200</b></div><div><small>Daily</small><b id="ratingDaily">1200</b></div><div><small>Puzzles</small><b id="ratingPuzzle">1200</b></div></div>
+    <p id="berserkStatus" class="berserk-status"></p>
+    <h4 class="achievement-title">Achievements <small id="achievementCount"></small></h4>
+    <div id="achievementGrid" class="achievement-grid"></div>
     <button id="signOutBtn" class="secondary-action" type="button">Sign out</button>
   </div>
 </dialog>
@@ -332,7 +341,7 @@ ${splashMarkup(splash)}
 
 dismissSplash($('#brandSplash'),splash);
 
-let clocks=initialClocks(Number($('#time').value));
+let clocks=initialClocks(timeChoice($('#time').value).seconds);
 // Board rendering (backlog V1-fix), chessground-style: the squares grid is built once (again
 // only when the board flips) and updated in place; pieces live in ONE absolutely positioned
 // layer above it (src/piece-layer.js), arrows in an SVG layer above that, and a dragged piece
@@ -762,7 +771,7 @@ async function clickSquare(sq,p,{instant=false}={}){
 }
 function choosePromotion(){return new Promise(resolve=>{const d=$('#promotion');let piece=null;d.addEventListener('close',()=>resolve(piece),{once:true});$$('#promotion button').forEach(b=>b.onclick=()=>{piece=b.dataset.piece;menus.close('promotion')});menus.open('promotion')})}
 function resetLocalClock(){
-  const seconds=mode==='computer'?600:Number($('#time').value);
+  const seconds=mode==='computer'?600:timeChoice($('#time').value).seconds;
   clocks=initialClocks(seconds);
   localClockState={w:clocks.w,b:clocks.b,active:game.turn(),startedAt:performance.now()};
   syncClockBars(clocks,localClockState.active);
@@ -1012,7 +1021,7 @@ function rejectMove(from,to,{quietRule=false}={}){
   playIllegalTone();buzz(HAPTICS.illegal);
   const square=flashSquareFor(reason);if(square)flashIllegal(square);
 }
-function clockText(n){return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`}
+function clockText(n){return clockLabel(n)}
 function playerBarClockColors(){
   const bottom=myColor==='b'?'b':'w';
   return {top:bottom==='w'?'b':'w',bottom};
@@ -1182,7 +1191,7 @@ function startDrawOfferExpiry(key){
   drawOfferTimer=setTimeout(()=>{if(drawOfferKey===key&&serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)void respondToDrawOffer(false,'expired')},10000);
 }
 function syncDrawOfferUi(){
-  syncTakebackUi();
+  syncTakebackUi();syncBerserkUi();
   const button=$('#draw'),card=$('#drawOfferCard');if(!button||!card)return;
   const active=serverGame?.draw_offer_by,own=!!active&&active===currentPlayerId,incoming=!!active&&!own&&['active','playing','in_progress'].includes(serverGame?.status);
   button.textContent=own?'Draw offered · Cancel':'Offer draw';button.classList.toggle('offered',own);
@@ -1268,7 +1277,10 @@ function syncIdentityUI(){
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
-    for(const pool of ['bullet','blitz','rapid','classical']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
+    for(const pool of ['bullet','blitz','rapid','classical','daily']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
+    const pr=$('#ratingPuzzle');if(pr)pr.textContent=Number(currentProfile?.puzzle_rating||1200);
+    const bs=$('#berserkStatus');if(bs){const prog=berserkProgress(currentProfile?.rated_win_streak,currentProfile?.berserk_ready);bs.textContent=prog.label;bs.classList.toggle('ready',prog.ready)}
+    renderAchievements();
   }
 }
 // ---- Portrait and country flag ----
@@ -1334,7 +1346,7 @@ async function openProfileEditor(){
   try{await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')}catch(error){toast(error.message)}
 }
 async function loadProfile(){
-  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();scheduleFlagPrompt();return out}
+  try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();scheduleFlagPrompt();if(signedIn())startSocial();return out}
   catch(error){
     if(error.status===401&&authSession&&await refreshAuthSession()){const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();return out}
     if(error.status===401&&authSession){saveAuthSession(null);currentProfile=null;syncIdentityUI()}
@@ -1534,7 +1546,7 @@ function liveGameOn(){
 }
 function syncAbandonCard(){
   const card=$('#abandonCard');if(!card)return;
-  const online=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.bot_player_id&&!currentBot;
+  const online=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.bot_player_id&&!serverGame?.daily_days&&!currentBot;
   const opponentSeen=online?(myColor==='w'?serverGame.black_last_seen_at:serverGame.white_last_seen_at):null;
   const opponentId=online?(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id):null;
   const info=online&&opponentId?abandonState(opponentSeen,Date.now()+(Number(clockSnapshot?.serverOffset)||0)):{state:'here'};
@@ -1741,6 +1753,187 @@ async function answerTakeback(accept){
 }
 $('#takeback').onclick=()=>{$('.game-more')?.removeAttribute('open');void requestTakeback()};
 $('#acceptTakeback').onclick=()=>answerTakeback(true);$('#declineTakeback').onclick=()=>answerTakeback(false);
+// ---- Berserk (earned every 3 straight rated wins; the server checks every rule) ----
+function syncBerserkUi(){
+  const seat=isOnlineGame()?myColor:null,ok=canBerserk({game:serverGame,seat,ready:!!currentProfile?.berserk_ready});
+  $('#berserkCard')?.classList.toggle('hidden',!ok);
+  const colors=playerBarClockColors();
+  for(const [bar,color] of [['.player.top',colors.top],['.player.bottom',colors.bottom]]){
+    const el=$(bar);if(!el)continue;
+    const on=isOnlineGame()&&!!serverGame&&!!(color==='w'?serverGame.white_berserk:serverGame.black_berserk);
+    el.classList.toggle('berserk',on);el.title=on?'Berserk: half clock, rating change ×1.25':'';
+  }
+}
+$('#goBerserk').onclick=async()=>{
+  const button=$('#goBerserk');button.disabled=true;
+  try{const out=await api.berserk(serverGameId);if(currentProfile)currentProfile={...currentProfile,berserk_ready:false};applyServerState(out);broadcastAux('draw_hint',{from:realtimeClientId});toast('Berserk! Half the clock, 1.25× the stakes');syncIdentityUI()}
+  catch(error){toast(error.message);void refreshServerState()}
+  finally{button.disabled=false;syncBerserkUi()}
+};
+
+// ---- Achievements on the profile ----
+function renderAchievements(){
+  const grid=$('#achievementGrid');if(!grid)return;
+  const board=achievementBoard(currentProfile?.achievements||[]),earned=board.filter(a=>a.earned).length;
+  const count=$('#achievementCount');if(count)count.textContent=`${earned} / ${board.length}`;
+  grid.innerHTML=board.map(a=>`<div class="achievement${a.earned?' earned':''}" title="${escapeHtml(a.text)}"><span class="achievement-mark" aria-hidden="true">${escapeHtml(a.mark)}</span><b>${escapeHtml(a.title)}</b><small>${a.earned?(a.at?`Earned ${new Date(a.at).toLocaleDateString()}`:'Earned'):escapeHtml(a.text)}</small></div>`).join('');
+}
+
+// ---- Friends, challenges and daily games ----
+function signedIn(){return !!authSession?.access_token&&!!currentProfile?.account}
+let socialState={incoming:[],outgoing:[],daily:[],seenAccepted:new Set(),timer:null,channel:null,channelFor:null};
+function friendRow(f,{search=false}={}){
+  return `<article class="friend-row" data-friend="${escapeHtml(f.id)}"><span class="presence-dot${f.online?' on':''}" aria-label="${f.online?'Online':'Offline'}"></span><div><b>${escapeHtml(f.name)}</b><small>${f.rating} rapid${f.online?' · online':''}</small></div><div>${search?`<button class="friend-follow" data-following="${f.following?'1':''}">${f.following?'Following':'Follow'}</button>`:'<button class="friend-unfollow" aria-label="Unfollow">Unfollow</button>'}<button class="friend-challenge">Challenge</button></div></article>`;
+}
+async function openChallengeDialog(player){
+  const body=document.createElement('div');body.className='challenge-form';
+  body.innerHTML=`<p>Challenge <b>${escapeHtml(player.name)}</b></p><div class="time-chips">${CHALLENGE_TIMES.map((t,i)=>`<button type="button" data-ct="${t.value}"${i===2?' class="on"':''}>${escapeHtml(t.label)}</button>`).join('')}</div><div class="rated-switch"><button type="button" class="on" data-cr="">Casual</button><button type="button" data-cr="1">Rated</button></div><div class="rated-switch"><button type="button" class="on" data-cc="random">Random</button><button type="button" data-cc="w">White</button><button type="button" data-cc="b">Black</button></div>`;
+  let time=CHALLENGE_TIMES[2].value,rated=false,color='random';
+  body.addEventListener('click',event=>{
+    const b=event.target.closest('button');if(!b)return;
+    if(b.dataset.ct!==undefined){time=b.dataset.ct;body.querySelectorAll('[data-ct]').forEach(x=>x.classList.toggle('on',x===b))}
+    if(b.dataset.cr!==undefined){rated=!!b.dataset.cr;body.querySelectorAll('[data-cr]').forEach(x=>x.classList.toggle('on',x===b))}
+    if(b.dataset.cc!==undefined){color=b.dataset.cc;body.querySelectorAll('[data-cc]').forEach(x=>x.classList.toggle('on',x===b))}
+  });
+  const send=await vchDialog({title:'Send a challenge',body,actions:[{label:'Cancel',value:false},{label:'Send challenge',value:true,primary:true}]});
+  if(!send)return;
+  try{await api.challengeSend(challengePayload(player.id,time,{rated,color}));toast(`Challenge sent to ${player.name}`);void refreshSocial()}catch(error){toast(error.message)}
+}
+function challengeHtml(c,incoming){
+  const who=incoming?c.from:c.to,label=timeControlLabel(c);
+  return `<article class="challenge-row" data-challenge="${escapeHtml(c.id)}"><div><b>${escapeHtml(who?.name||'Player')}</b><small>${escapeHtml(label)}${c.rated?' · rated':' · casual'}${incoming?'':' · waiting'}</small></div><div>${incoming?'<button class="challenge-decline">Decline</button><button class="challenge-accept primary">Accept</button>':'<button class="challenge-cancel">Cancel</button>'}</div></article>`;
+}
+function dailyHtml(g){
+  return `<article class="daily-row${g.yourTurn?' your-turn':''}" data-daily="${escapeHtml(g.code)}"><div><b>${escapeHtml(g.opponent||'Waiting for opponent')}</b><small>${g.yourTurn?'Your move':g.status==='waiting'?'Waiting to start':'Their move'} · ${escapeHtml(dailyDeadlineLabel(g.deadline)||timeControlLabel({daily_days:g.daily_days}))}</small></div><button class="daily-open${g.yourTurn?' primary':''}">${g.yourTurn?'Play':'Open'}</button></article>`;
+}
+function openGameCode(code){if(code)location.search='?game='+encodeURIComponent(code)}
+async function answerChallenge(id,accept){
+  try{
+    const out=await api.challengeRespond(id,accept);
+    if(!accept){toast('Challenge declined');return void refreshSocial()}
+    openGameCode((out.game||out).invite_code);
+  }catch(error){toast(error.message);void refreshSocial()}
+}
+function wireSocialActions(root){
+  root.querySelectorAll('[data-challenge]').forEach(row=>{
+    const id=row.dataset.challenge;
+    row.querySelector('.challenge-accept')?.addEventListener('click',()=>answerChallenge(id,true));
+    row.querySelector('.challenge-decline')?.addEventListener('click',()=>answerChallenge(id,false));
+    row.querySelector('.challenge-cancel')?.addEventListener('click',async()=>{try{await api.challengeCancel(id);toast('Challenge cancelled');void refreshSocial()}catch(error){toast(error.message)}});
+  });
+  root.querySelectorAll('[data-daily]').forEach(row=>row.querySelector('.daily-open')?.addEventListener('click',()=>openGameCode(row.dataset.daily)));
+}
+function renderNotifyList(){
+  const list=$('#notifyList');if(!list)return;
+  const yourTurn=socialState.daily.filter(g=>g.yourTurn),items=[...socialState.incoming.map(c=>challengeHtml(c,true)),...yourTurn.map(dailyHtml)];
+  list.innerHTML=items.join('')||'<p class="menu-empty">No notifications yet. Challenges and your-move alerts in daily games appear here.</p>';
+  wireSocialActions(list);
+  const n=socialState.incoming.length+yourTurn.length,badge=$('#notifyCount');
+  if(badge){badge.textContent=n>9?'9+':String(n);badge.classList.toggle('hidden',!n)}
+}
+async function refreshSocial(){
+  if(!currentProfile?.id)return;
+  try{
+    const [ch,daily]=await Promise.all([api.challenges(),api.dailyGames().catch(()=>({games:[]}))]);
+    socialState.incoming=ch.incoming||[];socialState.outgoing=ch.outgoing||[];socialState.daily=daily.games||[];
+    for(const a of ch.accepted||[]){
+      if(socialState.seenAccepted.has(a.id))continue;socialState.seenAccepted.add(a.id);
+      if(!a.daily_days&&!isOnlineGame()&&mode!=='computer'){toast('Challenge accepted · opening the game');openGameCode(a.code);return}
+    }
+    renderNotifyList();
+    if(currentRightView==='friends')drawFriendsLists();
+  }catch{}
+}
+function startSocial(){
+  if(!currentProfile?.id)return;
+  if(!socialState.timer){void refreshSocial();socialState.timer=setInterval(()=>{if(!document.hidden)void refreshSocial()},45000)}
+  if(socialState.channelFor!==currentProfile.id){
+    if(socialState.channel)realtimeClient.removeChannel(socialState.channel).catch(()=>{});
+    socialState.channelFor=currentProfile.id;
+    socialState.channel=realtimeClient.channel(`player:${currentProfile.id}`)
+      .on('broadcast',{event:'challenge'},()=>{toast('New challenge');void refreshSocial()})
+      .on('broadcast',{event:'challenge_answer'},message=>{
+        const p=message?.payload||{};
+        if(!p.accepted){toast('Your challenge was declined');return void refreshSocial()}
+        socialState.seenAccepted.add(p.id);
+        if(p.code&&!isOnlineGame()&&mode!=='computer'){toast('Challenge accepted · opening the game');openGameCode(p.code)}
+        else{toast('Challenge accepted');void refreshSocial()}
+      })
+      .subscribe();
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&socialState.timer)void refreshSocial()});
+function drawFriendsLists(){
+  const view=$('#dynamicView .friends-view');if(!view)return;
+  const ch=view.querySelector('#challengeList');
+  if(ch){ch.innerHTML=[...socialState.incoming.map(c=>challengeHtml(c,true)),...socialState.outgoing.map(c=>challengeHtml(c,false))].join('')||'<p class="menu-empty">No open challenges.</p>';wireSocialActions(ch)}
+  const daily=view.querySelector('#dailyList');
+  if(daily){daily.innerHTML=socialState.daily.map(dailyHtml).join('')||'<p class="menu-empty">No daily games. Challenge a friend to one, or pick "Daily" in Room.</p>';wireSocialActions(daily)}
+}
+function wireFriendRows(root,list){
+  root.querySelectorAll('[data-friend]').forEach(row=>{
+    const f=list.find(x=>x.id===row.dataset.friend);if(!f)return;
+    row.querySelector('.friend-challenge')?.addEventListener('click',()=>openChallengeDialog(f));
+    const follow=row.querySelector('.friend-follow');
+    if(follow)follow.onclick=async()=>{const on=!follow.dataset.following;try{await api.follow(f.id,on);follow.dataset.following=on?'1':'';follow.textContent=on?'Following':'Follow';f.following=on;void loadFriendList()}catch(error){toast(error.message)}};
+    row.querySelector('.friend-unfollow')?.addEventListener('click',async()=>{try{await api.follow(f.id,false);toast(`Unfollowed ${f.name}`);void loadFriendList()}catch(error){toast(error.message)}});
+  });
+}
+async function loadFriendList(){
+  const slot=$('#dynamicView #friendList');if(!slot)return;
+  try{
+    const out=await api.friends(),list=sortFriends(out.friends||[]);
+    const count=$('#dynamicView #followerCount');if(count)count.textContent=`${list.length} following · ${out.followers||0} followers`;
+    slot.innerHTML=list.map(f=>friendRow(f)).join('')||'<p class="menu-empty">Follow players to see when they are online and challenge them.</p>';
+    wireFriendRows(slot,list);
+  }catch(error){slot.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}
+}
+async function renderFriends(){
+  if(watchSession)stopWatching();
+  if(!signedIn()){
+    setDynamicView('friends','Friends',`<article class="friends-signin"><h4>Play your friends</h4><p>Sign in to follow players, see who is online, send challenges and play daily games.</p><button class="primary-action friends-signin-btn">Sign in</button></article>`);
+    $('#dynamicView .friends-signin-btn').onclick=()=>openAccount();return;
+  }
+  setDynamicView('friends','Friends',`<div class="friends-view">
+    <section class="friends-block"><h4>Challenges</h4><div id="challengeList"><p class="menu-empty">Loading…</p></div></section>
+    <section class="friends-block"><h4>Daily games</h4><div id="dailyList"><p class="menu-empty">Loading…</p></div></section>
+    <section class="friends-block"><h4>Find players</h4><input id="friendSearch" type="search" autocomplete="off" maxlength="20" placeholder="Search by username"><div id="friendResults"></div></section>
+    <section class="friends-block"><h4>Following <small id="followerCount"></small></h4><div id="friendList"><p class="menu-empty">Loading…</p></div></section>
+    <section class="friends-block push-block"><h4>Notifications</h4><p>Get a notification when it's your move in a daily game, or when someone challenges you.</p><button id="pushToggle" type="button">Turn on notifications</button></section>
+  </div>`);
+  drawFriendsLists();void refreshSocial();void loadFriendList();void syncPushButton();
+  let searchTimer=null;
+  $('#friendSearch').addEventListener('input',event=>{
+    clearTimeout(searchTimer);const q=event.target.value.trim(),slot=$('#friendResults');
+    if(q.length<2){slot.innerHTML='';return}
+    searchTimer=setTimeout(async()=>{try{const out=await api.playerSearch(q),list=out.players||[];slot.innerHTML=list.map(f=>friendRow(f,{search:true})).join('')||'<p class="menu-empty">No players found.</p>';wireFriendRows(slot,list)}catch(error){slot.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}},300);
+  });
+  $('#pushToggle').onclick=togglePush;
+}
+// ---- Web push (daily "your move" and challenges) ----
+async function pushRegistration(){return navigator.serviceWorker.ready}
+async function syncPushButton(){
+  const button=$('#pushToggle');if(!button)return;
+  if(!pushSupported(window)){button.disabled=true;button.textContent='Notifications are not supported in this browser';return}
+  if(Notification.permission==='denied'){button.disabled=true;button.textContent='Notifications are blocked in browser settings';return}
+  try{const sub=await (await pushRegistration()).pushManager.getSubscription();button.textContent=sub?'Turn off notifications':'Turn on notifications';button.dataset.on=sub?'1':''}catch{}
+}
+async function togglePush(){
+  const button=$('#pushToggle');if(!button||!pushSupported(window))return;
+  button.disabled=true;
+  try{
+    const reg=await pushRegistration(),existing=await reg.pushManager.getSubscription();
+    if(existing){await api.pushUnsubscribe(existing.endpoint).catch(()=>{});await existing.unsubscribe();toast('Notifications off')}
+    else{
+      if(await Notification.requestPermission()!=='granted')throw new Error('Notifications were not allowed');
+      const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToBytes(VAPID_PUBLIC_KEY)});
+      const json=sub.toJSON();await api.pushSubscribe({endpoint:json.endpoint,keys:{p256dh:json.keys?.p256dh,auth:json.keys?.auth}});
+      toast('Notifications on');
+    }
+  }catch(error){toast(error.message)}
+  finally{button.disabled=false;void syncPushButton()}
+}
+if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
 async function renderWatch(){
@@ -1926,6 +2119,7 @@ function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return fa
 function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
 function openMoreSheet(){
   openSheet('More',[
+    {label:'Friends & challenges',run:()=>openSection('friends')},
     {label:'Arena & tournaments',run:()=>openSection('arena')},
     {label:'Openings',run:()=>openSection('openings')},
     {label:'Famous games',run:()=>openSection('famous')},
@@ -2049,7 +2243,7 @@ $$('[data-computer-side]').forEach(button=>button.onclick=()=>{
 $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),seconds:Number($('#time').value),increment:0,rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -2699,7 +2893,7 @@ async function showBackendView(kind){
       const card=(t,i)=>{
         const phase=arenaPhase(t),joined=mine.get(t.id),weekly=isWeeklyArena(t);
         const action=phase.phase==='finished'?'':phase.phase==='upcoming'?(joined?'<button class="arena-join" disabled>Registered</button>':'<button class="arena-join">Register</button>'):'<button class="arena-join">Play now</button>';
-        return `<article data-arena="${i}" class="arena-card${weekly?' weekly':''} phase-${phase.phase}"><div>${weekly?'<span class="arena-badge">Weekly</span>':''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L</p>`:''}</div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
+        return `<article data-arena="${i}" class="arena-card${weekly?' weekly':''} phase-${phase.phase}"><div>${weekly?'<span class="arena-badge">Weekly</span>':''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
       };
       target.innerHTML=`<div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
       [...target.querySelectorAll('[data-arena]')].forEach((row,i)=>{
@@ -2712,7 +2906,7 @@ async function showBackendView(kind){
             const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000);
           }catch(error){toast(error.message)}
         };
-        row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=standingsRows(result.standings||[]).slice(0,10).map(p=>`<p><span>${p.rank}.</span> ${escapeHtml(p.name)} <b>${p.points} pts</b> <small>${p.record}</small></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
+        row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=standingsRows(result.standings||[]).slice(0,10).map(p=>`<p><span>${p.rank}.</span> ${escapeHtml(p.name)}${p.fire?' <span class="fire-tag">On fire</span>':''} <b>${p.points} pts</b> <small>${p.record}</small></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
       });
       const tick=setInterval(()=>{if(currentRightView!=='arena'||!document.body.contains(target))return clearInterval(tick);events.forEach((t,i)=>{const el=target.querySelector(`[data-arena-when="${i}"]`);if(el)el.textContent=arenaPhase(t).label})},30000);
     }catch(error){toast(error.message);showMovesView()}
@@ -2723,6 +2917,7 @@ function activateNav(kind){
   if(kind==='play')showMovesView();
   if(kind==='arena')showBackendView('arena');
   if(kind==='watch')void renderWatch();
+  if(kind==='friends')void renderFriends();
   if(kind==='puzzles')showBackendView('puzzle');
   if(kind==='learn')renderLearn();
   if(kind==='openings')renderOpenings();

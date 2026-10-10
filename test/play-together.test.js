@@ -14,7 +14,8 @@ test('arena phases read naturally', () => {
   assert.equal(arenaPhase({ status: 'finished' }, now).phase, 'finished');
   const sorted = sortArenas([{ slug: 'open-arena', starts_at: '2026-01-01', ends_at: '2027-01-01' }, { slug: 'weekly-arena-2026-10-10', starts_at: '2026-10-10T18:00:00Z', ends_at: '2026-10-10T19:30:00Z' }], now);
   assert.ok(isWeeklyArena(sorted[0]));
-  assert.deepEqual(standingsRows([{ username: 'a', points: 4, wins: 2 }])[0], { rank: 1, name: 'a', points: 4, record: '2W 0D 0L' });
+  assert.deepEqual(standingsRows([{ username: 'a', points: 4, wins: 2 }])[0], { rank: 1, name: 'a', points: 4, record: '2W 0D 0L', fire: false, berserks: 0 });
+  assert.equal(standingsRows([{ username: 'b', streak: 3 }])[0].fire, true);
 });
 
 test('server: takebacks only in casual human games, cleared by any move', () => {

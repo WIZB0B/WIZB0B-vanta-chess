@@ -76,6 +76,21 @@ export class VchApi {
   tournamentJoin(tournamentId) { return this.request('tournament_join', { tournamentId }); }
   tournamentStandings(tournamentId) { return this.request('tournament_standings', { tournamentId }); }
   bots() { return this.request('bots'); }
+  berserk(gameId) { return this.request('berserk', { gameId }); }
+  playerSearch(q) { return this.request('player_search', { q }); }
+  follow(playerId, on = true) { return this.request('follow', { playerId, on }); }
+  friends() { return this.request('friends'); }
+  challengeSend(payload) { return this.request('challenge_send', payload); }
+  challenges() { return this.request('challenges'); }
+  challengeRespond(challengeId, accept) { return this.request('challenge_respond', { challengeId, accept }); }
+  challengeCancel(challengeId) { return this.request('challenge_cancel', { challengeId }); }
+  dailyGames() { return this.request('daily_games'); }
+  pushSubscribe(subscription) { return this.request('push_subscribe', subscription); }
+  pushUnsubscribe(endpoint) { return this.request('push_unsubscribe', { endpoint }); }
+  puzzleDaily() { return this.request('puzzle_daily'); }
+  puzzleStats() { return this.request('puzzle_stats'); }
+  puzzleStreakRecord(count) { return this.request('puzzle_streak_record', { count }); }
+  achievements() { return this.request('achievements'); }
 }
 
 export function stableGuestToken(storage = localStorage) {
