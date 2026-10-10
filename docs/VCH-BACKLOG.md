@@ -253,6 +253,24 @@ Desktop stays as it is. On phones the site should feel like the lichess / chess.
 - R4 Puzzle Streak, harder every three solves, one skip (PR #20). Fixed: tapped puzzle moves
   never matched because taps always send a queen promotion.
 
+## S. Round 4 (owner approved 2026-10-10)
+Server code is in PR #21; the migration `20261010180000_round4_social_daily_berserk` and
+chess v19 are NOT deployed yet (owner cancelled the migration step; waiting for approval).
+- S1 Berserk: one charge at every 3rd straight rated win (never stacked); a loss removes an
+  unspent charge, a draw keeps it. Spend it before your first move in a live rated game:
+  half your clock, rating change x1.25 win or lose (same stakes both ways, so no free Elo).
+  Arena: 3 wins in a row = on fire (wins 4, draws 2); a Berserk win adds 1. (PR #21, #22)
+- S2 Friends: search, follow, online status, direct challenges (live or daily, casual or
+  rated, colour), bell notifications, realtime hints on `player:<id>`. (PR #22)
+- S3 Daily games: 1/3/7 days per move, own "daily" rating pool, no abandon claims; web push
+  for your move and challenges (VAPID private key only in `chess_server_secrets`). (PR #22)
+- S4 Achievements (11 badges) on the profile. (PR #21, #22)
+- S5 Puzzle rating (first try only), difficulty from your rating, daily puzzle, theme stats
+  and theme training, server streak record. (PR #23)
+- S6 Opening trainer from your own games; share Game Story as an image card or clip. (PR #24)
+- S7 Sign-in checked locally (ES256 JWKS) with a getUser fallback, to cut a round trip per
+  request. Verify after deploy: logs should rarely show "fell back to auth.getUser".
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
