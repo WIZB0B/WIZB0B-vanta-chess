@@ -30,6 +30,7 @@ import { ANALYSIS_MAX_DEPTH, BOT_MOVE_TIMEOUT_MS, botSearchNodes } from './engin
 import { friendlyAuthError, handleAuthCallback, withAuthRedirect } from './auth-callback.js';
 import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './splash.js';
 import { openingName, trainerReport } from './opening-trainer.js';
+import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
 import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
 import { difficultyForRating, ratingDeltaText, sparklinePoints, themeLabel, weakestThemes } from './puzzle-rating.js';
 import { CHALLENGE_TIMES, VAPID_PUBLIC_KEY, achievementBoard, berserkProgress, canBerserk, challengePayload, clockLabel, dailyDeadlineLabel, pushSupported, sortFriends, timeChoice, timeControlLabel, urlBase64ToBytes } from './social.js';
@@ -1664,7 +1665,7 @@ function drawArchive(){
       <div class="archive-signature"><small>Signature opening</small><b>${insight.topOpening?escapeHtml(insight.topOpening.name):'—'}</b>${insight.topOpening?`<em>${insight.topOpening.games} games · ${insight.topOpening.percent}%</em>`:''}</div>
     </section>
     ${current?'<button type="button" class="archive-current">Tell the story of the game you just played</button>':''}
-    <button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button>
+    <div class="archive-tools"><button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button><button type="button" class="archive-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button></div>
     <div class="archive-filters" role="tablist">${['all','win','loss','draw','computer'].map(f=>`<button type="button" data-archive-filter="${f}" class="${archiveFilter===f?'on':''}">${{all:'All',win:'Wins',loss:'Losses',draw:'Draws',computer:'vs Computer'}[f]}</button>`).join('')}</div>
     <div class="archive-list">${rows.map(({e,i})=>{
       const o=outcomeFor(e.result,e.myColor),opp=e.myColor==='w'?e.black:e.white,oppRating=e.myColor==='w'?e.blackRating:e.whiteRating,acc=reviews[e.id]?.accuracy?.[e.myColor],opening=detectOpening(sansFromPgn(e.pgn))?.name;
@@ -1675,6 +1676,7 @@ function drawArchive(){
   target.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>void openArchivedGame(archiveEntries[Number(b.dataset.archive)]));
   target.querySelector('.archive-current')?.addEventListener('click',()=>void startGameReview());
   target.querySelector('.archive-trainer')?.addEventListener('click',()=>void renderTrainer());
+  target.querySelector('.archive-mistakes')?.addEventListener('click',renderMistakes);
 }
 async function openArchivedGame(entry){
   if(!entry)return;
@@ -1801,7 +1803,7 @@ function startDrill(i){
   trainerIndex=i;cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   streakSession=null;game.load(d.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];
   flipped=game.turn()==='b';orientationSet=true;
-  puzzleSession={id:`drill-${i}`,solution:d.solution,index:0,played:[],started:Date.now(),failed:false,trainer:true,misses:0};
+  puzzleSession={id:`drill-${i}`,solution:d.solution,index:0,played:[],started:Date.now(),failed:false,trainer:true,kind:'opening',misses:0};
   render();
   setDynamicView('review','Opening trainer',`<article class="puzzle-info trainer-drill"><small>DRILL ${i+1} OF ${trainerDrills.length} · ${escapeHtml(d.name.toUpperCase())}</small><h4>${game.turn()==='w'?'White':'Black'} to move · play the main line</h4><p>In your game you played <b>${escapeHtml(d.played)}</b> here. Find the book move${d.solution.length>1?', then keep going':''}.</p><div class="streak-actions"><button class="trainer-skip">Skip</button><button class="trainer-stop">Stop</button></div></article>`);
   $('#dynamicView .trainer-skip').onclick=()=>startDrill(i+1);
@@ -1809,13 +1811,67 @@ function startDrill(i){
 }
 function drillMiss(){
   const s=puzzleSession;s.misses++;playIllegalTone();buzz(HAPTICS.illegal);
-  const next=s.solution[s.index];
-  if(s.misses>=2&&next){boardShapes=[{from:next.slice(0,2),to:next.slice(2,4),brush:'green'}];render();toast('The arrow shows the book move')}
-  else toast('Not the main line. Try again');
+  if(s.kind==='mistake'&&!s.graded){s.graded=true;gradeCurrentMistake(false)}
+  const next=s.solution[s.index],what=s.kind==='mistake'?'the better move':'the book move';
+  if(s.misses>=2&&next){boardShapes=[{from:next.slice(0,2),to:next.slice(2,4),brush:'green'}];render();toast(`The arrow shows ${what}`)}
+  else toast(s.kind==='mistake'?'Not that one either. Look again':'Not the main line. Try again');
 }
 function drillSolved(){
-  boardShapes=[];puzzleSession=null;toast('Main line found');
+  const s=puzzleSession;boardShapes=[];puzzleSession=null;
+  if(s?.kind==='mistake'){
+    if(!s.graded)gradeCurrentMistake(true);
+    toast(s.graded?'Found it · this one comes back soon':'Fixed · it comes back later to make sure');
+    setTimeout(()=>{if(mode==='puzzle'&&!puzzleSession)startMistakeDrill()},1000);return;
+  }
+  toast('Main line found');
   setTimeout(()=>{if(mode==='puzzle'&&!puzzleSession)startDrill(trainerIndex+1)},900);
+}
+// ---- Learn from your mistakes (src/mistakes.js) ----
+let currentMistakeId=null;
+function gradeCurrentMistake(correct){
+  const bank=loadMistakes(),i=bank.findIndex(m=>m.id===currentMistakeId);if(i<0)return;
+  const wasFixed=bank[i].fixed;bank[i]=gradeMistake(bank[i],correct);saveMistakes(bank);
+  if(correct&&!wasFixed){const fixed=mistakeStats(bank).fixed;if(fixed>=10&&fixed%10===0)void api.mistakesFixed(fixed).catch(()=>{})}
+}
+function rememberMistakes(){
+  // Your costly moves from the review just finished; and, for a rated game against a person,
+  // the opponent's accuracy as a fair-play signal (only ever reviewed by a human).
+  const entry=archiveSession?.entry,mine=entry?.myColor||myColor||computerSide||'w',them=mine==='w'?'b':'w';
+  const gameId=entry?.id||serverGameId||lastLocalArchiveId||`game-${Date.now()}`;
+  const opponent=entry?(mine==='w'?entry.black:entry.white):mode==='computer'?(currentBot?.display_name||'Computer'):(mine==='w'?serverGame?.black_name:serverGame?.white_name)||'';
+  const fresh=collectMistakes({results:reviewState.results,moves:reviewState.moves,positions:reviewState.positions,mine,gameId,date:entry?.date||null,opponent});
+  if(fresh.length){
+    const before=loadMistakes(),merged=mergeMistakes(before,fresh),added=merged.length-before.length;saveMistakes(merged);
+    if(added>0)setTimeout(()=>toast(`${added} ${added===1?'position':'positions'} added to Learn from your mistakes`,{duration:2600}),1400);
+  }
+  const rated=entry?entry.rated&&entry.source!=='computer':!!serverGame?.rated&&!!serverGameId&&!serverGame?.bot_player_id;
+  const theirs=reviewState.results.filter((r,i)=>reviewState.moves[i]?.color===them);
+  if(rated&&theirs.length>=10){
+    const acc=reviewAccuracyFor(them),avgLoss=theirs.reduce((s,r)=>s+Number(r.loss||0),0)/theirs.length;
+    if(Number.isFinite(acc))void api.fairplaySignal({gameId,accuracy:Math.round(acc*100)/100,avgLoss:Math.round(avgLoss*100)/100,moves:theirs.length}).catch(()=>{});
+  }
+}
+function renderMistakes(){
+  const bank=loadMistakes(),st=mistakeStats(bank),due=dueMistakes(bank);
+  setDynamicView('puzzles','Learn from your mistakes',`<article class="mistakes">
+    <p class="trainer-intro">Positions from your reviewed games where you went wrong. Find the better move; each one comes back tomorrow, in 3 days and in a week until it sticks.</p>
+    <div class="puzzle-stat-row"><div><small>DUE NOW</small><b>${st.due}</b></div><div><small>FIXED</small><b>${st.fixed}</b></div><div><small>MASTERED</small><b>${st.mastered}</b></div></div>
+    ${st.due?`<button class="primary-action mistakes-start">Start · ${st.due} due</button>`:`<p class="menu-empty">${st.total?'Nothing due right now. Come back tomorrow.':'Review a finished game (My games, then open a game) and your mistakes appear here.'}</p>`}
+    ${bank.length?`<h4>Recent</h4><div class="trainer-list">${bank.slice(0,15).map(m=>`<div class="trainer-row mistake-row"><span><b>Move ${m.moveNo} · you played ${escapeHtml(m.played)}</b><small>${escapeHtml(m.classification)} · vs ${escapeHtml(m.opponent||'opponent')}</small></span><span class="trainer-moves"><em>${m.box>=4?'Mastered':m.fixed?'Fixed':'To learn'}</em></span></div>`).join('')}</div>`:''}
+  </article>`);
+  $('#dynamicView .mistakes-start')?.addEventListener('click',startMistakeDrill);
+}
+function startMistakeDrill(){
+  const m=dueMistakes(loadMistakes())[0];if(!m){toast('All caught up');return void renderMistakes()}
+  currentMistakeId=m.id;cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  streakSession=null;try{game.load(m.fen)}catch{const bank=loadMistakes().filter(x=>x.id!==m.id);saveMistakes(bank);return startMistakeDrill()}
+  mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];flipped=game.turn()==='b';orientationSet=true;
+  puzzleSession={id:`mistake-${m.id}`,solution:[m.best],index:0,played:[],started:Date.now(),failed:false,trainer:true,kind:'mistake',misses:0,graded:false};
+  render();
+  const left=dueMistakes(loadMistakes()).length;
+  setDynamicView('puzzles','Learn from your mistakes',`<article class="puzzle-info trainer-drill"><small>${left} DUE · ${escapeHtml(m.classification.toUpperCase())} · MOVE ${m.moveNo}</small><h4>${game.turn()==='w'?'White':'Black'} to move · find a better move</h4><p>In your game against ${escapeHtml(m.opponent||'your opponent')} you played <b>${escapeHtml(m.played)}</b> here.</p><div class="streak-actions"><button class="trainer-skip">Skip</button><button class="trainer-stop">Stop</button></div></article>`);
+  $('#dynamicView .trainer-skip').onclick=()=>{const bank=loadMistakes(),i=bank.findIndex(x=>x.id===m.id);if(i>=0){bank[i]={...bank[i],due:Date.now()+3600000};saveMistakes(bank)}puzzleSession=null;startMistakeDrill()};
+  $('#dynamicView .trainer-stop').onclick=()=>{puzzleSession=null;renderMistakes()};
 }
 function playStory(){
   stopStory();const {moments}=storyData();
@@ -2590,7 +2646,18 @@ boardEl.addEventListener('pointerdown',event=>{
 // The board has no context menu: the right button draws, and a right-click (or a long press
 // on touch) during a drag or with premoves queued cancels them.
 boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointerDrag?.started){event.stopImmediatePropagation();cancelPointerDrag();return}cancelPremove()});
-render();startClock();void completeAuthCallback().then(connect);
+render();startClock();
+// ---- Offline: the computer opponent works without a connection (public/sw.js caches it) ----
+function syncOffline(){
+  const off=navigator.onLine===false;document.body.classList.toggle('offline',off);
+  let bar=$('#offlineBar');
+  if(off&&!bar){bar=document.createElement('div');bar.id='offlineBar';bar.className='offline-bar';bar.setAttribute('role','status');bar.innerHTML='<b>You are offline</b><span>Play the computer, review saved games and drill your mistakes. Online play returns with your connection.</span><button type="button">Play the computer</button>';bar.querySelector('button').onclick=()=>{setPrimaryScreen('game');void activateLeftMode('computer');showMovesView();if(isMobileApp())setMView('home')};document.body.append(bar)}
+  if(!off)bar?.remove();
+}
+window.addEventListener('offline',syncOffline);
+window.addEventListener('online',()=>{syncOffline();if(!currentProfile)void connect();toast('Back online')});
+syncOffline();
+if(navigator.onLine===false)void completeAuthCallback().catch(()=>{});else void completeAuthCallback().then(connect);
 // Email-link landing (/auth/callback). supabase-js reads the session from the URL with
 // detectSessionInUrl; a throwaway in-memory client is used so the app's own session store
 // stays the single source of truth. Tokens are never logged or shown.
@@ -2814,6 +2881,7 @@ async function startGameReview(){
     moveEvalByPly=reviewState.results.map(result=>result.afterCp/100);
     const archiveId=archiveSession?.entry.id||serverGameId||lastLocalArchiveId;
     if(archiveId)saveReviewSummary(archiveId,{accuracy:{w:reviewAccuracyFor('w'),b:reviewAccuracyFor('b')}});
+    try{rememberMistakes()}catch(error){console.warn('mistakes',error)}
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');
     if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
     setReviewPly(reviewState.moves.length);
@@ -3007,11 +3075,12 @@ async function showBackendView(kind){
       const side=game.turn()==='w'?'White':'Black';
       $('#dynamicView .view-content').innerHTML=streak
         ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
-        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button></article>`;
+        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button></article>`;
       $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
       $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
       $('#dynamicView .daily-puzzle')?.addEventListener('click',()=>showBackendView('daily'));
       $('#dynamicView .puzzle-stats')?.addEventListener('click',()=>showBackendView('puzzle-stats'));
+      $('#dynamicView .learn-mistakes')?.addEventListener('click',renderMistakes);
       $('#dynamicView .clear-theme')?.addEventListener('click',()=>{puzzleAngle=null;showBackendView('puzzle')});
       $('#dynamicView .skip-puzzle')?.addEventListener('click',()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;showBackendView('streak')});
       $('#dynamicView .end-streak')?.addEventListener('click',()=>endStreak(null));

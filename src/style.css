@@ -2585,3 +2585,15 @@ body[data-archive="1"] #topClock,body[data-archive="1"] #bottomClock{visibility:
 .story-share{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
 .story-share button{padding:9px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#14211f;font-size:12px;font-weight:600}
 .story-share button:disabled{opacity:.6}
+
+/* === Learn from your mistakes === */
+.archive-tools{display:grid;gap:6px;margin:8px 0}.archive-tools .archive-trainer{margin:0}
+.archive-mistakes,.learn-mistakes{width:100%;padding:10px 12px;border:1px solid rgba(239,138,118,.45);border-radius:9px;background:#1d1715;color:#f3b3a5;font-weight:600;text-align:left}
+.learn-mistakes{margin:0 0 8px}
+.mistakes .puzzle-stat-row{margin:10px 0}
+
+/* === Offline === */
+.offline-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;max-width:min(640px,calc(100vw - 32px));padding:10px 14px;border:1px solid rgba(229,193,124,.45);border-radius:12px;background:#0d1718f2;box-shadow:0 12px 40px #000a;font-size:12px}
+.offline-bar span{color:var(--muted);flex:1 1 240px}
+.offline-bar button{padding:7px 12px;border-radius:8px;background:linear-gradient(#efd59d,#d5ad64);color:#10120e;font-weight:700}
+body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}

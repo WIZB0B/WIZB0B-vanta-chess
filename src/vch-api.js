@@ -91,6 +91,19 @@ export class VchApi {
   puzzleStats() { return this.request('puzzle_stats'); }
   puzzleStreakRecord(count) { return this.request('puzzle_streak_record', { count }); }
   achievements() { return this.request('achievements'); }
+  mistakesFixed(count) { return this.request('mistakes_fixed', { count }); }
+  fairplaySignal(payload) { return this.request('fairplay_signal', payload); }
+  reportPlayer(payload) { return this.request('report_player', payload); }
+  publicProfile(username) { return this.request('public_profile', { username }); }
+  clubList(q = '') { return this.request('club_list', { q }); }
+  clubView(slug) { return this.request('club_view', { slug }); }
+  clubCreate(payload) { return this.request('club_create', payload); }
+  clubJoin(slug) { return this.request('club_join', { slug }); }
+  clubLeave() { return this.request('club_leave'); }
+  clubChat(slug, body) { return this.request('club_chat', { slug, body }); }
+  league(division = null) { return this.request('league', division === null ? {} : { division }); }
+  conditionalList(gameId) { return this.request('conditional_list', { gameId }); }
+  conditionalSet(gameId, lines) { return this.request('conditional_set', { gameId, lines }); }
 }
 
 export function stableGuestToken(storage = localStorage) {
