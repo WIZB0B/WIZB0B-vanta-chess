@@ -96,5 +96,5 @@ test('first load: engines start on first use, a stop never starts one, the piece
   assert.match(html, /rel="preload" as="image" href="\/assets\/vch\/pieces\/vanta-3d-1x\.png"/);
   const bridge = workerSource;
   assert.match(bridge, /if\(data\?\.action==='stop'\)\{queued=null;if\(engine&&searching\)/);
-  assert.match(main, /if\(!currentHistory\(\)\.length\)return; \/\/ "Analysis begins after your move"/);
+  assert.match(main, /if\(!need&&!currentHistory\(\)\.length\)return; \/\/ "Analysis begins after your move"/);
 });

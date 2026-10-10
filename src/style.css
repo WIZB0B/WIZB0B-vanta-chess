@@ -2708,3 +2708,25 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .study-intro-text{margin:0;color:var(--muted)}
 .studies .club-row button.study-del{color:#ff9b88}
 .study-open{margin:6px 0}
+
+/* === Coach, tournaments, reactions === */
+.computer-coach{margin-top:6px}
+.coach-card small{display:block;line-height:1.4}
+.coach-card.thinking{opacity:.75}
+.coach-card.tone-good{border-color:rgba(121,231,176,.45)}
+.coach-card.tone-warn{border-color:rgba(229,193,124,.5)}
+.coach-card.tone-bad{border-color:rgba(255,120,100,.5)}
+.arena-create{width:100%;margin-bottom:8px;padding:10px 12px;border:1px dashed rgba(229,193,124,.5);border-radius:9px;color:var(--gold);font-weight:600;text-align:left}
+.arena-badge.swiss{background:#1f3a31;color:var(--mint)}
+.arena-play{padding:8px 12px;border-radius:8px;background:linear-gradient(#efd59d,#d5ad64);color:#10120e;font-weight:700}
+.event-form .rated-switch,.event-form .time-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.event-form .rated-switch button,.event-form .time-chips button{padding:7px 11px;border:1px solid var(--line-strong);border-radius:7px;background:#14211f;font-size:12px}
+.event-form button.on{border-color:var(--mint);background:#1f3a31}
+.event-form input{width:100%;padding:9px;border-radius:8px;border:1px solid #3b4848;background:#091416;color:var(--text);font:inherit}
+.event-form label.check{display:flex;align-items:center;gap:8px}.event-form label.check input{width:auto}
+.reaction-bar{display:flex;justify-content:center;gap:6px;margin:6px 0}
+.reaction-bar button{padding:6px 12px;border:1px solid var(--line-strong);border-radius:999px;background:#14211f;font-size:12px;font-weight:700}
+.board-shell{position:relative}
+.reaction-float{position:absolute;bottom:10%;z-index:5;padding:4px 10px;border-radius:999px;background:#0d1718e6;border:1px solid var(--gold);color:var(--gold);font-weight:800;pointer-events:none;animation:reaction-rise 2.4s ease-out forwards}
+@keyframes reaction-rise{from{transform:translateY(0);opacity:0}15%{opacity:1}to{transform:translateY(-220px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.reaction-float{animation-duration:1.2s}}

@@ -285,6 +285,24 @@ round-4 migration first). Not deployed; waiting for the owner's approval.
 - T8 Freestyle: Chess960 starts without castling (chess.js has no 960 castling), casual
   only, rooms, challenges and the computer. (PR #29)
 
+## U. Round 6 (owner approved 2026-10-10)
+Server code in PR #31 (migration `20261010220000_round6_moderation_studies_swiss`, after the
+round-4 and round-5 migrations). Not deployed; waiting for the owner's approval.
+- U0 Loading fix (owner screenshot: empty board while loading): sprite preload, engines
+  start on first use, idle service-worker install, lazy bot portraits. (PR #30)
+- U0 Pending bug: online games in My games replayed only the last move (stored PGN held
+  one move); archive rebuilds from the move list, finished games store full PGN. (PR #30)
+- U1 Moderation page for admins (set `role='admin'` on the owner's player row at deploy). (PR #31, #32)
+- U2 Chess960 castling in Freestyle; Freestyle rated in its own pool. (PR #31, #33)
+- U3 Studies: annotated lines shared by /?study=CODE. (PR #31, #33)
+- U4 Coach mode against the computer. (PR #34)
+- U5 Player/club tournaments, arena or Swiss (auto-paired rounds). (PR #31, #34)
+- U6 Account: password reset, change password, download data, delete account. (PR #31, #32)
+- U7 Spectator reactions in Watch (text chips, players never see them). (PR #34)
+- Netlify deploy previews: the Netlify Drawer is blocked by our CSP (grey box at the bottom
+  of previews only). Turn it off in Netlify: Project configuration > Build & deploy >
+  Deploy Previews > Netlify Drawer. CSP stays strict.
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

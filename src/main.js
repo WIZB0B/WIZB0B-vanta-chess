@@ -35,6 +35,7 @@ import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { lazyWorker } from './lazy-worker.js';
 import { applyCastle, castleForMove, castleOptions, replay960 } from './castle960.js';
 import { moveLabels, studyPositions, studyUrl } from './study.js';
+import { coachNote } from './coach.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
 import { CARD_H, CARD_W, canvasToBlob, clipSchedule, drawStoryFrame, loadPieceImages, recordClip, shareOrDownload, storyFileName } from './story-share.js';
@@ -213,7 +214,7 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -242,6 +243,7 @@ ${splashMarkup(splash)}
         <div><b>Takeback request</b><small>Your opponent wants to take back their last move</small></div>
         <div><button id="declineTakeback" type="button">Decline</button><button id="acceptTakeback" type="button">Accept</button></div>
       </div>
+      <div id="coachCard" class="draw-offer-card coach-card hidden" role="status" aria-live="polite"></div>
       <div id="planCard" class="draw-offer-card plan-card hidden" role="region" aria-label="Conditional moves"></div>
       <div id="berserkCard" class="draw-offer-card berserk-card hidden" role="status" aria-live="polite">
         <div><b>Berserk ready</b><small>Half your clock. Rating change ×1.25, win or lose. Before your first move only.</small></div>
@@ -880,6 +882,7 @@ function selectedComputerSide(){
 }
 let computerVariant='standard';
 function startComputerGame(){
+  if(typeof hideCoach==='function')hideCoach();
   if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   const selectedBot=computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
@@ -949,7 +952,7 @@ async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)re
     }
   }finally{onlineMovePending=false}
   if(resendStaleMove)return makeMove(move,false,false);
-  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
+  return}let made,localElapsedMs=null;try{if(mode==='computer'&&localClockState){localElapsedMs=Math.max(0,performance.now()-localClockState.startedAt);settleLocalClock()}made=rememberLastMove(game.move(move))}catch{return}if(localElapsedMs!==null)moveTimeByPly[Math.max(0,(game.moveNumber()-1)*2+(game.turn()==='b'?1:0)-1)]=localElapsedMs;if(mode==='computer'){localClockState.active=game.turn();localClockState.startedAt=performance.now()}selected=null;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(()=>{updateMoves();playTone()});if(mode==='computer'&&remote)playQueuedPremove();if(mode==='computer'&&!remote&&made)void coachAfterMove(made);if(mode==='computer'&&!remote&&!game.isGameOver())afterBoardPaint(()=>setTimeout(engineMove,60));}
 function normalizedSan(value=''){return String(value).replace(/[+#?!]/g,'')}
 function isBookMove(records,index){
   const sans=records.slice(0,index+1).map(record=>normalizedSan(record.san||record.lan||''));
@@ -2071,6 +2074,7 @@ function startSocial(){
     if(socialState.channel)realtimeClient.removeChannel(socialState.channel).catch(()=>{});
     socialState.channelFor=currentProfile.id;
     socialState.channel=realtimeClient.channel(`player:${currentProfile.id}`)
+      .on('broadcast',{event:'tournament_game'},message=>{const code=message?.payload?.code;if(!code)return;toast(`Round ${message.payload.round} is ready`);if(!isOnlineGame()&&mode!=='computer')setTimeout(()=>{location.search='?game='+encodeURIComponent(code)},1200)})
       .on('broadcast',{event:'challenge'},()=>{toast('New challenge');void refreshSocial()})
       .on('broadcast',{event:'challenge_answer'},message=>{
         const p=message?.payload||{};
@@ -2530,6 +2534,85 @@ async function openStudy(code){
   catch(error){toast(error.message)}
 }
 if(params.get('study'))setTimeout(()=>void openStudy(String(params.get('study')).slice(0,8)),500);
+// ---- Coach mode vs the computer (src/coach.js). Never in games against people. ----
+const coachWorker=lazyWorker('/stockfish.worker.js');let coachPending=null,coachSeq=0,coachShown=null;
+coachWorker.onmessage=({data})=>{
+  if(!coachPending||data.requestId!==coachPending.id)return;
+  const line=String(data.line||'');
+  if(data.type==='uci'&&line.startsWith('info ')){const parsed=parseReviewInfo(line,coachPending.fen);if(parsed)coachPending.latest=parsed}
+  if((data.type==='uci'&&line.startsWith('bestmove '))||data.type==='unavailable'){const p=coachPending;coachPending=null;clearTimeout(p.timer);p.resolve({...p.latest,bestMove:line.split(/\s+/)[1]||p.latest.bestMove})}
+};
+function coachAnalyze(fen){
+  return new Promise(resolve=>{
+    const id=`coach-${++coachSeq}`;
+    const timer=setTimeout(()=>{if(coachPending?.id===id){coachPending=null;coachWorker.postMessage({action:'stop'});resolve(null)}},12000);
+    coachPending={id,fen,latest:{cp:0,depth:0,pv:'',bestMove:''},resolve,timer};
+    coachWorker.postMessage({mode:'analysis',fen,depth:12,requestId:id});
+  });
+}
+function coachOn(){try{return localStorage.getItem('vch.coach')==='1'}catch{return false}}
+function syncCoachToggle(){$$('[data-coach]').forEach(b=>b.classList.toggle('on',(b.dataset.coach==='on')===coachOn()))}
+$$('[data-coach]').forEach(b=>b.addEventListener('click',()=>{try{localStorage.setItem('vch.coach',b.dataset.coach==='on'?'1':'0')}catch{}syncCoachToggle();if(!coachOn())hideCoach()}));
+syncCoachToggle();
+function hideCoach(){coachShown=null;$('#coachCard')?.classList.add('hidden')}
+async function coachAfterMove(made){
+  if(!coachOn()||mode!=='computer'||!made?.before)return;
+  const key=made.after;coachShown=key;
+  const card=$('#coachCard');if(card){card.className='draw-offer-card coach-card thinking';card.innerHTML='<div><b>Coach</b><small>Looking at your move…</small></div>'}
+  const before=await coachAnalyze(made.before);if(coachShown!==key||!before?.bestMove)return;
+  const after=await coachAnalyze(made.after);if(coachShown!==key||!after)return;
+  const uci=`${made.from}${made.to}${made.promotion||''}`;
+  const classification=classifyMove({beforeCp:before.cp,afterCp:after.cp,color:made.color,isBook:isBookMove(game.history({verbose:true}),game.history().length-1),isBest:uci===before.bestMove,isSacrifice:false});
+  const note=coachNote({fenBefore:made.before,playedUci:uci,playedSan:made.san,bestUci:before.bestMove,classification,fenAfter:made.after,replyUci:after.bestMove});
+  if(!card||coachShown!==key)return;
+  card.className=`draw-offer-card coach-card tone-${note.tone}`;
+  card.innerHTML=`<div><b>${escapeHtml(note.title)}</b><small>${escapeHtml(note.text)}</small></div><div>${note.best?'<button type="button" data-coach-show>Show</button>':''}<button type="button" data-coach-close>OK</button></div>`;
+  card.querySelector('[data-coach-show]')?.addEventListener('click',()=>{boardShapes=[{from:note.best.slice(0,2),to:note.best.slice(2,4),brush:'green'}];render()});
+  card.querySelector('[data-coach-close]').addEventListener('click',()=>{boardShapes=[];render();hideCoach()});
+}
+// ---- Swiss and player-run tournaments ----
+const EVENT_TIMES=[['180-2','3+2'],['300-0','5+0'],['600-0','10+0'],['900-10','15+10']];
+async function openCreateTournament(){
+  if(!signedIn())return openAccount();
+  let club=null;try{const out=await api.clubList();if(out.mine?.role==='owner')club=out.mine}catch{}
+  const start=new Date(Date.now()+30*60000);start.setSeconds(0,0);
+  const local=new Date(start.getTime()-start.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const body=document.createElement('div');body.className='report-form event-form';
+  body.innerHTML=`<label><span>Name</span><input name="name" maxlength="40" placeholder="Friday blitz"></label>
+    <div class="rated-switch"><button type="button" class="on" data-ef="arena">Arena</button><button type="button" data-ef="swiss">Swiss</button></div>
+    <div class="time-chips">${EVENT_TIMES.map(([v,l],i)=>`<button type="button" data-et="${v}"${i===1?' class="on"':''}>${l}</button>`).join('')}</div>
+    <label><span>Starts</span><input name="start" type="datetime-local" value="${local}"></label>
+    <label class="ef-arena"><span>Length (minutes)</span><input name="minutes" type="number" min="20" max="180" value="60"></label>
+    <label class="ef-swiss hidden"><span>Rounds</span><input name="rounds" type="number" min="3" max="11" value="5"></label>
+    <label class="check"><input name="rated" type="checkbox"> Rated</label>
+    ${club?`<label class="check"><input name="club" type="checkbox"> Only for ${escapeHtml(club.name)} members</label>`:''}`;
+  let format='arena',time='300-0';
+  body.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.ef){format=b.dataset.ef;body.querySelectorAll('[data-ef]').forEach(x=>x.classList.toggle('on',x===b));body.querySelector('.ef-arena').classList.toggle('hidden',format!=='arena');body.querySelector('.ef-swiss').classList.toggle('hidden',format!=='swiss')}
+    if(b.dataset.et){time=b.dataset.et;body.querySelectorAll('[data-et]').forEach(x=>x.classList.toggle('on',x===b))}});
+  const ok=await vchDialog({title:'Create a tournament',body,actions:[{label:'Cancel',value:false},{label:'Create',value:true,primary:true}]});if(!ok)return;
+  const f=n=>body.querySelector(`[name="${n}"]`),[seconds,increment]=time.split('-').map(Number);
+  try{
+    await api.tournamentCreate({name:f('name').value,format,seconds,increment,rated:f('rated').checked,startsAt:new Date(f('start').value).toISOString(),minutes:Number(f('minutes').value),rounds:Number(f('rounds').value),clubSlug:f('club')?.checked?club.slug:undefined});
+    toast('Tournament created');showBackendView('arena');
+  }catch(error){toast(error.message)}
+}
+// ---- Spectator reactions (Watch only; text chips, never shown to the players) ----
+const REACTIONS=[['wow','Wow'],['brilliant','!!'],['blunder','??'],['gg','GG'],['tense','Tense']];
+let lastReactionAt=0;
+function syncReactionBar(){
+  let bar=$('#reactionBar');
+  if(mode!=='watch'||!watchSession){bar?.classList.add('hidden');return}
+  if(!bar){bar=document.createElement('div');bar.id='reactionBar';bar.className='reaction-bar';bar.setAttribute('aria-label','React');bar.innerHTML=REACTIONS.map(([id,l])=>`<button type="button" data-react="${id}">${l}</button>`).join('');$('.board-shell')?.after(bar);
+    bar.addEventListener('click',e=>{const id=e.target.closest('[data-react]')?.dataset.react;if(!id||!watchSession?.channel)return;if(Date.now()-lastReactionAt<2000)return toast('One reaction every two seconds');lastReactionAt=Date.now();watchSession.channel.send({type:'broadcast',event:'reaction',payload:{r:id}}).catch(()=>{});showReaction(id)})}
+  bar.classList.remove('hidden');
+}
+function showReaction(id){
+  const label=REACTIONS.find(([r])=>r===id)?.[1];if(!label)return; // only the known set is ever shown
+  const shell=$('.board-shell');if(!shell)return;
+  const chip=document.createElement('span');chip.className='reaction-float';chip.textContent=label;chip.style.left=`${15+Math.random()*70}%`;
+  chip.addEventListener('animationend',()=>chip.remove(),{once:true});setTimeout(()=>chip.remove(),3000);shell.append(chip);
+}
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
@@ -2557,6 +2640,7 @@ async function startWatching(id){
     watchSession.channel=realtimeClient.channel(`game:${id}`)
       .on('broadcast',{event:'state'},message=>{const state=message?.payload?.game;if(watchSession?.id===id&&state?.id===id)applyWatchState({game:state,serverNow:message.payload.serverNow})})
       .on('broadcast',{event:'moved'},message=>watchRelay(message?.payload))
+      .on('broadcast',{event:'reaction'},message=>showReaction(String(message?.payload?.r||'')))
       .subscribe();
     showMovesView();
     toast(`Watching ${out.game?.white_name||'White'} vs ${out.game?.black_name||'Black'}`);
@@ -2579,13 +2663,14 @@ function watchRelay(payload){
   if(!watchSession||payload?.gameId!==watchSession.id||!payload.from||!payload.to||payload.fenBefore!==game.fen())return;
   try{const made=game.move({from:payload.from,to:payload.to,promotion:payload.promotion||undefined});if(made){browse=null;render({hint:made});afterBoardPaint(playTone)}}catch{}
 }
-function stopWatching({reset=true}={}){
+function stopWatching({reset=true}={}){$('#reactionBar')?.classList.add('hidden');
   const session=watchSession;if(!session)return;
   watchSession=null;clearInterval(session.timer);if(session.channel)realtimeClient.removeChannel(session.channel).catch(()=>{});
   if(mode==='watch')mode=session.prevMode||'room';
   if(reset){clockSnapshot=null;browse=null;game.reset();lastMoveCache={fen:'',move:null};render({instant:true});updateMoves();syncPlayerBars()}
 }
 function syncWatchBars(){
+  syncReactionBar();
   const state=watchSession?.state||{};
   const top=flipped?'w':'b',bottom=flipped?'b':'w',name=c=>c==='w'?state.white_name||'White':state.black_name||'Black',rating=c=>c==='w'?state.white_rating_before:state.black_rating_before;
   $('#topPlayerName').textContent=name(top);$('#bottomPlayerName').textContent=name(bottom);
@@ -2781,7 +2866,7 @@ async function showHint(){
   if(game.turn()!==computerSide)return toast('Wait for your turn');
   const fen=game.fen();
   if(analysisBest?.fen!==fen){
-    scheduleAnalysis({force:true});toast('Thinking…',{duration:1200});
+    scheduleAnalysis({force:true,need:true});toast('Thinking…',{duration:1200});
     for(let i=0;i<30&&analysisBest?.fen!==fen;i++)await new Promise(resolve=>setTimeout(resolve,100));
   }
   if(game.fen()!==fen||analysisBest?.fen!==fen)return toast('No hint yet, try again');
@@ -3406,14 +3491,14 @@ function updateAnalysisFromUci(text,request){
   const line=$('#line');if(line&&pv)line.textContent=formatPv(pv);
   const best=firstMoveOfLine(pv);if(best&&depth>=6)analysisBest={fen:request.fen,depth,...best};
 }
-function scheduleAnalysis({force=false}={}){
+function scheduleAnalysis({force=false,need=false}={}){
   clearTimeout(analysisTimer);
   if(syncEngineLock())return;
   if(reviewState.running||reviewState.viewing||mode==='puzzle')return;
   analysisTimer=setTimeout(()=>{
     if(botThinking)return;
     const fen=game.fen();
-    if(!currentHistory().length)return; // "Analysis begins after your move": no engine download before then
+    if(!need&&!currentHistory().length)return; // "Analysis begins after your move": no engine download before then (a Hint asks for it)
     if(!force&&analysisRequest?.fen===fen)return;
     analysisRequest={id:`analysis-${++engineRequestSeq}`,fen,ply:currentHistory().length,depth:0};
     analysisWorker.postMessage({mode:'analysis',fen,depth:ANALYSIS_MAX_DEPTH,requestId:analysisRequest.id});
@@ -3528,20 +3613,24 @@ async function showBackendView(kind){
   if(kind==='arena'){
     setDynamicView('arena','Arena',brandLoading('Loading live tournaments…'));
     try{
-      const data=await api.tournaments(),events=sortArenas(data.tournaments||data.events||[]),mine=new Map((data.memberships||[]).map(m=>[m.tournament_id,m]));
+      const data=await api.tournaments(),events=sortArenas(data.tournaments||data.events||[]),mine=new Map((data.memberships||[]).map(m=>[m.tournament_id,m])),myGames=new Map((data.myGames||[]).map(g=>[g.tournament_id,g]));
       const target=$('#dynamicView .view-content');if(!target)return;
       const card=(t,i)=>{
         const phase=arenaPhase(t),joined=mine.get(t.id),weekly=isWeeklyArena(t);
-        const action=phase.phase==='finished'?'':phase.phase==='upcoming'?(joined?'<button class="arena-join" disabled>Registered</button>':'<button class="arena-join">Register</button>'):'<button class="arena-join">Play now</button>';
+        const swiss=t.format==='swiss',myGame=myGames.get(t.id);
+        const action=phase.phase==='finished'||(swiss&&t.status==='finished')?'':swiss?(myGame?`<button class="arena-play" data-code="${escapeHtml(myGame.code)}">Play round ${myGame.round}</button>`:joined?'<button class="arena-join" disabled>Joined</button>':'<button class="arena-join">Join</button>'):phase.phase==='upcoming'?(joined?'<button class="arena-join" disabled>Registered</button>':'<button class="arena-join">Register</button>'):'<button class="arena-join">Play now</button>';
         const battle=t.kind==='club_battle';
-        return `<article data-arena="${i}" class="arena-card${weekly||battle?' weekly':''}${battle?' club-battle':''} phase-${phase.phase}"><div>${battle?'<span class="arena-badge">Club battle</span>':weekly?'<span class="arena-badge">Weekly</span>':''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
+        return `<article data-arena="${i}" class="arena-card${weekly||battle?' weekly':''}${battle?' club-battle':''} phase-${phase.phase}"><div>${battle?'<span class="arena-badge">Club battle</span>':weekly?'<span class="arena-badge">Weekly</span>':t.format==='swiss'?`<span class="arena-badge swiss">Swiss · ${Number(t.current_round)?`round ${t.current_round} of ${t.rounds}`:`${t.rounds} rounds`}</span>`:''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
       };
-      target.innerHTML=`<div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
+      target.innerHTML=`<button class="arena-create">Create a tournament · arena or Swiss</button><div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
+      target.querySelector('.arena-create').onclick=()=>void openCreateTournament();
+      target.querySelectorAll('.arena-play').forEach(b=>b.onclick=()=>{location.search='?game='+encodeURIComponent(b.dataset.code)});
       [...target.querySelectorAll('[data-arena]')].forEach((row,i)=>{
         const t=events[i],phase=arenaPhase(t).phase,join=row.querySelector('.arena-join');
         if(join&&!join.disabled)join.onclick=async()=>{
           try{
             await api.tournamentJoin(t.id);
+            if(t.format==='swiss'){join.textContent='Joined';join.disabled=true;return toast('Joined · your games are paired for you each round')}
             if(phase==='upcoming'){join.textContent='Registered';join.disabled=true;return toast(`Registered · ${arenaPhase(t).label.toLowerCase()}`)}
             await api.queueJoin({seconds:Number(t.base_seconds||600),increment:Number(t.increment_seconds||0),rated:!!t.rated,tournamentId:t.id});mode='match';toast('Arena queue joined');
             const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000);
