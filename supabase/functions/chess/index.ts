@@ -886,7 +886,7 @@ async function modAction(req:Request,b:any){
   const mod=await adminFor(req,b),id=String(b.playerId||"");
   const target=await playerById(id);if(!target)throw fail("Player not found.",404);
   if(target.role==="admin"&&target.id!==mod.id)throw fail("Admins can't moderate each other here.",409);
-  const action=["mute","unmute","ban","unban","dismiss","resolve"].includes(b.action)?b.action:null;if(!action)throw fail("Unknown action.");
+  const action=["mute","unmute","ban","unban","dismiss","resolve"].includes(b.act)?b.act:null;if(!action)throw fail("Unknown action.");
   const note=String(b.note||"").replace(/[\u0000-\u001F]/g," ").trim().slice(0,500);
   const patch:any={};
   if(action==="mute")patch.muted_until=new Date(Date.now()+Math.max(1,Math.min(24*30,Number(b.hours)||24))*3600000).toISOString();

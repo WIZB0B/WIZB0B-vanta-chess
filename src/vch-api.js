@@ -36,7 +36,8 @@ export class VchApi {
     // every move.
     const response = await fetch(this.endpoint, {
       method: 'POST', headers, signal, referrerPolicy: 'no-referrer',
-      body: JSON.stringify({ action, ...(this.token ? { token: this.token } : {}), ...payload }),
+      // The request's own fields come last, so a payload field can never replace them.
+      body: JSON.stringify({ ...payload, action, ...(this.token ? { token: this.token } : {}) }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.error) {
@@ -104,6 +105,16 @@ export class VchApi {
   league(division = null) { return this.request('league', division === null ? {} : { division }); }
   conditionalList(gameId) { return this.request('conditional_list', { gameId }); }
   conditionalSet(gameId, lines) { return this.request('conditional_set', { gameId, lines }); }
+  modQueue() { return this.request('mod_queue'); }
+  modPlayer(playerId) { return this.request('mod_player', { playerId }); }
+  modAction({ action, ...rest }) { return this.request('mod_action', { ...rest, act: action }); } // "action" is the request's own field
+  studySave(payload) { return this.request('study_save', payload); }
+  studyGet(code) { return this.request('study_get', { code }); }
+  studyList() { return this.request('study_list'); }
+  studyDelete(code) { return this.request('study_delete', { code }); }
+  tournamentCreate(payload) { return this.request('tournament_create', payload); }
+  accountExport() { return this.request('account_export'); }
+  accountDelete(confirm) { return this.request('account_delete', { confirm }); }
 }
 
 export function stableGuestToken(storage = localStorage) {

@@ -169,6 +169,7 @@ ${splashMarkup(splash)}
           <button id="profileMenuProfile" type="button">Profile</button>
           <button id="profileMenuEdit" type="button">Edit portrait &amp; flag</button>
           <button id="profileMenuSettings" type="button">Settings</button>
+          <button id="profileMenuModeration" type="button" class="hidden">Moderation</button>
           <button id="profileMenuAuth" type="button">Sign in</button>
         </nav>
       </section>
@@ -335,15 +336,18 @@ ${splashMarkup(splash)}
     <label>Email<input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
     <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="••••••••"></label>
     <button id="authSubmit" class="primary-action" type="button">Sign in</button>
+    <button id="forgotPassword" class="link-action" type="button">Forgot password?</button>
     <p id="authMessage" class="auth-message"></p>
   </div>
   <div id="accountSigned" class="hidden">
     <div class="profile-card"><span class="avatar light">VC</span><div><b id="profileName">Player</b><small id="profileRating">1200 rapid</small></div></div>
     <div class="rating-grid"><div><small>Bullet</small><b id="ratingBullet">1200</b></div><div><small>Blitz</small><b id="ratingBlitz">1200</b></div><div><small>Rapid</small><b id="ratingRapid">1200</b></div><div><small>Classical</small><b id="ratingClassical">1200</b></div><div><small>Daily</small><b id="ratingDaily">1200</b></div><div><small>Puzzles</small><b id="ratingPuzzle">1200</b></div></div>
+    <p id="accountNotice" class="account-notice hidden" role="status"></p>
     <p id="berserkStatus" class="berserk-status"></p>
     <h4 class="achievement-title">Achievements <small id="achievementCount"></small></h4>
     <div id="achievementGrid" class="achievement-grid"></div>
     <button id="viewMyProfile" class="secondary-action" type="button">View my public profile</button>
+    <details class="account-settings"><summary>Account settings</summary><div><button id="changePassword" type="button">Change password</button><button id="exportData" type="button">Download my data</button><button id="deleteAccount" type="button" class="danger">Delete account</button></div></details>
     <button id="signOutBtn" class="secondary-action" type="button">Sign out</button>
   </div>
 </dialog>
@@ -1300,7 +1304,9 @@ function syncIdentityUI(){
     for(const pool of ['bullet','blitz','rapid','classical','daily']){const el=$('#rating'+pool[0].toUpperCase()+pool.slice(1));if(el)el.textContent=ratingFor(pool)}
     const pr=$('#ratingPuzzle');if(pr)pr.textContent=Number(currentProfile?.puzzle_rating||1200);
     const bs=$('#berserkStatus');if(bs){const prog=berserkProgress(currentProfile?.rated_win_streak,currentProfile?.berserk_ready);bs.textContent=prog.label;bs.classList.toggle('ready',prog.ready)}
-    renderAchievements();
+    renderAchievements();if(typeof syncAdminUi==='function')syncAdminUi();
+    const notice=$('#accountNotice'),muted=currentProfile?.muted_until&&Date.parse(currentProfile.muted_until)>Date.now();
+    if(notice){notice.textContent=currentProfile?.banned?'Your account is suspended: you can review your games but not play rated games, join events or chat.':muted?`You're muted until ${new Date(currentProfile.muted_until).toLocaleString()}.`:'';notice.classList.toggle('hidden',!notice.textContent)}
   }
 }
 // ---- Portrait and country flag ----
@@ -2332,6 +2338,97 @@ async function savePlan(){
   try{const out=await api.conditionalSet(serverGameId,lines);planLines={gameId:serverGameId,lines:out.lines};exitPlan({silent:true});toast('Plan saved')}catch(error){toast(error.message)}
 }
 $$('[data-computer-variant]').forEach(b=>b.addEventListener('click',()=>{computerVariant=b.dataset.computerVariant;$$('[data-computer-variant]').forEach(x=>x.classList.toggle('on',x===b))}));
+// ---- Account: password, your data, delete ----
+async function authPut(path,body,token){
+  const response=await fetch(SUPABASE_URL+path,{method:'PUT',headers:{'content-type':'application/json',apikey:SUPABASE_PUBLISHABLE_KEY,authorization:'Bearer '+token},body:JSON.stringify(body)});
+  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.msg||data.message||data.error_description||'Could not update the password');return data;
+}
+async function openSetPassword({title='Set a new password',intro='Choose a new password for your account.'}={}){
+  if(!authSession?.access_token)return openAccount();
+  menus.close('account'); // the account dialog sits in the top layer; close it so this one is in front
+  const body=document.createElement('div');body.className='report-form';
+  body.innerHTML=`<p>${escapeHtml(intro)}</p><label><span>New password</span><input type="password" autocomplete="new-password" minlength="8" maxlength="72"></label><label><span>Repeat it</span><input type="password" autocomplete="new-password" minlength="8" maxlength="72"></label>`;
+  for(;;){
+    const ok=await vchDialog({title,body,actions:[{label:'Cancel',value:false},{label:'Save password',value:true,primary:true}]});if(!ok)return;
+    const [a,b]=[...body.querySelectorAll('input')].map(i=>i.value);
+    if(a.length<8){toast('Use at least 8 characters');continue}
+    if(a!==b){toast('The passwords are different');continue}
+    try{await authPut('/auth/v1/user',{password:a},authSession.access_token);toast('Password saved');return}catch(error){toast(error.message)}
+  }
+}
+async function sendPasswordReset(){
+  const email=$('#authEmail').value.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$('#authMessage').textContent='Enter your email above, then tap "Forgot password?" again.';return}
+  try{await authFetch(withAuthRedirect('/auth/v1/recover'),{email});$('#authMessage').textContent='If that email has an account, a reset link is on its way.'}
+  catch(error){$('#authMessage').textContent=error.message}
+}
+async function downloadMyData(){
+  try{
+    const out=await api.accountExport(),blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`vch-data-${(currentProfile?.username||'me').replace(/[^A-Za-z0-9_-]/g,'')}-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);toast('Your data is downloading');
+  }catch(error){toast(error.message)}
+}
+async function deleteMyAccount(){
+  const name=currentProfile?.username||'';menus.close('account');
+  const body=document.createElement('div');body.className='report-form';
+  body.innerHTML=`<p>This deletes your account, profile, portrait, friends, club membership, studies and push devices, and signs you out. Your past games stay in your opponents' histories as "Deleted player". It can't be undone.</p><label><span>Type your username (${escapeHtml(name)}) to confirm</span><input autocomplete="off" maxlength="20"></label>`;
+  const ok=await vchDialog({title:'Delete your account?',body,actions:[{label:'Keep my account',value:false},{label:'Delete for good',value:true,primary:true}]});
+  if(!ok)return;
+  try{await api.accountDelete(body.querySelector('input').value);saveAuthSession(null);currentProfile=null;menus.close('account');await loadProfile().catch(()=>{});syncIdentityUI();toast('Your account was deleted',{duration:3200})}
+  catch(error){toast(error.message)}
+}
+$('#forgotPassword')?.addEventListener('click',sendPasswordReset);
+$('#changePassword')?.addEventListener('click',()=>void openSetPassword({title:'Change password'}));
+$('#exportData')?.addEventListener('click',downloadMyData);
+$('#deleteAccount')?.addEventListener('click',deleteMyAccount);
+
+// ---- Moderation (admins only; the server refuses everyone else) ----
+function isAdmin(){return signedIn()&&currentProfile?.role==='admin'}
+function syncAdminUi(){$('#profileMenuModeration')?.classList.toggle('hidden',!isAdmin())}
+async function renderModeration(){
+  if(!isAdmin())return toast('Moderation is for admins');
+  setPrimaryScreen('game');if(isMobileApp()){mTab='more';setMView('panel')}
+  setDynamicView('moderation','Moderation',brandLoading('Loading cases…'));
+  try{
+    const d=await api.modQueue(),target=$('#dynamicView .view-content');if(!target)return;
+    const reasons=r=>Object.entries(r).map(([k,v])=>`${v} ${k}`).join(' · ');
+    target.innerHTML=`<article class="mod">
+      <p class="trainer-intro">Reports and accuracy signals are leads for a person to check, not proof. Open a file, look at the games, then decide.</p>
+      <h4>Open cases <small>${d.cases.length}</small></h4>
+      ${d.cases.map(c=>`<button class="mod-case" data-mod="${escapeHtml(c.player.id)}"><span><b>${escapeHtml(c.player.username)}</b><small>${c.reports.length?`${c.reports.length} reports · ${escapeHtml(reasons(c.reasons))}`:'No reports'}${c.fairplay?` · ${c.fairplay.games_95_plus}/${c.fairplay.reviewed_games} games 95%+ · avg ${c.fairplay.avg_accuracy??'—'}%`:''}</small></span><em>${c.player.banned_at?'Suspended':c.player.muted_until&&Date.parse(c.player.muted_until)>Date.now()?'Muted':'Open'}</em></button>`).join('')||'<p class="menu-empty">Nothing to review.</p>'}
+      <h4>Recent actions</h4><div class="pp-list">${d.log.map(l=>`<div><b>${escapeHtml(l.action)} · ${escapeHtml(l.player)}</b><span>${escapeHtml(l.note||'')}</span><small>${escapeHtml(new Date(l.created_at).toLocaleString())} · ${escapeHtml(l.moderator)}</small></div>`).join('')||'<p class="menu-empty">No actions yet.</p>'}</div>
+    </article>`;
+    target.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>void openModFile(b.dataset.mod));
+  }catch(error){toast(error.message)}
+}
+async function openModFile(playerId){
+  setDynamicView('moderation','Moderation',brandLoading('Opening the file…'));
+  try{
+    const d=await api.modPlayer(playerId),p=d.player,target=$('#dynamicView .view-content');if(!target)return;
+    const muted=p.muted_until&&Date.parse(p.muted_until)>Date.now();
+    target.innerHTML=`<article class="mod">
+      <header class="mod-head"><h4>${escapeHtml(p.username)}</h4><small>${p.account?'Account':'Guest'} · ${p.rating} blitz · ${p.rated_games} rated games${p.banned_at?` · <b class="mod-flag">Suspended</b> (${escapeHtml(p.ban_reason||'')})`:''}${muted?` · <b class="mod-flag">Muted until ${escapeHtml(new Date(p.muted_until).toLocaleString())}</b>`:''}</small></header>
+      <div class="pp-actions">${muted?'<button data-act="unmute">Unmute</button>':'<button data-act="mute" data-hours="24">Mute 24h</button><button data-act="mute" data-hours="168">Mute 7 days</button>'}${p.banned_at?'<button data-act="unban">Lift suspension</button>':'<button data-act="ban" class="danger">Suspend</button>'}<button data-act="resolve">Mark reviewed</button><button data-act="dismiss">Dismiss reports</button><button class="mod-back">All cases</button></div>
+      <h4>Reports <small>${d.reports.length}</small></h4><div class="pp-list">${d.reports.map(r=>`<div><b>${escapeHtml(r.reason)}</b><span>${escapeHtml(r.note||'—')}</span><small>${escapeHtml(r.status)} · ${escapeHtml(new Date(r.created_at).toLocaleDateString())}</small></div>`).join('')||'<p class="menu-empty">None.</p>'}</div>
+      <h4>Accuracy measured by opponents <small>${d.signals.length}</small></h4><div class="pp-list">${d.signals.map(s=>`<div><b>${Number(s.accuracy).toFixed(1)}%</b><span>avg loss ${Number(s.avg_loss).toFixed(1)} · ${s.moves} moves</span><small>${escapeHtml(new Date(s.created_at).toLocaleDateString())}</small></div>`).join('')||'<p class="menu-empty">None.</p>'}</div>
+      <h4>Recent games</h4><div class="pp-list mod-games">${d.games.map(g=>`<div><b>${escapeHtml(g.opponent||'Player')} · ${escapeHtml(g.result)}</b><span>${g.rated?'rated':'casual'} ${escapeHtml(g.pool)} · ${g.moves} plies · ${g.avg_move_s===null?'—':`${g.avg_move_s}s ± ${g.move_time_sd}s per move`}</span><small>${escapeHtml(new Date(g.ended_at).toLocaleDateString())}</small></div>`).join('')||'<p class="menu-empty">No finished games.</p>'}</div>
+      <h4>History</h4><div class="pp-list">${d.log.map(l=>`<div><b>${escapeHtml(l.action)}</b><span>${escapeHtml(l.note||'')}</span><small>${escapeHtml(new Date(l.created_at).toLocaleString())}</small></div>`).join('')||'<p class="menu-empty">No actions yet.</p>'}</div>
+    </article>`;
+    target.querySelector('.mod-back').onclick=()=>void renderModeration();
+    target.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
+      const action=b.dataset.act;let note='';
+      if(action==='ban'||action==='mute'){
+        const box=document.createElement('div');box.className='report-form';box.innerHTML=`<label><span>${action==='ban'?'Reason (the player sees it)':'Note (for the log)'}</span><textarea maxlength="300" rows="3"></textarea></label>`;
+        const ok=await vchDialog({title:action==='ban'?`Suspend ${p.username}?`:`Mute ${p.username}?`,body:box,actions:[{label:'Cancel',value:false},{label:action==='ban'?'Suspend':'Mute',value:true,primary:true}]});if(!ok)return;
+        note=box.querySelector('textarea').value;
+      }
+      try{await api.modAction({playerId:p.id,action,hours:Number(b.dataset.hours)||undefined,note});toast('Done');void openModFile(p.id)}catch(error){toast(error.message)}
+    });
+  }catch(error){toast(error.message);void renderModeration()}
+}
+$('#profileMenuModeration')?.addEventListener('click',()=>{menus.close('profile');void renderModeration()});
+if(params.get('mod'))setTimeout(()=>{if(isAdmin())void renderModeration()},1200);
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
@@ -2889,9 +2986,10 @@ async function completeAuthCallback(){
   try{
     await handleAuthCallback({
       location,history,detectSession:detectCallbackSession,
-      onSignedIn:async session=>{
+      onSignedIn:async(session,info)=>{
         saveAuthSession(session);
         await loadProfile().catch(()=>{});syncIdentityUI();
+        if(info?.type==='recovery'){void openSetPassword({intro:'You opened a password reset link. Choose a new password.'});return}
         toast("Email confirmed, you're signed in",{duration:3200});
       },
       onError:error=>{void showAuthLinkError(error)}

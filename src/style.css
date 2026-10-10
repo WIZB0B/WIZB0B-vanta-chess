@@ -2678,3 +2678,16 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .plan-list li{display:flex;align-items:center;gap:8px;font-size:12px}
 .plan-list li span{flex:1}
 .plan-list li button{padding:2px 8px;font-size:11px;border:1px solid var(--line);border-radius:6px}
+
+/* === Moderation and account settings === */
+.link-action{display:block;margin:6px auto 0;padding:4px;color:var(--muted);font-size:12px;text-decoration:underline}
+.account-settings{margin:10px 0;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+.account-settings summary{cursor:pointer;color:var(--muted);font-size:12px}
+.account-settings>div{display:grid;gap:6px;margin-top:8px}
+.account-settings button{padding:9px;border:1px solid var(--line-strong);border-radius:8px;background:#14211f;font-size:12px}
+.account-settings button.danger,.pp-actions button.danger{color:#ff9b88;border-color:rgba(255,120,100,.4)}
+.account-notice{padding:8px 10px;border:1px solid rgba(255,120,100,.4);border-radius:8px;background:#2a1714;color:#ffb4a5;font-size:12px}
+.mod-case{display:flex;justify-content:space-between;gap:10px;width:100%;padding:9px 10px;margin-top:6px;border:1px solid var(--line);border-radius:8px;background:#0b1715;text-align:left}
+.mod-case small{display:block;color:var(--muted);font-size:11px}.mod-case em{font-style:normal;color:var(--gold);font-size:11px}
+.mod-head h4{margin:0;font-size:18px}.mod-head small{color:var(--muted)}.mod-flag{color:#ff9b88}
+.mod h4{margin:14px 0 6px}.mod-games span{font-size:11px}

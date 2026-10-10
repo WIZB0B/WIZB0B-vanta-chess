@@ -35,9 +35,9 @@ test('callback parsing reads hash and query, and recognises errors',()=>{
   assert.equal(isAuthCallback(loc('https://x.test/auth/callback')),true);
   assert.equal(isAuthCallback(loc('https://x.test/auth/callback/')),true);
   assert.equal(isAuthCallback(loc('https://x.test/')),false);
-  assert.deepEqual(readAuthCallback(`https://x.test/auth/callback#access_token=${TOKEN}&refresh_token=r&type=signup`),{hasTokens:true,error:null});
-  assert.deepEqual(readAuthCallback('https://x.test/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired'),{hasTokens:false,error:{code:'otp_expired'}});
-  assert.deepEqual(readAuthCallback('https://x.test/auth/callback?error=access_denied&error_description=bad'),{hasTokens:false,error:{code:'access_denied'}});
+  assert.deepEqual(readAuthCallback(`https://x.test/auth/callback#access_token=${TOKEN}&refresh_token=r&type=signup`),{hasTokens:true,type:'signup',error:null});
+  assert.deepEqual(readAuthCallback('https://x.test/auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired'),{hasTokens:false,type:null,error:{code:'otp_expired'}});
+  assert.deepEqual(readAuthCallback('https://x.test/auth/callback?error=access_denied&error_description=bad'),{hasTokens:false,type:null,error:{code:'access_denied'}});
   assert.match(friendlyAuthError({code:'otp_expired'}).body,/expired/);
   assert.match(friendlyAuthError({code:'access_denied'}).body,/already been used/);
   assert.equal(typeof friendlyAuthError({code:'weird'}).title,'string');
