@@ -10,3 +10,20 @@ self.addEventListener('fetch', event => {
     return response;
   }).catch(() => caches.match(event.request)));
 });
+// Web push: "your move" in daily games and new challenges. The game server sends a small
+// JSON payload {title, body, url, tag}; only same-site paths are opened.
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
+  const title = String(data.title || 'VCH').slice(0, 80);
+  const url = typeof data.url === 'string' && data.url.startsWith('/') && !data.url.startsWith('//') ? data.url : '/';
+  event.waitUntil(self.registration.showNotification(title, { body: String(data.body || '').slice(0, 200), tag: String(data.tag || 'vch').slice(0, 64), icon: '/icon-192.png', badge: '/icon-192.png', data: { url } }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const client of list) if (new URL(client.url).origin === self.location.origin && 'focus' in client) { client.navigate(url).catch(() => {}); return client.focus(); }
+    return self.clients.openWindow(url);
+  }));
+});
