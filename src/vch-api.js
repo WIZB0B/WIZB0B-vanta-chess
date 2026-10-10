@@ -57,6 +57,10 @@ export class VchApi {
   heartbeat(gameId) { return this.request('heartbeat', { gameId }); }
   resign(gameId) { return this.request('resign', { gameId }); }
   claimWin(gameId, outcome = 'win') { return this.request('claim_win', { gameId, outcome }); }
+  takebackOffer(gameId) { return this.request('takeback_offer', { gameId }); }
+  takebackRespond(gameId, accept) { return this.request('takeback_respond', { gameId, accept }); }
+  liveGames() { return this.request('live_games'); }
+  watchState(gameId) { return this.request('watch_state', { gameId }); }
   drawOffer(gameId) { return this.request('draw_offer', { gameId }); }
   drawCancel(gameId) { return this.request('draw_cancel', { gameId }); }
   drawRespond(gameId, accept) { return this.request('draw_respond', { gameId, accept }); }

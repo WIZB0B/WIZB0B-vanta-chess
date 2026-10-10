@@ -2279,7 +2279,7 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 .portrait-silhouette{width:72%;height:72%;fill:currentColor;display:block;margin:auto}
 .portrait-silhouette path{fill:currentColor}
 .player-flag img{width:100%;height:100%;object-fit:cover;border-radius:3px}
-.flag-prompt{position:fixed;left:18px;bottom:18px;z-index:200;width:min(360px,calc(100vw - 36px));padding:14px 16px;border-radius:12px;
+.flag-prompt{position:fixed;right:18px;bottom:18px;z-index:200;width:min(360px,calc(100vw - 36px));padding:14px 16px;border-radius:12px;
   background:rgba(8,18,19,.96);border:1px solid rgba(229,193,124,.45);box-shadow:0 18px 40px rgba(0,0,0,.5);color:#e9ece8;font-size:12px;
   animation:vch-prompt-in .28s cubic-bezier(.2,.8,.3,1) both}
 .flag-prompt b{font-size:14px}.flag-prompt p{margin:6px 0 10px;color:#a9b4b1;line-height:1.45}
@@ -2402,7 +2402,7 @@ body.m-app .m-sheet[hidden]{display:none}
 .m-sheet-card header svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 .m-sheet-items button{display:block;width:100%;text-align:left;padding:14px 12px;border-radius:10px;font-size:15px;color:#e6ece9;border-bottom:1px solid rgba(255,255,255,.06)}
 .m-sheet-items button:active{background:rgba(255,255,255,.05)}
-body.m-app .flag-prompt{left:12px;bottom:calc(var(--m-tabs-h) + 12px)}
+body.m-app .flag-prompt{left:12px;right:12px;width:auto;bottom:calc(var(--m-tabs-h) + 12px)}
 body.m-app #toast.show{bottom:calc(var(--m-tabs-h) + 14px)}
 @media (prefers-reduced-motion:reduce){.m-sheet-card{transition:none}}
 .m-room{color:#a9b4b1;font-size:13px;margin-right:10px}.m-room b{color:#f2dfaf;letter-spacing:.08em;margin-left:4px}
@@ -2430,3 +2430,29 @@ body.m-app .shell[data-mview="game"] .m-movebar{display:flex;align-items:center;
 body.m-app .shell[data-mview="game"] .m-movebar .m-moves{flex:1;margin-bottom:0}
 body.m-app .m-movebar button{width:40px;height:38px;flex:none;display:grid;place-items:center;color:#cfd8d4;border-radius:10px}
 .m-moves b[data-ply]{cursor:pointer}
+
+/* Watch (live public games). */
+.watch-intro{color:#93a29d;font-size:12px;line-height:1.45;margin:0 0 10px}
+.watch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.watch-card{display:grid;gap:8px;padding:8px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:linear-gradient(180deg,#13221f,#0a1515);text-align:left;color:#dfe7e3}
+.watch-card:hover{border-color:rgba(229,193,124,.5)}
+.watch-card .study-board{pointer-events:none}
+.watch-meta{display:grid;gap:3px;font-size:12px}
+.watch-meta span{display:flex;justify-content:space-between;gap:6px}
+.watch-meta em{font-style:normal;color:#93a29d}
+.watch-meta small{color:#7f9590;font-size:11px}
+.watch-refresh,.watch-empty button{margin-top:12px;padding:9px 14px;border-radius:9px;border:1px solid rgba(229,193,124,.4);background:#152421;color:#f2dfaf;font-weight:700}
+.watch-empty h4{margin:4px 0 6px}.watch-empty p{color:#93a29d;font-size:12px;line-height:1.5}
+
+/* Arena cards: the weekly arena leads with a gold edge. */
+.arena-card.weekly{border-color:rgba(229,193,124,.55)!important;box-shadow:inset 0 0 0 1px rgba(229,193,124,.18)}
+.arena-badge{display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.arena-when{color:#82edba;font-weight:700;font-size:12px}
+.arena-card.phase-upcoming .arena-when{color:#f2dfaf}.arena-card.phase-finished .arena-when{color:#93a29d}
+.arena-mine{color:#cfd8d4;font-size:12px}
+.arena-card .arena-join[disabled]{opacity:.7;cursor:default}
+.standings-slot p{display:flex;gap:8px;align-items:baseline;margin:4px 0;font-size:12px}
+.standings-slot small{color:#7f9590;margin-left:auto}
+
+/* Takeback request: same card as a draw offer. */
+.takeback-card{border-color:rgba(130,237,186,.35)}

@@ -38,7 +38,8 @@ test.describe('phone', () => {
     await expect(page.locator('.lpanel')).toBeHidden();
     await page.locator('[data-lesson="0"]').click();
     await expect(page.locator('.lesson-detail')).toContainText('Training focus');
-    await page.locator('[data-m-tab="famous"]').click();
+    await page.locator('[data-m-tab="more"]').click();
+    await page.locator('#mSheetItems button', { hasText: 'Famous games' }).click();
     await page.locator('[data-famous="0"]').click();
     await expect(page.locator('.study-board .study-square')).toHaveCount(64);
     await page.locator('[data-m-tab="more"]').click();

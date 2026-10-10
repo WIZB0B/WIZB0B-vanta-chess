@@ -232,7 +232,7 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   const {data,error}=await admin.from("chess_games").update({
     fen:c.fen(),pgn:c.pgn(),move_history:[...history,{from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,
-    white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,
+    white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,takeback_offer_by:null,takeback_offer_version:null,
     ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
   }).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("Move conflict. Syncing latest position.",409);
@@ -273,6 +273,90 @@ async function claimWin(req:Request,b:any){
   const settled=await settleRatings(data);
   EdgeRuntime.waitUntil(broadcastGameState(settled));
   return {game:settled,claimed:draw?"draw":"win"}
+}
+// Takebacks: casual games between two people only (never rated, bot or tournament games).
+// The requester takes back their own last move: one ply if the opponent hasn't replied yet,
+// two if they have. The offer lapses when anyone moves (applyMove clears it).
+function takebackPlies(g:any,requesterColor:string){
+  const turn=new Chess(g.fen).turn(),history=Array.isArray(g.move_history)?g.move_history:[];
+  const plies=turn===requesterColor?2:1;
+  if(history.length<plies)return 0;
+  if(history[history.length-plies]?.color!==requesterColor)return 0;
+  return plies;
+}
+function takebackAllowed(g:any){
+  if(g.status!=="active")throw fail("Game is not active.",409);
+  if(g.rated||g.bot_player_id||g.tournament_id)throw fail("Takebacks are for casual games between two players.",409);
+}
+async function takebackOffer(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);takebackAllowed(g);
+  const color=g.white_player_id===p.id?"w":"b";
+  if(!takebackPlies(g,color))throw fail("You have no move to take back yet.",409);
+  if(g.takeback_offer_by===p.id)return {game:g,offered:true};
+  const {data,error}=await admin.from("chess_games").update({takeback_offer_by:p.id,takeback_offer_version:Number(g.version),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
+  EdgeRuntime.waitUntil(broadcastGameState(data));
+  return {game:data,offered:true}
+}
+async function takebackRespond(req:Request,b:any){
+  const {p,g}=await assertGameParticipant(req,b);takebackAllowed(g);
+  const asker=g.takeback_offer_by;
+  if(!asker||asker===p.id||Number(g.takeback_offer_version)!==Number(g.version))throw fail("There is no takeback request to answer.",409);
+  if(!b.accept){
+    const {data,error}=await admin.from("chess_games").update({takeback_offer_by:null,takeback_offer_version:null,updated_at:nowIso()}).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
+    if(error)throw error;const out=data||g;EdgeRuntime.waitUntil(broadcastGameState(out));return {game:out,accepted:false}
+  }
+  const askerColor=asker===g.white_player_id?"w":"b",plies=takebackPlies(g,askerColor);
+  if(!plies)throw fail("There is no move to take back.",409);
+  const history=(Array.isArray(g.move_history)?g.move_history:[]).slice(0,-plies),c=new Chess();
+  for(const m of history){try{c.move({from:m.from,to:m.to,promotion:m.promotion||undefined})}catch{throw fail("Could not rebuild the position.",500)}}
+  const {data,error}=await admin.from("chess_games").update({
+    fen:c.fen(),pgn:c.pgn(),move_history:history,move_count:history.length,version:Number(g.version)+1,
+    last_move_at:nowIso(),updated_at:nowIso(),takeback_offer_by:null,takeback_offer_version:null,draw_offer_by:null
+  }).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
+  EdgeRuntime.waitUntil(broadcastGameState(data));
+  return {game:data,accepted:true,plies}
+}
+// Watch: recent public games (matchmaking and tournament games; private rooms are never
+// listed). Spectators get the board, names, ratings and clocks, nothing else.
+const WATCH_FIELDS="id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
+const publicGame=(g:any)=>{const {bot_player_id,...rest}=g;return {...rest,bot:!!bot_player_id}};
+async function liveGames(){
+  const since=new Date(Date.now()-3*60000).toISOString();
+  const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("status","active").in("source",["queue","tournament"]).gte("updated_at",since).gt("move_count",0).order("updated_at",{ascending:false}).limit(30);
+  if(error)throw error;
+  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=publicGame(g);return {...rest,last_move:Array.isArray(move_history)?move_history.at(-1)||null:null}})}
+}
+async function watchState(b:any){
+  const id=String(b.gameId||"");if(!/^[0-9a-f-]{36}$/i.test(id))throw fail("Game not found.",404);
+  const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("id",id).in("source",["queue","tournament"]).maybeSingle();
+  if(error)throw error;if(!data)throw fail("This game can't be watched.",404);
+  return {game:publicGame(await resolveTimeout(data))}
+}
+// The weekly arena: every Saturday 18:00 UTC for 90 minutes, rated 3+2 blitz. tournaments()
+// makes sure this week's (or next week's) exists and moves arenas through their statuses.
+const WEEKLY_ARENA={hourUtc:18,minutes:90,base:180,inc:2,pool:"blitz"};
+function weeklyArenaWindow(now=new Date()){
+  const start=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),WEEKLY_ARENA.hourUtc));
+  start.setUTCDate(start.getUTCDate()+((6-start.getUTCDay()+7)%7));
+  let end=new Date(start.getTime()+WEEKLY_ARENA.minutes*60000);
+  if(end<=now){start.setUTCDate(start.getUTCDate()+7);end=new Date(start.getTime()+WEEKLY_ARENA.minutes*60000)}
+  return {start,end};
+}
+async function ensureWeeklyArena(){
+  const {start,end}=weeklyArenaWindow(),slug="weekly-arena-"+start.toISOString().slice(0,10);
+  await admin.from("chess_tournaments").upsert({slug,name:"VCH Weekly Arena",description:"Every Saturday · 90 minutes · rated 3+2 blitz. Win to score 2, draw for 1. Most points takes the week.",format:"arena",status:Date.now()>=start.getTime()?"active":"scheduled",rated:true,pool:WEEKLY_ARENA.pool,base_seconds:WEEKLY_ARENA.base,increment_seconds:WEEKLY_ARENA.inc,starts_at:start.toISOString(),ends_at:end.toISOString()},{onConflict:"slug",ignoreDuplicates:true});
+  const now=nowIso();
+  await Promise.all([
+    admin.from("chess_tournaments").update({status:"active"}).like("slug","weekly-arena-%").eq("status","scheduled").lte("starts_at",now).gt("ends_at",now),
+    admin.from("chess_tournaments").update({status:"finished"}).like("slug","weekly-arena-%").in("status",["scheduled","active"]).lte("ends_at",now)
+  ]);
+}
+function arenaOpen(t:any){
+  const now=Date.now();
+  if(t.starts_at&&now<Date.parse(t.starts_at))throw fail("The arena hasn't started yet. You're registered; come back when it opens.",409);
+  if(t.ends_at&&now>=Date.parse(t.ends_at))throw fail("This arena has ended.",409);
 }
 async function resign(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")return {game:g};let patch:any;
@@ -435,7 +519,7 @@ async function gameState(req:Request,b:any){
 }
 async function queueJoin(req:Request,b:any){
   const p=await playerFor(req,b,!!b.rated);const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0)));let pool=poolFor(base,inc),rated=!!b.rated,tournament:any=null;
-  if(b.tournamentId){tournament=await one("chess_tournaments","id",b.tournamentId);if(!tournament||!["active","scheduled"].includes(tournament.status))throw fail("Tournament is not available.",409);pool=tournament.pool;rated=tournament.rated;if(rated&&!p.auth_user_id)throw fail("Sign in to play this rated tournament.",401)}
+  if(b.tournamentId){tournament=await one("chess_tournaments","id",b.tournamentId);if(!tournament||!["active","scheduled"].includes(tournament.status))throw fail("Tournament is not available.",409);arenaOpen(tournament);pool=tournament.pool;rated=tournament.rated;if(rated&&!p.auth_user_id)throw fail("Sign in to play this rated tournament.",401)}
   await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");
   const r=ratingOf(p,pool),er=effectiveRating(p,pool);const {data:q,error}=await admin.from("chess_matchmaking_queue").insert({player_id:p.id,rated,pool,base_seconds:tournament?.base_seconds||base,increment_seconds:tournament?.increment_seconds||inc,rating:r,effective_rating:er,tournament_id:tournament?.id||null,state:"searching",heartbeat_at:nowIso()}).select().single();if(error)throw error;
   const cutoff=new Date(Date.now()-90000).toISOString();let query=admin.from("chess_matchmaking_queue").select("*").eq("state","searching").eq("rated",rated).eq("pool",pool).neq("player_id",p.id).gte("heartbeat_at",cutoff).order("created_at").limit(60);const {data:raw,error:e2}=await query;if(e2)throw e2;let candidates=raw||[];
@@ -496,7 +580,7 @@ async function queueStatus(req:Request,b:any){
   return {state:q.state,queue:q}
 }
 async function queueLeave(req:Request,b:any){const p=await playerFor(req,b);await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");return {state:"cancelled"}}
-async function tournaments(req:Request,b:any){const {data:list,error}=await admin.from("chess_tournaments").select("*").in("status",["scheduled","active"]).order("starts_at").limit(30);if(error)throw error;let memberships:any[]=[];try{const p=await playerFor(req,b);const {data}=await admin.from("chess_tournament_entries").select("tournament_id,points,games,wins,draws,losses").eq("player_id",p.id);memberships=data||[]}catch{}return {tournaments:list||[],memberships}}
+async function tournaments(req:Request,b:any){try{await ensureWeeklyArena()}catch(e){console.error("weekly arena",e)}const recent=new Date(Date.now()-3*86400000).toISOString();const {data:list,error}=await admin.from("chess_tournaments").select("*").or(`status.in.(scheduled,active),and(status.eq.finished,ends_at.gte.${recent})`).order("starts_at").limit(30);if(error)throw error;let memberships:any[]=[];try{const p=await playerFor(req,b);const {data}=await admin.from("chess_tournament_entries").select("tournament_id,points,games,wins,draws,losses").eq("player_id",p.id);memberships=data||[]}catch{}return {tournaments:list||[],memberships}}
 async function tournamentJoin(req:Request,b:any){const t=await one("chess_tournaments","id",b.tournamentId);if(!t)throw fail("Tournament not found.",404);const p=await playerFor(req,b,!!t.rated);const {data:exists}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",t.id).eq("player_id",p.id).maybeSingle();if(!exists){const {error}=await admin.from("chess_tournament_entries").insert({tournament_id:t.id,player_id:p.id});if(error)throw error}return {joined:true,tournament:t,player:publicPlayer(p)}}
 async function tournamentStandings(b:any){const {data:e,error}=await admin.from("chess_tournament_entries").select("*").eq("tournament_id",b.tournamentId).order("points",{ascending:false}).order("wins",{ascending:false}).order("joined_at").limit(100);if(error)throw error;const ids=(e||[]).map((x:any)=>x.player_id),{data:players}=ids.length?await admin.from("chess_players").select("id,username,display_name,ratings").in("id",ids):{data:[]};const map=new Map((players||[]).map((p:any)=>[p.id,p]));return {standings:(e||[]).map((x:any)=>{const p:any=map.get(x.player_id);return {...x,username:p?.username||p?.display_name||"Player",rating:ratingOf(p,"blitz")}})}}
 async function leaderboard(b:any){const pool=POOLS.includes(b.pool)?b.pool:"rapid";const {data,error}=await admin.from("chess_players").select("id,username,display_name,ratings,provisional_games,wins,losses,draws,rated_games,smurf_score").not("auth_user_id","is",null).limit(300);if(error)throw error;return {pool,leaderboard:(data||[]).map((p:any)=>({...publicPlayer(p),pool_rating:ratingOf(p,pool),pool_games:gamesOf(p,pool)})).filter((x:any)=>x.pool_games>0).sort((a:any,bx:any)=>bx.pool_rating-a.pool_rating).slice(0,100)}}
@@ -533,6 +617,10 @@ Deno.serve(async(req)=>{
       case "bot_move":out=await botMove(req,b);break;
       case "resign":out=await resign(req,b);break;
       case "claim_win":out=await claimWin(req,b);break;
+      case "takeback_offer":out=await takebackOffer(req,b);break;
+      case "takeback_respond":out=await takebackRespond(req,b);break;
+      case "live_games":out=await liveGames();break;
+      case "watch_state":out=await watchState(b);break;
       case "draw_offer":out=await offerDraw(req,b);break;
       case "draw_cancel":out=await cancelDraw(req,b);break;
       case "draw_respond":out=await respondDraw(req,b);break;

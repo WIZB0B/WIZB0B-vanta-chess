@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-async function enterGameOnFirstVisit(page){await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'))}
+async function enterGameOnFirstVisit(page){await page.addInitScript(()=>{localStorage.setItem('vch.intro-seen','1');localStorage.setItem('vanta.flagPrompt','1')})}
 
 async function mockProfile(page){
   await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', async route=>{
