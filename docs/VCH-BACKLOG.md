@@ -271,6 +271,20 @@ chess v19 are NOT deployed yet (owner cancelled the migration step; waiting for 
 - S7 Sign-in checked locally (ES256 JWKS) with a getUser fallback, to cut a round trip per
   request. Verify after deploy: logs should rarely show "fell back to auth.getUser".
 
+## T. Round 5 (owner approved 2026-10-10)
+Server code in PR #25 (migration `20261010200000_round5_clubs_leagues_profiles`, needs the
+round-4 migration first). Not deployed; waiting for the owner's approval.
+- T1 Learn from your mistakes (browser-local spaced repetition from reviews). (PR #26)
+- T2 Offline play against the computer (service worker caches engine + bundles). (PR #26)
+- T3 Public profile: rating line, best wins, head-to-head, report player. (PR #27)
+- T4 Clubs with chat, Sunday club battle (best five count, never vs your own club). (PR #28)
+- T5 Monthly leagues Bronze to Diamond, top/bottom fifth move, season badges. (PR #28)
+- T6 Fair play: reports and opponent-measured accuracy signals; human review only through
+  the owner-only `chess_fairplay_review` view. No automatic bans. (PR #25-#27)
+- T7 Conditional moves in daily games; one automatic reply per move. (PR #29)
+- T8 Freestyle: Chess960 starts without castling (chess.js has no 960 castling), casual
+  only, rooms, challenges and the computer. (PR #29)
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
