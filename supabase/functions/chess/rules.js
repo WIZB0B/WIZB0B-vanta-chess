@@ -186,3 +186,19 @@ export function swissPairs(players = []) {
   const balance = p => p.whites - (p.games - p.whites);
   return { pairs: res.map(([a, b]) => (balance(a) <= balance(b) ? [a.id, b.id] : [b.id, a.id])), bye };
 }
+
+// ---- First moves (bullet-friendly start) ----
+// Each side's first move is not timed; the clocks start once both have moved. If the side
+// to move hasn't made its first move within FIRST_MOVE_MS, the game is aborted (no rating).
+export const FIRST_MOVE_MS = 30000;
+export function firstMovesPending(moveCount) { return Number(moveCount || 0) < 2; }
+export function abortDue({ moveCount, lastMoveAt, daily = false, now = Date.now() }) {
+  if (daily || !firstMovesPending(moveCount)) return false;
+  const since = Date.parse(lastMoveAt || '');
+  return Number.isFinite(since) && now - since > FIRST_MOVE_MS;
+}
+
+// ---- Opening explorer ----
+export const EXPLORER_PLIES = 24;
+// Position key: placement, side to move, castling, en passant (no move counters).
+export function explorerKey(fen) { return String(fen || '').split(' ').slice(0, 4).join(' '); }

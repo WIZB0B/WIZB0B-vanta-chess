@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
 import { calculateMoveTiming } from "./latency.js";
 import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle, rightsAfterMove } from "./castle960.js";
-import { swissPairs } from "./rules.js";
+import { EXPLORER_PLIES, abortDue, explorerKey, firstMovesPending, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
 const admin = createClient(
@@ -170,6 +170,8 @@ async function awardAchievements(p:any,extra:any={}){
   const ids=newAchievements(p.achievements,p,extra);if(!ids.length)return [];
   const at=nowIso(),next=[...(Array.isArray(p.achievements)?p.achievements:[]),...ids.map(id=>({id,at}))];
   await admin.from("chess_players").update({achievements:next}).eq("id",p.id);
+  const title=(id:string)=>({"first-win":"First win","ten-wins":"Ten wins","fifty-wins":"Fifty wins","rated-25":"Seasoned","three-in-a-row":"Berserker","giant-slayer":"Giant slayer","puzzle-50":"Puzzle solver","streak-10":"Streak of ten","arena-podium":"Arena podium","daily-finished":"Correspondent","first-friend":"Good company","club-member":"Club player","league-promoted":"Promoted","mistake-fixer":"Learns fast","freestyle":"Freestyler"} as any)[id]||"Achievement";
+  for(const id of ids)EdgeRuntime.waitUntil(notifyPlayer(p.id,{title:`Achievement: ${title(id)}`,body:"See it on your profile.",url:"/?profile=1",tag:`achievement-${id}`},{push:false}).catch(()=>{}));
   return ids;
 }
 // ---- Web push ("your move" in daily games, challenges) ----
@@ -180,9 +182,11 @@ async function vapid(){
   const m=Object.fromEntries((data||[]).map((r:any)=>[r.name,r.value]));
   vapidCache=m.vapid_private&&m.vapid_public?m:null;return vapidCache;
 }
-async function notifyPlayer(playerId:string,payload:any){
+async function notifyPlayer(playerId:string,payload:any,{push=true}:{push?:boolean}={}){
   try{
     if(!playerId)return;
+    await inbox(playerId,payload).catch(e=>console.error("inbox",e));
+    if(!push)return;
     const {data:subs}=await admin.from("chess_push_subscriptions").select("id,endpoint,p256dh,auth").eq("player_id",playerId).limit(10);
     if(!subs?.length)return;
     const keys=await vapid();if(!keys)return;
@@ -214,6 +218,7 @@ async function settleTournament(g:any){
   }
 }
 async function settleRatings(g:any){
+  if(g?.result&&g.result!=="*")EdgeRuntime.waitUntil(recordExplorer(g).catch(e=>console.error("explorer",e)));
   if(!g.rated||!g.white_player_id||!g.black_player_id||g.result==="*"||g.white_rating_delta!=null)return g;
   const [w,b]=await Promise.all([playerById(g.white_player_id),playerById(g.black_player_id)]);if(!w||!b)return g;
   const pool=POOLS.includes(g.pool)?g.pool:"rapid",rw=ratingOf(w,pool),rb=ratingOf(b,pool),sw=scoreFor(g.result,"w"),sb=1-sw,nw=gamesOf(w,pool),nb=gamesOf(b,pool);
@@ -252,7 +257,13 @@ function sideCanPossiblyMate(c:Chess,color:"w"|"b"){
   return false
 }
 async function resolveTimeout(g:any){
-  if(!g||g.status!=="active"||!g.last_move_at)return g;const c=new Chess(g.fen),side=c.turn(),elapsed=Math.max(0,Date.now()-Date.parse(g.last_move_at)),remain=side==="w"?Number(g.white_time_ms):Number(g.black_time_ms);if(elapsed<remain)return g;
+  if(!g||g.status!=="active"||!g.last_move_at)return g;
+  if(!g.daily_days&&firstMovesPending(g.move_count)){
+    if(!abortDue({moveCount:g.move_count,lastMoveAt:g.last_move_at}))return g;
+    const {data}=await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"aborted",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+    if(data)EdgeRuntime.waitUntil(broadcastGameState(data));
+    return data||g;
+  }const c=new Chess(g.fen),side=c.turn(),elapsed=Math.max(0,Date.now()-Date.parse(g.last_move_at)),remain=side==="w"?Number(g.white_time_ms):Number(g.black_time_ms);if(elapsed<remain)return g;
   const winner=(side==="w"?"b":"w") as "w"|"b";
   const patch=!sideCanPossiblyMate(c,winner)
     ?{status:"draw",result:"1/2-1/2",...(side==="w"?{white_time_ms:0}:{black_time_ms:0})}
@@ -296,6 +307,7 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   }else{try{m=c.move({from:String(b.from),to:String(b.to),promotion:String(b.promotion||"q")[0]})}catch{}if(!m)throw fail("Illegal move.")}
   const castling960=g.variant==="freestyle"?(m.castle?rightsAfterCastle(g.castling960,color):rightsAfterMove(g.castling960,m)):undefined;
   const timing=calculateMoveTiming({clientMoveAt:b.clientMoveAt,lastMoveAt:g.last_move_at,serverReceivedAt:serverReceivedMs});
+  if(!g.daily_days&&firstMovesPending(g.move_count))timing.chargedElapsedMs=0; // first moves are free; clocks start after both
   let wt=Number(g.white_time_ms),bt=Number(g.black_time_ms);
   if(color==="w")wt=Math.max(0,wt-timing.chargedElapsedMs);else bt=Math.max(0,bt-timing.chargedElapsedMs);
   if((color==="w"?wt:bt)<=0){
@@ -342,7 +354,14 @@ function fullPgn(g:any,moves:any[],result:string){
 }
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
   // Player and game are fetched at the same time; nothing else is read before the move is written.
-  const [p,g]=await Promise.all([playerFor(req,b,false,{touch:false}),gameById(b.gameId)]);if(!g)throw fail("Game not found.",404);if(g.status!=="active")throw fail("Game is not active.",409);
+  let [p,g]=await Promise.all([playerFor(req,b,false,{touch:false}),gameById(b.gameId)]);if(!g)throw fail("Game not found.",404);
+  // A reply sent while the move it answers is still on its way here (both players' clients
+  // see moves through the realtime relay first): wait briefly for that move to land.
+  if(Number(b.expectedVersion)===Number(g.version)+1&&g.status==="active"){
+    const until=Date.now()+1800;
+    while(Date.now()<until){await new Promise(r=>setTimeout(r,80));const fresh=await gameById(g.id);if(fresh&&(Number(fresh.version)>=Number(b.expectedVersion)||fresh.status!=="active")){g=fresh;break}}
+  }
+  if(g.status!=="active")throw fail("Game is not active.",409);
   const color=g.white_player_id===p.id?"w":g.black_player_id===p.id?"b":null;if(!color)throw fail("You are not a player in this game.",403);
   if(g.bot_player_id===p.id)throw fail("Bot seats cannot be controlled by player credentials.",403);
   return applyMove(g,color,b,serverReceivedMs)
@@ -662,7 +681,7 @@ async function processSeasonIfDue(){
     if(!claimed?.length)continue; // already processed (or being processed)
     const {data:entries}=await admin.from("chess_league_entries").select("player_id,division,points,games,wins").eq("season",season).limit(5000);
     const moves=leagueMoves(entries||[]),moved=new Map(moves.map(x=>[x.player_id,x.to]));
-    for(const mv of moves)await admin.from("chess_players").update({league_division:mv.to}).eq("id",mv.player_id);
+    for(const mv of moves){await admin.from("chess_players").update({league_division:mv.to}).eq("id",mv.player_id);await inbox(mv.player_id,{title:mv.to>mv.from?`Promoted to ${DIVISIONS[mv.to]}`:`Moved to ${DIVISIONS[mv.to]}`,body:`Season ${season} is over.`,url:"/?league=1",tag:`league-${season}`}).catch(()=>{})}
     // Season badge for everyone who played the minimum, in the division they finished in.
     const at=nowIso();
     for(const e of (entries||[]).filter((x:any)=>Number(x.games)>=LEAGUE_MIN_GAMES)){
@@ -769,6 +788,7 @@ async function clubChat(req:Request,b:any){
   if(Number(count||0)>=3)throw fail("Slow down a little.",429);
   const {data,error}=await admin.from("chess_club_messages").insert({club_id:club.id,player_id:p.id,body}).select("id,body,created_at").single();if(error)throw error;
   EdgeRuntime.waitUntil(broadcastTo("club:"+club.id,"message",{id:data.id}));
+  EdgeRuntime.waitUntil((async()=>{const {data:mem}=await admin.from("chess_club_members").select("player_id").eq("club_id",club.id).neq("player_id",p.id).limit(300);for(const m of mem||[])await inbox(m.player_id,{title:`New messages in ${club.name}`,body:`${p.username||"A member"}: ${body.slice(0,120)}`,url:`/?club=${club.slug}`,tag:`club-${club.id}`})})().catch(e=>console.error("club inbox",e)));
   return {message:{...data,name:p.username||p.display_name,mine:true}}
 }
 // Club battle: every Sunday 18:00 UTC for 90 minutes, rated 5+0. A club scores its best five
@@ -1052,6 +1072,65 @@ async function accountDelete(req:Request,b:any){
   await admin.from("chess_players").update({username:null,display_name:"Deleted player",auth_user_id:null,device_hash:await hash("deleted:"+crypto.randomUUID()),avatar_data:null,country_code:null,achievements:[],role:"player"}).eq("id",p.id);
   if(authId){const {error}=await admin.auth.admin.deleteUser(authId);if(error)console.error("auth delete failed",error)}
   return {deleted:true}
+}
+
+// ---- Notifications inbox ----
+const notifyKind=(tag:string)=>tag.startsWith("game-")?"game":tag.startsWith("challenge-")?"challenge":tag.startsWith("swiss-")||tag.startsWith("tournament-")?"tournament":tag.startsWith("club-")?"club":tag.startsWith("achievement-")?"achievement":tag.startsWith("league-")?"league":"info";
+async function inbox(playerId:string,payload:any){
+  if(!playerId)return;
+  const tag=String(payload.tag||"info-"+crypto.randomUUID()).slice(0,80),url=String(payload.url||"/");
+  await admin.from("chess_notifications").upsert({player_id:playerId,tag,kind:notifyKind(tag),title:String(payload.title||"VCH").slice(0,120),body:String(payload.body||"").slice(0,300),url:url.startsWith("/")&&!url.startsWith("//")?url.slice(0,200):"/",created_at:nowIso(),read_at:null},{onConflict:"player_id,tag"});
+  await broadcastTo("player:"+playerId,"notify",{tag});
+}
+async function notificationsList(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  if(Math.random()<.05)EdgeRuntime.waitUntil(admin.from("chess_notifications").delete().eq("player_id",p.id).lt("created_at",new Date(Date.now()-60*86400000).toISOString()).then(()=>{}));
+  const [{data,error},{count}]=await Promise.all([
+    admin.from("chess_notifications").select("id,kind,title,body,url,created_at,read_at").eq("player_id",p.id).order("created_at",{ascending:false}).limit(60),
+    admin.from("chess_notifications").select("id",{count:"exact",head:true}).eq("player_id",p.id).is("read_at",null)
+  ]);
+  if(error)throw error;return {notifications:data||[],unread:Number(count||0)}
+}
+async function notificationsRead(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  let q=admin.from("chess_notifications").update({read_at:nowIso()}).eq("player_id",p.id).is("read_at",null);
+  if(Array.isArray(b.ids)&&b.ids.length)q=q.in("id",b.ids.map(String).filter((x:string)=>/^[0-9a-f-]{36}$/i.test(x)).slice(0,100));
+  await q;return {ok:true}
+}
+// ---- Opening explorer from VCH games ----
+async function recordExplorer(g:any){
+  if(!g||g.result==="*"||g.bot_player_id||g.variant==="freestyle"||Number(g.move_count||0)<6)return;
+  const {data:claimed}=await admin.from("chess_games").update({explorer_at:nowIso()}).eq("id",g.id).is("explorer_at",null).select("id").maybeSingle();
+  if(!claimed)return;
+  const w=g.result==="1-0"?1:0,bl=g.result==="0-1"?1:0,d=g.result==="1/2-1/2"?1:0;
+  const c=new Chess(),seen=new Set<string>(),rows:any[]=[];
+  for(const m of (Array.isArray(g.move_history)?g.move_history:[]).slice(0,EXPLORER_PLIES)){
+    const position=explorerKey(c.fen());let made:any=null;
+    try{made=c.move({from:m.from,to:m.to,promotion:m.promotion||undefined})}catch{}
+    if(!made)break;
+    const key=position+"|"+made.san;if(seen.has(key))continue;seen.add(key);
+    rows.push({position,san:made.san,w,d,b:bl});
+  }
+  if(rows.length){const {error}=await admin.rpc("chess_explorer_add",{p_rows:rows});if(error)console.error("explorer",error)}
+}
+async function openingExplorer(req:Request,b:any){
+  let fen=String(b.fen||"");try{fen=new Chess(fen||undefined).fen()}catch{throw fail("That position isn't valid.")}
+  const key=explorerKey(fen);
+  // Fair play: no explorer for a position in your own live game.
+  try{
+    const p=await playerFor(req,b,false,{touch:false});
+    const {data:live}=await admin.from("chess_games").select("fen").eq("status","active").is("daily_days",null).or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).limit(5);
+    if((live||[]).some((g:any)=>explorerKey(g.fen)===key))throw fail("The explorer is off for positions in your live games.",409);
+  }catch(e:any){if(e?.status===409)throw e}
+  const {data,error}=await admin.from("chess_opening_moves").select("san,games,white,draws,black").eq("position",key).order("games",{ascending:false}).limit(20);
+  if(error)throw error;
+  return {position:key,moves:data||[],total:(data||[]).reduce((s:number,x:any)=>s+Number(x.games),0)}
+}
+async function explorerBackfill(req:Request,b:any){
+  await adminFor(req,b);
+  const {data}=await admin.from("chess_games").select("*").is("explorer_at",null).not("result","eq","*").is("bot_player_id",null).gte("move_count",6).limit(150);
+  for(const g of data||[])await recordExplorer(g);
+  return {processed:(data||[]).length}
 }
 
 async function resign(req:Request,b:any){
@@ -1374,6 +1453,10 @@ Deno.serve(async(req)=>{
       case "tournament_create":out=await tournamentCreate(req,b);break;
       case "account_export":out=await accountExport(req,b);break;
       case "account_delete":out=await accountDelete(req,b);break;
+      case "notifications":out=await notificationsList(req,b);break;
+      case "notifications_read":out=await notificationsRead(req,b);break;
+      case "opening_explorer":out=await openingExplorer(req,b);break;
+      case "explorer_backfill":out=await explorerBackfill(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;
