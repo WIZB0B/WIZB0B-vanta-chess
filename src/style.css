@@ -2867,3 +2867,5 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .simul-bar button{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#122120;color:#cfd8d4;font-weight:600;font-size:12px}
 .simul-bar button:first-of-type{background:var(--mint,#82edba);color:#0b1715;border-color:transparent}.simul-bar button[disabled]{opacity:.5}
 @media (max-width:720px){.simul-bar{bottom:calc(76px + env(safe-area-inset-bottom))}}
+
+.simul-open{width:100%;margin-bottom:8px;padding:10px 12px;border:1px solid rgba(130,237,186,.4);border-radius:9px;background:#0f201b;color:var(--mint,#82edba);font-weight:600;text-align:left}
