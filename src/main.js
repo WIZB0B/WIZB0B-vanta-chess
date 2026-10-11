@@ -3771,10 +3771,10 @@ function renderOpenings(){
   const current=detectOpening(currentHistory());
   setDynamicView('openings','Opening Explorer',`
     <button class="explorer-open">VCH explorer · what players here choose in any position</button>
-    <button class="explorer-open rep-open">My repertoire · build your lines and drill them</button>
+    <button class="rep-open">My repertoire · build your lines and drill them</button>
     ${current?`<article class="current-opening"><small>CURRENT POSITION</small><h4>${escapeHtml(current.name)} <span>${current.eco}</span></h4><p>${escapeHtml(current.idea)}</p></article>`:''}
     <div class="library-list">${OPENINGS.map((o,i)=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p><button class="library-action" data-opening="${i}">Study this line</button></article>`).join('')}</div>`);
-  $('#dynamicView .explorer-open:not(.rep-open)')?.addEventListener('click',startExplorer);
+  $('#dynamicView .explorer-open')?.addEventListener('click',startExplorer);
   $('#dynamicView .rep-open')?.addEventListener('click',()=>void renderRepertoire());
   $$('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }

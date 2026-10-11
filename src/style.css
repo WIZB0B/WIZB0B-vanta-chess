@@ -2807,7 +2807,7 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 @media (max-width:520px){.lobby-top{grid-template-columns:1fr 1fr}}
 
 /* ---- Round 9: repertoire and insights ---- */
-.rep-open{border-color:rgba(229,193,124,.45);background:#1d1a12;color:#f2dfaf}
+.rep-open{width:100%;margin-bottom:10px;padding:10px 12px;border:1px solid rgba(229,193,124,.45);border-radius:9px;background:#1d1a12;color:#f2dfaf;font-weight:600;text-align:left}
 .rep-lines{display:grid;gap:4px;margin-top:10px}
 .rep-line{display:grid;grid-template-columns:1fr auto;gap:6px}
 .rep-view{text-align:left;padding:8px 10px;border-radius:7px;background:#0b1715;border:1px solid transparent;font:500 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#dfe6e2}
