@@ -331,6 +331,7 @@ ${splashMarkup(splash)}
 </div>
 
 <div id="toast"></div>
+<div id="simulBar" class="simul-bar hidden" role="status"><span id="simulBarText">Simul</span><button id="simulNext" type="button">Next board</button><button id="simulAll" type="button">All boards</button></div>
 <div id="a11yLive" class="sr-only" aria-live="polite" aria-atomic="true" data-no-i18n></div>
 
 <aside id="chatDrawer" class="chat-drawer" aria-hidden="true">
@@ -925,11 +926,11 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
-  if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
+  if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
-  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
+  if(reply){setTimeout(async()=>{if(!puzzleSession)return;try{const made=rememberLastMove(game.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]}));puzzleSession.played.push(reply);puzzleSession.index++;render({hint:made});afterBoardPaint(playTone);if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved()}}catch{toast('Puzzle line could not continue')}},260)}
   return}if(serverGameId&&!remote){
   if(onlineMovePending)return;
   let legalMove;
@@ -1604,7 +1605,7 @@ function liveGameOn(){
 }
 function syncAbandonCard(){
   const card=$('#abandonCard');if(!card)return;
-  const online=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.bot_player_id&&!serverGame?.daily_days&&!currentBot;
+  const online=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.bot_player_id&&!serverGame?.daily_days&&!serverGame?.simul_id&&!currentBot;
   const opponentSeen=online?(myColor==='w'?serverGame.black_last_seen_at:serverGame.white_last_seen_at):null;
   const opponentId=online?(myColor==='w'?serverGame.black_player_id:serverGame.white_player_id):null;
   const info=online&&opponentId?abandonState(opponentSeen,Date.now()+(Number(clockSnapshot?.serverOffset)||0)):{state:'here'};
@@ -1624,7 +1625,7 @@ function syncWakeLock(){
 // First moves: untimed, but the game is aborted if the side to move doesn't start in 30s.
 function syncFirstMoveCard(){
   const card=$('#firstMoveCard');if(!card)return;
-  const show=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.daily_days&&Number(serverGame?.move_count||0)<2&&currentHistory().length<2;
+  const show=isOnlineGame()&&!!myColor&&serverGame?.status==='active'&&!serverGame?.daily_days&&!serverGame?.simul_id&&Number(serverGame?.move_count||0)<2&&currentHistory().length<2;
   card.classList.toggle('hidden',!show);if(!show)return;
   const since=Date.parse(serverGame.last_move_at||''),now=Date.now()+(Number(clockSnapshot?.serverOffset)||0),left=Math.max(0,Math.ceil((30000-(now-since))/1000));
   const mine=game.turn()===myColor;
@@ -2037,7 +2038,7 @@ function renderAchievements(){
 function signedIn(){return !!authSession?.access_token&&!!currentProfile?.account}
 let socialState={incoming:[],outgoing:[],daily:[],seenAccepted:new Set(),timer:null,channel:null,channelFor:null};
 function friendRow(f,{search=false}={}){
-  return `<article class="friend-row" data-friend="${escapeHtml(f.id)}"><span class="presence-dot${f.online?' on':''}" aria-label="${f.online?'Online':'Offline'}"></span><div><button class="friend-name" type="button">${escapeHtml(f.name)}</button><small>${f.rating} rapid${f.online?' · online':''}</small></div><div>${search?`<button class="friend-follow" data-following="${f.following?'1':''}">${f.following?'Following':'Follow'}</button>`:'<button class="friend-unfollow" aria-label="Unfollow">Unfollow</button>'}<button class="friend-challenge">Challenge</button></div></article>`;
+  return `<article class="friend-row" data-friend="${escapeHtml(f.id)}"><span class="presence-dot${f.online?' on':''}" aria-label="${f.online?'Online':'Offline'}"></span><div><button class="friend-name" type="button">${escapeHtml(f.name)}</button><small>${f.rating} rapid${f.online?' · online':''}</small></div><div>${search?`<button class="friend-follow" data-following="${f.following?'1':''}">${f.following?'Following':'Follow'}</button>`:'<button class="friend-unfollow" aria-label="Unfollow">Unfollow</button>'}<button class="friend-challenge">Challenge</button><button class="friend-battle">Battle</button></div></article>`;
 }
 async function openChallengeDialog(player){
   const body=document.createElement('div');body.className='challenge-form';
@@ -2133,6 +2134,7 @@ function wireFriendRows(root,list){
   root.querySelectorAll('[data-friend]').forEach(row=>{
     const f=list.find(x=>x.id===row.dataset.friend);if(!f)return;
     row.querySelector('.friend-challenge')?.addEventListener('click',()=>openChallengeDialog(f));
+    row.querySelector('.friend-battle')?.addEventListener('click',()=>void createBattle(f.id));
     row.querySelector('.friend-name')?.addEventListener('click',()=>void openProfile(f.name));
     const follow=row.querySelector('.friend-follow');
     if(follow)follow.onclick=async()=>{const on=!follow.dataset.following;try{await api.follow(f.id,on);follow.dataset.following=on?'1':'';follow.textContent=on?'Following':'Follow';f.following=on;void loadFriendList()}catch(error){toast(error.message)}};
@@ -2347,6 +2349,8 @@ async function renderLeague(division=leagueDivision){
   }catch(error){toast(error.message)}
 }
 if(params.get('club'))setTimeout(()=>void openClub(String(params.get('club')).slice(0,32)),500);
+if(params.get('battle'))setTimeout(()=>void joinBattle(String(params.get('battle')).slice(0,6)),600);
+if(params.get('simul'))setTimeout(()=>void renderSimul(String(params.get('simul')).slice(0,40)),600);
 // ---- Conditional moves in daily games (src/plan-moves.js; the server plays the reply) ----
 let planSession=null,planLines={gameId:null,lines:[]};
 function planAvailable(){return isOnlineGame()&&!!myColor&&!!serverGame?.daily_days&&serverGame.status==='active'&&game.turn()!==myColor}
@@ -3821,9 +3825,10 @@ async function showBackendView(kind){
       const side=game.turn()==='w'?'White':'Black';
       $('#dynamicView .view-content').innerHTML=streak
         ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
-        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button></article>`;
+        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button><button class="start-battle">Puzzle Battle · race a friend</button></article>`;
       $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
       $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
+      $('#dynamicView .start-battle')?.addEventListener('click',()=>void renderBattle());
       $('#dynamicView .daily-puzzle')?.addEventListener('click',()=>showBackendView('daily'));
       $('#dynamicView .puzzle-stats')?.addEventListener('click',()=>showBackendView('puzzle-stats'));
       $('#dynamicView .learn-mistakes')?.addEventListener('click',renderMistakes);
@@ -3845,8 +3850,9 @@ async function showBackendView(kind){
         const battle=t.kind==='club_battle';
         return `<article data-arena="${i}" class="arena-card${weekly||battle?' weekly':''}${battle?' club-battle':''} phase-${phase.phase}"><div>${battle?'<span class="arena-badge">Club battle</span>':weekly?'<span class="arena-badge">Weekly</span>':t.format==='swiss'?`<span class="arena-badge swiss">Swiss · ${Number(t.current_round)?`round ${t.current_round} of ${t.rounds}`:`${t.rounds} rounds`}</span>`:''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-lobby">Lobby</button><button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
       };
-      target.innerHTML=`<button class="arena-create">Create a tournament · arena or Swiss</button><div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
-      target.querySelector('.arena-create').onclick=()=>void openCreateTournament();
+      target.innerHTML=`<button class="arena-create">Create a tournament · arena or Swiss</button><button class="arena-create simul-open">Simuls · one host plays everyone</button><div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
+      target.querySelector('.arena-create:not(.simul-open)').onclick=()=>void openCreateTournament();
+      target.querySelector('.simul-open').onclick=()=>void renderSimuls();
       target.querySelectorAll('.arena-play').forEach(b=>b.onclick=()=>{location.search='?game='+encodeURIComponent(b.dataset.code)});
       [...target.querySelectorAll('[data-arena]')].forEach((row,i)=>{
         const t=events[i],phase=arenaPhase(t).phase,join=row.querySelector('.arena-join');
@@ -3972,6 +3978,145 @@ async function renderInsights(pool=null){
   target.querySelectorAll('[data-pool]').forEach(b=>b.onclick=()=>void renderInsights(b.dataset.pool));
   target.querySelectorAll('[data-leak]').forEach(b=>b.onclick=()=>{const l=s.leaks[Number(b.dataset.leak)];leakActions[l.action]?.(l)});
 }
+// ---- Puzzle Battle: the same puzzles, three minutes, three misses and you're out ----
+let battle=null,battleTimer=null;
+const battleSeat=()=>battle?.seat==='guest'?'guest':'host',battleOther=()=>battleSeat()==='host'?'guest':'host';
+async function createBattle(to=null){
+  try{const out=await api.battleCreate(to);battle={...out.battle,local:{score:0,misses:0,index:0}};if(to)toast('Battle sent');startBattlePolling();drawBattle()}catch(error){toast(error.message)}
+}
+async function joinBattle(code){
+  if(!code)return;
+  try{const out=await api.battleJoin(code.toUpperCase());battle={...out.battle,local:{score:0,misses:0,index:0}};history.replaceState(null,'',location.pathname);startBattlePolling();drawBattle()}catch(error){toast(error.message)}
+}
+function stopBattle(){clearInterval(battleTimer);battleTimer=null;if(puzzleSession?.kind==='battle')puzzleSession=null;battle=null}
+function startBattlePolling(){
+  clearInterval(battleTimer);
+  battleTimer=setInterval(async()=>{
+    if(!battle)return clearInterval(battleTimer);
+    if(currentRightView!=='battle'&&battle.status!=='live'){stopBattle();return}
+    try{const out=await api.battleState(battle.id);const was=battle.status;battle={...out.battle,local:battle.local};if(was!=='live'&&battle.status==='live')beginBattle();if(battle.status==='finished'&&was!=='finished')finishBattle();drawBattleScore()}catch{}
+    if(battle?.status==='live'&&Date.now()>Date.parse(battle.ends_at)+1500)finishBattle();
+  },1200);
+}
+function drawBattle(){
+  if(!battle)return renderBattle();
+  const link=`${location.origin}/?battle=${battle.code}`;
+  if(battle.status==='waiting'){
+    setDynamicView('battle','Puzzle Battle',`<article class="battle"><p class="trainer-intro">Same puzzles for both of you, easy to hard. Three minutes; three misses and you're out. Most solved wins.</p><div class="battle-code"><small>BATTLE CODE</small><b>${escapeHtml(battle.code)}</b></div><div class="pp-actions"><button class="gold battle-copy">Copy invite link</button><button class="battle-cancel">Cancel</button></div><p class="menu-empty">${brandLoading('Waiting for your opponent…')}</p></article>`);
+    $('#dynamicView .battle-copy').onclick=async()=>{try{await navigator.clipboard.writeText(link);toast('Invite link copied')}catch{toast(link)}};
+    $('#dynamicView .battle-cancel').onclick=async()=>{try{await api.battleCancel(battle.id)}catch{}stopBattle();void renderBattle()};
+    return;
+  }
+  if(battle.status==='live')return beginBattle();
+  if(battle.status==='finished')return finishBattle();
+  stopBattle();void renderBattle();
+}
+function renderBattle(){
+  setDynamicView('battle','Puzzle Battle',`<article class="battle"><p class="trainer-intro">Race a friend through the same puzzles: three minutes, three misses and you're out. Unrated, just for fun.</p><button class="gold battle-new">Create a battle</button><form class="battle-join"><input name="code" maxlength="6" placeholder="Battle code" autocomplete="off" autocapitalize="characters"><button>Join</button></form><p class="menu-empty">Or tap Battle next to a friend in Community.</p></article>`);
+  $('#dynamicView .battle-new').onclick=()=>void createBattle();
+  $('#dynamicView .battle-join').onsubmit=e=>{e.preventDefault();void joinBattle(String(new FormData(e.currentTarget).get('code')||'').trim())};
+}
+function beginBattle(){
+  if(!battle||battle.status!=='live')return;
+  if(puzzleSession?.kind==='battle')return drawBattleScore();
+  const wait=Date.parse(battle.starts_at)-Date.now();
+  setDynamicView('battle','Puzzle Battle',`<article class="battle live"><div class="battle-score"></div><h4 class="battle-status">${wait>0?`Starting in ${Math.ceil(wait/1000)}`:'Go!'}</h4><button class="battle-quit">Leave battle</button></article>`);
+  $('#dynamicView .battle-quit').onclick=()=>{stopBattle();showMovesView()};
+  drawBattleScore();
+  setTimeout(()=>{if(battle?.status==='live')nextBattlePuzzle()},Math.max(0,wait));
+}
+function nextBattlePuzzle(){
+  if(!battle)return;const l=battle.local,p=battle.puzzles[l.index];
+  if(!p||l.misses>=battle.maxMisses||Date.now()>Date.parse(battle.ends_at)){puzzleSession=null;const st=$('#dynamicView .battle-status');if(st)st.textContent=l.misses>=battle.maxMisses?'Out of lives · waiting for the end':'Done · waiting for the end';return}
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});streakSession=null;
+  game.load(p.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];flipped=game.turn()==='b';orientationSet=true;
+  puzzleSession={id:`battle-${p.id}`,solution:p.solution,index:0,played:[],started:Date.now(),failed:false,kind:'battle'};
+  setPrimaryScreen('game');render();
+  const st=$('#dynamicView .battle-status');if(st)st.textContent=`Puzzle ${l.index+1} · ${game.turn()==='w'?'White':'Black'} to move`;
+}
+function battleSolved(){if(!battle)return;battle.local.score++;battle.local.index++;playUiSound('start');reportBattle();nextBattlePuzzle()}
+function battleMiss(move){if(!battle)return;battle.local.misses++;battle.local.index++;rejectMove(move.from,move.to,{quietRule:true});reportBattle();setTimeout(nextBattlePuzzle,350)}
+function reportBattle(){if(!battle)return;drawBattleScore();void api.battleProgress(battle.id,battle.local.score,battle.local.misses).then(out=>{if(battle){battle={...out.battle,local:battle.local};drawBattleScore()}}).catch(()=>{})}
+function drawBattleScore(){
+  const slot=$('#dynamicView .battle-score');if(!slot||!battle)return;
+  const me=battle[battleSeat()]||{},them=battle[battleOther()]||{},left=Math.max(0,Math.ceil((Date.parse(battle.ends_at)-Date.now())/1000));
+  const mine={score:Math.max(battle.local.score,Number(me.score||0)),misses:Math.max(battle.local.misses,Number(me.misses||0))};
+  const lives=n=>`<span class="battle-lives" aria-label="${battle.maxMisses-n} lives left">${[...Array(battle.maxMisses)].map((_,i)=>`<i class="${i<battle.maxMisses-n?'on':''}"></i>`).join('')}</span>`;
+  slot.innerHTML=`<div class="battle-side me"><small>YOU</small><b>${mine.score}</b>${lives(mine.misses)}</div><div class="battle-clock">${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}</div><div class="battle-side"><small>${escapeHtml(them.name||'Opponent')}</small><b>${Number(them.score||0)}</b>${lives(Number(them.misses||0))}</div>`;
+}
+function finishBattle(){
+  if(!battle)return;clearInterval(battleTimer);battleTimer=null;if(puzzleSession?.kind==='battle')puzzleSession=null;
+  const b=battle,me=b[battleSeat()]||{},them=b[battleOther()]||{},mine=Math.max(b.local.score,Number(me.score||0)),theirs=Number(them.score||0);
+  const title=mine>theirs?'You won the battle':mine<theirs?'You lost the battle':'A tie';
+  setDynamicView('battle','Puzzle Battle',`<article class="battle done"><h4>${title}</h4><div class="battle-final"><b>${mine}</b><span>–</span><b>${theirs}</b></div><p>${escapeHtml(them.name||'Opponent')}</p><div class="pp-actions"><button class="gold battle-again">New battle</button><button class="battle-back">Back to puzzles</button></div></article>`);
+  $('#dynamicView .battle-again').onclick=()=>{battle=null;void createBattle()};
+  $('#dynamicView .battle-back').onclick=()=>{battle=null;showBackendView('puzzle')};
+  battle=null;
+}
+setInterval(()=>{if(battle?.status==='live')drawBattleScore()},1000);
+// ---- Simuls: one host, many boards ----
+let simulSession=null,simulTimer=null;
+async function renderSimuls(){
+  setDynamicView('simuls','Simuls',brandLoading('Loading simuls…'));
+  try{
+    const {simuls=[]}=await api.simulList(),target=$('#dynamicView .view-content');if(!target||currentRightView!=='simuls')return;
+    target.innerHTML=`<article class="simuls"><p class="trainer-intro">In a simul one player takes on everyone who joins, each on their own board. The host plays White on every board; games are casual.</p>
+      ${signedIn()?`<details class="simul-host"><summary>Host a simul</summary><form class="simul-form"><label>Name <input name="name" maxlength="60" placeholder="Friday simul"></label><label>Time control <select name="tc"><option value="1800+30">30+30</option><option value="900+10">15+10</option><option value="600+5">10+5</option></select></label><label>Players <input name="max" type="number" min="2" max="20" value="10"></label><label class="check-row">Club members only <input name="club" type="checkbox"></label><button class="gold">Create simul</button></form></details>`:'<p class="menu-empty">Sign in to host or join a simul.</p>'}
+      <div class="simul-list">${simuls.map(x=>`<article class="simul-card"><div><small>${escapeHtml(x.status==='live'?'PLAYING':'OPEN')} · ${formatTimeControl(x.base_seconds,x.increment_seconds)}</small><b>${escapeHtml(x.name)}</b><span>${escapeHtml(x.host)}${x.hostRating?` · ${x.hostRating}`:''} · ${x.players}/${x.max_players} players</span></div><div>${x.mine?`<button data-simul-open="${x.id}" class="gold">Manage</button>`:x.status==='open'?(x.joined?`<button data-simul-leave="${x.id}">Leave</button>`:`<button data-simul-join="${x.id}" class="gold">Join</button>`):''}<button data-simul-open="${x.id}">Open</button></div></article>`).join('')||'<p class="menu-empty">No simuls right now. Host the first one.</p>'}</div></article>`;
+    target.querySelector('.simul-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget),[sec,inc]=String(f.get('tc')).split('+').map(Number);try{const out=await api.simulCreate({name:f.get('name'),seconds:sec,increment:inc,maxPlayers:Number(f.get('max')||10),club:!!f.get('club')});toast('Simul created');void renderSimul(out.simul.id)}catch(error){toast(error.message)}});
+    target.querySelectorAll('[data-simul-join]').forEach(b=>b.onclick=async()=>{try{await api.simulJoin(b.dataset.simulJoin);toast('Joined · the host starts the simul');void renderSimul(b.dataset.simulJoin)}catch(error){toast(error.message)}});
+    target.querySelectorAll('[data-simul-leave]').forEach(b=>b.onclick=async()=>{try{await api.simulLeave(b.dataset.simulLeave);void renderSimuls()}catch(error){toast(error.message)}});
+    target.querySelectorAll('[data-simul-open]').forEach(b=>b.onclick=()=>void renderSimul(b.dataset.simulOpen));
+  }catch(error){toast(error.message)}
+}
+async function renderSimul(id){
+  clearInterval(simulTimer);
+  setDynamicView('simul','Simul',brandLoading('Loading the simul…'));
+  const draw=async()=>{
+    if(currentRightView!=='simul'){clearInterval(simulTimer);return}
+    let d;try{d=await api.simulState(id)}catch(error){clearInterval(simulTimer);toast(error.message);return}
+    if(currentRightView!=='simul')return;const target=$('#dynamicView .view-content');if(!target)return;
+    if(d.isHost&&d.simul.status==='live')simulSession={id,boards:d.boards};
+    const s=d.simul,waiting=d.boards.filter(b=>b.hostToMove).length,mine=d.boards.find(b=>b.mine&&b.code);
+    target.innerHTML=`<article class="simul">
+      <div class="lobby-head"><small>${escapeHtml(s.status.toUpperCase())} · ${formatTimeControl(s.base_seconds,s.increment_seconds)} · ${s.players}/${s.max_players} players</small><b>${escapeHtml(s.name)}</b><span>${escapeHtml(s.host)}${s.status==='live'||s.status==='finished'?` · host ${d.score.host} · players ${d.score.players} · draws ${d.score.draws}`:''}</span></div>
+      ${d.isHost&&s.status==='open'?`<div class="pp-actions"><button class="gold simul-start"${d.entrants.length?'':' disabled'}>Start the simul</button><button class="simul-cancel">Cancel</button><button class="simul-copy">Copy invite link</button></div><h4>Players</h4><div class="pp-list">${d.entrants.map(n=>`<div><b>${escapeHtml(n)}</b></div>`).join('')||'<p class="menu-empty">Waiting for players to join.</p>'}</div>`:''}
+      ${!d.isHost&&s.status==='open'?`<p class="menu-empty">${s.joined?'You are in. The host starts the simul soon; your board opens from here and from your notifications.':'Join from the simul list to play the host.'}</p>`:''}
+      ${mine&&mine.status==='active'?`<button class="gold lobby-mine" data-code="${escapeHtml(mine.code)}">Go to your board</button>`:''}
+      ${d.boards.length?`<h4>Boards${d.isHost&&waiting?` <small>${waiting} waiting for you</small>`:''}</h4><div class="watch-grid simul-boards">${d.boards.map((b,i)=>`<button type="button" class="watch-card simul-board${b.hostToMove&&d.isHost?' your-move':''}${b.mine?' mine':''}" data-board="${i}"${b.code?'':' disabled'}>${studyBoardHtml(b.fen)}<span class="watch-meta"><span><b>${escapeHtml(b.opponent||'Player')}</b><em>${b.status==='active'?(b.hostToMove?(d.isHost?'Your move':'Host to move'):(d.isHost?'Their move':'Your move')):escapeHtml(b.result)}</em></span></span></button>`).join('')}</div>`:''}
+    </article>`;
+    target.querySelector('.simul-start')?.addEventListener('click',async()=>{try{await api.simulStart(id);toast('Simul started');void draw()}catch(error){toast(error.message)}});
+    target.querySelector('.simul-cancel')?.addEventListener('click',async()=>{try{await api.simulStart(id,true);void renderSimuls()}catch(error){toast(error.message)}});
+    target.querySelector('.simul-copy')?.addEventListener('click',async()=>{const link=`${location.origin}/?simul=${id}`;try{await navigator.clipboard.writeText(link);toast('Invite link copied')}catch{toast(link)}});
+    target.querySelector('.lobby-mine')?.addEventListener('click',e=>void openGameByCode(e.currentTarget.dataset.code));
+    target.querySelectorAll('[data-board]').forEach(el=>el.onclick=()=>{const b=d.boards[Number(el.dataset.board)];if(b?.code)void openGameByCode(b.code)});
+    syncSimulBar();
+  };
+  await draw();simulTimer=setInterval(()=>{if(!document.hidden)void draw()},5000);
+}
+async function openGameByCode(code){
+  try{
+    await resetFinishedGame('room');
+    const state=await api.join(code,guestName);applyServerState(state);room=(state.game||state).invite_code||code;roomCreated=false;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();
+    setPrimaryScreen('game');syncSimulBar();
+  }catch(error){toast(error.message)}
+}
+// The host's bar on a simul board: how many boards wait, and a jump to the next one.
+async function refreshSimulSession(){
+  if(!simulSession)return;
+  try{const d=await api.simulState(simulSession.id);if(d.simul.status!=='live'){simulSession=null;syncSimulBar();return}simulSession.boards=d.boards;syncSimulBar()}catch{}
+}
+function syncSimulBar(){
+  const bar=$('#simulBar');if(!bar)return;
+  const on=!!simulSession&&!!serverGame?.simul_id&&serverGame.simul_id===simulSession.id;
+  bar.classList.toggle('hidden',!on);if(!on)return;
+  const waiting=simulSession.boards.filter(b=>b.hostToMove&&b.id!==serverGameId).length;
+  $('#simulBarText').textContent=waiting?`Simul · ${waiting} ${waiting===1?'board waits':'boards wait'} for you`:'Simul · no other board waits';
+  $('#simulNext').disabled=!waiting;
+}
+$('#simulNext').onclick=()=>{const next=simulSession?.boards.find(b=>b.hostToMove&&b.id!==serverGameId&&b.code);if(next)void openGameByCode(next.code)};
+$('#simulAll').onclick=()=>{if(simulSession)void renderSimul(simulSession.id)};
+setInterval(()=>{if(simulSession&&!document.hidden)void refreshSimulSession()},5000);
 // ---- Tournament lobby: standings, pairings and the top live games (refreshes every 10s) ----
 let lobbyTimer=null;
 async function openTournamentLobby(t){

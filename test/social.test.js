@@ -64,7 +64,7 @@ test('wiring: berserk card, friends nav, daily room options, no abandon claims i
   assert.match(main, /id="berserkCard"/);
   assert.match(main, /data-nav="friends"/);
   assert.match(main, /<option value="daily-3">/);
-  assert.match(main, /!serverGame\?\.daily_days&&!currentBot;/);
+  assert.match(main, /!serverGame\?\.daily_days&&(!serverGame\?\.simul_id&&)?!currentBot;/);
   assert.match(fn, /if\(g\.daily_days\)throw fail\("Daily games are won on time, not by claiming\.",409\);/);
   assert.match(fn, /case "berserk":out=await goBerserk\(req,b\);break;/);
 });

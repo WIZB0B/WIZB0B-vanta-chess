@@ -17,5 +17,5 @@ test('the best streak only goes up', () => {
 });
 
 test('puzzle moves match the solution even though taps always send a queen promotion', () => {
-  assert.match(main, /if\(uci!==expected&&!\(expected\?\.length===4&&uci===expected\+'q'\)\)\{if\(streakSession\)return endStreak\(move\);/);
+  assert.match(main, /if\(uci!==expected&&!\(expected\?\.length===4&&uci===expected\+'q'\)\)\{(if\(puzzleSession\.kind==='battle'\)return battleMiss\(move\);)?if\(streakSession\)return endStreak\(move\);/);
 });

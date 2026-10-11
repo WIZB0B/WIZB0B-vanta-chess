@@ -2833,3 +2833,37 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .ins-table em{font-style:normal;text-align:right;font-weight:600}
 .ins-meter{height:8px;border-radius:999px;background:#14211f;overflow:hidden}.ins-meter i{display:block;height:100%;background:#ef8a76}
 .ins-note{color:var(--muted);font-size:12px;margin-top:8px}
+
+/* ---- Round 9: Puzzle Battle and simuls ---- */
+.start-battle{width:100%;margin-top:8px;padding:10px 12px;border-radius:9px;border:1px solid rgba(229,193,124,.45);background:#1d1a12;color:#f2dfaf;font-weight:600}
+.battle .gold,.simuls .gold{padding:10px 14px;border-radius:9px;color:#10120e;font-weight:700}
+.battle-new{width:100%;margin:8px 0}
+.battle-join{display:grid;grid-template-columns:1fr auto;gap:6px;margin:8px 0}
+.battle-join input{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#0b1715;color:inherit;font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:2px}
+.battle-join button{padding:0 14px;border-radius:8px}
+.battle-code{display:grid;place-items:center;gap:2px;padding:16px;margin:10px 0;border:1px dashed rgba(229,193,124,.5);border-radius:10px}
+.battle-code small{color:var(--muted);font-size:10px;letter-spacing:.6px}.battle-code b{font:700 30px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:6px;color:#f2dfaf}
+.battle-score{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:12px;border-radius:10px;background:#0b1715;border:1px solid var(--line)}
+.battle-side{display:grid;gap:3px;justify-items:center}.battle-side small{color:var(--muted);font-size:10px;letter-spacing:.5px;text-transform:uppercase;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.battle-side b{font-size:30px;line-height:1}.battle-side.me b{color:var(--mint,#82edba)}
+.battle-clock{font:700 22px ui-monospace,SFMono-Regular,Menlo,monospace;color:#f2dfaf}
+.battle-lives{display:flex;gap:4px}.battle-lives i{width:9px;height:9px;border-radius:50%;background:#2a3532}.battle-lives i.on{background:#ef8a76}
+.battle-status{text-align:center;margin:14px 0}
+.battle-quit{width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted)}
+.battle.done{text-align:center}.battle-final{display:flex;justify-content:center;gap:14px;align-items:baseline;margin:10px 0}.battle-final b{font-size:44px}
+.friend-battle{margin-left:4px}
+.simul-host{margin:10px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0b1715}
+.simul-host summary{cursor:pointer;font-weight:600;color:#f2dfaf}
+.simul-form{display:grid;gap:8px;margin-top:10px}
+.simul-form label{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px}
+.simul-form input,.simul-form select{padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:#07110f;color:inherit;max-width:60%}
+.simul-list{display:grid;gap:6px;margin-top:10px}
+.simul-card{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;background:#0b1715;border:1px solid var(--line)}
+.simul-card>div:first-child{display:grid;gap:2px}.simul-card small{color:var(--muted);font-size:10px;letter-spacing:.5px}.simul-card span{color:var(--muted);font-size:12px}
+.simul-card>div:last-child{display:flex;gap:6px}.simul-card button{padding:7px 10px;border-radius:8px;font-size:12px}
+.simul-boards{grid-template-columns:repeat(2,minmax(0,1fr))}
+.simul-board.your-move{border-color:rgba(130,237,186,.7)}.simul-board.mine{border-color:rgba(229,193,124,.6)}.simul-board[disabled]{cursor:default}
+.simul-bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:8px;padding:8px 10px 8px 14px;border-radius:999px;background:#0b1715;border:1px solid rgba(130,237,186,.45);box-shadow:0 10px 30px rgb(0 0 0 / .45);font-size:13px}
+.simul-bar button{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#122120;color:#cfd8d4;font-weight:600;font-size:12px}
+.simul-bar button:first-of-type{background:var(--mint,#82edba);color:#0b1715;border-color:transparent}.simul-bar button[disabled]{opacity:.5}
+@media (max-width:720px){.simul-bar{bottom:calc(76px + env(safe-area-inset-bottom))}}
