@@ -4,6 +4,7 @@ import { calculateMoveTiming } from "./latency.js";
 import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle, rightsAfterMove } from "./castle960.js";
 import { zhPlay, zhState, zhStatus } from "./crazyhouse.js";
 import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } from "./rules.js";
+import { MOMENT_DAYS, MOMENT_MIN_PLIES, momentCaption, momentScore } from "./rules.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
@@ -1447,6 +1448,52 @@ async function commentaryFor(t:any){
   return (data||[]).map((c:any)=>({id:c.id,body:c.body,ply:c.ply,game:c.game_id?gn.get(c.game_id)||null:null,gameId:c.game_id,author:an.get(c.author_id)||"Organiser",at:c.created_at}))
 }
 
+// ======== Round 11: Vanta Moment of the Week ========
+// The week's most striking finish from finished rated standard games: an admin's pick for
+// this ISO week, otherwise the best checkmate of the last 7 days (mating while down material
+// first, then quick mates). Banned players' games never show. Cached briefly per instance.
+let momentCache:{at:number,week:string,moment:any}|null=null;
+const MOMENT_FIELDS="id,fen,result,move_count,white_name,black_name,white_player_id,black_player_id,white_rating_before,black_rating_before,pool,move_history,ended_at,rated,variant,status";
+function momentCard(g:any,extra:any){
+  const hist=Array.isArray(g.move_history)?g.move_history:[],last=hist[hist.length-1]||null;
+  return {gameId:g.id,white:g.white_name,black:g.black_name,whiteRating:g.white_rating_before??null,blackRating:g.black_rating_before??null,result:g.result,pool:g.pool,fen:g.fen,
+    lastMove:last?.from&&last?.to?{from:last.from,to:last.to}:null,sans:hist.map((m:any)=>m.san||"").filter(Boolean),endedAt:g.ended_at,...extra}
+}
+async function bannedAmong(ids:string[]){
+  if(!ids.length)return new Set<string>();
+  const {data}=await admin.from("chess_players").select("id").in("id",ids).not("banned_at","is",null);
+  return new Set((data||[]).map((x:any)=>x.id))
+}
+async function momentAuto(){
+  const since=new Date(Date.now()-MOMENT_DAYS*86400000).toISOString();
+  const {data,error}=await admin.from("chess_games").select(MOMENT_FIELDS).eq("rated",true).eq("variant","standard").in("result",["1-0","0-1"]).gte("move_count",MOMENT_MIN_PLIES).gte("ended_at",since).order("ended_at",{ascending:false}).limit(500);
+  if(error)throw error;
+  const ranked=(data||[]).map((g:any)=>{let mate=false;try{mate=new Chess(g.fen).isCheckmate()}catch{}const s=momentScore({fen:g.fen,result:g.result,mate,plies:Number(g.move_count||0)});return s?{g,s}:null}).filter(Boolean).sort((a:any,c:any)=>c.s.score-a.s.score).slice(0,10) as any[];
+  const banned=await bannedAmong([...new Set(ranked.flatMap(x=>[x.g.white_player_id,x.g.black_player_id]).filter(Boolean))] as string[]);
+  const best=ranked.find(x=>!banned.has(x.g.white_player_id)&&!banned.has(x.g.black_player_id));
+  return best?momentCard(best.g,{caption:momentCaption(best.s),picked:false}):null
+}
+async function momentOfWeek(){
+  const week=isoWeek();
+  if(momentCache&&momentCache.week===week&&Date.now()-momentCache.at<600000)return {week,moment:momentCache.moment};
+  let moment:any=null;
+  const {data:pick}=await admin.from("chess_moments").select("game_id,caption").eq("week",week).maybeSingle();
+  if(pick?.game_id){const g=await gameById(pick.game_id);const banned=g?await bannedAmong([g.white_player_id,g.black_player_id].filter(Boolean)):new Set();
+    if(g&&g.status!=="active"&&!banned.size)moment=momentCard(g,{caption:pick.caption||"Picked by the Vanta team",picked:true})}
+  if(!moment)moment=await momentAuto();
+  momentCache={at:Date.now(),week,moment};
+  return {week,moment}
+}
+async function momentPick(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});if(p.role!=="admin")throw fail("Not found.",404);
+  const week=isoWeek();momentCache=null;
+  if(!b.gameId){await admin.from("chess_moments").delete().eq("week",week);return momentOfWeek()}
+  const g=await gameById(String(b.gameId));if(!g||g.status==="active"||!g.rated)throw fail("Pick a finished rated game.",409);
+  const caption=cleanChat(b.caption).slice(0,120)||null;
+  const {error}=await admin.from("chess_moments").upsert({week,game_id:g.id,caption,picked_by:p.id,picked_at:nowIso()});if(error)throw error;
+  return momentOfWeek()
+}
+
 // Tournament lobby: standings, the current round's pairings, and live games to watch.
 async function tournamentLobby(req:Request,b:any){
   const t=await one("chess_tournaments","id",String(b.tournamentId||""));if(!t)throw fail("Tournament not found.",404);
@@ -1808,6 +1855,8 @@ Deno.serve(async(req)=>{
       case "battle_queue_status":out=await battleQueueStatus(req,b);break;
       case "battle_ladder":out=await battleLadder(req,b);break;
       case "commentary_post":out=await commentaryPost(req,b);break;
+      case "moment_of_week":out=await momentOfWeek();break;
+      case "moment_pick":out=await momentPick(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;

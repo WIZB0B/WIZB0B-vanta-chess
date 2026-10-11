@@ -296,3 +296,27 @@ export const LADDER_POINTS = { win: 2, draw: 1, loss: 0 };
 export const BATTLE_QUEUE_MS = 60000;
 // ---- Prep: the openings a player chooses ----
 export const PREP_PLIES = 12;
+
+// ---- Round 11: Vanta Moment of the Week ----
+// Material on the board by colour (pawn 1, minor 3, rook 5, queen 9; kings don't count).
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+export function materialOf(fen) {
+  const out = { w: 0, b: 0 };
+  for (const ch of String(fen || '').split(' ')[0] || '') {
+    const v = PIECE_VALUE[ch.toLowerCase()]; if (v === undefined) continue;
+    out[ch === ch.toUpperCase() ? 'w' : 'b'] += v;
+  }
+  return out;
+}
+export const MOMENT_DAYS = 7, MOMENT_MIN_PLIES = 10;
+// A finished rated game as a candidate: checkmates only. The winner mating while down
+// material scores highest, then quick mates. Returns null when it isn't a candidate.
+export function momentScore({ fen, result, mate = false, plies = 0 }) {
+  if (!mate || !['1-0', '0-1'].includes(result) || Number(plies) < MOMENT_MIN_PLIES) return null;
+  const m = materialOf(fen), winner = result === '1-0' ? 'w' : 'b', loser = winner === 'w' ? 'b' : 'w';
+  const down = Math.max(0, m[loser] - m[winner]), moves = Math.ceil(Number(plies) / 2);
+  return { score: down * 10 + Math.max(0, 60 - moves) / 6, down, moves, winner };
+}
+export function momentCaption({ down = 0, moves = 0 } = {}) {
+  return down > 0 ? `Checkmate while ${down} ${down === 1 ? 'point' : 'points'} down` : `Checkmate in ${moves} moves`;
+}
