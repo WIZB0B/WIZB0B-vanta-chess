@@ -2,6 +2,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
 import { calculateMoveTiming } from "./latency.js";
 import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle, rightsAfterMove } from "./castle960.js";
+import { zhPlay, zhState, zhStatus } from "./crazyhouse.js";
+import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } from "./rules.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
@@ -33,7 +35,7 @@ const corsFor=(req:Request)=>{
   };
 };
 const START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const POOLS=["bullet","blitz","rapid","classical","daily","freestyle"];
+const POOLS=["bullet","blitz","rapid","classical","daily","freestyle","crazyhouse"];
 const nowIso=()=>new Date().toISOString();
 async function broadcastGameState(game:any){
   if(!game?.id)return;
@@ -277,13 +279,14 @@ async function createGame(req:Request,b:any,{players=null,source="private",tourn
   let white:any,black:any;if(players)[white,black]=players;else{white=await playerFor(req,b,!!b.rated);assertAllowed(white)}
   let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),active=!!black;
   // Daily games: days per move instead of a clock, rated in their own "daily" pool.
-  const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":b.variant==="freestyle"&&!bot?"freestyle":poolFor(base,inc),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
+  const zh=b.variant==="crazyhouse"&&!bot;if(zh&&b.dailyDays)throw fail("Crazyhouse is played live, not as a daily game.");
+  const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":b.variant==="freestyle"&&!bot?"freestyle":zh?"crazyhouse":poolFor(base,inc),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
   // Freestyle: a random Chess960 start with Chess960 castling (castle960.js), rated in its own pool.
   const freestyle=b.variant==="freestyle"&&!bot,startFen=freestyle?freestyleFen():START_FEN;
   const {data,error}=await admin.from("chess_games").insert({
     invite_code:code,white_player_id:white.id,black_player_id:black?.id||null,
     white_name:white.username||white.display_name,black_name:black?(black.username||black.display_name):null,
-    fen:startFen,start_fen:freestyle?startFen:null,variant:freestyle?"freestyle":"standard",castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
+    fen:startFen,start_fen:freestyle?startFen:null,variant:freestyle?"freestyle":zh?"crazyhouse":"standard",zh_pockets:zh?{w:{},b:{}}:null,zh_promoted:zh?[]:null,castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
     time_control_seconds:dailyDays?dailyDays*86400:base,increment_seconds:dailyDays?0:inc,white_time_ms:moveMs,black_time_ms:moveMs,daily_days:dailyDays,challenge_id:b.challengeId||null,
     last_move_at:active?nowIso():null,started_at:active?nowIso():null,white_last_seen_at:nowIso(),black_last_seen_at:black?nowIso():null,
     bot_player_id:bot?.player_id||null,bot_elo:bot?.elo||null,bot_style:bot?.style||null
@@ -299,12 +302,15 @@ async function joinGame(req:Request,b:any){
 async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
   if(Number(b.expectedVersion)!==Number(g.version))throw fail("Board changed. Syncing latest position.",409);
   let c=new Chess(g.fen);if(c.turn()!==color)throw fail("It is not that side's turn.",409);
-  let m:any;
+  let m:any,zhNext:any=null;
   if(g.variant==="freestyle"&&b.castle){
     const opt=castleOptions(c,g.castling960||"-",Chess).find((o:any)=>o.san===(b.castle==="O-O-O"?"O-O-O":"O-O"));
     if(!opt)throw fail("Castling isn't allowed here.");
     c=new Chess(applyCastle(c.fen(),opt));
     m={from:opt.kingFrom,to:opt.kingTo,san:opt.san+(c.isCheckmate()?"#":c.inCheck()?"+":""),lan:opt.san,color,piece:"k",captured:null,promotion:null,castle:true,rook_from:opt.rookFrom,rook_to:opt.rookTo};
+  }else if(g.variant==="crazyhouse"){
+    const r=zhPlay(Chess,g.fen,zhState(g.zh_pockets,g.zh_promoted),b.drop?{drop:b.drop,to:b.to}:{from:b.from,to:b.to,promotion:b.promotion});
+    if(!r)throw fail("Illegal move.");c=new Chess(r.fen);m=r.move;zhNext=r.state;
   }else{try{m=c.move({from:String(b.from),to:String(b.to),promotion:String(b.promotion||"q")[0]})}catch{}if(!m)throw fail("Illegal move.")}
   const castling960=g.variant==="freestyle"?(m.castle?rightsAfterCastle(g.castling960,color):rightsAfterMove(g.castling960,m)):undefined;
   const timing=calculateMoveTiming({clientMoveAt:b.clientMoveAt,lastMoveAt:g.last_move_at,serverReceivedAt:serverReceivedMs});
@@ -317,10 +323,10 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
     EdgeRuntime.waitUntil(broadcastGameState(timedOutGame));
     return {game:timedOutGame,move:null,timedOut:true};
   }
-  const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;const o=outcome(c),history=Array.isArray(g.move_history)?g.move_history:[];
+  const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;const o=zhNext?zhStatus(Chess,c,zhNext):outcome(c),history=Array.isArray(g.move_history)?g.move_history:[];
   if(g.daily_days){wt=dailyMoveMs(g.daily_days);bt=wt} // each move gets the full days again
   const {data,error}=await admin.from("chess_games").update({
-    fen:c.fen(),pgn:o.result==="*"?c.pgn():fullPgn(g,[...history,m],o.result),move_history:[...history,{from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,...(m.castle?{castle:true,rook_from:m.rook_from,rook_to:m.rook_to}:{}),client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
+    fen:c.fen(),pgn:o.result==="*"?(zhNext?"":c.pgn()):fullPgn(g,[...history,m],o.result),...(zhNext?{zh_pockets:zhNext.pockets,zh_promoted:zhNext.promoted,...(o.result!=="*"?{end_reason:(o as any).reason}:{})}:{}),move_history:[...history,{...(m.drop?{drop:m.drop}:{}),from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,...(m.castle?{castle:true,rook_from:m.rook_from,rook_to:m.rook_to}:{}),client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,...(castling960!==undefined?{castling960}:{}),
     white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,takeback_offer_by:null,takeback_offer_version:null,
     ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
@@ -341,10 +347,10 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
 // The whole game as PGN (each move is applied to a board built from the stored FEN, so
 // c.pgn() alone only holds the last move). Written when the game ends.
 function fullPgn(g:any,moves:any[],result:string){
-  if(g.variant==="freestyle"){ // chess.js can't write 960 castles; the PGN is assembled by hand
+  if(g.variant==="freestyle"||g.variant==="crazyhouse"){ // chess.js can't write 960 castles or drops; the PGN is assembled by hand
     const fen=g.start_fen||START_FEN,[,turn,,,,full]=fen.split(" ");let n=Number(full)||1,side=turn||"w";const parts:string[]=[];
     moves.forEach((m:any,i:number)=>{if(side==="w")parts.push(`${n}. ${m.san}`);else parts.push(i===0?`${n}... ${m.san}`:m.san);if(side==="b")n++;side=side==="w"?"b":"w"});
-    return `[Event "VCH Freestyle"]\n[Site "VCH"]\n[White "${String(g.white_name||"White").replace(/"/g,"")}"]\n[Black "${String(g.black_name||"Black").replace(/"/g,"")}"]\n[Result "${result}"]\n[Variant "Chess960"]\n[SetUp "1"]\n[FEN "${fen}"]\n\n${parts.join(" ")} ${result}`;
+    return `[Event "VCH Freestyle"]\n[Site "VCH"]\n[White "${String(g.white_name||"White").replace(/"/g,"")}"]\n[Black "${String(g.black_name||"Black").replace(/"/g,"")}"]\n[Result "${result}"]\n${g.variant==="crazyhouse"?`[Variant "Crazyhouse"]`:`[Variant "Chess960"]\n[SetUp "1"]\n[FEN "${fen}"]`}\n\n${parts.join(" ")} ${result}`;
   }
   try{
     const c=new Chess(g.start_fen||START_FEN);
@@ -428,6 +434,7 @@ async function takebackRespond(req:Request,b:any){
     const {data,error}=await admin.from("chess_games").update({takeback_offer_by:null,takeback_offer_version:null,updated_at:nowIso()}).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
     if(error)throw error;const out=data||g;EdgeRuntime.waitUntil(broadcastGameState(out));return {game:out,accepted:false}
   }
+  if(g.variant==="crazyhouse")throw fail("Takebacks aren't available in Crazyhouse.",409);
   const askerColor=asker===g.white_player_id?"w":"b",plies=takebackPlies(g,askerColor);
   if(!plies)throw fail("There is no move to take back.",409);
   const history=(Array.isArray(g.move_history)?g.move_history:[]).slice(0,-plies);
@@ -443,7 +450,7 @@ async function takebackRespond(req:Request,b:any){
 }
 // Watch: recent public games (matchmaking and tournament games; private rooms are never
 // listed). Spectators get the board, names, ratings and clocks, nothing else.
-const WATCH_FIELDS="variant,start_fen,id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
+const WATCH_FIELDS="zh_pockets,zh_promoted,variant,start_fen,id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
 const publicGame=(g:any)=>{const {bot_player_id,...rest}=g;return {...rest,bot:!!bot_player_id}};
 async function liveGames(){
   const since=new Date(Date.now()-3*60000).toISOString();
@@ -541,7 +548,8 @@ async function challengeSend(req:Request,b:any){
   const {count}=await admin.from("chess_challenges").select("id",{count:"exact",head:true}).eq("from_player_id",p.id).eq("status","pending").gt("expires_at",nowIso());
   if(Number(count||0)>=5)throw fail("You have too many open challenges.",429);
   const color=["w","b"].includes(b.color)?b.color:"random";
-  const variant=b.variant==="freestyle"?"freestyle":"standard";
+  const variant=["freestyle","crazyhouse"].includes(b.variant)?b.variant:"standard";
+  if(variant==="crazyhouse"&&b.dailyDays)throw fail("Crazyhouse is played live, not as a daily game.");
   const {data,error}=await admin.from("chess_challenges").insert({variant,from_player_id:p.id,to_player_id:to,base_seconds:Math.max(30,Math.min(7200,Number(b.seconds||600))),increment_seconds:Math.max(0,Math.min(60,Number(b.increment||0))),daily_days:dailyDays,rated,color,expires_at:new Date(Date.now()+(dailyDays?3*86400000:10*60000)).toISOString()}).select().single();
   if(error)throw error;
   EdgeRuntime.waitUntil(Promise.all([
@@ -1119,7 +1127,7 @@ async function notificationsRead(req:Request,b:any){
 }
 // ---- Opening explorer from VCH games ----
 async function recordExplorer(g:any){
-  if(!g||g.result==="*"||g.bot_player_id||g.variant==="freestyle"||Number(g.move_count||0)<6)return;
+  if(!g||g.result==="*"||g.bot_player_id||g.variant==="freestyle"||g.variant==="crazyhouse"||Number(g.move_count||0)<6)return;
   const {data:claimed}=await admin.from("chess_games").update({explorer_at:nowIso()}).eq("id",g.id).is("explorer_at",null).select("id").maybeSingle();
   if(!claimed)return;
   const w=g.result==="1-0"?1:0,bl=g.result==="0-1"?1:0,d=g.result==="1/2-1/2"?1:0;
@@ -1212,7 +1220,7 @@ const battleView=(t:any,p:any,names:Map<string,string>)=>{const seat=t.host_id==
     winner:t.status==="finished"?battleWinner(t):null,maxMisses:BATTLE_MAX_MISSES}};
 async function battleNames(t:any){const ids=[t.host_id,t.guest_id].filter(Boolean);const {data}=await admin.from("chess_players").select("id,username,display_name").in("id",ids);return new Map((data||[]).map((x:any)=>[x.id,x.username||x.display_name]))}
 async function battleSettle(t:any){
-  if(t.status==="live"&&battleOver(t)){const {data}=await admin.from("chess_puzzle_battles").update({status:"finished"}).eq("id",t.id).eq("status","live").select().maybeSingle();if(data){t=data;EdgeRuntime.waitUntil(broadcastTo(`battle:${t.id}`,"battle",{status:"finished"}))}}
+  if(t.status==="live"&&battleOver(t)){const {data}=await admin.from("chess_puzzle_battles").update({status:"finished"}).eq("id",t.id).eq("status","live").select().maybeSingle();if(data){t=data;EdgeRuntime.waitUntil(broadcastTo(`battle:${t.id}`,"battle",{status:"finished"}));if(t.ladder)EdgeRuntime.waitUntil(ladderRecord(t).catch(e=>console.error("ladder",e)))}}
   return t
 }
 async function battleCreate(req:Request,b:any){
@@ -1343,6 +1351,102 @@ async function vacation(req:Request,b:any){
 }
 const vacationInfo=(p:any,now=Date.now())=>({on:onVacation(p,now),until:onVacation(p,now)?p.vacation_until:null,left:vacationLeft(p,now),perYear:VACATION_DAYS});
 
+// ======== Round 10: prep, Puzzle Battle ladder, live commentary ========
+// ---- Prep: the openings a player usually plays (their finished rated games) ----
+async function playerOpenings(req:Request,b:any){
+  const name=String(b.username||"").trim().slice(0,32);if(!name)throw fail("Pick a player.");
+  const {data:pl}=await admin.from("chess_players").select("id,username,display_name,ratings").ilike("username",name.replace(/[%_]/g,"")).limit(1);
+  const target=(pl||[])[0];if(!target)throw fail("Player not found.",404);
+  const {data,error}=await admin.from("chess_games").select("white_player_id,black_player_id,result,move_history").or(`white_player_id.eq.${target.id},black_player_id.eq.${target.id}`).eq("rated",true).eq("variant","standard").in("result",["1-0","0-1","1/2-1/2"]).order("ended_at",{ascending:false}).limit(300);
+  if(error)throw error;
+  const lines={w:[] as any[],b:[] as any[]};
+  for(const g of data||[]){const color=g.white_player_id===target.id?"w":"b";const sans=(Array.isArray(g.move_history)?g.move_history:[]).slice(0,PREP_PLIES).map((m:any)=>m.san).filter(Boolean);if(sans.length>=2)lines[color].push({sans,score:scoreFor(g.result,color)})}
+  return {player:{name:target.username||target.display_name,rating:ratingOf(target,"blitz")},lines}
+}
+// ---- Puzzle Battle ladder: matched battles, a weekly table, badges for the top three ----
+async function ladderWeekDue(){
+  const prev=previousWeek();
+  const {data:done}=await admin.from("chess_battle_weeks").select("week").eq("week",prev).maybeSingle();if(done)return;
+  const {error:claim}=await admin.from("chess_battle_weeks").insert({week:prev});if(claim)return; // someone else is doing it
+  const {data:top}=await admin.from("chess_battle_ladder").select("player_id,points").eq("week",prev).gt("points",0).order("points",{ascending:false}).order("wins",{ascending:false}).limit(3);
+  const at=nowIso();
+  for(const [i,e] of (top||[]).entries()){const pl=await playerById(e.player_id);if(!pl)continue;const id=`battle-${prev}-${i+1}`,have=Array.isArray(pl.achievements)?pl.achievements:[];
+    await admin.from("chess_players").update({achievements:[...have.filter((a:any)=>a?.id!==id),{id,at}]}).eq("id",pl.id);
+    EdgeRuntime.waitUntil(inbox(pl.id,{title:`Puzzle Battle ladder: #${i+1}`,body:`You finished week ${prev} on the podium.`,url:"/?ladder=1",tag:`ladder-${prev}`}).catch(()=>{}))}
+}
+async function ladderRecord(t:any){
+  if(!t.ladder||!t.guest_id)return;const week=isoWeek(new Date(t.starts_at||Date.now())),w=battleWinner(t);
+  for(const seat of ["host","guest"]){
+    const id=t[seat+"_id"],pts=w==="draw"?LADDER_POINTS.draw:w===seat?LADDER_POINTS.win:LADDER_POINTS.loss;
+    const {data:row}=await admin.from("chess_battle_ladder").select("*").eq("week",week).eq("player_id",id).maybeSingle();
+    await admin.from("chess_battle_ladder").upsert({week,player_id:id,points:Number(row?.points||0)+pts,wins:Number(row?.wins||0)+(w===seat?1:0),battles:Number(row?.battles||0)+1,solved:Number(row?.solved||0)+Number(t[seat+"_score"]||0),updated_at:nowIso()},{onConflict:"week,player_id"});
+  }
+}
+async function battleQueueJoin(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});assertAllowed(p);
+  const since=new Date(Date.now()-BATTLE_QUEUE_MS).toISOString();
+  const {data:waiting}=await admin.from("chess_battle_queue").select("player_id").neq("player_id",p.id).gte("joined_at",since).order("joined_at").limit(1);
+  const other=(waiting||[])[0];
+  if(other){
+    const {data:taken}=await admin.from("chess_battle_queue").delete().eq("player_id",other.player_id).select();
+    if(taken?.length){
+      await admin.from("chess_battle_queue").delete().eq("player_id",p.id);
+      let code=code6();while(await one("chess_puzzle_battles","code",code))code=code6();
+      const starts=Date.now()+BATTLE_COUNTDOWN_MS;
+      const {data,error}=await admin.from("chess_puzzle_battles").insert({code,host_id:other.player_id,guest_id:p.id,ladder:true,puzzles:await battlePuzzles(),status:"live",starts_at:new Date(starts).toISOString(),ends_at:new Date(starts+BATTLE_MS).toISOString()}).select().single();if(error)throw error;
+      EdgeRuntime.waitUntil(broadcastTo(`player:${other.player_id}`,"battle",{code}));
+      return {battle:battleView(data,p,await battleNames(data))}
+    }
+  }
+  await admin.from("chess_battle_queue").upsert({player_id:p.id,joined_at:nowIso()},{onConflict:"player_id"});
+  return {waiting:true}
+}
+async function battleQueueStatus(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});
+  const {data}=await admin.from("chess_puzzle_battles").select("*").eq("host_id",p.id).eq("ladder",true).eq("status","live").gte("created_at",new Date(Date.now()-30000).toISOString()).order("created_at",{ascending:false}).limit(1);
+  const t=(data||[])[0];if(t)return {battle:battleView(t,p,await battleNames(t))};
+  if(b.leave)await admin.from("chess_battle_queue").delete().eq("player_id",p.id);
+  else await admin.from("chess_battle_queue").upsert({player_id:p.id,joined_at:nowIso()},{onConflict:"player_id"});
+  return {waiting:!b.leave}
+}
+async function battleLadder(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  await ladderWeekDue().catch(e=>console.error("ladder week",e));
+  const week=isoWeek(),prev=previousWeek();
+  const [{data:rows},{data:last}]=await Promise.all([
+    admin.from("chess_battle_ladder").select("player_id,points,wins,battles,solved").eq("week",week).order("points",{ascending:false}).order("wins",{ascending:false}).limit(50),
+    admin.from("chess_battle_ladder").select("player_id,points").eq("week",prev).gt("points",0).order("points",{ascending:false}).order("wins",{ascending:false}).limit(3)]);
+  const ids=[...new Set([...(rows||[]),...(last||[])].map((r:any)=>r.player_id))];
+  const {data:pl}=ids.length?await admin.from("chess_players").select("id,username,display_name").in("id",ids):{data:[]};
+  const names=new Map((pl||[]).map((x:any)=>[x.id,x.username||x.display_name]));
+  const {count}=await admin.from("chess_battle_queue").select("player_id",{count:"exact",head:true}).gte("joined_at",new Date(Date.now()-BATTLE_QUEUE_MS).toISOString());
+  return {week,waiting:Number(count||0),standings:(rows||[]).map((r:any,i:number)=>({rank:i+1,name:names.get(r.player_id)||"Player",points:r.points,wins:r.wins,battles:r.battles,solved:r.solved,me:!!p&&r.player_id===p.id})),lastWeek:{week:prev,podium:(last||[]).map((r:any)=>({name:names.get(r.player_id)||"Player",points:r.points}))}}
+}
+// ---- Live commentary in tournament lobbies ----
+async function canComment(p:any,t:any){
+  if(!p)return false;if(p.role==="admin"||t.created_by===p.id)return true;
+  if(t.club_id){const club=await one("chess_clubs","id",t.club_id);if(club?.owner_id===p.id)return true}
+  return false
+}
+async function commentaryPost(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});assertAllowed(p);
+  const t=await one("chess_tournaments","id",String(b.tournamentId||""));if(!t)throw fail("Tournament not found.",404);
+  if(!(await canComment(p,t)))throw fail("Only the organiser can commentate.",403);
+  const body=cleanChat(b.body);if(!body)throw fail("Write something first.");
+  let game:any=null;if(b.gameId){game=await gameById(String(b.gameId));if(!game||game.tournament_id!==t.id)game=null}
+  const {data,error}=await admin.from("chess_commentary").insert({tournament_id:t.id,game_id:game?.id||null,author_id:p.id,ply:game?Number(game.move_count||0):null,body}).select().single();if(error)throw error;
+  const item={id:data.id,body:data.body,ply:data.ply,game:game?`${game.white_name} vs ${game.black_name}`:null,gameId:game?.id||null,author:p.username||p.display_name,at:data.created_at};
+  EdgeRuntime.waitUntil(broadcastTo(`lobby:${t.id}`,"comment",item));
+  return {comment:item}
+}
+async function commentaryFor(t:any){
+  const {data}=await admin.from("chess_commentary").select("id,body,ply,game_id,author_id,created_at").eq("tournament_id",t.id).order("created_at",{ascending:false}).limit(40);
+  const ids=[...new Set((data||[]).map((c:any)=>c.author_id))],gids=[...new Set((data||[]).map((c:any)=>c.game_id).filter(Boolean))];
+  const [{data:au},{data:gs}]=await Promise.all([ids.length?admin.from("chess_players").select("id,username,display_name").in("id",ids):Promise.resolve({data:[]}),gids.length?admin.from("chess_games").select("id,white_name,black_name").in("id",gids):Promise.resolve({data:[]})]);
+  const an=new Map((au||[]).map((x:any)=>[x.id,x.username||x.display_name])),gn=new Map((gs||[]).map((x:any)=>[x.id,`${x.white_name} vs ${x.black_name}`]));
+  return (data||[]).map((c:any)=>({id:c.id,body:c.body,ply:c.ply,game:c.game_id?gn.get(c.game_id)||null:null,gameId:c.game_id,author:an.get(c.author_id)||"Organiser",at:c.created_at}))
+}
+
 // Tournament lobby: standings, the current round's pairings, and live games to watch.
 async function tournamentLobby(req:Request,b:any){
   const t=await one("chess_tournaments","id",String(b.tournamentId||""));if(!t)throw fail("Tournament not found.",404);
@@ -1355,7 +1459,7 @@ async function tournamentLobby(req:Request,b:any){
     fresh.format==="swiss"&&Number(fresh.current_round)>0?admin.from("chess_games").select("white_name,black_name,result,status,invite_code,white_player_id,black_player_id").eq("tournament_id",t.id).eq("tournament_round",fresh.current_round).limit(100):Promise.resolve({data:[]})
   ]);
   const ratingSum=(g:any)=>Number(g.white_rating_before||0)+Number(g.black_rating_before||0);
-  return {tournament:fresh,standings:standings.standings,clubs:standings.clubs||[],
+  return {commentary:await commentaryFor(t).catch(()=>[]),canComment:await canComment(viewer,t).catch(()=>false),tournament:fresh,standings:standings.standings,clubs:standings.clubs||[],
     games:(live||[]).sort((a:any,c:any)=>ratingSum(c)-ratingSum(a)).map((g:any)=>({id:g.id,white:g.white_name,black:g.black_name,whiteRating:g.white_rating_before,blackRating:g.black_rating_before,moves:g.move_count,fen:g.fen,round:g.tournament_round,mine:!!viewer&&[g.white_player_id,g.black_player_id].includes(viewer.id)})),
     pairings:(round||[]).map((g:any)=>({white:g.white_name,black:g.black_name,result:g.status==="active"?"playing":g.result,mine:!!viewer&&[g.white_player_id,g.black_player_id].includes(viewer.id),code:viewer&&[g.white_player_id,g.black_player_id].includes(viewer.id)?g.invite_code:null}))}
 }
@@ -1699,6 +1803,11 @@ Deno.serve(async(req)=>{
       case "simul_start":out=await simulStart(req,b);break;
       case "simul_state":out=await simulState(req,b);break;
       case "vacation":out=await vacation(req,b);break;
+      case "player_openings":out=await playerOpenings(req,b);break;
+      case "battle_queue":out=await battleQueueJoin(req,b);break;
+      case "battle_queue_status":out=await battleQueueStatus(req,b);break;
+      case "battle_ladder":out=await battleLadder(req,b);break;
+      case "commentary_post":out=await commentaryPost(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;

@@ -281,3 +281,18 @@ export function cleanRepertoire(lines = []) {
 
 // ---- Simuls ----
 export const SIMUL_MAX_PLAYERS = 20;
+
+// ---- Puzzle Battle ladder ----
+// ISO week ("2026-W41"): weeks start on Monday; week 1 holds the first Thursday.
+export function isoWeek(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);
+  const year = d.getUTCFullYear(), start = new Date(Date.UTC(year, 0, 1));
+  const week = Math.ceil(((d - start) / 86400000 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+export function previousWeek(date = new Date()) { return isoWeek(new Date(date.getTime() - 7 * 86400000)); }
+export const LADDER_POINTS = { win: 2, draw: 1, loss: 0 };
+export const BATTLE_QUEUE_MS = 60000;
+// ---- Prep: the openings a player chooses ----
+export const PREP_PLIES = 12;
