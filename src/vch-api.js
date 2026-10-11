@@ -134,6 +134,11 @@ export class VchApi {
   simulStart(simulId, cancel = false) { return this.request('simul_start', cancel ? { simulId, cancel: true } : { simulId }); }
   simulState(simulId) { return this.request('simul_state', { simulId }); }
   vacation(options = {}) { return this.request('vacation', options); }
+  playerOpenings(username) { return this.request('player_openings', { username }); }
+  battleQueue() { return this.request('battle_queue'); }
+  battleQueueStatus(leave = false) { return this.request('battle_queue_status', leave ? { leave: true } : {}); }
+  battleLadder() { return this.request('battle_ladder'); }
+  commentaryPost(tournamentId, body, gameId = null) { return this.request('commentary_post', gameId ? { tournamentId, body, gameId } : { tournamentId, body }); }
   explorerBackfill() { return this.request('explorer_backfill'); }
 }
 
