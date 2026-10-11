@@ -360,6 +360,19 @@ after rounds 4-8). Not deployed.
   it in the daily list. (PR #42, #45)
 - Translations for all round 9 screens. (PR #45)
 
+## Y. Round 10 (owner approved 2026-10-11)
+Server code in PR #46 (migration `20261011150000_round10_crazyhouse_ladder_commentary`,
+after rounds 4-9). Rounds 4-9 are live in the database (owner ran the SQL 2026-10-11); the
+round 4-9 game server is waiting for the owner's deploy (CLI or dashboard).
+- Y1 Today's training: a daily plan from your own data with a streak. (PR #47)
+- Y2 Prep against a player: their rated openings, played back as often as they play them,
+  with their score per move, until their book runs out. (PR #46, #47)
+- Y3 Crazyhouse: drops from your pocket; own rated pool; live only. (PR #46, #48)
+- Y4 Analyse together: a shared board and arrows over a realtime channel, by link. (PR #49)
+- Y5 Puzzle Battle ladder: matched battles, weekly table, podium badges. (PR #46, #49)
+- Y6 Live commentary in tournament lobbies by the organiser, club owner or an admin. (PR #46, #49)
+- Translations for every round 10 screen. (PR #49)
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

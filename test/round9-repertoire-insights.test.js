@@ -47,7 +47,7 @@ test('insights: scores, leaks and the rating line', () => {
   assert.match(ratingChartSvg(ratingSeries(rows, 'blitz')), /^<svg class="ins-chart"/); assert.equal(ratingChartSvg([]), '');
 });
 test('wiring: free board while adding lines, drills accept any prepared move, explorer marks', () => {
-  assert.match(main, /function freeBoard\(\)\{return !!planSession\|\|!!studySession\?\.editing\|\|!!exploreSession\|\|!!repEdit\}/);
+  assert.match(main, /function freeBoard\(\)\{return !!planSession\|\|!!studySession\?\.editing\|\|!!exploreSession\|\|!!repEdit(\|\|!!\w+)*\}/);
   assert.match(main, /if\(puzzleSession\.kind==='repertoire'&&uci!==puzzleSession\.solution\[puzzleSession\.index\]\)\{const full=repContinue\(/);
   assert.match(main, /if\(kind!=='repertoire'&&repEdit\)endRepEdit\(\);/);
   assert.match(main, /markRepRows\(fen\);/); assert.match(main, /id="profileMenuInsights"/);

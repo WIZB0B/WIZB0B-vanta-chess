@@ -37,6 +37,7 @@ import { lazyWorker } from './lazy-worker.js';
 import { resolveTypedMove } from './typed-move.js';
 import { REP_KEY, addLine, lineText, removeLine, repContinue, repDeviation, repDrill, repMovesAt, repStats } from './repertoire.js';
 import { buildPlan, currentStreak, loadProgress as loadPlanProgress, loadStreak, planComplete, tick as planTick } from './training-plan.js';
+import { cleanShapes, isNewer } from './analysis-sync.js';
 import { prepReply, prepStats, prepSummary, prepTree } from './prep.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
@@ -387,7 +388,7 @@ let clocks=initialClocks(timeChoice($('#time').value).seconds);
 // move. Everything else (status text, move list, clocks, sound, analysis, engine, game-over
 // check) waits until the slide has landed and at least two frames have been painted
 // (afterBoardPaint); the online move request waits two frames (nextFrames).
-let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,zhDropSelected=null,egSession=null,prepSession=null,todayPlan=null,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
+let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,zhDropSelected=null,analysis=null,egSession=null,prepSession=null,todayPlan=null,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
 let boardMotion=Promise.resolve(),boardMotionUntil=0,motionScaleCache=null;
 function nextFrames(count=2){
   return new Promise(resolve=>{
@@ -620,7 +621,7 @@ function renderStatus(){
 function render(options){
   renderBoard(options);
   if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
-  if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove()})}
+  if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove();if(analysis){const key=JSON.stringify([analysis.sans,boardShapes]);if(key!==analysis.sentKey){analysis.seq++;analysisSend()}}})}
 }
 function endText(){if(isZhGame()){const st=zhStatus(Chess,game,zhClientState());if(st.over)return st.result==='1/2-1/2'?'Draw · Stalemate':`Checkmate · ${st.result==='1-0'?'White':'Black'} wins`}if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
@@ -933,7 +934,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -1739,7 +1740,7 @@ function drawArchive(){
       <div class="archive-signature"><small>Signature opening</small><b>${insight.topOpening?escapeHtml(insight.topOpening.name):'—'}</b>${insight.topOpening?`<em>${insight.topOpening.games} games · ${insight.topOpening.percent}%</em>`:''}</div>
     </section>
     ${current?'<button type="button" class="archive-current">Tell the story of the game you just played</button>':''}
-    <div class="archive-tools"><button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button><button type="button" class="archive-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button></div>
+    <div class="archive-tools"><button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button><button type="button" class="archive-together">Analyse together · a shared board with a friend</button><button type="button" class="archive-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button></div>
     <div class="archive-filters" role="tablist">${['all','win','loss','draw','computer'].map(f=>`<button type="button" data-archive-filter="${f}" class="${archiveFilter===f?'on':''}">${{all:'All',win:'Wins',loss:'Losses',draw:'Draws',computer:'vs Computer'}[f]}</button>`).join('')}</div>
     <div class="archive-list">${rows.map(({e,i})=>{
       const o=outcomeFor(e.result,e.myColor),opp=e.myColor==='w'?e.black:e.white,oppRating=e.myColor==='w'?e.blackRating:e.whiteRating,acc=reviews[e.id]?.accuracy?.[e.myColor],opening=detectOpening(sansFromPgn(e.pgn))?.name;
@@ -1749,6 +1750,7 @@ function drawArchive(){
   target.querySelectorAll('[data-archive-filter]').forEach(b=>b.onclick=()=>{archiveFilter=b.dataset.archiveFilter;drawArchive()});
   target.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>void openArchivedGame(archiveEntries[Number(b.dataset.archive)]));
   target.querySelector('.archive-current')?.addEventListener('click',()=>void startGameReview());
+  target.querySelector('.archive-together')?.addEventListener('click',()=>{const h=archiveSession?game.history():[];startAnalysis(h.length?{sans:h}:archiveSession?{startFen:game.fen()}:{})});
   target.querySelector('.archive-trainer')?.addEventListener('click',()=>void renderTrainer());
   target.querySelector('.archive-mistakes')?.addEventListener('click',renderMistakes);
 }
@@ -2120,6 +2122,7 @@ function startSocial(){
       .on('broadcast',{event:'notify'},()=>void refreshInbox())
       .on('broadcast',{event:'tournament_game'},message=>{const code=message?.payload?.code;if(!code)return;toast(`Round ${message.payload.round} is ready`);if(!isOnlineGame()&&mode!=='computer')setTimeout(()=>{location.search='?game='+encodeURIComponent(code)},1200)})
       .on('broadcast',{event:'challenge'},()=>{toast('New challenge');void refreshSocial()})
+      .on('broadcast',{event:'battle'},message=>{const code=message?.payload?.code;if(code&&(!battle||battle.status!=='live')){clearInterval(battleQueueTimer);battleQueueTimer=null;void joinBattle(code)}})
       .on('broadcast',{event:'challenge_answer'},message=>{
         const p=message?.payload||{};
         if(!p.accepted){toast('Your challenge was declined');return void refreshSocial()}
@@ -2359,6 +2362,8 @@ async function renderLeague(division=leagueDivision){
 }
 if(params.get('club'))setTimeout(()=>void openClub(String(params.get('club')).slice(0,32)),500);
 if(params.get('battle'))setTimeout(()=>void joinBattle(String(params.get('battle')).slice(0,6)),600);
+if(params.get('ladder'))setTimeout(()=>void renderLadder(),600);
+if(params.get('analysis'))setTimeout(()=>void joinAnalysis(String(params.get('analysis')).slice(0,12)),600);
 if(params.get('simul'))setTimeout(()=>void renderSimul(String(params.get('simul')).slice(0,40)),600);
 // ---- Conditional moves in daily games (src/plan-moves.js; the server plays the reply) ----
 let planSession=null,planLines={gameId:null,lines:[]};
@@ -2539,7 +2544,7 @@ async function zhDropOnline(type,to){
 }
 // ---- Studies (src/study.js): annotate a line, share it by link ----
 let studySession=null;
-function freeBoard(){return !!planSession||!!studySession?.editing||!!exploreSession||!!repEdit}
+function freeBoard(){return !!planSession||!!studySession?.editing||!!exploreSession||!!repEdit||!!analysis}
 function endStudy({restore=true}={}){
   if(!studySession)return;studySession=null;
   if(mode==='study'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
@@ -3779,6 +3784,7 @@ function setDynamicView(kind,title,html){
   if(kind!=='repertoire'&&repEdit)endRepEdit();
   if(kind!=='endgames'&&egSession)endEndgame();
   if(kind!=='prep'&&prepSession)endPrep();
+  if(kind!=='analysis'&&analysis)leaveAnalysis();
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
@@ -3836,11 +3842,12 @@ function renderLesson(index){
   $('#dynamicView .all-lessons').onclick=renderLearn;
 }
 function renderLearn(){
-  setDynamicView('learn','Practice & Learn',`<button class="plan-open"><span><small>TODAY'S TRAINING</small><b>${escapeHtml(planHeadline())}</b></span><em class="plan-streak" aria-label="Streak">${currentStreak(loadStreak())}</em></button><div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button>`);
+  setDynamicView('learn','Practice & Learn',`<button class="plan-open"><span><small>TODAY'S TRAINING</small><b>${escapeHtml(planHeadline())}</b></span><em class="plan-streak" aria-label="Streak">${currentStreak(loadStreak())}</em></button><div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
   $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
   $('#dynamicView .open-studies')?.addEventListener('click',()=>void renderStudies());
   $('#dynamicView .open-endgames')?.addEventListener('click',renderEndgames);
+  $('#dynamicView .open-together')?.addEventListener('click',()=>startAnalysis());
   $('#dynamicView .plan-open')?.addEventListener('click',()=>void renderPlan());
 }
 function renderReview(){
@@ -4196,7 +4203,9 @@ function drawBattle(){
   stopBattle();void renderBattle();
 }
 function renderBattle(){
-  setDynamicView('battle','Puzzle Battle',`<article class="battle"><p class="trainer-intro">Race a friend through the same puzzles: three minutes, three misses and you're out. Unrated, just for fun.</p><button class="gold battle-new">Create a battle</button><form class="battle-join"><input name="code" maxlength="6" placeholder="Battle code" autocomplete="off" autocapitalize="characters"><button>Join</button></form><p class="menu-empty">Or tap Battle next to a friend in Community.</p></article>`);
+  setDynamicView('battle','Puzzle Battle',`<article class="battle"><p class="trainer-intro">Race a friend through the same puzzles: three minutes, three misses and you're out. Unrated, just for fun.</p><button class="gold battle-new">Create a battle</button><form class="battle-join"><input name="code" maxlength="6" placeholder="Battle code" autocomplete="off" autocapitalize="characters"><button>Join</button></form><p class="menu-empty">Or tap Battle next to a friend in Community.</p><h4>Weekly ladder</h4><p class="trainer-intro">Get matched with anyone looking for a battle. A win is 2 points, a tie 1. The top three each week get a badge.</p><div class="pp-actions"><button class="gold battle-queue">Find an opponent</button><button class="battle-ladder">This week's ladder</button></div></article>`);
+  $('#dynamicView .battle-queue').onclick=()=>void queueBattle();
+  $('#dynamicView .battle-ladder').onclick=()=>void renderLadder();
   $('#dynamicView .battle-new').onclick=()=>void createBattle();
   $('#dynamicView .battle-join').onsubmit=e=>{e.preventDefault();void joinBattle(String(new FormData(e.currentTarget).get('code')||'').trim())};
 }
@@ -4301,6 +4310,97 @@ function syncSimulBar(){
 $('#simulNext').onclick=()=>{const next=simulSession?.boards.find(b=>b.hostToMove&&b.id!==serverGameId&&b.code);if(next)void openGameByCode(next.code)};
 $('#simulAll').onclick=()=>{if(simulSession)void renderSimul(simulSession.id)};
 setInterval(()=>{if(simulSession&&!document.hidden)void refreshSimulSession()},5000);
+// ---- Puzzle Battle ladder: get matched, a weekly table, a podium badge ----
+let battleQueueTimer=null;
+async function queueBattle(){
+  if(!signedIn())return openAccount();
+  try{
+    const out=await api.battleQueue();
+    if(out.battle){battle={...out.battle,local:{score:0,misses:0,index:0}};startBattlePolling();return drawBattle()}
+    setDynamicView('battle','Puzzle Battle',`<article class="battle"><p class="trainer-intro">Looking for an opponent for the weekly ladder…</p><p class="menu-empty">${brandLoading('Searching')}</p><button class="battle-cancel">Stop searching</button></article>`);
+    $('#dynamicView .battle-cancel').onclick=async()=>{clearInterval(battleQueueTimer);battleQueueTimer=null;try{await api.battleQueueStatus(true)}catch{}renderBattle()};
+    clearInterval(battleQueueTimer);const started=Date.now();
+    battleQueueTimer=setInterval(async()=>{
+      if(currentRightView!=='battle'){clearInterval(battleQueueTimer);battleQueueTimer=null;void api.battleQueueStatus(true).catch(()=>{});return}
+      if(Date.now()-started>120000){clearInterval(battleQueueTimer);battleQueueTimer=null;void api.battleQueueStatus(true).catch(()=>{});toast('Nobody else is looking right now. Try again later or invite a friend.');return renderBattle()}
+      try{const st=await api.battleQueueStatus();if(st.battle){clearInterval(battleQueueTimer);battleQueueTimer=null;battle={...st.battle,local:{score:0,misses:0,index:0}};startBattlePolling();drawBattle()}else if(!(Date.now()-started<15000)){const again=await api.battleQueue();if(again.battle){clearInterval(battleQueueTimer);battleQueueTimer=null;battle={...again.battle,local:{score:0,misses:0,index:0}};startBattlePolling();drawBattle()}}}catch{}
+    },2000);
+  }catch(error){toast(error.message)}
+}
+async function renderLadder(){
+  setDynamicView('battle','Puzzle Battle ladder',brandLoading('Loading the ladder…'));
+  let d;try{d=await api.battleLadder()}catch(error){toast(error.message);return}
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='battle')return;
+  target.innerHTML=`<article class="battle ladder"><div class="lobby-head"><small>WEEK ${escapeHtml(d.week)}</small><b>Puzzle Battle ladder</b><span>${d.waiting?`${d.waiting} looking for a battle now`:'Win 2 · tie 1 · top three get a badge'}</span></div>
+    <div class="pp-actions"><button class="gold battle-queue">Find an opponent</button><button class="battle-back">Back</button></div>
+    ${d.lastWeek.podium.length?`<h4>Last week <small>${escapeHtml(d.lastWeek.week)}</small></h4><div class="ladder-podium">${d.lastWeek.podium.map((p,i)=>`<div class="place-${i+1}"><b>${i+1}</b><span>${escapeHtml(p.name)}</span><em>${p.points}</em></div>`).join('')}</div>`:''}
+    <h4>This week</h4><div class="league-table">${d.standings.map(r=>`<div class="${r.me?'me':''}"><span>${r.rank}</span><b>${escapeHtml(r.name)}</b><em>${r.wins}/${r.battles} won</em><strong>${r.points}</strong></div>`).join('')||'<p class="menu-empty">No battles yet this week. Be the first.</p>'}</div></article>`;
+  target.querySelector('.battle-queue').onclick=()=>void queueBattle();
+  target.querySelector('.battle-back').onclick=()=>renderBattle();
+}
+// ---- Analyse together: one shared board over a realtime channel (no server state) ----
+function analysisCode(){return crypto.getRandomValues(new Uint32Array(2)).reduce((s,n)=>s+n.toString(36),'').replace(/[^a-z0-9]/g,'').slice(0,10).toUpperCase()}
+function startAnalysis({startFen=new Chess().fen(),sans=[]}={}){joinAnalysis(analysisCode(),{startFen,sans,host:true})}
+function joinAnalysis(code,{startFen=null,sans=[],host=false}={}){
+  if(!/^[A-Z0-9]{6,12}$/.test(code))return toast('That analysis link is not valid');
+  if(liveGameOn()&&mode!=='computer')return toast('Analysis opens after your game');
+  leaveAnalysis({restore:false});
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  puzzleSession=null;streakSession=null;if(exploreSession)endExplore({restore:false});if(repEdit)endRepEdit({restore:false});if(egSession)endEndgame({restore:false});if(prepSession)endPrep({restore:false});
+  if(mode==='computer'&&computerStarted){computerStarted=false;currentBot=null;myColor=null}
+  const name=(currentProfile?.account&&currentProfile.username)||guestName;
+  analysis={code,host,startFen:startFen||new Chess().fen(),sans:[...sans],seq:host?1:0,peers:new Map(),name,sentKey:'',channel:null};
+  analysisLoad();mode='analysis';serverGameId=null;clockSnapshot=null;browse=null;orientationSet=true;
+  analysis.channel=realtimeClient.channel(`analysis:${code}`,{config:{broadcast:{self:false}}})
+    .on('broadcast',{event:'state'},m=>analysisReceive(m?.payload))
+    .on('broadcast',{event:'hello'},m=>{const p=m?.payload||{};if(!p.id||!analysis)return;analysis.peers.set(p.id,{name:String(p.name||'Guest').slice(0,24),at:Date.now()});drawAnalysis();analysisSend(true)})
+    .on('broadcast',{event:'bye'},m=>{if(analysis){analysis.peers.delete(m?.payload?.id);drawAnalysis()}})
+    .subscribe(status=>{if(status==='SUBSCRIBED'&&analysis){analysis.channel.send({type:'broadcast',event:'hello',payload:{id:realtimeClientId,name:analysis.name}}).catch(()=>{});if(host)analysisSend(true)}});
+  history.replaceState(null,'',`?analysis=${code}`);
+  setPrimaryScreen('game');render();updateMoves();drawAnalysis();
+}
+function analysisLoad(){const c=new Chess(analysis.startFen);for(const s of analysis.sans){try{c.move(s)}catch{break}}game.load(c.fen());lastMoveCache={fen:'',move:null};}
+function analysisPayload(){return {id:realtimeClientId,name:analysis.name,seq:analysis.seq,startFen:analysis.startFen,sans:analysis.sans,shapes:boardShapes.slice(0,24)}}
+function analysisSend(force=false){
+  if(!analysis?.channel)return;const key=JSON.stringify([analysis.sans,boardShapes]);if(!force&&key===analysis.sentKey)return;analysis.sentKey=key;
+  analysis.channel.send({type:'broadcast',event:'state',payload:analysisPayload()}).catch(()=>{});
+}
+function analysisReceive(p){
+  if(!analysis||!p||!Array.isArray(p.sans))return;
+  if(p.id&&p.name)analysis.peers.set(p.id,{name:String(p.name).slice(0,24),at:Date.now()});
+  if(!isNewer(p,analysis,realtimeClientId)){drawAnalysis();return}
+  try{new Chess(String(p.startFen))}catch{return}
+  analysis.seq=Number(p.seq);analysis.startFen=String(p.startFen);analysis.sans=p.sans.slice(0,400).map(String);
+  boardShapes=cleanShapes(p.shapes);
+  analysis.sentKey=JSON.stringify([analysis.sans,boardShapes]);
+  analysisLoad();render();updateMoves();drawAnalysis();
+}
+function analysisChanged(){if(!analysis)return;analysis.seq++;analysisSend();drawAnalysis()}
+function leaveAnalysis({restore=true}={}){
+  if(!analysis)return;const ch=analysis.channel;analysis=null;
+  if(ch){ch.send({type:'broadcast',event:'bye',payload:{id:realtimeClientId}}).catch(()=>{});realtimeClient.removeChannel(ch).catch(()=>{})}
+  if(new URLSearchParams(location.search).get('analysis'))history.replaceState(null,'',location.pathname);
+  if(mode==='analysis'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
+}
+function analysisMove(move){
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||'q'})}catch{}
+  if(!made)return rejectMove(move.from,move.to);
+  analysis.sans=[...analysis.sans,made.san];
+  boardShapes=[];rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);updateMoves();analysisChanged();
+}
+function drawAnalysis(){
+  if(!analysis)return;const link=`${location.origin}/?analysis=${analysis.code}`,peers=[...analysis.peers.values()].filter(p=>Date.now()-p.at<120000);
+  const html=`<article class="explorer analysis-together"><p class="trainer-intro">Everyone with the link moves the same pieces and sees the same arrows. Right-click (or long-press) to draw.</p>
+    <div class="battle-code"><small>ANALYSIS LINK</small><b>${escapeHtml(analysis.code)}</b></div>
+    <div class="pp-actions"><button class="gold an-copy">Copy link</button><button class="an-back"${analysis.sans.length?'':' disabled'}>Back one move</button><button class="an-reset">Start position</button><button class="an-leave">Leave</button></div>
+    <div class="explorer-line">${analysis.sans.length?escapeHtml(lineText(analysis.sans)):'Start position'}</div>
+    <h4>Here now</h4><div class="an-peers"><span class="me">${escapeHtml(analysis.name)} (you)</span>${peers.map(p=>`<span>${escapeHtml(p.name)}</span>`).join('')||'<small>Share the link to invite someone.</small>'}</div></article>`;
+  if(currentRightView!=='analysis')setDynamicView('analysis','Analyse together',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  $('#dynamicView .an-copy').onclick=async()=>{try{await navigator.clipboard.writeText(link);toast('Analysis link copied')}catch{toast(link)}};
+  $('#dynamicView .an-back').onclick=()=>{if(!analysis.sans.length)return;analysis.sans=analysis.sans.slice(0,-1);boardShapes=[];analysisLoad();render();updateMoves();analysisChanged()};
+  $('#dynamicView .an-reset').onclick=()=>{analysis.sans=[];boardShapes=[];analysisLoad();render();updateMoves();analysisChanged()};
+  $('#dynamicView .an-leave').onclick=()=>{leaveAnalysis();showMovesView()};
+}
 // ---- Tournament lobby: standings, pairings and the top live games (refreshes every 10s) ----
 let lobbyTimer=null;
 async function openTournamentLobby(t){
@@ -4310,12 +4410,14 @@ async function openTournamentLobby(t){
     if(currentRightView!=='lobby'){clearInterval(lobbyTimer);return}
     let d;try{d=await api.tournamentLobby(t.id)}catch(error){clearInterval(lobbyTimer);toast(error.message);return}
     const target=$('#dynamicView .view-content');if(!target||currentRightView!=='lobby')return;
+    const typing=target.querySelector('.cm-input');if(typing&&(typing.value||document.activeElement===typing))return; // don't wipe a comment being written
     const tt=d.tournament||t,swiss=tt.format==='swiss',games=d.games||[],top=games.slice(0,4),rest=games.slice(4);
     const card=(g,i)=>`<button type="button" class="watch-card lobby-game${g.mine?' mine':''}" data-lobby-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white||'White')}</b><em>${escapeHtml(String(g.whiteRating||''))}</em></span><span><b>${escapeHtml(g.black||'Black')}</b><em>${escapeHtml(String(g.blackRating||''))}</em></span><small>${g.mine?'Your game':`move ${Math.max(1,Math.ceil(Number(g.moves||0)/2))}`}</small></span></button>`;
     const myPairing=(d.pairings||[]).find(p=>p.mine&&p.code&&p.result==='playing');
     target.innerHTML=`<article class="lobby">
       <div class="lobby-head"><small>${tt.rated?'RATED':'CASUAL'} · ${escapeHtml(tt.pool||'')} · ${formatTimeControl(Number(tt.base_seconds||600),Number(tt.increment_seconds||0))}${swiss&&Number(tt.current_round)?` · Round ${tt.current_round} of ${tt.rounds}`:''}</small><b>${escapeHtml(tt.name||'Tournament')}</b><span>${escapeHtml(swiss?(tt.status==='finished'?'Finished':'Swiss'):arenaPhase(tt).label)}</span></div>
       ${myPairing?`<button class="gold lobby-mine" data-code="${escapeHtml(myPairing.code)}">Go to your game</button>`:''}
+      ${(d.commentary||[]).length||d.canComment?`<h4>Commentary</h4>${d.canComment?`<form class="cm-form"><select name="game" aria-label="Game"><option value="">The whole event</option>${games.map(g=>`<option value="${escapeHtml(g.id)}">${escapeHtml(g.white)} vs ${escapeHtml(g.black)}</option>`).join('')}</select><input name="body" class="cm-input" maxlength="280" placeholder="What's happening on the boards?" autocomplete="off"><button>Post</button></form>`:''}<div class="cm-feed">${(d.commentary||[]).map(c=>`<div class="cm-item"><small>${escapeHtml(c.author)}${c.game?` · ${escapeHtml(c.game)}${c.ply?` · move ${Math.ceil(c.ply/2)}`:''}`:''} · ${escapeHtml(new Date(c.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}))}</small><p>${escapeHtml(c.body)}</p></div>`).join('')||'<p class="menu-empty">No commentary yet.</p>'}</div>`:''}
       <h4>Live games <small>Top games first</small></h4>
       ${games.length?`<div class="watch-grid lobby-top">${top.map(card).join('')}</div>${rest.length?`<div class="lobby-list">${rest.map((g,i)=>`<button type="button" data-lobby-watch="${i+4}"${g.mine?' class="mine"':''}><b>${escapeHtml(g.white)}</b> <em>${escapeHtml(String(g.whiteRating||''))}</em> vs <b>${escapeHtml(g.black)}</b> <em>${escapeHtml(String(g.blackRating||''))}</em></button>`).join('')}</div>`:''}`:'<p class="menu-empty">No live games in this tournament right now.</p>'}
       ${swiss?`<h4>Pairings${Number(tt.current_round)?` <small>Round ${tt.current_round}</small>`:''}</h4>${(d.pairings||[]).length?`<div class="lobby-pairings">${d.pairings.map(p=>`<div class="${p.mine?'me':''}"><b>${escapeHtml(p.white)}</b><span>${p.result==='playing'?'Playing':escapeHtml(p.result||'')}</span><b>${escapeHtml(p.black)}</b></div>`).join('')}</div>`:'<p class="menu-empty">Pairings appear when the round starts.</p>'}`:''}
@@ -4326,6 +4428,7 @@ async function openTournamentLobby(t){
     </article>`;
     target.querySelectorAll('[data-lobby-watch]').forEach(el=>el.onclick=()=>{const g=games[Number(el.dataset.lobbyWatch)];if(!g)return;clearInterval(lobbyTimer);if(g.mine){if(myPairing)location.search='?game='+encodeURIComponent(myPairing.code);else showMovesView();return}void startWatching(g.id)});
     target.querySelector('.lobby-mine')?.addEventListener('click',e=>{location.search='?game='+encodeURIComponent(e.currentTarget.dataset.code)});
+    target.querySelector('.cm-form')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,f=new FormData(form),body=String(f.get('body')||'').trim();if(!body)return;try{await api.commentaryPost(t.id,body,String(f.get('game')||'')||null);form.querySelector('.cm-input').value='';form.querySelector('.cm-input').blur();toast('Posted');void draw()}catch(error){toast(error.message)}});
   };
   await draw();
   lobbyTimer=setInterval(()=>{if(document.hidden)return;void draw()},10000);

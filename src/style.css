@@ -2919,3 +2919,19 @@ button.zh-piece{cursor:pointer}button.zh-piece:hover:not([disabled]){border-colo
 button.zh-piece.on{border-color:var(--mint,#82edba);box-shadow:0 0 0 2px rgba(130,237,186,.35)}
 button.zh-piece[disabled]{opacity:.55;cursor:default}
 .zh-empty{color:var(--muted);font-size:10px}
+
+/* ---- Round 10: commentary, ladder, analyse together ---- */
+.cm-form{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr) auto;gap:6px;margin-bottom:8px}
+.cm-form select,.cm-form input{min-width:0;padding:8px 9px;border-radius:8px;border:1px solid var(--line);background:#07110f;color:inherit;font-size:12px}
+.cm-form button{padding:0 14px;border-radius:8px;font-weight:600}
+.cm-feed{display:grid;gap:5px;max-height:260px;overflow:auto}
+.cm-item{padding:8px 10px;border-radius:8px;background:#0b1715;border-left:3px solid #e5c17c}
+.cm-item small{color:var(--muted);font-size:10px}.cm-item p{margin:3px 0 0;font-size:13px;line-height:1.4}
+.ladder-podium{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ladder-podium>div{display:grid;justify-items:center;gap:2px;padding:10px 6px;border-radius:9px;background:#0b1715;border:1px solid var(--line)}
+.ladder-podium b{font-size:20px}.ladder-podium .place-1 b{color:#e5c17c}.ladder-podium .place-2 b{color:#cfd8d4}.ladder-podium .place-3 b{color:#c58b5a}
+.ladder-podium span{font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ladder-podium em{font-style:normal;color:var(--muted);font-size:11px}
+.an-peers{display:flex;flex-wrap:wrap;gap:6px}
+.an-peers span{padding:4px 10px;border-radius:999px;background:#0b1715;border:1px solid var(--line);font-size:12px}.an-peers span.me{border-color:rgba(130,237,186,.5);color:var(--mint,#82edba)}
+.an-peers small{color:var(--muted);font-size:12px}
+@media (max-width:520px){.cm-form{grid-template-columns:1fr auto}.cm-form select{grid-column:1/-1}}
