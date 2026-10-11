@@ -231,3 +231,53 @@ export function clubLeagueTable(entries = [], memberClub = new Map(), clubs = ne
     return { id, name: clubs.get(id)?.name || 'Club', slug: clubs.get(id)?.slug || '', points: top.reduce((s, x) => s + x, 0), players: pts.length };
   }).sort((a, b) => b.points - a.points || b.players - a.players);
 }
+
+// ---- Vacation (daily games) ----
+// Up to VACATION_DAYS a calendar year. While a vacation lasts the daily-game clock of the
+// player to move doesn't run out: the time it overlaps the current move is added back.
+export const VACATION_DAYS = 14;
+export function vacationLeft(p, now = Date.now()) {
+  const year = new Date(now).getUTCFullYear();
+  return Number(p?.vacation_year) === year ? Math.max(0, VACATION_DAYS - Number(p?.vacation_used || 0)) : VACATION_DAYS;
+}
+export function onVacation(p, now = Date.now()) { return !!p?.vacation_until && Date.parse(p.vacation_until) > now && (!p.vacation_from || Date.parse(p.vacation_from) <= now); }
+export function vacationOverlapMs(p, from, to = Date.now()) {
+  if (!p?.vacation_from || !p?.vacation_until) return 0;
+  const a = Math.max(Date.parse(p.vacation_from), from), b = Math.min(Date.parse(p.vacation_until), to);
+  return Number.isFinite(a) && Number.isFinite(b) && b > a ? b - a : 0;
+}
+
+// ---- Puzzle Battle ----
+export const BATTLE_MS = 180000, BATTLE_COUNTDOWN_MS = 5000, BATTLE_PUZZLES = 30, BATTLE_MAX_MISSES = 3;
+// Easy first, harder later: sort by rating, keep it varied.
+export function battleSet(puzzles = [], n = BATTLE_PUZZLES, rand = Math.random) {
+  const pool = [...puzzles];
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  return pool.slice(0, n).sort((a, b) => Number(a.rating || 0) - Number(b.rating || 0));
+}
+export function battleOver(t, now = Date.now()) {
+  if (t.status !== 'live') return t.status === 'finished';
+  return now >= Date.parse(t.ends_at) || (Number(t.host_misses) >= BATTLE_MAX_MISSES && Number(t.guest_misses) >= BATTLE_MAX_MISSES);
+}
+export function battleWinner(t) { const h = Number(t.host_score || 0), g = Number(t.guest_score || 0); return h > g ? 'host' : g > h ? 'guest' : 'draw'; }
+
+// ---- Repertoire ----
+export const REPERTOIRE_MAX_LINES = 300, REPERTOIRE_MAX_PLIES = 40;
+const SAN = /^(O-O(-O)?|[NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](=[NBRQ])?)[+#]?$/;
+// Structural clean-up (legality is checked with chess.js by the caller).
+export function cleanRepertoire(lines = []) {
+  const out = [], seen = new Set();
+  for (const line of Array.isArray(lines) ? lines : []) {
+    if (!Array.isArray(line)) continue;
+    const sans = line.slice(0, REPERTOIRE_MAX_PLIES).map(s => String(s || '').trim());
+    if (!sans.length || !sans.every(s => SAN.test(s))) continue;
+    const key = sans.join(' ');
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(sans);
+    if (out.length >= REPERTOIRE_MAX_LINES) break;
+  }
+  return out;
+}
+
+// ---- Simuls ----
+export const SIMUL_MAX_PLAYERS = 20;

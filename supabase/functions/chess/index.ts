@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
 import { calculateMoveTiming } from "./latency.js";
 import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle, rightsAfterMove } from "./castle960.js";
-import { CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
+import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
 const admin = createClient(
@@ -258,12 +258,13 @@ function sideCanPossiblyMate(c:Chess,color:"w"|"b"){
 }
 async function resolveTimeout(g:any){
   if(!g||g.status!=="active"||!g.last_move_at)return g;
-  if(!g.daily_days&&firstMovesPending(g.move_count)){
+  if(!g.daily_days&&!g.simul_id&&firstMovesPending(g.move_count)){
     if(!abortDue({moveCount:g.move_count,lastMoveAt:g.last_move_at}))return g;
     const {data}=await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"aborted",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
     if(data)EdgeRuntime.waitUntil(broadcastGameState(data));
     return data||g;
   }const c=new Chess(g.fen),side=c.turn(),elapsed=Math.max(0,Date.now()-Date.parse(g.last_move_at)),remain=side==="w"?Number(g.white_time_ms):Number(g.black_time_ms);if(elapsed<remain)return g;
+  if(g.daily_days){const pid=side==="w"?g.white_player_id:g.black_player_id,away=pid?await playerById(pid):null;if(away&&elapsed-vacationOverlapMs(away,Date.parse(g.last_move_at))<remain)return g}
   const winner=(side==="w"?"b":"w") as "w"|"b";
   const patch=!sideCanPossiblyMate(c,winner)
     ?{status:"draw",result:"1/2-1/2",...(side==="w"?{white_time_ms:0}:{black_time_ms:0})}
@@ -272,7 +273,7 @@ async function resolveTimeout(g:any){
   return data?settleRatings(data):g
 }
 async function freshGame(id:string){return resolveTimeout(await gameById(id))}
-async function createGame(req:Request,b:any,{players=null,source="private",tournamentId=null,bot=null}:any={}){
+async function createGame(req:Request,b:any,{players=null,source="private",tournamentId=null,bot=null,simulId=null}:any={}){
   let white:any,black:any;if(players)[white,black]=players;else{white=await playerFor(req,b,!!b.rated);assertAllowed(white)}
   let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),active=!!black;
   // Daily games: days per move instead of a clock, rated in their own "daily" pool.
@@ -282,7 +283,7 @@ async function createGame(req:Request,b:any,{players=null,source="private",tourn
   const {data,error}=await admin.from("chess_games").insert({
     invite_code:code,white_player_id:white.id,black_player_id:black?.id||null,
     white_name:white.username||white.display_name,black_name:black?(black.username||black.display_name):null,
-    fen:startFen,start_fen:freestyle?startFen:null,variant:freestyle?"freestyle":"standard",castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,
+    fen:startFen,start_fen:freestyle?startFen:null,variant:freestyle?"freestyle":"standard",castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
     time_control_seconds:dailyDays?dailyDays*86400:base,increment_seconds:dailyDays?0:inc,white_time_ms:moveMs,black_time_ms:moveMs,daily_days:dailyDays,challenge_id:b.challengeId||null,
     last_move_at:active?nowIso():null,started_at:active?nowIso():null,white_last_seen_at:nowIso(),black_last_seen_at:black?nowIso():null,
     bot_player_id:bot?.player_id||null,bot_elo:bot?.elo||null,bot_style:bot?.style||null
@@ -383,6 +384,7 @@ async function claimWin(req:Request,b:any){
   if(g.status!=="active")throw fail("Game is not active.",409);
   if(g.bot_player_id)throw fail("Games against a bot can't be claimed.",409);
   if(g.daily_days)throw fail("Daily games are won on time, not by claiming.",409);
+  if(g.simul_id)throw fail("In a simul the host moves between boards; the clock decides.",409);
   const seat=g.white_player_id===p.id?"w":"b";
   const seen=Date.parse((seat==="w"?g.black_last_seen_at:g.white_last_seen_at)||"")||0;
   if(Date.now()-seen<CLAIM_AFTER_MS)throw fail("Your opponent is still connected.",409);
@@ -595,7 +597,9 @@ async function dailyGames(req:Request,b:any){
   const p=await playerFor(req,b,false,{touch:false});
   const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,fen,daily_days,last_move_at,move_count,rated").not("daily_days","is",null).in("status",["active","waiting"]).or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("last_move_at",{ascending:true}).limit(50);
   if(error)throw error;
-  return {games:(data||[]).map((g:any)=>{const seat=g.white_player_id===p.id?"w":"b",turn=String(g.fen||"").split(" ")[1]||"w";return {id:g.id,code:g.invite_code,opponent:seat==="w"?g.black_name:g.white_name,seat,yourTurn:g.status==="active"&&turn===seat,status:g.status,fen:g.fen,daily_days:g.daily_days,deadline:g.last_move_at?new Date(Date.parse(g.last_move_at)+dailyMoveMs(g.daily_days)).toISOString():null,moves:g.move_count,rated:g.rated}})}
+  const oppIds=[...new Set((data||[]).map((g:any)=>g.white_player_id===p.id?g.black_player_id:g.white_player_id).filter(Boolean))];
+  const {data:opps}=oppIds.length?await admin.from("chess_players").select("id,vacation_from,vacation_until").in("id",oppIds):{data:[]};const away=new Map((opps||[]).filter((x:any)=>onVacation(x)).map((x:any)=>[x.id,x.vacation_until]));
+  return {vacation:vacationInfo(p),games:(data||[]).map((g:any)=>{const seat=g.white_player_id===p.id?"w":"b",turn=String(g.fen||"").split(" ")[1]||"w";return {opponentAwayUntil:away.get(seat==="w"?g.black_player_id:g.white_player_id)||null,id:g.id,code:g.invite_code,opponent:seat==="w"?g.black_name:g.white_name,seat,yourTurn:g.status==="active"&&turn===seat,status:g.status,fen:g.fen,daily_days:g.daily_days,deadline:g.last_move_at?new Date(Date.parse(g.last_move_at)+dailyMoveMs(g.daily_days)).toISOString():null,moves:g.move_count,rated:g.rated}})}
 }
 // ---- Puzzles: daily puzzle, themes, streak record ----
 async function puzzleDaily(req:Request,b:any){
@@ -1163,6 +1167,182 @@ async function explorerBackfill(req:Request,b:any){
   return {processed:(data||[]).length}
 }
 
+// ======== Round 9: repertoire, insights, Puzzle Battle, simuls, vacation ========
+const code6=()=>crypto.randomUUID().replace(/-/g,"").slice(0,6).toUpperCase();
+// ---- Repertoire: your opening lines as White and Black ----
+async function repertoireGet(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});
+  const {data,error}=await admin.from("chess_repertoires").select("color,lines,updated_at").eq("player_id",p.id);if(error)throw error;
+  const by=(c:string)=>(data||[]).find((r:any)=>r.color===c);
+  return {w:by("w")?.lines||[],b:by("b")?.lines||[],updated_at:(data||[]).map((r:any)=>r.updated_at).sort().at(-1)||null}
+}
+async function repertoireSave(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});assertAllowed(p);
+  const color=b.color==="b"?"b":"w";
+  // Every line must be legal from the start position.
+  const lines=cleanRepertoire(b.lines).filter((sans:string[])=>{const c=new Chess();try{for(const s of sans)if(!c.move(s))return false;return true}catch{return false}});
+  const {error}=await admin.from("chess_repertoires").upsert({player_id:p.id,color,lines,updated_at:nowIso()},{onConflict:"player_id,color"});if(error)throw error;
+  return {color,lines}
+}
+// ---- Insights: one compact row per finished game (the browser does the sums) ----
+async function insights(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});
+  const {data,error}=await admin.from("chess_games").select("ended_at,pool,rated,result,end_reason,move_count,white_player_id,black_player_id,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,time_control_seconds,increment_seconds,daily_days,move_history,bot_player_id,variant")
+    .or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).in("result",["1-0","0-1","1/2-1/2"]).order("ended_at",{ascending:false}).limit(500);
+  if(error)throw error;
+  const rows=(data||[]).map((g:any)=>{
+    const w=g.white_player_id===p.id,res=g.result==="1/2-1/2"?.5:(g.result==="1-0")===w?1:0;
+    const before=w?g.white_rating_before:g.black_rating_before,delta=w?g.white_rating_delta:g.black_rating_delta;
+    return {at:g.ended_at,pool:g.pool,rated:!!g.rated,color:w?"w":"b",score:res,reason:g.end_reason||null,plies:Number(g.move_count||0),
+      rating:before!=null&&delta!=null?Number(before)+Number(delta):null,opp:w?g.black_rating_before:g.white_rating_before,bot:!!g.bot_player_id,variant:g.variant||"standard",
+      tc:g.daily_days?"daily":`${Math.round(Number(g.time_control_seconds||0)/60)}+${Number(g.increment_seconds||0)}`,
+      sans:(Array.isArray(g.move_history)?g.move_history:[]).slice(0,12).map((m:any)=>m.san||"").filter(Boolean)}
+  });
+  return {games:rows,ratings:p.ratings||{},puzzle_rating:p.puzzle_rating??null}
+}
+// ---- Puzzle Battle: same puzzles, three minutes, three misses and you're out ----
+async function battlePuzzles(){
+  const {data}=await admin.from("chess_puzzles").select("id,fen,solution,rating").order("fetched_at",{ascending:false}).limit(400);
+  const set=battleSet(data||[]);if(set.length<10)throw fail("Not enough puzzles yet. Solve a few first, then try again.",503);
+  return set.map((x:any)=>({id:x.id,fen:x.fen,solution:x.solution,rating:x.rating}))
+}
+const battleView=(t:any,p:any,names:Map<string,string>)=>{const seat=t.host_id===p.id?"host":t.guest_id===p.id?"guest":null;
+  return {id:t.id,code:t.code,status:t.status,seat,starts_at:t.starts_at,ends_at:t.ends_at,puzzles:seat&&t.status!=="waiting"?t.puzzles:[],
+    host:{name:names.get(t.host_id)||"Host",score:t.host_score,misses:t.host_misses},guest:t.guest_id?{name:names.get(t.guest_id)||"Guest",score:t.guest_score,misses:t.guest_misses}:null,
+    winner:t.status==="finished"?battleWinner(t):null,maxMisses:BATTLE_MAX_MISSES}};
+async function battleNames(t:any){const ids=[t.host_id,t.guest_id].filter(Boolean);const {data}=await admin.from("chess_players").select("id,username,display_name").in("id",ids);return new Map((data||[]).map((x:any)=>[x.id,x.username||x.display_name]))}
+async function battleSettle(t:any){
+  if(t.status==="live"&&battleOver(t)){const {data}=await admin.from("chess_puzzle_battles").update({status:"finished"}).eq("id",t.id).eq("status","live").select().maybeSingle();if(data){t=data;EdgeRuntime.waitUntil(broadcastTo(`battle:${t.id}`,"battle",{status:"finished"}))}}
+  return t
+}
+async function battleCreate(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});assertAllowed(p);
+  let code=code6();while(await one("chess_puzzle_battles","code",code))code=code6();
+  const {data,error}=await admin.from("chess_puzzle_battles").insert({code,host_id:p.id,puzzles:await battlePuzzles()}).select().single();if(error)throw error;
+  if(b.to){const to=await playerById(String(b.to));if(to&&to.id!==p.id)EdgeRuntime.waitUntil(notifyPlayer(to.id,{title:"Puzzle Battle",body:`${p.username||p.display_name||"A player"} wants to race you through puzzles.`,url:`/?battle=${code}`,tag:"battle-"+code},{push:true}).catch(()=>{}))}
+  return {battle:battleView(data,p,new Map([[p.id,p.username||p.display_name]]))}
+}
+async function battleJoin(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});assertAllowed(p);
+  let t=await one("chess_puzzle_battles","code",String(b.code||"").toUpperCase().slice(0,6));if(!t)throw fail("Battle not found.",404);
+  if(t.host_id!==p.id&&!t.guest_id&&t.status==="waiting"){
+    const starts=Date.now()+BATTLE_COUNTDOWN_MS;
+    const {data}=await admin.from("chess_puzzle_battles").update({guest_id:p.id,status:"live",starts_at:new Date(starts).toISOString(),ends_at:new Date(starts+BATTLE_MS).toISOString()}).eq("id",t.id).is("guest_id",null).select().maybeSingle();
+    if(!data)throw fail("Someone else joined first.",409);t=data;
+    EdgeRuntime.waitUntil(broadcastTo(`battle:${t.id}`,"battle",{status:"live"}));
+  }
+  t=await battleSettle(t);
+  return {battle:battleView(t,p,await battleNames(t))}
+}
+async function battleState(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  let t=await one("chess_puzzle_battles","id",String(b.battleId||""));if(!t)throw fail("Battle not found.",404);
+  t=await battleSettle(t);return {battle:battleView(t,p,await battleNames(t))}
+}
+// The browser checks each puzzle; the server only keeps the count (unrated, for fun).
+async function battleProgress(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  let t=await one("chess_puzzle_battles","id",String(b.battleId||""));if(!t)throw fail("Battle not found.",404);
+  const seat=t.host_id===p.id?"host":t.guest_id===p.id?"guest":null;if(!seat)throw fail("Not your battle.",403);
+  if(t.status!=="live"||Date.now()<Date.parse(t.starts_at)-1000)return {battle:battleView(t,p,await battleNames(t))};
+  const score=Math.max(Number(t[seat+"_score"]),Math.min(BATTLE_PUZZLES,Number(b.score||0))),misses=Math.max(Number(t[seat+"_misses"]),Math.min(BATTLE_MAX_MISSES,Number(b.misses||0)));
+  if(Date.now()<=Date.parse(t.ends_at)+2000){const {data}=await admin.from("chess_puzzle_battles").update({[seat+"_score"]:score,[seat+"_misses"]:misses}).eq("id",t.id).select().single();t=data}
+  t=await battleSettle(t);
+  EdgeRuntime.waitUntil(broadcastTo(`battle:${t.id}`,"battle",{seat,score:t[seat+"_score"],misses:t[seat+"_misses"],status:t.status}));
+  return {battle:battleView(t,p,await battleNames(t))}
+}
+async function battleCancel(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});
+  await admin.from("chess_puzzle_battles").update({status:"cancelled"}).eq("id",String(b.battleId||"")).eq("host_id",p.id).eq("status","waiting");
+  return {ok:true}
+}
+// ---- Simuls: the host plays every entrant on their own board ----
+const simulCard=(s:any,host:any,entries:any[],p:any)=>({id:s.id,code:s.code,name:s.name,status:s.status,base_seconds:s.base_seconds,increment_seconds:s.increment_seconds,max_players:s.max_players,
+  host:host?(host.username||host.display_name):"Host",hostRating:host?ratingOf(host,poolFor(s.base_seconds,s.increment_seconds)):null,players:entries.length,joined:!!p&&entries.some((e:any)=>e.player_id===p.id),mine:!!p&&s.host_id===p.id,created_at:s.created_at});
+async function simulList(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  const {data,error}=await admin.from("chess_simuls").select("*").in("status",["open","live"]).gte("created_at",new Date(Date.now()-2*86400000).toISOString()).order("created_at",{ascending:false}).limit(30);if(error)throw error;
+  const m=p?await clubOf(p.id):null,visible=(data||[]).filter((s:any)=>!s.club_id||s.club_id===m?.club_id);
+  const ids=visible.map((s:any)=>s.id),hosts=[...new Set(visible.map((s:any)=>s.host_id))];
+  const [{data:entries},{data:hp}]=await Promise.all([ids.length?admin.from("chess_simul_entries").select("simul_id,player_id").in("simul_id",ids):Promise.resolve({data:[]}),hosts.length?admin.from("chess_players").select("id,username,display_name,ratings").in("id",hosts):Promise.resolve({data:[]})]);
+  const hm=new Map((hp||[]).map((x:any)=>[x.id,x]));
+  return {simuls:visible.map((s:any)=>simulCard(s,hm.get(s.host_id),(entries||[]).filter((e:any)=>e.simul_id===s.id),p))}
+}
+async function simulCreate(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});assertAllowed(p);
+  const {count}=await admin.from("chess_simuls").select("id",{count:"exact",head:true}).eq("host_id",p.id).in("status",["open","live"]);if(Number(count)>0)throw fail("Finish your current simul first.",409);
+  const name=String(b.name||"").replace(/[\u0000-\u001F\u007F]/g," ").trim().slice(0,60)||`${p.username||"Host"}'s simul`;
+  const club=b.club?await clubOf(p.id):null;
+  let code=code6();while(await one("chess_simuls","code",code))code=code6();
+  const {data,error}=await admin.from("chess_simuls").insert({code,host_id:p.id,name,base_seconds:Math.max(300,Math.min(7200,Number(b.seconds||1800))),increment_seconds:Math.max(0,Math.min(60,Number(b.increment??30))),max_players:Math.max(2,Math.min(SIMUL_MAX_PLAYERS,Number(b.maxPlayers||10))),club_id:club?.club_id||null}).select().single();if(error)throw error;
+  return {simul:simulCard(data,p,[],p)}
+}
+async function simulJoin(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});assertAllowed(p);
+  const s=await one("chess_simuls","id",String(b.simulId||""));if(!s||s.status!=="open")throw fail("This simul is not taking players.",409);
+  if(s.host_id===p.id)throw fail("You are hosting this simul.",409);
+  if(s.club_id){const m=await clubOf(p.id);if(m?.club_id!==s.club_id)throw fail("This simul is for club members.",403)}
+  const {count}=await admin.from("chess_simul_entries").select("player_id",{count:"exact",head:true}).eq("simul_id",s.id);if(Number(count)>=s.max_players)throw fail("This simul is full.",409);
+  const {error}=await admin.from("chess_simul_entries").upsert({simul_id:s.id,player_id:p.id},{onConflict:"simul_id,player_id",ignoreDuplicates:true});if(error)throw error;
+  EdgeRuntime.waitUntil(broadcastTo(`player:${s.host_id}`,"notify",{kind:"simul",title:`${p.username||"A player"} joined your simul`}));
+  return {ok:true}
+}
+async function simulLeave(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});
+  await admin.from("chess_simul_entries").delete().eq("simul_id",String(b.simulId||"")).eq("player_id",p.id).is("game_id",null);
+  return {ok:true}
+}
+async function simulStart(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});
+  const s=await one("chess_simuls","id",String(b.simulId||""));if(!s||s.host_id!==p.id)throw fail("Only the host can start the simul.",403);
+  if(b.cancel){await admin.from("chess_simuls").update({status:"cancelled"}).eq("id",s.id).eq("status","open");return {ok:true}}
+  const {data:entries}=await admin.from("chess_simul_entries").select("player_id").eq("simul_id",s.id);
+  if(!(entries||[]).length)throw fail("Wait for at least one player.",409);
+  const {data:claimed}=await admin.from("chess_simuls").update({status:"live",started_at:nowIso()}).eq("id",s.id).eq("status","open").select().maybeSingle();if(!claimed)throw fail("The simul has already started.",409);
+  for(const e of entries||[]){
+    const opp=await playerById(e.player_id);if(!opp)continue;
+    const made=await createGame(req,{seconds:s.base_seconds,increment:s.increment_seconds,rated:false},{players:[p,opp],source:"private",simulId:s.id});
+    await admin.from("chess_simul_entries").update({game_id:made.game.id}).eq("simul_id",s.id).eq("player_id",opp.id);
+    EdgeRuntime.waitUntil(notifyPlayer(opp.id,{title:`${s.name} has started`,body:`Your board against ${p.username||"the host"} is ready.`,url:`/?game=${made.game.invite_code}`,tag:"simul-"+s.id},{push:true}).catch(()=>{}));
+  }
+  return simulState(req,{...b,simulId:s.id})
+}
+async function simulState(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  const s=await one("chess_simuls","id",String(b.simulId||""));if(!s)throw fail("Simul not found.",404);
+  if(s.club_id){const m=p?await clubOf(p.id):null;if(m?.club_id!==s.club_id&&s.host_id!==p?.id)throw fail("Simul not found.",404)}
+  const [{data:entries},host]=await Promise.all([admin.from("chess_simul_entries").select("player_id,game_id").eq("simul_id",s.id),playerById(s.host_id)]);
+  const gids=(entries||[]).map((e:any)=>e.game_id).filter(Boolean);
+  const {data:games}=gids.length?await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,fen,move_count,last_move_at,white_time_ms,black_time_ms").in("id",gids):{data:[]};
+  const isHost=!!p&&p.id===s.host_id;
+  const boards=(games||[]).map((g:any)=>{const turn=String(g.fen).split(" ")[1],hostSeat=g.white_player_id===s.host_id?"w":"b",mine=isHost||(!!p&&[g.white_player_id,g.black_player_id].includes(p.id));
+    return {id:g.id,code:mine?g.invite_code:null,opponent:hostSeat==="w"?g.black_name:g.white_name,status:g.status,result:g.result,fen:g.fen,moves:g.move_count,hostToMove:g.status==="active"&&turn===hostSeat,mine:!isHost&&mine}});
+  // Finished when every board is.
+  if(s.status==="live"&&boards.length&&boards.every((x:any)=>x.status!=="active"))await admin.from("chess_simuls").update({status:"finished"}).eq("id",s.id).eq("status","live");
+  const names=new Map<string,string>();if(s.status==="open"&&(entries||[]).length){const {data:pl}=await admin.from("chess_players").select("id,username,display_name").in("id",(entries||[]).map((e:any)=>e.player_id));for(const x of pl||[])names.set(x.id,x.username||x.display_name)}
+  const score=boards.reduce((acc:any,x:any)=>{if(x.status==="active")return acc;const hostWhite=(games||[]).find((g:any)=>g.id===x.id)?.white_player_id===s.host_id,hostWon=(x.result==="1-0")===hostWhite;if(x.result==="1/2-1/2")acc.draws++;else if(hostWon)acc.host++;else acc.players++;return acc},{host:0,players:0,draws:0});
+  return {simul:simulCard(s,host,entries||[],p),boards:boards.sort((a:any,c:any)=>Number(c.hostToMove)-Number(a.hostToMove)),entrants:s.status==="open"?(entries||[]).map((e:any)=>names.get(e.player_id)||"Player"):[],score,isHost}
+}
+// ---- Vacation for daily games ----
+async function vacation(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false}),now=Date.now(),year=new Date(now).getUTCFullYear();
+  const base={vacation_year:year,vacation_used:Number(p.vacation_year)===year?Number(p.vacation_used||0):0};
+  if(b.end){
+    if(!onVacation(p,now))return {vacation:vacationInfo({...p,...base},now)};
+    const unused=Math.floor((Date.parse(p.vacation_until)-now)/86400000);
+    const patch={...base,vacation_used:Math.max(0,base.vacation_used-unused),vacation_until:nowIso()};
+    await admin.from("chess_players").update(patch).eq("id",p.id);return {vacation:vacationInfo({...p,...patch},now)}
+  }
+  if(b.days==null)return {vacation:vacationInfo({...p,...base},now)};
+  if(onVacation(p,now))throw fail("You are already on vacation.",409);
+  const days=Math.round(Number(b.days)),left=VACATION_DAYS-base.vacation_used;
+  if(!(days>=1&&days<=left))throw fail(left?`Pick 1 to ${left} days.`:"No vacation days left this year.",409);
+  const patch={...base,vacation_used:base.vacation_used+days,vacation_from:nowIso(),vacation_until:new Date(now+days*86400000).toISOString()};
+  await admin.from("chess_players").update(patch).eq("id",p.id);
+  return {vacation:vacationInfo({...p,...patch},now)}
+}
+const vacationInfo=(p:any,now=Date.now())=>({on:onVacation(p,now),until:onVacation(p,now)?p.vacation_until:null,left:vacationLeft(p,now),perYear:VACATION_DAYS});
+
 // Tournament lobby: standings, the current round's pairings, and live games to watch.
 async function tournamentLobby(req:Request,b:any){
   const t=await one("chess_tournaments","id",String(b.tournamentId||""));if(!t)throw fail("Tournament not found.",404);
@@ -1504,6 +1684,21 @@ Deno.serve(async(req)=>{
       case "opening_explorer":out=await openingExplorer(req,b);break;
       case "explorer_backfill":out=await explorerBackfill(req,b);break;
       case "tournament_lobby":out=await tournamentLobby(req,b);break;
+      case "repertoire_get":out=await repertoireGet(req,b);break;
+      case "repertoire_save":out=await repertoireSave(req,b);break;
+      case "insights":out=await insights(req,b);break;
+      case "battle_create":out=await battleCreate(req,b);break;
+      case "battle_join":out=await battleJoin(req,b);break;
+      case "battle_state":out=await battleState(req,b);break;
+      case "battle_progress":out=await battleProgress(req,b);break;
+      case "battle_cancel":out=await battleCancel(req,b);break;
+      case "simul_list":out=await simulList(req,b);break;
+      case "simul_create":out=await simulCreate(req,b);break;
+      case "simul_join":out=await simulJoin(req,b);break;
+      case "simul_leave":out=await simulLeave(req,b);break;
+      case "simul_start":out=await simulStart(req,b);break;
+      case "simul_state":out=await simulState(req,b);break;
+      case "vacation":out=await vacation(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;
