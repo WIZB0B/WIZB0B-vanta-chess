@@ -2909,3 +2909,13 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .prep-stats p{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center;margin:0;font-size:12px}
 .prep-stats .ins-meter i{background:#e5c17c}.prep-stats em{font-style:normal;color:var(--muted)}
 @media (max-width:520px){.prep-cols{grid-template-columns:1fr}}
+
+/* ---- Round 10: Crazyhouse pockets ---- */
+.captured-tray.zh-pocket{display:inline-flex;gap:4px;align-items:center}
+.zh-piece{position:relative;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:#0b1715}
+.zh-piece img{width:26px;height:26px}
+.zh-piece b{position:absolute;right:-4px;bottom:-4px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#e5c17c;color:#10120e;font:700 10px/15px ui-sans-serif,system-ui,sans-serif;text-align:center}
+button.zh-piece{cursor:pointer}button.zh-piece:hover:not([disabled]){border-color:rgba(130,237,186,.6)}
+button.zh-piece.on{border-color:var(--mint,#82edba);box-shadow:0 0 0 2px rgba(130,237,186,.35)}
+button.zh-piece[disabled]{opacity:.55;cursor:default}
+.zh-empty{color:var(--muted);font-size:10px}

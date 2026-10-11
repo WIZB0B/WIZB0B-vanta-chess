@@ -32,6 +32,7 @@ import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './
 import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
+import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
 import { lazyWorker } from './lazy-worker.js';
 import { resolveTypedMove } from './typed-move.js';
 import { REP_KEY, addLine, lineText, removeLine, repContinue, repDeviation, repDrill, repMovesAt, repStats } from './repertoire.js';
@@ -226,7 +227,7 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button></div>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -386,7 +387,7 @@ let clocks=initialClocks(timeChoice($('#time').value).seconds);
 // move. Everything else (status text, move list, clocks, sound, analysis, engine, game-over
 // check) waits until the slide has landed and at least two frames have been painted
 // (afterBoardPaint); the online move request waits two frames (nextFrames).
-let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,egSession=null,prepSession=null,todayPlan=null,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
+let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,zhDropSelected=null,egSession=null,prepSession=null,todayPlan=null,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
 let boardMotion=Promise.resolve(),boardMotionUntil=0,motionScaleCache=null;
 function nextFrames(count=2){
   return new Promise(resolve=>{
@@ -512,6 +513,8 @@ function landingFx(made){
 // last, with the material lead (+N) for the side ahead.
 function syncCapturedTrays(boardGame,placement){
   const style=document.documentElement.dataset.pieceStyle||'vanta',bars=playerBarClockColors();
+  if(isZhGame()&&!reviewState.viewing&&!browse)return drawPockets(style,bars);
+  for(const id of ['#topCaptured','#bottomCaptured'])$(id)?.classList.remove('zh-pocket');
   const key=`${placement}|${style}|${bars.top}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
   const caps=capturedPieces(boardGame.board());
   for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
@@ -552,11 +555,11 @@ function renderBoard({hint=null,instant=false}={}){
   const boardGame=reviewFen||browseFen?new Chess(reviewFen||browseFen):game,placement=boardGame.fen().split(' ')[0];
   dom.board.classList.toggle('browsing',!!browseFen);
   if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
-  const legal=new Set(reviewState.viewing||browse||!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
+  const legal=new Set(reviewState.viewing||browse?[]:zhDropSelected?zhDropTargets(zhDropSelected):!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
   const lastMove=boardLastMove(),position=positionMap(boardGame.board());
   let checked=null;
   if(boardGame.inCheck())for(const [sq,key] of position)if(key===boardGame.turn()+'k')checked=sq;
-  const mated=!reviewState.viewing&&checked&&boardGame.isCheckmate();
+  const mated=!reviewState.viewing&&checked&&(isZhGame()&&boardGame===game?zhStatus(Chess,game,zhClientState()).over:boardGame.isCheckmate());
   const marks=new Map(boardShapes.filter(shape=>!shape.to||shape.to===shape.from).map(shape=>[shape.from,shape.brush]));
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
@@ -603,7 +606,7 @@ function renderStatus(){
     $('#turn').textContent=`Game over · ${normalizedEndReason(serverGame.end_reason)||serverGame.result||serverGame.status}`;
     $('#state').textContent='Authoritative server result';
   }else{
-    $('#turn').textContent=game.isGameOver()?endText():`${game.turn()==='w'?'White':'Black'} to move`;
+    $('#turn').textContent=boardOver()?endText():`${game.turn()==='w'?'White':'Black'} to move`;
     $('#state').textContent=game.inCheck()?'Check · Real time':'Real time  •  Casual game';
   }
   document.body.dataset.seat=myColor||'';
@@ -619,7 +622,7 @@ function render(options){
   if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
   if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove()})}
 }
-function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
+function endText(){if(isZhGame()){const st=zhStatus(Chess,game,zhClientState());if(st.over)return st.result==='1/2-1/2'?'Draw · Stalemate':`Checkmate · ${st.result==='1-0'?'White':'Black'} wins`}if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
   const base=Math.max(0,Number(seconds)||0),label=base%60===0?String(base/60):`${base}s`;
   return `${label}+${Math.max(0,Number(increment)||0)}`;
@@ -799,7 +802,8 @@ async function clickSquare(sq,p,{instant=false}={}){
     if(sq===premoves.selected){cancelPremove();return}
     premoves.queue(sq,'q');selected=null;render();return
   }
-  if(!retrySession&&!freeBoard()&&(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))))return;
+  if(!retrySession&&!freeBoard()&&(reviewState.viewing||localGameOver||boardOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))))return;
+  if(zhDropSelected){const type=zhDropSelected;zhDropSelected=null;if(zhDropTargets(type).includes(sq)){void zhDropOnline(type,sq);return}if(p?.color===game.turn()){selected=sq}render();return}
   premoves.cancel();
   if(!selected){if(p?.color===game.turn()){selected=sq;render()}return}
   if(sq===selected){selected=null;render();return}
@@ -1750,6 +1754,7 @@ function drawArchive(){
 }
 async function openArchivedGame(entry){
   if(!entry)return;
+  if(entry.variant==='crazyhouse')return toast("Crazyhouse games can't be replayed here yet");
   const freestyle=entry.variant==='freestyle'&&entry.startFen&&Array.isArray(entry.sans);
   const replayed=freestyle?replay960(Chess,entry.startFen,entry.sans):null;
   const loaded=new Chess();if(!freestyle){try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}}
@@ -2045,7 +2050,7 @@ function friendRow(f,{search=false}={}){
 }
 async function openChallengeDialog(player){
   const body=document.createElement('div');body.className='challenge-form';
-  body.innerHTML=`<p>Challenge <b>${escapeHtml(player.name)}</b></p><div class="time-chips">${CHALLENGE_TIMES.map((t,i)=>`<button type="button" data-ct="${t.value}"${i===2?' class="on"':''}>${escapeHtml(t.label)}</button>`).join('')}</div><div class="rated-switch"><button type="button" class="on" data-cr="">Casual</button><button type="button" data-cr="1">Rated</button></div><div class="rated-switch"><button type="button" class="on" data-cc="random">Random</button><button type="button" data-cc="w">White</button><button type="button" data-cc="b">Black</button></div><div class="rated-switch"><button type="button" class="on" data-cv="standard">Standard</button><button type="button" data-cv="freestyle">Freestyle 960</button></div>`;
+  body.innerHTML=`<p>Challenge <b>${escapeHtml(player.name)}</b></p><div class="time-chips">${CHALLENGE_TIMES.map((t,i)=>`<button type="button" data-ct="${t.value}"${i===2?' class="on"':''}>${escapeHtml(t.label)}</button>`).join('')}</div><div class="rated-switch"><button type="button" class="on" data-cr="">Casual</button><button type="button" data-cr="1">Rated</button></div><div class="rated-switch"><button type="button" class="on" data-cc="random">Random</button><button type="button" data-cc="w">White</button><button type="button" data-cc="b">Black</button></div><div class="rated-switch"><button type="button" class="on" data-cv="standard">Standard</button><button type="button" data-cv="freestyle">Freestyle 960</button><button type="button" data-cv="crazyhouse">Crazyhouse</button></div>`;
   let time=CHALLENGE_TIMES[2].value,rated=false,color='random',variant='standard';
   body.addEventListener('click',event=>{
     const b=event.target.closest('button');if(!b)return;
@@ -2501,6 +2506,36 @@ async function castleOnline(opt){
     const state=await api.move(serverGameId,version,{castle:opt.san,from:opt.kingFrom,to:opt.kingTo,clientMoveAt:Date.now()});
     onlineMovePending=false;applyServerState(state);broadcastAux('draw_hint',{from:realtimeClientId});
   }catch(error){onlineMovePending=false;try{game.load(before)}catch{}render();toast(error.message);void refreshServerState()}
+}
+// ---- Crazyhouse (src/crazyhouse.js): captured pieces go to your pocket; drop them instead of moving ----
+function isZhGame(){const g=watchSession?.state||serverGame;return g?.variant==='crazyhouse'&&(isOnlineGame()||mode==='watch')}
+function zhClientState(){const g=watchSession?.state||serverGame||{};return zhState(g.zh_pockets,g.zh_promoted)}
+function boardOver(){return isZhGame()?zhStatus(Chess,game,zhClientState()).over:game.isGameOver()}
+function zhDropTargets(type){if(!isZhGame())return [];return zhDrops(Chess,game,zhClientState()).filter(d=>d.drop===type).map(d=>d.to)}
+function drawPockets(style,bars){
+  const st=zhClientState(),mine=myColor&&isOnlineGame()&&serverGame?.status==='active'&&game.turn()===myColor;
+  const key=`zh|${style}|${bars.top}|${JSON.stringify(st.pockets)}|${zhDropSelected}|${mine}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
+    const tray=$(id);if(!tray)continue;const pocket=st.pockets[color]||{},own=color===myColor;
+    tray.classList.add('zh-pocket');
+    tray.innerHTML=ZH_PIECES.filter(t=>pocket[t]>0).map(t=>own?`<button type="button" class="zh-piece${zhDropSelected===t?' on':''}" data-drop="${t}"${mine?'':' disabled'} aria-label="Drop ${pieceNames[t]} (${pocket[t]} in pocket)"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></button>`:`<span class="zh-piece"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></span>`).join('')||'<small class="zh-empty">Pocket empty</small>';
+    tray.setAttribute('aria-label',`Pocket: ${ZH_PIECES.filter(t=>pocket[t]>0).map(t=>`${pocket[t]} ${pieceNames[t]}`).join(', ')||'empty'}`);
+  }
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest?.('.zh-pocket [data-drop]');if(!b||b.disabled)return;
+  const t=b.dataset.drop;zhDropSelected=zhDropSelected===t?null:t;selected=null;syncCapturedTrays.key='';render();
+});
+async function zhDropOnline(type,to){
+  if(onlineMovePending||!serverGameId)return;
+  const before=game.fen(),version=serverVersion,prev=serverGame,r=zhPlay(Chess,before,zhClientState(),{drop:type,to});
+  if(!r)return rejectMove(to,to);
+  onlineMovePending=true;
+  try{
+    game.load(r.fen);serverGame={...serverGame,zh_pockets:r.state.pockets};rememberLastMove({...r.move,from:null});syncCapturedTrays.key='';render();afterBoardPaint(playTone);
+    const state=await api.move(serverGameId,version,{drop:type,to,clientMoveAt:Date.now()});
+    onlineMovePending=false;applyServerState(state);
+  }catch(error){onlineMovePending=false;serverGame=prev;try{game.load(before)}catch{}syncCapturedTrays.key='';render();toast(error.message);void refreshServerState()}
 }
 // ---- Studies (src/study.js): annotate a line, share it by link ----
 let studySession=null;
@@ -3076,7 +3111,7 @@ $$('[data-computer-side]').forEach(button=>button.onclick=()=>{
 $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='crazyhouse'&&String($('#time').value).startsWith('daily'))return toast('Crazyhouse is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -3344,6 +3379,8 @@ async function submitTypedMove(event){
     if(!opt)return say(typedMoveError('illegal'));
     input.value='';selected=null;return void castleOnline(opt);
   }
+  const drop=/^([PNBRQpnbrq])?@([a-h][1-8])$/.exec(text.replace(/\s/g,''));
+  if(drop&&isZhGame()){const type=(drop[1]||'p').toLowerCase();if(!zhDropTargets(type).includes(drop[2]))return say(typedMoveError('illegal'));input.value='';return void zhDropOnline(type,drop[2])}
   const r=resolveTypedMove(game,text);
   if(!r.move)return say(typedMoveError(r.error));
   input.value='';selected=null;premoves.cancel();
