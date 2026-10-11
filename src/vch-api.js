@@ -140,6 +140,8 @@ export class VchApi {
   battleLadder() { return this.request('battle_ladder'); }
   commentaryPost(tournamentId, body, gameId = null) { return this.request('commentary_post', gameId ? { tournamentId, body, gameId } : { tournamentId, body }); }
   explorerBackfill() { return this.request('explorer_backfill'); }
+  momentOfWeek() { return this.request('moment_of_week'); }
+  momentPick(gameId, caption = '') { return this.request('moment_pick', gameId ? { gameId, caption } : {}); }
 }
 
 export function stableGuestToken(storage = localStorage) {

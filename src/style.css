@@ -2967,3 +2967,29 @@ button.zh-piece[disabled]{opacity:.55;cursor:default}
 .relic-swatch{display:grid;grid-template-columns:repeat(2,14px);grid-template-rows:repeat(2,14px);border-radius:4px;overflow:hidden}
 .relic-swatch i{display:block}
 .theme-relics{margin-top:6px}
+/* Rivals (Community) */
+.rival-list{display:grid;gap:8px;margin-top:10px}
+.rival{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:#0b1715;border:1px solid var(--line)}
+.rival>div{display:grid;gap:2px;min-width:0}
+.rival-rank{font-size:20px;font-weight:800;color:#e5c17c;width:22px;text-align:center}
+.rival-name{justify-self:start;padding:0;border:0;background:none;color:#f2dfaf;font-weight:700;font-size:14px;cursor:pointer}
+.rival b{font-size:12px}.rival small{color:var(--muted);font-size:10px}
+.rival-form{display:flex;gap:3px;margin-top:2px}
+.rival .gold{padding:8px 12px;border-radius:8px;color:#10120e;font-weight:700}
+/* Vanta Moment of the Week (Watch and the main menu) */
+.vmoment{display:grid;grid-template-columns:minmax(110px,150px) 1fr;gap:14px;align-items:center;margin:0 0 14px;padding:12px;border-radius:12px;border:1px solid rgba(229,193,124,.35);background:linear-gradient(145deg,#1a1a12,#0a1311)}
+.vmoment.empty{grid-template-columns:1fr}
+.vmoment .study-board{width:100%}
+.vmoment>div:not(.study-board){display:grid;gap:6px;align-content:start}
+.vmoment small,.menu-moment small{color:#e5c17c;font-size:9px;letter-spacing:.8px;font-weight:700}
+.vmoment h4{margin:0;font-size:17px;color:#f6ead0}
+.vmoment p{margin:0;font-size:12px;color:#cfd8d4}.vmoment p em{font-style:normal;color:var(--muted)}
+.vmoment .gold{justify-self:start;padding:8px 14px;border-radius:8px;color:#10120e;font-weight:700}
+.moment-pick{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+.moment-pick input{min-width:0}
+.moment-pick button{grid-column:span 1}
+.menu-moment{grid-column:1/-1;display:grid;grid-template-columns:72px 1fr;gap:14px;align-items:center;width:100%;margin-top:14px;padding:12px 14px;border:1px solid rgba(229,193,124,.3);border-radius:14px;background:linear-gradient(145deg,rgba(40,36,20,.72),rgba(7,15,12,.86));color:#e9efe9;text-align:left;cursor:pointer}
+.menu-moment.hidden{display:none}
+.menu-moment .study-board{width:72px;border-width:1px;border-radius:5px;pointer-events:none}
+.menu-moment span{display:grid;gap:3px}.menu-moment b{font-size:15px}.menu-moment em{font-style:normal;font-size:12px;color:#a9b6b1}
+@media (max-width:560px){.vmoment{grid-template-columns:1fr}.vmoment .study-board{max-width:260px}}

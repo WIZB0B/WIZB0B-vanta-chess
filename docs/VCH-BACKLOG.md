@@ -373,6 +373,30 @@ round 4-9 game server is waiting for the owner's deploy (CLI or dashboard).
 - Y6 Live commentary in tournament lobbies by the organiser, club owner or an admin. (PR #46, #49)
 - Translations for every round 10 screen. (PR #49)
 
+## Z. Round 11 (owner request 2026-10-11)
+Server code in PR claude/round11-server (migration `20261011180000_round11_moment_of_week`,
+after round 10). Not deployed: on 2026-10-11 the Supabase write tools timed out in the build
+session, so round 10's migration and function were not applied either.
+- Z1 Vanta Dark (fog of war), against the computer: normal rules, you see only your pieces and
+  the squares they reach; checking pieces are revealed; their moves show as "?"; no moods,
+  hints, coach, evaluation or opening names while it's dark. Online play needs the server to
+  hide the opponent's pieces from each player (later). (PR claude/round11-modes)
+- Z2 Blackout Blitz, against the computer: 3 minutes; after every four of your moves the next
+  two are blind (pieces fade, squares work, the move list goes dark). (PR claude/round11-modes)
+- Z3 Your Shadow: a bot from your own games that opens like you, as often as you play each
+  move, then plays at your rating. (PR claude/round11-modes)
+- Z4 The Vanta Gauntlet: seven bots, 900 to 2700, three lives, colours alternate; leaving a
+  stage unfinished costs a life. On the device. (PR claude/round11-modes)
+- Z5 Rivals (Community tab): players you meet often with close results, from your history;
+  challenge from the list. (PR claude/round11-rivals-moment)
+- Z6 Relic sets (Theme Studio): six earned board themes (squares, accent, gold, wallpaper;
+  pieces stay plain artwork) for Vanta Dark, Blackout Blitz, Your Shadow, two Gauntlet
+  milestones and beating a rival. On the device. (PR claude/round11-modes)
+- Z7 Vanta Moment of the Week: the week's best checkmate from rated games (mating while down
+  material first), or an admin's pick; on Watch and the main menu, with a replay.
+  (PR claude/round11-server, claude/round11-rivals-moment)
+- Translations for every round 11 screen. (PR claude/round11-rivals-moment)
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

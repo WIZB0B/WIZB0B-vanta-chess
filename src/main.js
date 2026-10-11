@@ -43,6 +43,7 @@ import { checkers as darkCheckers, darkSan, fogPosition, visibleSquares } from '
 import { BLACKOUT_SECONDS, blindMovesLeft, inBlackout, movesUntilBlackout, myMoveCount } from './blackout.js';
 import { SHADOW_PLIES, shadowBook, shadowElo, shadowLines } from './shadow.js';
 import { GAUNTLET_LIVES, GAUNTLET_STAGES, loadGauntlet, newRun as newGauntletRun, recordStage, saveGauntlet, stageColor } from './gauntlet.js';
+import { rivalLine, rivalsFrom } from './rivals.js';
 import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } from './relics.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
@@ -230,6 +231,7 @@ ${splashMarkup(splash)}
         <div><h2>Community</h2></div>
       </article>
     </div>
+    <button type="button" id="menuMoment" class="menu-moment hidden" aria-label="Vanta Moment of the Week"></button>
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
@@ -2310,10 +2312,10 @@ $('#viewMyProfile')?.addEventListener('click',()=>{menus.close('account');void o
 if(params.get('player'))setTimeout(()=>void openProfile(String(params.get('player')).slice(0,20)),500);
 // ---- Community: Friends | Clubs | League ----
 function communityTabs(active){
-  return `<div class="community-tabs" role="tablist">${[['friends','Friends'],['clubs','Clubs'],['league','League']].map(([k,l])=>`<button type="button" role="tab" data-community="${k}" class="${k===active?'on':''}" aria-selected="${k===active}">${l}</button>`).join('')}</div>`;
+  return `<div class="community-tabs" role="tablist">${[['friends','Friends'],['rivals','Rivals'],['clubs','Clubs'],['league','League']].map(([k,l])=>`<button type="button" role="tab" data-community="${k}" class="${k===active?'on':''}" aria-selected="${k===active}">${l}</button>`).join('')}</div>`;
 }
 function wireCommunityTabs(){
-  $$('#dynamicView [data-community]').forEach(b=>b.onclick=()=>{const k=b.dataset.community;if(k==='friends')void renderFriends();if(k==='clubs')void renderClubs();if(k==='league')void renderLeague()});
+  $$('#dynamicView [data-community]').forEach(b=>b.onclick=()=>{const k=b.dataset.community;if(k==='friends')void renderFriends();if(k==='rivals')void renderRivals();if(k==='clubs')void renderClubs();if(k==='league')void renderLeague()});
 }
 let clubChannel=null,clubOpen=null;
 function closeClubChannel(){if(clubChannel){realtimeClient.removeChannel(clubChannel).catch(()=>{});clubChannel=null}}
@@ -2839,9 +2841,10 @@ if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection
 async function renderWatch(){
   setDynamicView('watch','Watch',brandLoading('Finding live games…'));
   try{
-    const {games=[]}=await api.liveGames(),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch')return;
-    target.innerHTML=games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
-      :`<div class="watch-empty"><h4>No live games right now</h4><p>Games from matchmaking and arenas appear here while they're played. Private rooms are never listed.</p><button type="button" class="watch-refresh">Refresh</button></div>`;
+    const [{games=[]},moment]=await Promise.all([api.liveGames(),loadMoment()]),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch')return;
+    target.innerHTML=momentHtml(moment)+(games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
+      :`<div class="watch-empty"><h4>No live games right now</h4><p>Games from matchmaking and arenas appear here while they're played. Private rooms are never listed.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
+    wireMoment(target,moment);
     target.querySelectorAll('[data-watch]').forEach(el=>el.onclick=()=>startWatching(games[Number(el.dataset.watch)].id));
     target.querySelector('.watch-refresh')?.addEventListener('click',()=>void renderWatch());
   }catch(error){toast(error.message)}
@@ -4300,6 +4303,57 @@ function drawRelics(){
   target.querySelectorAll('[data-relic]').forEach(b=>b.onclick=()=>{wearRelic(b.dataset.relic);drawRelics()});
   target.querySelector('[data-relic-off]')?.addEventListener('click',()=>{wearRelic(null);drawRelics()});
 }
+// ---- Round 11: Rivals (src/rivals.js) — from your own game history ----
+let rivalsCache=null;
+async function loadRivals(force=false){
+  if(!signedIn())return [];
+  if(!force&&rivalsCache&&Date.now()-rivalsCache.at<300000)return rivalsCache.list;
+  const out=await api.archive(100),botNames=new Set([...computerBots,...DEFAULT_COMPUTER_BOTS].map(b=>String(b.display_name||b.name||'').toLowerCase()).filter(Boolean));
+  const me=currentProfile?.id||currentPlayerId;
+  const games=(out.games||[]).filter(g=>!botNames.has(String((g.white_player_id===me?g.black_name:g.white_name)||'').toLowerCase())); // until history carries bot_player_id everywhere
+  const list=rivalsFrom(games,me);rivalsCache={at:Date.now(),list};return list;
+}
+async function renderRivals(){
+  if(watchSession)stopWatching();closeClubChannel();
+  if(!signedIn()){setDynamicView('friends','Community',communityTabs('rivals')+`<article class="friends-signin"><h4>Find your rivals</h4><p>Sign in and play rated or casual games: the players you keep meeting with close results show up here.</p><button class="primary-action friends-signin-btn">Sign in</button></article>`);$('#dynamicView .friends-signin-btn').onclick=()=>openAccount();wireCommunityTabs();return}
+  setDynamicView('friends','Community',communityTabs('rivals')+brandLoading('Looking through your games…'));wireCommunityTabs();
+  let list=[];try{list=await loadRivals(true)}catch(error){toast(error.message)}
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='friends'||!target.querySelector('[data-community="rivals"].on'))return;
+  target.innerHTML=communityTabs('rivals')+`<p class="trainer-intro">The players you keep meeting with results that stay close: at least three games against real players, closest records first. Beat one to earn the Rivalry relic.</p>`+
+    (list.length?`<div class="rival-list">${list.map((r,i)=>`<article class="rival"><span class="rival-rank">${i+1}</span><div><button class="rival-name" data-rival-profile="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button><b>${escapeHtml(rivalLine(r))}</b><small>${r.games} games · draws ${r.draws} · you score ${r.score}%</small><span class="rival-form" aria-label="Last games">${r.form.map(x=>`<i class="form-dot ${x===1?'win':x===.5?'draw':'loss'}"></i>`).join('')}</span></div><button class="gold" data-rival-challenge="${i}">Challenge</button></article>`).join('')}</div>`
+      :'<div class="watch-empty"><h4>No rivals yet</h4><p>Play three or more games against the same player and they show up here.</p></div>');
+  wireCommunityTabs();
+  target.querySelectorAll('[data-rival-profile]').forEach(b=>b.onclick=()=>void openProfile(b.dataset.rivalProfile));
+  target.querySelectorAll('[data-rival-challenge]').forEach(b=>b.onclick=()=>{const r=list[Number(b.dataset.rivalChallenge)];if(r)void openChallengeDialog({id:r.id,name:r.name})});
+}
+// ---- Round 11: Vanta Moment of the Week (server picks it; admins can pin one) ----
+let momentStore=null;
+async function loadMoment(force=false){
+  if(!force&&momentStore&&Date.now()-momentStore.at<600000)return momentStore.moment;
+  try{const out=await api.momentOfWeek();momentStore={at:Date.now(),moment:out?.moment?{...out.moment,week:out.week}:null}}catch{momentStore={at:Date.now(),moment:null}}
+  return momentStore.moment;
+}
+function momentHtml(m){
+  const admin=isAdmin();if(!m&&!admin)return '';
+  const pick=admin?`<form class="moment-pick"><input name="game" maxlength="40" placeholder="Game ID" autocomplete="off"><input name="caption" maxlength="120" placeholder="Caption (optional)" autocomplete="off"><button type="submit">Pick this week's moment</button>${m?.picked?'<button type="button" class="moment-clear">Clear the pick</button>':''}</form>`:'';
+  if(!m)return `<article class="vmoment empty"><div><small>VANTA MOMENT OF THE WEEK</small><h4>No moment yet this week</h4></div>${pick}</article>`;
+  const side=(name,rating)=>`<b>${escapeHtml(name||'?')}</b>${rating?` <em>${escapeHtml(String(rating))}</em>`:''}`;
+  return `<article class="vmoment">${studyBoardHtml(m.fen)}<div><small>VANTA MOMENT OF THE WEEK</small><h4>${escapeHtml(m.caption||'')}</h4><p>${side(m.white,m.whiteRating)} vs ${side(m.black,m.blackRating)} · ${escapeHtml(m.result)}</p><button class="gold moment-replay">Replay the game</button>${pick}</div></article>`;
+}
+function momentEntry(m){return archiveEntryFromServer({id:m.gameId,sans:m.sans,white_name:m.white,black_name:m.black,result:m.result,rated:true,white_rating_before:m.whiteRating,black_rating_before:m.blackRating,ended_at:m.endedAt,move_count:m.sans?.length||0,variant:'standard',pool:m.pool},null)}
+function wireMoment(root,m){
+  root.querySelector('.moment-replay')?.addEventListener('click',()=>{if(m)void openArchivedGame(momentEntry(m))});
+  const form=root.querySelector('.moment-pick');
+  form?.addEventListener('submit',async e=>{e.preventDefault();const id=form.game.value.trim();if(!id)return;try{await api.momentPick(id,form.caption.value.trim());momentStore=null;toast('Moment of the Week picked');void renderWatch();void syncMenuMoment()}catch(error){toast(error.message)}});
+  root.querySelector('.moment-clear')?.addEventListener('click',async()=>{try{await api.momentPick(null);momentStore=null;toast('Pick cleared');void renderWatch();void syncMenuMoment()}catch(error){toast(error.message)}});
+}
+async function syncMenuMoment(){
+  const el=$('#menuMoment');if(!el)return;const m=await loadMoment();
+  el.classList.toggle('hidden',!m);if(!m){el.innerHTML='';return}
+  el.innerHTML=`${studyBoardHtml(m.fen)}<span><small>VANTA MOMENT OF THE WEEK</small><b>${escapeHtml(m.caption||'')}</b><em>${escapeHtml(m.white||'')} vs ${escapeHtml(m.black||'')}</em></span>`;
+}
+$('#menuMoment')?.addEventListener('click',()=>{setPrimaryScreen('game',{remember:true});activateNav('watch')});
+setTimeout(()=>void syncMenuMoment(),1200);
 // ---- Puzzle Battle: the same puzzles, three minutes, three misses and you're out ----
 let battle=null,battleTimer=null;
 const battleSeat=()=>battle?.seat==='guest'?'guest':'host',battleOther=()=>battleSeat()==='host'?'guest':'host';
