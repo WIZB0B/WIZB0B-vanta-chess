@@ -45,7 +45,7 @@ test('game over modal covers results, reasons, players, ratings and actions',()=
 test('game start banner covers computer and online starts for about two seconds',()=>{
   assert.match(main,/Game started · You play \$\{color==='w'\?'White':'Black'\} · \$\{formatTimeControl\(seconds,increment\)\}/);
   assert.match(main,/gameStartBannerTimer=setTimeout\(\(\)=>banner\.classList\.remove\('show'\),2100\)/);
-  assert.match(main,/showGameStartBanner\(computerSide,600,0,/);
+  assert.match(main,/showGameStartBanner\(computerSide,computerRules==='blackout'\?BLACKOUT_SECONDS:600,0,/);
   assert.match(main,/showGameStartBanner\(myColor,state\.time_control_seconds\|\|state\.base_seconds\|\|600,state\.increment_seconds\|\|0,/);
   assert.match(main,/playUiSound\('start'\)/);
   assert.match(css,/\.game-start-banner\.show/);
