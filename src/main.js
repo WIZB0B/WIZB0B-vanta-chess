@@ -35,6 +35,7 @@ import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { lazyWorker } from './lazy-worker.js';
 import { resolveTypedMove } from './typed-move.js';
 import { REP_KEY, addLine, lineText, removeLine, repContinue, repDeviation, repDrill, repMovesAt, repStats } from './repertoire.js';
+import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
 import { SPEECH_LANG, clockAnnouncement, spokenMove } from './a11y.js';
 import { applyCastle, castleForMove, castleOptions, replay960 } from './castle960.js';
@@ -383,7 +384,7 @@ let clocks=initialClocks(timeChoice($('#time').value).seconds);
 // move. Everything else (status text, move list, clocks, sound, analysis, engine, game-over
 // check) waits until the slide has landed and at least two frames have been painted
 // (afterBoardPaint); the online move request waits two frames (nextFrames).
-let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
+let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,egSession=null,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
 let boardMotion=Promise.resolve(),boardMotionUntil=0,motionScaleCache=null;
 function nextFrames(count=2){
   return new Promise(resolve=>{
@@ -926,7 +927,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -2060,7 +2061,7 @@ function challengeHtml(c,incoming){
   return `<article class="challenge-row" data-challenge="${escapeHtml(c.id)}"><div><b>${escapeHtml(who?.name||'Player')}</b><small>${escapeHtml(label)}${c.rated?' · rated':' · casual'}${incoming?'':' · waiting'}</small></div><div>${incoming?'<button class="challenge-decline">Decline</button><button class="challenge-accept primary">Accept</button>':'<button class="challenge-cancel">Cancel</button>'}</div></article>`;
 }
 function dailyHtml(g){
-  return `<article class="daily-row${g.yourTurn?' your-turn':''}" data-daily="${escapeHtml(g.code)}"><div><b>${escapeHtml(g.opponent||'Waiting for opponent')}</b><small>${g.yourTurn?'Your move':g.status==='waiting'?'Waiting to start':'Their move'} · ${escapeHtml(dailyDeadlineLabel(g.deadline)||timeControlLabel({daily_days:g.daily_days}))}</small></div><button class="daily-open${g.yourTurn?' primary':''}">${g.yourTurn?'Play':'Open'}</button></article>`;
+  return `<article class="daily-row${g.yourTurn?' your-turn':''}" data-daily="${escapeHtml(g.code)}"><div><b>${escapeHtml(g.opponent||'Waiting for opponent')}</b><small>${g.yourTurn?'Your move':g.status==='waiting'?'Waiting to start':'Their move'} · ${escapeHtml(dailyDeadlineLabel(g.deadline)||timeControlLabel({daily_days:g.daily_days}))}${g.opponentAwayUntil?` · <span class="away-tag">On vacation until ${escapeHtml(new Date(g.opponentAwayUntil).toLocaleDateString())}</span>`:''}</small></div><button class="daily-open${g.yourTurn?' primary':''}">${g.yourTurn?'Play':'Open'}</button></article>`;
 }
 function openGameCode(code){if(code)location.search='?game='+encodeURIComponent(code)}
 async function answerChallenge(id,accept){
@@ -2093,7 +2094,7 @@ async function refreshSocial(){
   if(!currentProfile?.id)return;
   try{
     const [ch,daily]=await Promise.all([api.challenges(),api.dailyGames().catch(()=>({games:[]}))]);
-    socialState.incoming=ch.incoming||[];socialState.outgoing=ch.outgoing||[];socialState.daily=daily.games||[];
+    socialState.incoming=ch.incoming||[];socialState.outgoing=ch.outgoing||[];socialState.daily=daily.games||[];socialState.vacation=daily.vacation||null;
     for(const a of ch.accepted||[]){
       if(socialState.seenAccepted.has(a.id))continue;socialState.seenAccepted.add(a.id);
       if(!a.daily_days&&!isOnlineGame()&&mode!=='computer'){toast('Challenge accepted · opening the game');openGameCode(a.code);return}
@@ -2128,7 +2129,7 @@ function drawFriendsLists(){
   const ch=view.querySelector('#challengeList');
   if(ch){ch.innerHTML=[...socialState.incoming.map(c=>challengeHtml(c,true)),...socialState.outgoing.map(c=>challengeHtml(c,false))].join('')||'<p class="menu-empty">No open challenges.</p>';wireSocialActions(ch)}
   const daily=view.querySelector('#dailyList');
-  if(daily){daily.innerHTML=socialState.daily.map(dailyHtml).join('')||'<p class="menu-empty">No daily games. Challenge a friend to one, or pick "Daily" in Room.</p>';wireSocialActions(daily)}
+  if(daily){daily.innerHTML=socialState.daily.map(dailyHtml).join('')||'<p class="menu-empty">No daily games. Challenge a friend to one, or pick "Daily" in Room.</p>';wireSocialActions(daily);drawVacation(daily)}
 }
 function wireFriendRows(root,list){
   root.querySelectorAll('[data-friend]').forEach(row=>{
@@ -3736,6 +3737,7 @@ function setDynamicView(kind,title,html){
   if(kind!=='study'&&studySession)endStudy();
   if(kind!=='explorer'&&exploreSession)endExplore();
   if(kind!=='repertoire'&&repEdit)endRepEdit();
+  if(kind!=='endgames'&&egSession)endEndgame();
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
@@ -3793,10 +3795,11 @@ function renderLesson(index){
   $('#dynamicView .all-lessons').onclick=renderLearn;
 }
 function renderLearn(){
-  setDynamicView('learn','Practice & Learn',`<div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button>`);
+  setDynamicView('learn','Practice & Learn',`<div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button>`);
   $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
   $('#dynamicView .open-studies')?.addEventListener('click',()=>void renderStudies());
+  $('#dynamicView .open-endgames')?.addEventListener('click',renderEndgames);
 }
 function renderReview(){
   cancelPremove(false);
@@ -3954,7 +3957,7 @@ async function startRepDrill(color,count=0){
   $('#dynamicView .trainer-stop').onclick=()=>{puzzleSession=null;mode='room';game.reset();boardShapes=[];render();void renderRepertoire(color)};
 }
 // ---- Insights (src/insights.js): where your points go ----
-const leakActions={repertoire:l=>void renderRepertoire(l.color||'w'),mistakes:()=>renderMistakes(),play:()=>activateNav('play')};
+const leakActions={endgames:()=>renderEndgames(),repertoire:l=>void renderRepertoire(l.color||'w'),mistakes:()=>renderMistakes(),play:()=>activateNav('play')};
 async function renderInsights(pool=null){
   setDynamicView('insights','Insights',brandLoading('Reading your games…'));
   if(!signedIn()){const t=$('#dynamicView .view-content');if(t)t.innerHTML='<p class="menu-empty">Sign in to see insights from your rated and casual games.</p>';return}
@@ -3977,6 +3980,72 @@ async function renderInsights(pool=null){
   </article>`:'<p class="menu-empty">Play a few games to see your insights.</p>';
   target.querySelectorAll('[data-pool]').forEach(b=>b.onclick=()=>void renderInsights(b.dataset.pool));
   target.querySelectorAll('[data-leak]').forEach(b=>b.onclick=()=>{const l=s.leaks[Number(b.dataset.leak)];leakActions[l.action]?.(l)});
+}
+// ---- Vacation for daily games: your clocks don't run out while you're away ----
+function drawVacation(list){
+  const v=socialState.vacation;if(!v||!signedIn())return;
+  let box=list.parentElement?.querySelector('.vacation-box');
+  if(!box){box=document.createElement('div');box.className='vacation-box';list.after(box)}
+  box.innerHTML=v.on?`<p><b>On vacation until ${escapeHtml(new Date(v.until).toLocaleString())}</b><small>Your daily-game clocks won't run out. ${v.left} of ${v.perYear} days left this year.</small></p><button class="vacation-end">End vacation</button>`
+    :`<p><b>Vacation</b><small>Going away? Your daily-game clocks won't run out. ${v.left} of ${v.perYear} days left this year.</small></p>${v.left?`<form class="vacation-form"><select name="days" aria-label="Vacation days">${[...Array(v.left)].map((_,i)=>`<option value="${i+1}">${i+1} ${i?'days':'day'}</option>`).join('')}</select><button>Start vacation</button></form>`:''}`;
+  box.querySelector('.vacation-end')?.addEventListener('click',async()=>{try{const out=await api.vacation({end:true});socialState.vacation=out.vacation;toast('Welcome back');drawVacation(list)}catch(error){toast(error.message)}});
+  box.querySelector('.vacation-form')?.addEventListener('submit',async e=>{e.preventDefault();const days=Number(new FormData(e.currentTarget).get('days'));try{const out=await api.vacation({days});socialState.vacation=out.vacation;toast('Vacation started');drawVacation(list)}catch(error){toast(error.message)}});
+}
+// ---- Endgame drills (src/endgames.js): textbook positions against Stockfish ----
+const egWorker=lazyWorker('/stockfish.worker.js');let egPending=null,egSeq=0;
+egWorker.onmessage=({data})=>{
+  if(!egPending||data.requestId!==egPending.id)return;
+  const line=String(data.line||'');
+  if((data.type==='uci'&&line.startsWith('bestmove '))||data.type==='unavailable'){const p=egPending;egPending=null;p.resolve(line.split(/\s+/)[1]||null)}
+};
+function egBest(fen,depth=14){return new Promise(resolve=>{const id=`eg-${++egSeq}`;if(egPending){egPending.resolve(null)}egPending={id,resolve};egWorker.postMessage({mode:'analysis',fen,depth,requestId:id})})}
+function renderEndgames(){
+  if(egSession)endEndgame({restore:false});
+  const progress=loadProgress();
+  setDynamicView('endgames','Endgame drills',`<article class="endgames"><p class="trainer-intro">Win (or hold) textbook endgames against Stockfish at full strength. Beat the par for three stars.</p><div class="eg-list">${DRILLS.map(d=>`<button class="eg-card" data-eg="${d.id}"><span><small>${escapeHtml(d.level)}</small><b>${escapeHtml(d.title)}</b><em>${d.goal==='hold'?`Hold for ${d.limit} moves`:`Par ${d.par} moves`}</em></span><span class="eg-stars" aria-label="${progress[d.id]||0} of 3 stars">${[1,2,3].map(n=>`<i class="${n<=(progress[d.id]||0)?'on':''}"></i>`).join('')}</span></button>`).join('')}</div></article>`);
+  $$('#dynamicView [data-eg]').forEach(b=>b.onclick=()=>startEndgame(b.dataset.eg));
+}
+function startEndgame(id){
+  const drill=drillById(id);if(!drill)return;
+  if(liveGameOn()&&mode!=='computer')return toast('Drills open after your game');
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  puzzleSession=null;streakSession=null;if(exploreSession)endExplore({restore:false});if(repEdit)endRepEdit({restore:false});
+  if(mode==='computer'&&computerStarted){computerStarted=false;currentBot=null;myColor=null}
+  game.load(drill.fen);boardShapes=[];selected=null;mode='endgame';serverGameId=null;clockSnapshot=null;browse=null;
+  const color=yourColor(drill);egSession={drill,color,moves:0,over:false,thinking:false};flipped=color==='b';orientationSet=true;
+  setPrimaryScreen('game');render();updateMoves();drawEndgame();
+  if(game.turn()!==color)void egReply();
+}
+function endEndgame({restore=true}={}){if(!egSession)return;egSession=null;if(egPending){egPending.resolve(null);egWorker.postMessage({action:'stop'})}if(mode==='endgame'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}}
+function drawEndgame(result=null){
+  const s=egSession;if(!s)return;const d=s.drill,goal={mate:'Checkmate the king',promote:'Promote the pawn and keep the queen',hold:`Hold the draw for ${d.limit} moves`}[d.goal];
+  const html=`<article class="puzzle-info eg-drill"><small>${escapeHtml(d.level.toUpperCase())} · ${s.color==='w'?'YOU PLAY WHITE':'YOU PLAY BLACK'}</small><h4>${escapeHtml(d.title)}</h4><p><b>${escapeHtml(goal)}</b>${d.goal==='hold'?'':` · par ${d.par}`}</p><div class="puzzle-progress">Moves <b>${s.moves}</b>${d.goal==='hold'?` of ${d.limit}`:` · limit ${d.limit}`}</div>${result?`<div class="eg-result ${result.success?'win':'fail'}"><b>${result.success?'Done':'Not this time'}</b><span>${escapeHtml(result.text)}</span>${result.success?`<span class="eg-stars">${[1,2,3].map(n=>`<i class="${n<=result.stars?'on':''}"></i>`).join('')}</span>`:''}</div>`:`<p class="eg-tip">${escapeHtml(d.tip)}</p>`}<div class="streak-actions"><button class="eg-hint"${result||s.thinking?' disabled':''}>Hint</button><button class="eg-restart">Restart</button><button class="eg-back">All drills</button></div></article>`;
+  if(currentRightView!=='endgames')setDynamicView('endgames','Endgame drills',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  $('#dynamicView .eg-restart').onclick=()=>startEndgame(d.id);
+  $('#dynamicView .eg-back').onclick=()=>{endEndgame();renderEndgames()};
+  $('#dynamicView .eg-hint').onclick=async()=>{if(!egSession||egSession.over||game.turn()!==egSession.color)return;const fen=game.fen(),best=await egBest(fen,16);if(!best||!egSession||game.fen()!==fen)return;boardShapes=[{from:best.slice(0,2),to:best.slice(2,4),brush:'green'}];render()};
+}
+function egCheck(made){
+  const s=egSession,st=drillStatus(s.drill,game,s.moves,made);if(!st.done)return false;
+  s.over=true;const stars=starsFor(s.drill,s.moves,st.success);if(st.success)saveStars(s.drill.id,stars);
+  const text={mate:`Checkmate in ${s.moves} moves.`,promoted:`Promoted in ${s.moves} moves.`,held:`You held for ${s.moves} moves.`,draw:'A draw: you held it.',mated:'You were checkmated.',queened:'Their pawn became a queen.',stalemate:'Stalemate: the king had no moves.','lost material':'Your last piece was taken.','out of moves':`Not done within ${s.drill.limit} moves.`}[st.reason]||'';
+  playUiSound(st.success?'win':'lose');drawEndgame({success:st.success,stars,text});return true;
+}
+function egMove(move){
+  const s=egSession;if(!s||s.over||s.thinking||game.turn()!==s.color)return;
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||'q'})}catch{}
+  if(!made)return rejectMove(move.from,move.to);
+  s.moves++;boardShapes=[];rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);updateMoves();
+  if(egCheck(made))return;drawEndgame();void egReply();
+}
+async function egReply(){
+  const s=egSession;if(!s||s.over)return;s.thinking=true;
+  const fen=game.fen(),best=await egBest(fen);
+  if(egSession!==s||game.fen()!==fen){return}
+  s.thinking=false;if(!best)return toast('Stockfish 19 unavailable in this browser.');
+  let made=null;try{made=game.move({from:best.slice(0,2),to:best.slice(2,4),promotion:best[4]||undefined})}catch{}
+  if(!made)return;rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);updateMoves();
+  if(!egCheck(made))drawEndgame();
 }
 // ---- Puzzle Battle: the same puzzles, three minutes, three misses and you're out ----
 let battle=null,battleTimer=null;

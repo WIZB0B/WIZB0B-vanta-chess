@@ -2869,3 +2869,20 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 @media (max-width:720px){.simul-bar{bottom:calc(76px + env(safe-area-inset-bottom))}}
 
 .simul-open{width:100%;margin-bottom:8px;padding:10px 12px;border:1px solid rgba(130,237,186,.4);border-radius:9px;background:#0f201b;color:var(--mint,#82edba);font-weight:600;text-align:left}
+
+/* ---- Round 9: endgame drills and vacation ---- */
+.open-endgames{margin-top:8px}
+.eg-list{display:grid;gap:6px;margin-top:10px}
+.eg-card{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 12px;border-radius:9px;background:#0b1715;border:1px solid var(--line);text-align:left;color:inherit}
+.eg-card:hover{border-color:rgba(130,237,186,.45)}
+.eg-card span:first-child{display:grid;gap:2px}.eg-card small{color:var(--muted);font-size:10px;letter-spacing:.5px;text-transform:uppercase}.eg-card em{font-style:normal;color:var(--muted);font-size:12px}
+.eg-stars{display:inline-flex;gap:4px}.eg-stars i{width:12px;height:12px;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);background:#2a3532}.eg-stars i.on{background:#e5c17c}
+.eg-tip{color:var(--muted);font-size:13px;line-height:1.45}
+.eg-result{display:grid;gap:4px;margin:10px 0;padding:10px 12px;border-radius:9px;border:1px solid var(--line)}
+.eg-result.win{border-color:rgba(130,237,186,.5);background:#0f201b}.eg-result.fail{border-color:rgba(239,138,118,.45);background:#21130f}
+.away-tag{color:#f2dfaf}
+.vacation-box{display:grid;gap:8px;margin-top:10px;padding:10px 12px;border-radius:9px;background:#0b1715;border:1px solid var(--line)}
+.vacation-box p{margin:0;display:grid;gap:3px}.vacation-box small{color:var(--muted);font-size:12px}
+.vacation-form{display:grid;grid-template-columns:1fr auto;gap:6px}
+.vacation-form select{padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:#07110f;color:inherit}
+.vacation-box button{padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600}

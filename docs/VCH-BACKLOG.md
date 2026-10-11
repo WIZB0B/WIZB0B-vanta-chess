@@ -341,6 +341,25 @@ Not deployed; deploys with the round 4-7 batch once the owner accepts the prompt
   the player is listed in Moderation and matchmaking treats them as up to 300 points
   stronger. A lead for a moderator, never an automatic penalty. (PR #39, #41)
 
+## X. Round 9 (owner approved 2026-10-11)
+Server code in PR #42 (migration `20261011120000_round9_repertoire_battle_simul_vacation`,
+after rounds 4-8). Not deployed.
+- X1 Opening repertoire: lines as White and Black, from the board or the explorer; drills
+  where the computer plays your prepared replies; explorer marks your moves. Synced to the
+  account, on the device for guests. (PR #42, #43)
+- X2 Insights: score by colour, opening, opponent strength and time control; rating line
+  per pool; how and when you lose; repertoire deviations; up to four things to work on with
+  a button to the fix. (PR #42, #43)
+- X3 Puzzle Battle: the same puzzles for two players, three minutes, three misses out;
+  invite by code, link or from a friend. Unrated. (PR #42, #44)
+- X4 Simuls: host plays everyone (White, casual), up to 20 boards, optional club-only;
+  host bar with the boards waiting. No abandon claim or 30 s abort on simul boards. (PR #42, #44)
+- X5 Endgame drills against Stockfish: queen, rook and two-bishop mates, king-and-pawn win
+  and hold, Lucena; par and stars saved on the device. (PR #45)
+- X6 Vacation for daily games: up to 14 days a year; clocks don't run out; opponents see
+  it in the daily list. (PR #42, #45)
+- Translations for all round 9 screens. (PR #45)
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
