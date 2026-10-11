@@ -119,6 +119,21 @@ export class VchApi {
   notificationsRead(ids = null) { return this.request('notifications_read', ids ? { ids } : {}); }
   openingExplorer(fen, { mine = false } = {}) { return this.request('opening_explorer', mine ? { fen, mine: true } : { fen }); }
   tournamentLobby(tournamentId) { return this.request('tournament_lobby', { tournamentId }); }
+  repertoireGet() { return this.request('repertoire_get'); }
+  repertoireSave(color, lines) { return this.request('repertoire_save', { color, lines }); }
+  insights() { return this.request('insights'); }
+  battleCreate(to = null) { return this.request('battle_create', to ? { to } : {}); }
+  battleJoin(code) { return this.request('battle_join', { code }); }
+  battleState(battleId) { return this.request('battle_state', { battleId }); }
+  battleProgress(battleId, score, misses) { return this.request('battle_progress', { battleId, score, misses }); }
+  battleCancel(battleId) { return this.request('battle_cancel', { battleId }); }
+  simulList() { return this.request('simul_list'); }
+  simulCreate(options) { return this.request('simul_create', options); }
+  simulJoin(simulId) { return this.request('simul_join', { simulId }); }
+  simulLeave(simulId) { return this.request('simul_leave', { simulId }); }
+  simulStart(simulId, cancel = false) { return this.request('simul_start', cancel ? { simulId, cancel: true } : { simulId }); }
+  simulState(simulId) { return this.request('simul_state', { simulId }); }
+  vacation(options = {}) { return this.request('vacation', options); }
   explorerBackfill() { return this.request('explorer_backfill'); }
 }
 

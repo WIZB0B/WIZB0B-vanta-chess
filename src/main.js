@@ -34,6 +34,8 @@ import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { lazyWorker } from './lazy-worker.js';
 import { resolveTypedMove } from './typed-move.js';
+import { REP_KEY, addLine, lineText, removeLine, repContinue, repDeviation, repDrill, repMovesAt, repStats } from './repertoire.js';
+import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
 import { SPEECH_LANG, clockAnnouncement, spokenMove } from './a11y.js';
 import { applyCastle, castleForMove, castleOptions, replay960 } from './castle960.js';
 import { moveLabels, studyPositions, studyUrl } from './study.js';
@@ -176,6 +178,7 @@ ${splashMarkup(splash)}
         <header><span id="profileMenuAvatar" class="avatar light" aria-hidden="true">GU</span><div><b id="profileMenuName">${guestName}</b><small id="profileMenuRating">1200 rating</small></div><button id="closeProfileMenu" class="menu-close" type="button" aria-label="Close account menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
         <nav class="profile-menu-items" aria-label="Account">
           <button id="profileMenuProfile" type="button">Profile</button>
+          <button id="profileMenuInsights" type="button">Insights</button>
           <button id="profileMenuEdit" type="button">Edit portrait &amp; flag</button>
           <button id="profileMenuSettings" type="button">Settings</button>
           <button id="profileMenuModeration" type="button" class="hidden">Moderation</button>
@@ -379,7 +382,7 @@ let clocks=initialClocks(timeChoice($('#time').value).seconds);
 // move. Everything else (status text, move list, clocks, sound, analysis, engine, game-over
 // check) waits until the slide has landed and at least two frames have been painted
 // (afterBoardPaint); the online move request waits two frames (nextFrames).
-let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
+let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,repertoire=null,repEdit=null,repColor='w',announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
 let boardMotion=Promise.resolve(),boardMotionUntil=0,motionScaleCache=null;
 function nextFrames(count=2){
   return new Promise(resolve=>{
@@ -922,7 +925,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -1877,9 +1880,9 @@ function startDrill(i){
 function drillMiss(){
   const s=puzzleSession;s.misses++;playIllegalTone();buzz(HAPTICS.illegal);
   if(s.kind==='mistake'&&!s.graded){s.graded=true;gradeCurrentMistake(false)}
-  const next=s.solution[s.index],what=s.kind==='mistake'?'the better move':'the book move';
+  const next=s.solution[s.index],what=s.kind==='mistake'?'the better move':s.kind==='repertoire'?'your prepared move':'the book move';
   if(s.misses>=2&&next){boardShapes=[{from:next.slice(0,2),to:next.slice(2,4),brush:'green'}];render();toast(`The arrow shows ${what}`)}
-  else toast(s.kind==='mistake'?'Not that one either. Look again':'Not the main line. Try again');
+  else toast(s.kind==='mistake'?'Not that one either. Look again':s.kind==='repertoire'?'Not your prepared move. Try again':'Not the main line. Try again');
 }
 function drillSolved(){
   const s=puzzleSession;boardShapes=[];puzzleSession=null;
@@ -1888,6 +1891,7 @@ function drillSolved(){
     toast(s.graded?'Found it · this one comes back soon':'Fixed · it comes back later to make sure');
     setTimeout(()=>{if(mode==='puzzle'&&!puzzleSession)startMistakeDrill()},1000);return;
   }
+  if(s?.kind==='repertoire'){toast(s.misses?'Line complete':'Line complete · no mistakes');setTimeout(()=>{if(mode==='puzzle'&&!puzzleSession)startRepDrill(s.color,s.count+1)},900);return}
   toast('Main line found');
   setTimeout(()=>{if(mode==='puzzle'&&!puzzleSession)startDrill(trainerIndex+1)},900);
 }
@@ -2492,7 +2496,7 @@ async function castleOnline(opt){
 }
 // ---- Studies (src/study.js): annotate a line, share it by link ----
 let studySession=null;
-function freeBoard(){return !!planSession||!!studySession?.editing||!!exploreSession}
+function freeBoard(){return !!planSession||!!studySession?.editing||!!exploreSession||!!repEdit}
 function endStudy({restore=true}={}){
   if(!studySession)return;studySession=null;
   if(mode==='study'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
@@ -2696,12 +2700,14 @@ function exploreSan(san){let made=null;try{made=game.move(san)}catch{}if(!made)r
 async function drawExplorer(){
   if(!exploreSession)return;
   const src=exploreSession.source||'all',mine=src==='mine';
-  const fen=game.fen(),html=`<article class="explorer"><p class="trainer-intro">${mine?'What you chose in this position, and how it went.':'What VCH players chose in this position, and how it went. Play moves on the board or tap a row.'}</p><div class="ex-source" role="group" aria-label="Games"><button type="button" class="ex-src${mine?'':' on'}" data-src="all" aria-pressed="${!mine}">All players</button><button type="button" class="ex-src${mine?' on':''}" data-src="mine" aria-pressed="${mine}">Your games</button></div><div class="explorer-line">${exploreSession.line.length?escapeHtml(exploreSession.line.join(' ')):'Start position'}</div><div class="pp-actions"><button class="ex-back"${exploreSession.line.length?'':' disabled'}>Back one move</button><button class="ex-reset">Start position</button><button class="ex-close">Close</button></div><div class="explorer-table">${brandLoading('Looking up games…')}</div><small class="ex-note">Engine score for each move · Stockfish 19</small></article>`;
+  const fen=game.fen(),html=`<article class="explorer"><p class="trainer-intro">${mine?'What you chose in this position, and how it went.':'What VCH players chose in this position, and how it went. Play moves on the board or tap a row.'}</p><div class="ex-source" role="group" aria-label="Games"><button type="button" class="ex-src${mine?'':' on'}" data-src="all" aria-pressed="${!mine}">All players</button><button type="button" class="ex-src${mine?' on':''}" data-src="mine" aria-pressed="${mine}">Your games</button></div><div class="explorer-line">${exploreSession.line.length?escapeHtml(exploreSession.line.join(' ')):'Start position'}</div><div class="pp-actions"><button class="ex-back"${exploreSession.line.length?'':' disabled'}>Back one move</button><button class="ex-reset">Start position</button><button class="ex-close">Close</button></div>${exploreSession.line.length?'<div class="pp-actions ex-rep"><button class="ex-addrep" data-color="w">Save line as White</button><button class="ex-addrep" data-color="b">Save line as Black</button></div>':''}<div class="explorer-table">${brandLoading('Looking up games…')}</div><small class="ex-note">Engine score for each move · Stockfish 19</small></article>`;
   if(currentRightView!=='explorer')setDynamicView('explorer','VCH explorer',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
   const t=$('#dynamicView .view-content');if(!t)return;
   t.querySelector('.ex-back').onclick=()=>{if(!exploreSession.line.length)return;game.undo();exploreSession.line.pop();boardShapes=[];render();void drawExplorer()};
   t.querySelector('.ex-reset').onclick=()=>{game.reset();exploreSession.line=[];render();void drawExplorer()};
   t.querySelector('.ex-close').onclick=()=>{if(explorerEval){explorerWorker.postMessage({action:'stop'});explorerEval=null}endExplore();showMovesView()};
+  t.querySelectorAll('.ex-addrep').forEach(b=>b.onclick=()=>void addRepLine(b.dataset.color,[...exploreSession.line]));
+  if(!repertoire)void loadRepertoire().then(()=>{if(exploreSession&&game.fen()===fen)markRepRows(fen)});
   t.querySelectorAll('.ex-src').forEach(b=>b.onclick=()=>{if(exploreSession.source===b.dataset.src)return;exploreSession.source=b.dataset.src;void drawExplorer()});
   const slot=t.querySelector('.explorer-table');
   if(mine&&!signedIn()){slot.innerHTML='<p class="menu-empty">Sign in to see your own games</p>';return}
@@ -2712,6 +2718,7 @@ async function drawExplorer(){
     slot.innerHTML=rows.length?`<div class="ex-head"><span>Move</span><span>Games</span><span>White · Draw · Black</span><span>Engine</span></div>${withUci.map(r=>`<button class="ex-row" data-san="${escapeHtml(r.san)}"><b>${escapeHtml(r.san)}</b><span>${r.games} <small>${r.share}%</small></span><span class="ex-bar" aria-label="White ${r.white}%, draws ${r.draws}%, Black ${r.black}%"><i class="w" style="width:${r.white}%">${r.white>=14?r.white+'%':''}</i><i class="d" style="width:${r.draws}%">${r.draws>=14?r.draws+'%':''}</i><i class="b" style="width:${r.black}%">${r.black>=14?r.black+'%':''}</i></span><span class="ex-eval"${withUci.indexOf(r)<10&&r.uci?` data-uci="${r.uci}"`:''}>${withUci.indexOf(r)<10&&r.uci?'…':'—'}</span></button>`).join('')}<p class="ex-total">${out.total} games from this position</p>`
       :`<p class="menu-empty">${mine?"You haven't reached this position in a finished game yet.":'No VCH games reached this position yet.'}</p><div class="ex-head ex-engine-head"><span>Engine's top moves</span></div><div class="ex-engine-top"><p class="menu-empty">${brandLoading('Thinking…')}</p></div>`;
     slot.querySelectorAll('.ex-row[data-san]').forEach(b=>b.onclick=()=>exploreSan(b.dataset.san));
+    markRepRows(fen);
     if(!game.isGameOver())startExplorerEval(fen,withUci.slice(0,10).map(r=>r.uci).filter(Boolean));
   }catch(error){slot.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}
 }
@@ -3724,6 +3731,7 @@ function showMovesView(){
 function setDynamicView(kind,title,html){
   if(kind!=='study'&&studySession)endStudy();
   if(kind!=='explorer'&&exploreSession)endExplore();
+  if(kind!=='repertoire'&&repEdit)endRepEdit();
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
@@ -3763,9 +3771,11 @@ function renderOpenings(){
   const current=detectOpening(currentHistory());
   setDynamicView('openings','Opening Explorer',`
     <button class="explorer-open">VCH explorer · what players here choose in any position</button>
+    <button class="explorer-open rep-open">My repertoire · build your lines and drill them</button>
     ${current?`<article class="current-opening"><small>CURRENT POSITION</small><h4>${escapeHtml(current.name)} <span>${current.eco}</span></h4><p>${escapeHtml(current.idea)}</p></article>`:''}
     <div class="library-list">${OPENINGS.map((o,i)=>`<article><div><b>${escapeHtml(o.name)}</b><small>${o.eco} · ${o.line.join(' ')}</small></div><p>${escapeHtml(o.idea)}</p><button class="library-action" data-opening="${i}">Study this line</button></article>`).join('')}</div>`);
-  $('#dynamicView .explorer-open')?.addEventListener('click',startExplorer);
+  $('#dynamicView .explorer-open:not(.rep-open)')?.addEventListener('click',startExplorer);
+  $('#dynamicView .rep-open')?.addEventListener('click',()=>void renderRepertoire());
   $$('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }
 function renderFamous(){
@@ -3856,6 +3866,112 @@ async function showBackendView(kind){
     }catch(error){toast(error.message);showMovesView()}
   }
 }
+// ---- Opening repertoire (src/repertoire.js): your lines, drilled; synced when signed in ----
+function localRepertoire(){try{const r=JSON.parse(localStorage.getItem(REP_KEY)||'null');return {w:Array.isArray(r?.w)?r.w:[],b:Array.isArray(r?.b)?r.b:[]}}catch{return {w:[],b:[]}}}
+function storeLocalRepertoire(){try{localStorage.setItem(REP_KEY,JSON.stringify(repertoire))}catch{}}
+async function loadRepertoire(){
+  const local=localRepertoire();
+  if(!signedIn()){repertoire=local;return repertoire}
+  try{
+    const out=await api.repertoireGet();repertoire={w:out.w||[],b:out.b||[]};
+    // First time signed in: bring the lines you made as a guest.
+    for(const c of ['w','b'])if(!repertoire[c].length&&local[c].length){repertoire[c]=local[c];void api.repertoireSave(c,local[c]).catch(()=>{})}
+  }catch{repertoire=local}
+  storeLocalRepertoire();return repertoire
+}
+async function saveRepertoire(color){storeLocalRepertoire();if(signedIn())try{const out=await api.repertoireSave(color,repertoire[color]);repertoire[color]=out.lines||repertoire[color];storeLocalRepertoire()}catch(error){toast(error.message)}}
+async function addRepLine(color,sans){
+  if(!repertoire)await loadRepertoire();
+  const next=addLine(repertoire[color],sans);if(!next)return toast('That line could not be saved');
+  if(next===repertoire[color])return toast('Already in your repertoire');
+  repertoire[color]=next;await saveRepertoire(color);toast(color==='w'?'Saved to your White repertoire':'Saved to your Black repertoire');
+  if(exploreSession)markRepRows(game.fen());
+}
+function markRepRows(fen){
+  if(!repertoire)return;const here=new Set([...repMovesAt(repertoire.w,fen),...repMovesAt(repertoire.b,fen)]);
+  $$('#dynamicView .explorer-table .ex-row[data-san]').forEach(r=>{const on=here.has(r.dataset.san);r.classList.toggle('in-rep',on);if(on&&!r.querySelector('.rep-tag')){const tag=document.createElement('small');tag.className='rep-tag';tag.textContent='Repertoire';r.querySelector('b')?.after(tag)}});
+}
+async function renderRepertoire(color=repColor){
+  repColor=color;
+  setDynamicView('repertoire','My repertoire',brandLoading('Loading your lines…'));
+  await loadRepertoire();if(currentRightView!=='repertoire')return;
+  const target=$('#dynamicView .view-content');if(!target)return;
+  const lines=repertoire[color],st=repStats(repertoire);
+  target.innerHTML=`<article class="repertoire">
+    <p class="trainer-intro">Your prepared lines. Add them from the board or the explorer, then drill them: the computer plays the replies you prepared for, you play your moves.${signedIn()?'':' Saved on this device; sign in to keep them with your account.'}</p>
+    <div class="ex-source" role="group" aria-label="Colour"><button type="button" class="ex-src${color==='w'?' on':''}" data-rep="w" aria-pressed="${color==='w'}">As White · ${st.w}</button><button type="button" class="ex-src${color==='b'?' on':''}" data-rep="b" aria-pressed="${color==='b'}">As Black · ${st.b}</button></div>
+    <div class="pp-actions"><button class="gold rep-add">Add a line</button><button class="rep-drill"${lines.length?'':' disabled'}>Drill these lines</button></div>
+    <div class="rep-lines">${lines.map((l,i)=>`<div class="rep-line"><button class="rep-view" data-line="${i}">${escapeHtml(lineText(l))}</button><button class="rep-del" data-del="${i}" aria-label="Remove line">Remove</button></div>`).join('')||'<p class="menu-empty">No lines yet. Tap Add a line and play the moves on the board.</p>'}</div>
+  </article>`;
+  target.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>void renderRepertoire(b.dataset.rep));
+  target.querySelector('.rep-add').onclick=()=>startRepEdit(color);
+  target.querySelector('.rep-drill').onclick=()=>startRepDrill(color,0);
+  target.querySelectorAll('[data-line]').forEach(b=>b.onclick=()=>renderStudy('openings',color==='w'?'Your line as White':'Your line as Black',lines[Number(b.dataset.line)],lineText(lines[Number(b.dataset.line)])));
+  target.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{repertoire[color]=removeLine(repertoire[color],Number(b.dataset.del));await saveRepertoire(color);void renderRepertoire(color)});
+}
+function startRepEdit(color){
+  if(liveGameOn()&&mode!=='computer')return toast('The repertoire opens after your game');
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  puzzleSession=null;streakSession=null;if(exploreSession)endExplore({restore:false});
+  if(mode==='computer'&&computerStarted){computerStarted=false;currentBot=null;myColor=null}
+  game.reset();boardShapes=[];repEdit={color,line:[]};mode='repertoire';flipped=color==='b';orientationSet=true;
+  setPrimaryScreen('game');render();drawRepEdit();
+}
+function endRepEdit({restore=true}={}){if(!repEdit)return;repEdit=null;if(mode==='repertoire'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}}
+function repEditMove(move){
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||'q'})}catch{}
+  if(!made)return rejectMove(move.from,move.to);
+  repEdit.line.push(made.san);rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);drawRepEdit();
+}
+function drawRepEdit(){
+  if(!repEdit)return;const known=repMovesAt(repertoire?.[repEdit.color]||[],game.fen());
+  const html=`<article class="explorer rep-edit"><p class="trainer-intro">Play the line on the board, both sides. Save it when it's as deep as you want.</p><div class="explorer-line">${repEdit.line.length?escapeHtml(lineText(repEdit.line)):'Start position'}</div>${known.length?`<p class="rep-known">Your lines continue with <b>${known.map(escapeHtml).join(', ')}</b></p>`:''}<div class="pp-actions"><button class="gold rep-save"${repEdit.line.length?'':' disabled'}>Save line</button><button class="rep-back"${repEdit.line.length?'':' disabled'}>Back one move</button><button class="rep-cancel">Cancel</button></div></article>`;
+  if(currentRightView!=='repertoire')setDynamicView('repertoire','Add a line',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const t=$('#dynamicView .view-content');if(!t)return;
+  t.querySelector('.rep-save').onclick=async()=>{const {color,line}=repEdit;await addRepLine(color,line);endRepEdit();void renderRepertoire(color)};
+  t.querySelector('.rep-back').onclick=()=>{if(!repEdit.line.length)return;game.undo();repEdit.line.pop();boardShapes=[];render();drawRepEdit()};
+  t.querySelector('.rep-cancel').onclick=()=>{const c=repEdit.color;endRepEdit();void renderRepertoire(c)};
+}
+async function startRepDrill(color,count=0){
+  if(liveGameOn()&&mode!=='computer')return toast('Drills open after your game');
+  if(!repertoire)await loadRepertoire();
+  const d=repDrill(repertoire[color],color);if(!d)return toast(color==='w'?'Add a line as White first':'Add a line as Black first');
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});if(repEdit)endRepEdit({restore:false});
+  streakSession=null;game.reset();mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];
+  const offset=color==='b'?1:0;
+  if(offset){const u=d.ucis[0];rememberLastMove(game.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]||undefined}))}
+  flipped=color==='b';orientationSet=true;
+  puzzleSession={id:`rep-${color}-${count}`,solution:d.ucis.slice(offset),full:d.ucis,offset,index:0,played:[],started:Date.now(),failed:false,trainer:true,kind:'repertoire',misses:0,color,count,lines:repertoire[color]};
+  setPrimaryScreen('game');render();
+  setDynamicView('repertoire','Repertoire drill',`<article class="puzzle-info trainer-drill"><small>REPERTOIRE · ${color==='w'?'AS WHITE':'AS BLACK'} · LINE ${count+1}</small><h4>Play your prepared moves</h4><p>The computer answers with one of the replies you prepared for. Any move from your lines counts.</p><div class="streak-actions"><button class="trainer-skip">Next line</button><button class="trainer-stop">Stop</button></div></article>`);
+  $('#dynamicView .trainer-skip').onclick=()=>startRepDrill(color,count+1);
+  $('#dynamicView .trainer-stop').onclick=()=>{puzzleSession=null;mode='room';game.reset();boardShapes=[];render();void renderRepertoire(color)};
+}
+// ---- Insights (src/insights.js): where your points go ----
+const leakActions={repertoire:l=>void renderRepertoire(l.color||'w'),mistakes:()=>renderMistakes(),play:()=>activateNav('play')};
+async function renderInsights(pool=null){
+  setDynamicView('insights','Insights',brandLoading('Reading your games…'));
+  if(!signedIn()){const t=$('#dynamicView .view-content');if(t)t.innerHTML='<p class="menu-empty">Sign in to see insights from your rated and casual games.</p>';return}
+  let data;try{data=await api.insights()}catch(error){toast(error.message);return}
+  if(currentRightView!=='insights')return;const target=$('#dynamicView .view-content');if(!target)return;
+  const rows=data.games||[],s=insightSummary(rows),pools=insightPools(rows),active=pool&&pools.includes(pool)?pool:pools[0],series=active?ratingSeries(rows,active):[];
+  if(!repertoire)await loadRepertoire().catch(()=>null);
+  const dev=repertoire?rows.map(r=>({r,d:repDeviation(repertoire[r.color]||[],r.color,r.sans||[])})).filter(x=>x.d):[];
+  const bar=o=>`<span class="ex-bar" aria-label="${o.wins} wins, ${o.draws} draws, ${o.losses} losses"><i class="w" style="width:${Math.round(100*o.wins/o.games)}%"></i><i class="d" style="width:${Math.round(100*o.draws/o.games)}%"></i><i class="b" style="width:${Math.round(100*o.losses/o.games)}%"></i></span>`;
+  const reasonName={time:'On time',resigned:'Resigned',left:'Left the game',checkmate:'Checkmated',other:'Other'},phaseName={opening:'In the opening',middlegame:'In the middlegame',endgame:'In the endgame'},strengthName={stronger:'Against stronger players',similar:'Against similar players',weaker:'Against weaker players'};
+  target.innerHTML=s.games?`<article class="insights">
+    <div class="ins-head"><div><small>GAMES</small><b>${s.games}</b></div><div><small>SCORE</small><b>${s.score}%</b></div>${s.colors.map(c=>`<div><small>${c.key==='w'?'AS WHITE':'AS BLACK'}</small><b>${c.score}%</b></div>`).join('')}</div>
+    ${s.leaks.length?`<h4>Worth working on</h4><div class="ins-leaks">${s.leaks.map((l,i)=>`<div class="ins-leak"><p>${escapeHtml(l.text)}</p>${leakActions[l.action]?`<button data-leak="${i}">${l.action==='repertoire'?'Open repertoire':l.action==='mistakes'?'Learn from your mistakes':l.action==='endgames'?'Endgame drills':'Play'}</button>`:''}</div>`).join('')}</div>`:''}
+    ${pools.length?`<h4>Rating</h4><div class="ex-source ins-pools">${pools.map(p=>`<button type="button" class="ex-src${p===active?' on':''}" data-pool="${p}">${escapeHtml(p[0].toUpperCase()+p.slice(1))}</button>`).join('')}</div>${series.length>=2?ratingChartSvg(series):'<p class="menu-empty">The rating line appears after two rated games in a pool.</p>'}`:''}
+    <h4>Openings</h4><div class="ins-table">${s.openings.slice(0,8).map(o=>`<div><span><b>${escapeHtml(o.name)}</b><small>${o.color==='w'?'as White':'as Black'} · ${o.games} games</small></span>${bar(o)}<em>${o.score}%</em></div>`).join('')}</div>
+    ${dev.length?`<p class="ins-note">You left your repertoire in ${dev.length} ${dev.length===1?'game':'games'}. Most recent: ${escapeHtml(dev[0].d.played)} instead of ${escapeHtml(dev[0].d.expected.join(' / '))}.</p>`:''}
+    ${s.losses?`<h4>How you lose</h4><div class="ins-table">${s.lossReasons.map(r=>`<div><span><b>${escapeHtml(reasonName[r.reason]||r.reason)}</b></span><span class="ins-meter"><i style="width:${r.share}%"></i></span><em>${r.share}%</em></div>`).join('')}${s.lossPhases.filter(p=>p.n).map(p=>`<div><span><b>${escapeHtml(phaseName[p.phase])}</b></span><span class="ins-meter"><i style="width:${p.share}%"></i></span><em>${p.share}%</em></div>`).join('')}</div>`:''}
+    ${s.strength.length?`<h4>By opponent</h4><div class="ins-table">${['stronger','similar','weaker'].map(k=>s.strength.find(x=>x.key===k)).filter(Boolean).map(o=>`<div><span><b>${escapeHtml(strengthName[o.key])}</b><small>${o.games} games</small></span>${bar(o)}<em>${o.score}%</em></div>`).join('')}</div>`:''}
+    ${s.pools.length?`<h4>By time control</h4><div class="ins-table">${s.pools.map(o=>`<div><span><b>${escapeHtml(o.key[0].toUpperCase()+o.key.slice(1))}</b><small>${o.games} games</small></span>${bar(o)}<em>${o.score}%</em></div>`).join('')}</div>`:''}
+  </article>`:'<p class="menu-empty">Play a few games to see your insights.</p>';
+  target.querySelectorAll('[data-pool]').forEach(b=>b.onclick=()=>void renderInsights(b.dataset.pool));
+  target.querySelectorAll('[data-leak]').forEach(b=>b.onclick=()=>{const l=s.leaks[Number(b.dataset.leak)];leakActions[l.action]?.(l)});
+}
 // ---- Tournament lobby: standings, pairings and the top live games (refreshes every 10s) ----
 let lobbyTimer=null;
 async function openTournamentLobby(t){
@@ -3933,6 +4049,7 @@ $('#closeProfileMenu').onclick=()=>menus.close('profile');
 $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
 $('#profileMenuProfile').onclick=openAccount;
 $('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
+$('#profileMenuInsights').onclick=()=>{menus.close('profile');void renderInsights()};
 $('#profileMenuSettings').onclick=()=>menus.open('theme');
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});

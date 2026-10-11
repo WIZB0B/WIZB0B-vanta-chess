@@ -20,7 +20,7 @@ test('notifications: same-site links only, time ago, badge', () => {
 });
 test('wiring: explorer is a free board that never opens during a live game', () => {
   assert.match(main, /if\(liveGameOn\(\)&&mode!=='computer'\)return toast\('The explorer opens after your game'\)/);
-  assert.match(main, /function freeBoard\(\)\{return !!planSession\|\|!!studySession\?\.editing\|\|!!exploreSession\}/);
+  assert.match(main, /function freeBoard\(\)\{return !!planSession\|\|!!studySession\?\.editing\|\|!!exploreSession(\|\|!!repEdit)?\}/);
   assert.match(main, /location\.assign\(url\)/);
   assert.match(main, /const url=safeNotificationUrl\(b\.dataset\.url\)/);
 });
