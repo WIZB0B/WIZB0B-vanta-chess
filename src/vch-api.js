@@ -117,7 +117,8 @@ export class VchApi {
   accountDelete(confirm) { return this.request('account_delete', { confirm }); }
   notifications() { return this.request('notifications'); }
   notificationsRead(ids = null) { return this.request('notifications_read', ids ? { ids } : {}); }
-  openingExplorer(fen) { return this.request('opening_explorer', { fen }); }
+  openingExplorer(fen, { mine = false } = {}) { return this.request('opening_explorer', mine ? { fen, mine: true } : { fen }); }
+  tournamentLobby(tournamentId) { return this.request('tournament_lobby', { tournamentId }); }
   explorerBackfill() { return this.request('explorer_backfill'); }
 }
 

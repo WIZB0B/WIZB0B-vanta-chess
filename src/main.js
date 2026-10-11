@@ -39,7 +39,7 @@ import { applyCastle, castleForMove, castleOptions, replay960 } from './castle96
 import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
 import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
-import { explorerRows } from './explorer-view.js';
+import { explorerRows, formatScore, parseMultiPv, scoreValue } from './explorer-view.js';
 import { LANGUAGES, LANG_KEY, RTL, addTranslations, detectLanguage, translateText, translateTree } from './i18n.js';
 import { BOARD_SETS, unlockedSets } from './season-themes.js';
 import { planReady, planText } from './plan-moves.js';
@@ -2331,11 +2331,15 @@ async function renderLeague(division=leagueDivision){
       <div class="league-divisions">${d.divisions.map((n,i)=>`<button data-division="${i}" class="div-${i}${i===d.division?' on':''}">${escapeHtml(n)}</button>`).join('')}</div>
       <p class="arena-rules">Rated games score 3 for a win and 1 for a draw. At the end of the month the top fifth of each division (with at least ${d.minGames} games) moves up and the bottom fifth moves down. Everyone with ${d.minGames}+ games earns a season badge.</p>
       <div class="league-table">${d.standings.map(r=>`<div class="${zone(r)}${r.me?' me':''}"><span>${r.rank}</span><b>${escapeHtml(r.name)}</b><em>${r.games} g</em><strong>${r.points}</strong></div>`).join('')||'<p class="menu-empty">No games in this division yet this season.</p>'}</div>
+      <h4>Club league</h4><p class="arena-rules">Clubs play as teams: the league points of each club's best ${Number(d.clubTop||10)} members this season.</p>
+      <div class="league-table club-league">${(d.clubs||[]).map(c=>`<div class="${d.myClub&&d.myClub.slug===c.slug?'me':''}"><span>${c.rank}</span><b data-club="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</b><em>${c.players} p</em><strong>${c.points}</strong></div>`).join('')||'<p class="menu-empty">No club has league points yet this season.</p>'}</div>
+      ${signedIn()&&!d.myClub&&(d.clubs||[]).length?'<p class="menu-empty">Join a club to play for it in the league.</p>':''}
       ${d.badges.length?`<h4>Your season badges</h4><div class="pp-badges">${d.badges.map(b=>{const [y,m,div]=b.id.replace(/^season-/,'').split('-');return `<span class="achievement earned"><span class="achievement-mark">S</span><b>${escapeHtml(div[0].toUpperCase()+div.slice(1))} · ${y}-${m}</b></span>`}).join('')}</div>`:''}
     </article>`;
     wireCommunityTabs();
     target.querySelectorAll('[data-division]').forEach(b=>b.onclick=()=>void renderLeague(Number(b.dataset.division)));
-    target.querySelectorAll('.league-table b').forEach(b=>{b.classList.add('pp-link');b.onclick=()=>void openProfile(b.textContent)});
+    target.querySelectorAll('.league-table:not(.club-league) b').forEach(b=>{b.classList.add('pp-link');b.onclick=()=>void openProfile(b.textContent)});
+    target.querySelectorAll('.club-league b[data-club]').forEach(b=>{b.classList.add('pp-link');b.onclick=()=>void openClub(b.dataset.club)});
   }catch(error){toast(error.message)}
 }
 if(params.get('club'))setTimeout(()=>void openClub(String(params.get('club')).slice(0,32)),500);
@@ -2443,7 +2447,7 @@ async function renderModeration(){
     target.innerHTML=`<article class="mod">
       <p class="trainer-intro">Reports and accuracy signals are leads for a person to check, not proof. Open a file, look at the games, then decide.</p>
       <h4>Open cases <small>${d.cases.length}</small></h4>
-      ${d.cases.map(c=>`<button class="mod-case" data-mod="${escapeHtml(c.player.id)}"><span><b>${escapeHtml(c.player.username)}</b><small>${c.reports.length?`${c.reports.length} reports · ${escapeHtml(reasons(c.reasons))}`:'No reports'}${c.fairplay?` · ${c.fairplay.games_95_plus}/${c.fairplay.reviewed_games} games 95%+ · avg ${c.fairplay.avg_accuracy??'—'}%`:''}</small></span><em>${c.player.banned_at?'Suspended':c.player.muted_until&&Date.parse(c.player.muted_until)>Date.now()?'Muted':'Open'}</em></button>`).join('')||'<p class="menu-empty">Nothing to review.</p>'}
+      ${d.cases.map(c=>`<button class="mod-case" data-mod="${escapeHtml(c.player.id)}"><span><b>${escapeHtml(c.player.username)}</b><small>${c.reports.length?`${c.reports.length} reports · ${escapeHtml(reasons(c.reasons))}`:'No reports'}${c.fairplay?` · ${c.fairplay.games_95_plus}/${c.fairplay.reviewed_games} games 95%+ · avg ${c.fairplay.avg_accuracy??'—'}%`:''}${c.sandbag?` · <span class="mod-sandbag" title="Quick rated losses: resigning, flagging or leaving within a few moves.">Possible sandbagging · ${Number(c.sandbag).toFixed(1)}</span>`:''}</small></span><em>${c.player.banned_at?'Suspended':c.player.muted_until&&Date.parse(c.player.muted_until)>Date.now()?'Muted':'Open'}</em></button>`).join('')||'<p class="menu-empty">Nothing to review.</p>'}
       <h4>Recent actions</h4><div class="pp-list">${d.log.map(l=>`<div><b>${escapeHtml(l.action)} · ${escapeHtml(l.player)}</b><span>${escapeHtml(l.note||'')}</span><small>${escapeHtml(new Date(l.created_at).toLocaleString())} · ${escapeHtml(l.moderator)}</small></div>`).join('')||'<p class="menu-empty">No actions yet.</p>'}</div>
     </article>`;
     target.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>void openModFile(b.dataset.mod));
@@ -2648,6 +2652,7 @@ function showReaction(id){
 let exploreSession=null;
 function endExplore({restore=true}={}){
   if(!exploreSession)return;exploreSession=null;
+  if(explorerEval){explorerWorker.postMessage({action:'stop'});explorerEval=null}
   if(mode==='explore'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
 }
 function startExplorer(){
@@ -2663,20 +2668,52 @@ function exploreMove(move){
   if(!made)return rejectMove(move.from,move.to);
   exploreSession.line.push(made.san);rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);void drawExplorer();
 }
+// Engine scores for the explorer rows (a separate worker: never the live-game engine).
+const explorerWorker=lazyWorker('/stockfish.worker.js');let explorerEval=null,explorerEvalSeq=0;
+explorerWorker.onmessage=({data})=>{
+  const job=explorerEval;if(!job||data.requestId!==job.id)return;
+  const line=String(data.line||'');
+  if(data.type==='uci'){const s=parseMultiPv(line,job.fen);if(s&&(!job.scores.get(s.uci)||s.depth>=job.scores.get(s.uci).depth)){job.scores.set(s.uci,s);paintExplorerEval(job)}}
+  if((data.type==='uci'&&line.startsWith('bestmove '))||data.type==='unavailable'){job.done=true;paintExplorerEval(job);explorerEval=null}
+};
+function startExplorerEval(fen,ucis){
+  if(explorerEval)explorerWorker.postMessage({action:'stop'});
+  const id=`explore-${++explorerEvalSeq}`;
+  explorerEval={id,fen,ucis,scores:new Map(),done:false};
+  explorerWorker.postMessage({mode:'analysis',fen,depth:10,requestId:id,multipv:ucis.length?Math.min(10,ucis.length):3,...(ucis.length?{searchmoves:ucis}:{})});
+}
+function paintExplorerEval(job){
+  const slot=$('#dynamicView .explorer-table');if(!slot||!exploreSession||game.fen()!==job.fen)return;
+  for(const cell of slot.querySelectorAll('.ex-eval[data-uci]')){const s=job.scores.get(cell.dataset.uci);if(!s){if(job.done)cell.textContent='—';continue}cell.textContent=formatScore(s);const v=scoreValue(s);cell.classList.toggle('good',v>=50);cell.classList.toggle('bad',v<=-50)}
+  const top=slot.querySelector('.ex-engine-top');
+  if(top){
+    const best=[...job.scores.values()].sort((a,b)=>a.multipv-b.multipv).slice(0,3);
+    top.innerHTML=best.length?best.map(s=>{let san=s.uci;try{san=new Chess(job.fen).move({from:s.uci.slice(0,2),to:s.uci.slice(2,4),promotion:s.uci[4]||undefined}).san}catch{}return `<button class="ex-row ex-engine" data-san="${escapeHtml(san)}"><b>${escapeHtml(san)}</b><span class="ex-eval">${formatScore(s)}</span><span></span><span></span></button>`}).join(''):`<p class="menu-empty">${job.done?'—':brandLoading('Thinking…')}</p>`;
+    top.querySelectorAll('[data-san]').forEach(b=>b.onclick=()=>exploreSan(b.dataset.san));
+  }
+}
+function exploreSan(san){let made=null;try{made=game.move(san)}catch{}if(!made)return;exploreSession.line.push(made.san);rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);void drawExplorer()}
 async function drawExplorer(){
   if(!exploreSession)return;
-  const fen=game.fen(),html=`<article class="explorer"><p class="trainer-intro">What VCH players chose in this position, and how it went. Play moves on the board or tap a row.</p><div class="explorer-line">${exploreSession.line.length?escapeHtml(exploreSession.line.join(' ')):'Start position'}</div><div class="pp-actions"><button class="ex-back"${exploreSession.line.length?'':' disabled'}>Back one move</button><button class="ex-reset">Start position</button><button class="ex-close">Close</button></div><div class="explorer-table">${brandLoading('Looking up games…')}</div></article>`;
+  const src=exploreSession.source||'all',mine=src==='mine';
+  const fen=game.fen(),html=`<article class="explorer"><p class="trainer-intro">${mine?'What you chose in this position, and how it went.':'What VCH players chose in this position, and how it went. Play moves on the board or tap a row.'}</p><div class="ex-source" role="group" aria-label="Games"><button type="button" class="ex-src${mine?'':' on'}" data-src="all" aria-pressed="${!mine}">All players</button><button type="button" class="ex-src${mine?' on':''}" data-src="mine" aria-pressed="${mine}">Your games</button></div><div class="explorer-line">${exploreSession.line.length?escapeHtml(exploreSession.line.join(' ')):'Start position'}</div><div class="pp-actions"><button class="ex-back"${exploreSession.line.length?'':' disabled'}>Back one move</button><button class="ex-reset">Start position</button><button class="ex-close">Close</button></div><div class="explorer-table">${brandLoading('Looking up games…')}</div><small class="ex-note">Engine score for each move · Stockfish 19</small></article>`;
   if(currentRightView!=='explorer')setDynamicView('explorer','VCH explorer',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
   const t=$('#dynamicView .view-content');if(!t)return;
   t.querySelector('.ex-back').onclick=()=>{if(!exploreSession.line.length)return;game.undo();exploreSession.line.pop();boardShapes=[];render();void drawExplorer()};
   t.querySelector('.ex-reset').onclick=()=>{game.reset();exploreSession.line=[];render();void drawExplorer()};
-  t.querySelector('.ex-close').onclick=()=>{endExplore();showMovesView()};
+  t.querySelector('.ex-close').onclick=()=>{if(explorerEval){explorerWorker.postMessage({action:'stop'});explorerEval=null}endExplore();showMovesView()};
+  t.querySelectorAll('.ex-src').forEach(b=>b.onclick=()=>{if(exploreSession.source===b.dataset.src)return;exploreSession.source=b.dataset.src;void drawExplorer()});
+  const slot=t.querySelector('.explorer-table');
+  if(mine&&!signedIn()){slot.innerHTML='<p class="menu-empty">Sign in to see your own games</p>';return}
   try{
-    const out=await api.openingExplorer(fen);if(!exploreSession||game.fen()!==fen)return;
-    const rows=explorerRows(out.moves||[]),slot=t.querySelector('.explorer-table');
-    slot.innerHTML=rows.length?`<div class="ex-head"><span>Move</span><span>Games</span><span>White · Draw · Black</span></div>${rows.map(r=>`<button class="ex-row" data-san="${escapeHtml(r.san)}"><b>${escapeHtml(r.san)}</b><span>${r.games} <small>${r.share}%</small></span><span class="ex-bar" aria-label="White ${r.white}%, draws ${r.draws}%, Black ${r.black}%"><i class="w" style="width:${r.white}%">${r.white>=14?r.white+'%':''}</i><i class="d" style="width:${r.draws}%">${r.draws>=14?r.draws+'%':''}</i><i class="b" style="width:${r.black}%">${r.black>=14?r.black+'%':''}</i></span></button>`).join('')}<p class="ex-total">${out.total} games from this position</p>`:'<p class="menu-empty">No VCH games reached this position yet.</p>';
-    slot.querySelectorAll('[data-san]').forEach(b=>b.onclick=()=>{let made=null;try{made=game.move(b.dataset.san)}catch{}if(!made)return;exploreSession.line.push(made.san);rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);void drawExplorer()});
-  }catch(error){const slot=t.querySelector('.explorer-table');if(slot)slot.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}
+    const out=await api.openingExplorer(fen,{mine});if(!exploreSession||game.fen()!==fen||(exploreSession.source||'all')!==src)return;
+    const rows=explorerRows(out.moves||[]),uci=san=>{try{const m=new Chess(fen).move(san);return m.from+m.to+(m.promotion||'')}catch{return ''}};
+    const withUci=rows.map(r=>({...r,uci:uci(r.san)}));
+    slot.innerHTML=rows.length?`<div class="ex-head"><span>Move</span><span>Games</span><span>White · Draw · Black</span><span>Engine</span></div>${withUci.map(r=>`<button class="ex-row" data-san="${escapeHtml(r.san)}"><b>${escapeHtml(r.san)}</b><span>${r.games} <small>${r.share}%</small></span><span class="ex-bar" aria-label="White ${r.white}%, draws ${r.draws}%, Black ${r.black}%"><i class="w" style="width:${r.white}%">${r.white>=14?r.white+'%':''}</i><i class="d" style="width:${r.draws}%">${r.draws>=14?r.draws+'%':''}</i><i class="b" style="width:${r.black}%">${r.black>=14?r.black+'%':''}</i></span><span class="ex-eval"${withUci.indexOf(r)<10&&r.uci?` data-uci="${r.uci}"`:''}>${withUci.indexOf(r)<10&&r.uci?'…':'—'}</span></button>`).join('')}<p class="ex-total">${out.total} games from this position</p>`
+      :`<p class="menu-empty">${mine?"You haven't reached this position in a finished game yet.":'No VCH games reached this position yet.'}</p><div class="ex-head ex-engine-head"><span>Engine's top moves</span></div><div class="ex-engine-top"><p class="menu-empty">${brandLoading('Thinking…')}</p></div>`;
+    slot.querySelectorAll('.ex-row[data-san]').forEach(b=>b.onclick=()=>exploreSan(b.dataset.san));
+    if(!game.isGameOver())startExplorerEval(fen,withUci.slice(0,10).map(r=>r.uci).filter(Boolean));
+  }catch(error){slot.innerHTML=`<p class="menu-empty">${escapeHtml(error.message)}</p>`}
 }
 // ---- Notifications inbox (bell + full page) ----
 let inboxState={items:[],unread:0,available:true};
@@ -3796,7 +3833,7 @@ async function showBackendView(kind){
         const swiss=t.format==='swiss',myGame=myGames.get(t.id);
         const action=phase.phase==='finished'||(swiss&&t.status==='finished')?'':swiss?(myGame?`<button class="arena-play" data-code="${escapeHtml(myGame.code)}">Play round ${myGame.round}</button>`:joined?'<button class="arena-join" disabled>Joined</button>':'<button class="arena-join">Join</button>'):phase.phase==='upcoming'?(joined?'<button class="arena-join" disabled>Registered</button>':'<button class="arena-join">Register</button>'):'<button class="arena-join">Play now</button>';
         const battle=t.kind==='club_battle';
-        return `<article data-arena="${i}" class="arena-card${weekly||battle?' weekly':''}${battle?' club-battle':''} phase-${phase.phase}"><div>${battle?'<span class="arena-badge">Club battle</span>':weekly?'<span class="arena-badge">Weekly</span>':t.format==='swiss'?`<span class="arena-badge swiss">Swiss · ${Number(t.current_round)?`round ${t.current_round} of ${t.rounds}`:`${t.rounds} rounds`}</span>`:''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
+        return `<article data-arena="${i}" class="arena-card${weekly||battle?' weekly':''}${battle?' club-battle':''} phase-${phase.phase}"><div>${battle?'<span class="arena-badge">Club battle</span>':weekly?'<span class="arena-badge">Weekly</span>':t.format==='swiss'?`<span class="arena-badge swiss">Swiss · ${Number(t.current_round)?`round ${t.current_round} of ${t.rounds}`:`${t.rounds} rounds`}</span>`:''}<small>${t.rated?'RATED':'CASUAL'} · ${escapeHtml(t.pool||'arena')} · ${formatTimeControl(Number(t.base_seconds||600),Number(t.increment_seconds||0))}</small><h4>${escapeHtml(t.name||t.title||'Arena')}</h4>${t.description?`<p>${escapeHtml(t.description)}</p>`:''}<p class="arena-when" data-arena-when="${i}">${escapeHtml(phase.label)}</p>${joined?`<p class="arena-mine">You: ${Number(joined.points||0)} pts · ${joined.wins||0}W ${joined.draws||0}D ${joined.losses||0}L${Number(joined.streak||0)>=3?' <span class="fire-tag">On fire · wins score double</span>':''}</p>`:''}<p class="arena-rules">Win 2 · draw 1. Three wins in a row put you on fire: wins score 4. A Berserk win adds 1.</p></div><div>${action}<button class="arena-lobby">Lobby</button><button class="arena-standings">${phase.phase==='finished'?'Results':'Standings'}</button></div><section class="standings-slot"></section></article>`;
       };
       target.innerHTML=`<button class="arena-create">Create a tournament · arena or Swiss</button><div class="arena-list">${events.map(card).join('')||'<p>No arenas right now.</p>'}</div>`;
       target.querySelector('.arena-create').onclick=()=>void openCreateTournament();
@@ -3812,11 +3849,41 @@ async function showBackendView(kind){
             const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000);
           }catch(error){toast(error.message)}
         };
+        row.querySelector('.arena-lobby').onclick=()=>void openTournamentLobby(t);
         row.querySelector('.arena-standings').onclick=async()=>{try{const result=await api.tournamentStandings(t.id),slot=row.querySelector('.standings-slot');slot.innerHTML=((result.clubs||[]).length?`<div class="club-table"><small>CLUBS · best five count</small>${result.clubs.slice(0,8).map((c,i)=>`<p><span>${i+1}.</span> ${escapeHtml(c.name)} <b>${c.points} pts</b> <small>${c.players} players</small></p>`).join('')}</div>`:'')+standingsRows(result.standings||[]).slice(0,10).map(p=>`<p><span>${p.rank}.</span> ${escapeHtml(p.name)}${p.fire?' <span class="fire-tag">On fire</span>':''} <b>${p.points} pts</b> <small>${p.record}</small></p>`).join('')||'<p>No scores yet.</p>'}catch(error){toast(error.message)}};
       });
       const tick=setInterval(()=>{if(currentRightView!=='arena'||!document.body.contains(target))return clearInterval(tick);events.forEach((t,i)=>{const el=target.querySelector(`[data-arena-when="${i}"]`);if(el)el.textContent=arenaPhase(t).label})},30000);
     }catch(error){toast(error.message);showMovesView()}
   }
+}
+// ---- Tournament lobby: standings, pairings and the top live games (refreshes every 10s) ----
+let lobbyTimer=null;
+async function openTournamentLobby(t){
+  clearInterval(lobbyTimer);
+  setDynamicView('lobby',t.name||'Tournament lobby',brandLoading('Loading the lobby…'));
+  const draw=async()=>{
+    if(currentRightView!=='lobby'){clearInterval(lobbyTimer);return}
+    let d;try{d=await api.tournamentLobby(t.id)}catch(error){clearInterval(lobbyTimer);toast(error.message);return}
+    const target=$('#dynamicView .view-content');if(!target||currentRightView!=='lobby')return;
+    const tt=d.tournament||t,swiss=tt.format==='swiss',games=d.games||[],top=games.slice(0,4),rest=games.slice(4);
+    const card=(g,i)=>`<button type="button" class="watch-card lobby-game${g.mine?' mine':''}" data-lobby-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white||'White')}</b><em>${escapeHtml(String(g.whiteRating||''))}</em></span><span><b>${escapeHtml(g.black||'Black')}</b><em>${escapeHtml(String(g.blackRating||''))}</em></span><small>${g.mine?'Your game':`move ${Math.max(1,Math.ceil(Number(g.moves||0)/2))}`}</small></span></button>`;
+    const myPairing=(d.pairings||[]).find(p=>p.mine&&p.code&&p.result==='playing');
+    target.innerHTML=`<article class="lobby">
+      <div class="lobby-head"><small>${tt.rated?'RATED':'CASUAL'} · ${escapeHtml(tt.pool||'')} · ${formatTimeControl(Number(tt.base_seconds||600),Number(tt.increment_seconds||0))}${swiss&&Number(tt.current_round)?` · Round ${tt.current_round} of ${tt.rounds}`:''}</small><b>${escapeHtml(tt.name||'Tournament')}</b><span>${escapeHtml(swiss?(tt.status==='finished'?'Finished':'Swiss'):arenaPhase(tt).label)}</span></div>
+      ${myPairing?`<button class="gold lobby-mine" data-code="${escapeHtml(myPairing.code)}">Go to your game</button>`:''}
+      <h4>Live games <small>Top games first</small></h4>
+      ${games.length?`<div class="watch-grid lobby-top">${top.map(card).join('')}</div>${rest.length?`<div class="lobby-list">${rest.map((g,i)=>`<button type="button" data-lobby-watch="${i+4}"${g.mine?' class="mine"':''}><b>${escapeHtml(g.white)}</b> <em>${escapeHtml(String(g.whiteRating||''))}</em> vs <b>${escapeHtml(g.black)}</b> <em>${escapeHtml(String(g.blackRating||''))}</em></button>`).join('')}</div>`:''}`:'<p class="menu-empty">No live games in this tournament right now.</p>'}
+      ${swiss?`<h4>Pairings${Number(tt.current_round)?` <small>Round ${tt.current_round}</small>`:''}</h4>${(d.pairings||[]).length?`<div class="lobby-pairings">${d.pairings.map(p=>`<div class="${p.mine?'me':''}"><b>${escapeHtml(p.white)}</b><span>${p.result==='playing'?'Playing':escapeHtml(p.result||'')}</span><b>${escapeHtml(p.black)}</b></div>`).join('')}</div>`:'<p class="menu-empty">Pairings appear when the round starts.</p>'}`:''}
+      <h4>Standings</h4>
+      ${(d.clubs||[]).length?`<div class="club-table"><small>CLUBS · best five count</small>${d.clubs.slice(0,8).map((c,i)=>`<p><span>${i+1}.</span> ${escapeHtml(c.name)} <b>${c.points} pts</b> <small>${c.players} players</small></p>`).join('')}</div>`:''}
+      <div class="league-table lobby-standings">${standingsRows(d.standings||[]).slice(0,30).map(p=>`<div><span>${p.rank}</span><b>${escapeHtml(p.name)}${p.fire?' <i class="fire-tag">On fire</i>':''}</b><em>${escapeHtml(p.record)}</em><strong>${p.points}</strong></div>`).join('')||'<p class="menu-empty">No scores yet.</p>'}</div>
+      <small class="ex-note">Updates every 10 seconds</small>
+    </article>`;
+    target.querySelectorAll('[data-lobby-watch]').forEach(el=>el.onclick=()=>{const g=games[Number(el.dataset.lobbyWatch)];if(!g)return;clearInterval(lobbyTimer);if(g.mine){if(myPairing)location.search='?game='+encodeURIComponent(myPairing.code);else showMovesView();return}void startWatching(g.id)});
+    target.querySelector('.lobby-mine')?.addEventListener('click',e=>{location.search='?game='+encodeURIComponent(e.currentTarget.dataset.code)});
+  };
+  await draw();
+  lobbyTimer=setInterval(()=>{if(document.hidden)return;void draw()},10000);
 }
 function activateNav(kind){
   $$('.main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.nav===kind));

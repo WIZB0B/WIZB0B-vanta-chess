@@ -2739,8 +2739,8 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 /* === Explorer and notifications === */
 .explorer-open{width:100%;margin-bottom:10px;padding:10px 12px;border:1px solid rgba(121,231,176,.45);border-radius:9px;background:#122520;color:var(--mint);font-weight:600;text-align:left}
 .explorer-line{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#0b1715;font-size:12px;color:var(--muted);min-height:34px}
-.ex-head{display:grid;grid-template-columns:52px 70px 1fr;gap:8px;padding:0 8px 4px;color:var(--muted);font-size:10px;letter-spacing:.5px;text-transform:uppercase}
-.ex-row{display:grid;grid-template-columns:52px 70px 1fr;gap:8px;align-items:center;width:100%;padding:7px 8px;border-radius:7px;text-align:left;font-size:13px}
+.ex-head{display:grid;grid-template-columns:52px 70px 1fr 50px;gap:8px;padding:0 8px 4px;color:var(--muted);font-size:10px;letter-spacing:.5px;text-transform:uppercase}
+.ex-row{display:grid;grid-template-columns:52px 70px 1fr 50px;gap:8px;align-items:center;width:100%;padding:7px 8px;border-radius:7px;text-align:left;font-size:13px}
 .ex-row:hover{background:#14211f}.ex-row small{color:var(--muted)}
 .ex-bar{display:flex;height:16px;border-radius:4px;overflow:hidden;background:#24302e}
 .ex-bar i{display:grid;place-items:center;font:700 9px 'DM Sans',sans-serif;font-style:normal;min-width:0}
@@ -2776,3 +2776,32 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .type-move small{grid-column:1/-1;font-size:11px;color:rgb(255 255 255 / .45)}
 @media (hover:none){.type-move small{display:none}}
 #themeStudio .check-row input{width:18px;height:18px;accent-color:var(--mint,#82edba)}
+
+/* ---- Round 8: explorer engine scores and sources ---- */
+.ex-source{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.ex-src{padding:8px;border:1px solid var(--line);border-radius:8px;background:#0b1715;color:var(--muted);font-weight:600;font-size:12px}
+.ex-src.on{border-color:rgba(121,231,176,.55);color:var(--mint);background:#122520}
+.ex-eval{font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;color:#cfd8d4}
+.ex-eval.good{color:#f3ead7}.ex-eval.bad{color:#9fb0ab}
+.ex-engine-head{margin-top:10px;grid-template-columns:1fr}
+.ex-engine .ex-eval{text-align:left}
+.ex-note{display:block;margin-top:6px;color:var(--muted);font-size:11px}
+
+/* ---- Round 8: tournament lobby, club league, sandbagging lead ---- */
+.lobby h4{margin:16px 0 8px;display:flex;align-items:baseline;gap:8px}.lobby h4 small{color:var(--muted);font-weight:500;font-size:11px}
+.lobby-head{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#0b1715}
+.lobby-head small{color:var(--muted);font-size:10px;letter-spacing:.5px;text-transform:uppercase}.lobby-head b{font-size:18px}.lobby-head span{color:var(--mint);font-size:12px}
+.lobby-mine{width:100%;margin-top:10px;padding:11px;border-radius:9px;color:#10120e;font-weight:700}
+.lobby-top{grid-template-columns:repeat(2,minmax(0,1fr))}
+.lobby-game.mine{border-color:rgba(229,193,124,.6)}
+.lobby-list{display:grid;gap:4px;margin-top:8px}
+.lobby-list button{text-align:left;padding:8px 10px;border-radius:7px;background:#0b1715;border:1px solid transparent;font-size:12px;color:#cfd8d4}
+.lobby-list button:hover{border-color:var(--line)}.lobby-list em{color:var(--muted);font-style:normal}.lobby-list .mine{border-color:rgba(229,193,124,.5)}
+.lobby-pairings{display:grid;gap:3px}
+.lobby-pairings>div{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:7px 10px;border-radius:7px;background:#0b1715;font-size:13px}
+.lobby-pairings>div b:last-child{text-align:right}.lobby-pairings>div span{color:var(--muted);font-size:11px;font-weight:600}
+.lobby-pairings>div.me,.league-table>div.me{border-left-color:var(--gold,#e5c17c)}
+.lobby-standings .fire-tag{font-style:normal;margin-left:6px}
+.club-league b[data-club]{cursor:pointer}
+.mod-sandbag{color:#f2b38f}
+@media (max-width:520px){.lobby-top{grid-template-columns:1fr 1fr}}

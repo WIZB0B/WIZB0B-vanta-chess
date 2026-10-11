@@ -320,6 +320,27 @@ fill the explorer from past games with the `explorer_backfill` action (150 games
 - Known: e2e/board-motion animation-timing tests are flaky in the shared container (same
   rate on round-5 builds); they pass when the machine is idle.
 
+## W. Round 8 (owner approved 2026-10-11)
+Server code in PR #39 (migration `20261011090000_round8_sandbagging`, after rounds 4-7).
+Not deployed; deploys with the round 4-7 batch once the owner accepts the prompts.
+- W1 Translations finished: toasts, lessons, openings, famous games, game-over messages and
+  the remaining screens; values inside messages via patterns. The extra dictionary loads
+  only for French, Spanish, Portuguese or Arabic. (PR #40)
+- W2 Explorer: Stockfish score for each listed move (own worker, depth 10, MultiPV +
+  searchmoves); "Your games" shows only your finished standard games; with no games the
+  engine suggests its top three. Still off for positions in your live game. (PR #39, #41)
+- W3 Tournament lobby: live games strongest first (your own marked), Swiss pairings for the
+  round, standings; refreshes every 10 s while open. Club events stay private. (PR #39, #41)
+- W4 Clubs in the league: each club scores its best 10 members' league points this season;
+  table under the division standings. (PR #39, #41)
+- W5 Accessibility: type moves (Nf3, e2e4, O-O; "/" focuses the box); every new move and
+  your clock at 1 min / 30 s / 10 s announced to screen readers in the interface language;
+  optional read-aloud in Theme Studio. (PR #40)
+- W6 Anti-sandbagging: a hidden score rises on quick rated losses (resign, flag or leave
+  within 6 moves; more against much weaker opponents) and falls with normal games. From 3
+  the player is listed in Moderation and matchmaking treats them as up to 300 points
+  stronger. A lead for a moderator, never an automatic penalty. (PR #39, #41)
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

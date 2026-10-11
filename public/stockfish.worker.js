@@ -5,6 +5,7 @@
  * Requests:
  *   {mode:'bot', fen, elo, nodes, requestId}      fixed node budget, Elo/Skill limited
  *   {mode:'analysis', fen, depth, requestId}      full strength, searches to depth
+ *     optional multipv (1-10) and searchmoves ['e2e4', …] (score only those moves)
  *   {action:'stop'}                               stops the current search
  * One search runs at a time. A new request stops the running search and starts once
  * its bestmove arrives, so every output line carries the requestId it belongs to. */
@@ -30,6 +31,7 @@ function ensureEngine(){
 }
 
 function configureStrength(worker,request){
+  worker.postMessage(`setoption name MultiPV value ${request.mode==='analysis'?request.multipv:1}`);
   if(request.mode==='analysis'){
     worker.postMessage('setoption name UCI_LimitStrength value false');
     worker.postMessage('setoption name Skill Level value 20');
@@ -48,7 +50,7 @@ function configureStrength(worker,request){
 }
 
 function goCommand(request){
-  if(request.mode==='analysis')return `go depth ${clamp(request.depth,1,MAX_DEPTH,18)}`;
+  if(request.mode==='analysis')return `go depth ${clamp(request.depth,1,MAX_DEPTH,18)}${request.searchmoves.length?` searchmoves ${request.searchmoves.join(' ')}`:''}`;
   return `go nodes ${clamp(request.nodes,MIN_NODES,MAX_NODES,100000)}`;
 }
 
@@ -65,7 +67,8 @@ self.onmessage=({data})=>{
     if(data?.action==='stop'){queued=null;if(engine&&searching)engine.postMessage('stop');return} // nothing to stop yet
     const worker=ensureEngine();
     if(!data?.fen)return;
-    const request={mode:data.mode==='analysis'?'analysis':'bot',fen:String(data.fen),elo:data.elo,nodes:data.nodes,depth:data.depth,requestId:data.requestId??null};
+    const searchmoves=(Array.isArray(data.searchmoves)?data.searchmoves:[]).map(String).filter(m=>/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m)).slice(0,30);
+    const request={mode:data.mode==='analysis'?'analysis':'bot',fen:String(data.fen).replace(/[^\w\/ -]/g,''),elo:data.elo,nodes:data.nodes,depth:data.depth,multipv:clamp(data.multipv,1,10,1),searchmoves,requestId:data.requestId??null};
     if(searching){queued=request;worker.postMessage('stop');return}
     start(request);
   }catch{
