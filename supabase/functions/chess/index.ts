@@ -1548,7 +1548,7 @@ async function respondDraw(req:Request,b:any){
 }
 async function gameHistory(req:Request,b:any){
   const p=await playerFor(req,b),limit=Math.max(1,Math.min(100,Number(b.limit||30)));
-  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen,move_history").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
+  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen,move_history,bot_player_id").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
   if(error)throw error;
   return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=g;return {...rest,sans:Array.isArray(move_history)?move_history.map((m:any)=>m.san||"").filter(Boolean):[]}})}
 }
