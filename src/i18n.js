@@ -213,10 +213,34 @@ export function detectLanguage(saved, navigatorLanguages = []) {
   for (const tag of navigatorLanguages) { const base = String(tag || '').toLowerCase().split('-')[0]; if (LANGUAGES[base]) return base; }
   return 'en';
 }
+// More rows and patterns arrive with src/i18n-more.js (loaded only for other languages).
+const PATTERNS = [];
+export function addTranslations(rows = [], patterns = []) {
+  for (const [lang, col] of Object.entries(COLS)) for (const r of rows) if (r[col] && !DICTIONARY[lang].has(r[0])) DICTIONARY[lang].set(r[0], r[col]);
+  for (const [source, ...out] of patterns) PATTERNS.push({ re: new RegExp(source), out });
+}
+function fromPattern(text, lang) {
+  const col = COLS[lang] - 1;
+  for (const p of PATTERNS) {
+    const m = p.re.exec(text);
+    if (!m || !p.out[col]) continue;
+    return p.out[col].replace(/([$%])(\d)/g, (_, kind, i) => { const v = m[Number(i)] ?? ''; return kind === '%' ? translateText(v, lang) || v : v; });
+  }
+  return null;
+}
+const exact = (text, lang) => DICTIONARY[lang].get(text) || fromPattern(text, lang);
 export function translateText(text, lang) {
   if (lang === 'en' || !DICTIONARY[lang]) return null;
   const trimmed = String(text || '').trim();
-  return DICTIONARY[lang].get(trimmed) || null;
+  if (!trimmed) return null;
+  const whole = exact(trimmed, lang);
+  if (whole) return whole;
+  // "You won · by checkmate": translate each part that can be, keep the rest (names, scores).
+  if (trimmed.includes(' · ')) {
+    const parts = trimmed.split(' · '), done = parts.map(x => exact(x.trim(), lang));
+    if (done.some(Boolean)) return parts.map((x, i) => done[i] || x).join(' · ');
+  }
+  return null;
 }
 
 const ORIGINAL = new WeakMap(); // text node -> its English source; element -> {attr: English source}

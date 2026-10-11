@@ -33,12 +33,14 @@ import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { lazyWorker } from './lazy-worker.js';
+import { resolveTypedMove } from './typed-move.js';
+import { SPEECH_LANG, clockAnnouncement, spokenMove } from './a11y.js';
 import { applyCastle, castleForMove, castleOptions, replay960 } from './castle960.js';
 import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
 import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
 import { explorerRows } from './explorer-view.js';
-import { LANGUAGES, LANG_KEY, RTL, detectLanguage, translateTree } from './i18n.js';
+import { LANGUAGES, LANG_KEY, RTL, addTranslations, detectLanguage, translateText, translateTree } from './i18n.js';
 import { BOARD_SETS, unlockedSets } from './season-themes.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
@@ -283,6 +285,7 @@ ${splashMarkup(splash)}
           <div class="moves-head"><span>#</span><span>White</span><span>Black</span></div>
           <div id="moves" class="moves"><span>Game ready — make a move.</span></div>
           <div class="move-nav" aria-label="Move navigation"><button type="button" data-browse="first" aria-label="First move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-7 6 7 6"/></svg></button><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button type="button" data-browse="live" aria-label="Back to the live position"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l7 6-7 6"/></svg></button><button type="button" id="undoMove" class="undo-move hidden">Undo</button></div>
+          <form id="typeMoveForm" class="type-move" autocomplete="off"><label for="typeMove">Type a move</label><input id="typeMove" maxlength="12" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go" placeholder="Nf3, e4, O-O…" aria-describedby="typeMoveHelp"><button>Move</button><small id="typeMoveHelp">Press / to type a move. Moves are read out to screen readers.</small></form>
           <div class="analysis">
             <header><b><img class="analysis-title-icon" src="/assets/vch/icons/review.svg" alt="">Engine Analysis</b><small>Stockfish 19 · Depth <span id="depth">—</span></small></header>
             <div id="reviewProgress" class="review-progress hidden" aria-live="polite"><span><b id="reviewProgressLabel">Analyzing game</b><em id="reviewProgressCount">0 / 0</em></span><div><i id="reviewProgressFill"></i></div></div>
@@ -325,6 +328,7 @@ ${splashMarkup(splash)}
 </div>
 
 <div id="toast"></div>
+<div id="a11yLive" class="sr-only" aria-live="polite" aria-atomic="true" data-no-i18n></div>
 
 <aside id="chatDrawer" class="chat-drawer" aria-hidden="true">
   <header><div><small>PLAYER CHAT</small><h3>Game conversation</h3></div><button id="closeChat" aria-label="Close chat">×</button></header>
@@ -333,7 +337,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><small id="boardSetNote" class="board-set-note"></small><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -375,7 +379,7 @@ let clocks=initialClocks(timeChoice($('#time').value).seconds);
 // move. Everything else (status text, move list, clocks, sound, analysis, engine, game-over
 // check) waits until the slide has landed and at least two frames have been painted
 // (afterBoardPaint); the online move request waits two frames (nextFrames).
-let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false;
+let boardDom=null,boardShapes=[],shapeDraft=null,lastBoardPlacement='',lastMoveCache={fen:'',move:null},statusScheduled=false,announceScheduled=false,announceState={key:"",count:0},lastAnnouncedSeconds=null;
 let boardMotion=Promise.resolve(),boardMotionUntil=0,motionScaleCache=null;
 function nextFrames(count=2){
   return new Promise(resolve=>{
@@ -589,7 +593,7 @@ function renderStatus(){
     $('#turn').textContent=localGameOverInfo?.reason==='on time'?'Game over · Time expired':'Game over · Resignation';
     $('#state').textContent='Computer game finished';
   }else if(serverGameId&&serverGame&&!['active','playing','in_progress','waiting'].includes(serverGame.status)){
-    $('#turn').textContent=`Game over · ${serverGame.end_reason||serverGame.result||serverGame.status}`;
+    $('#turn').textContent=`Game over · ${normalizedEndReason(serverGame.end_reason)||serverGame.result||serverGame.status}`;
     $('#state').textContent='Authoritative server result';
   }else{
     $('#turn').textContent=game.isGameOver()?endText():`${game.turn()==='w'?'White':'Black'} to move`;
@@ -606,6 +610,7 @@ function renderStatus(){
 function render(options){
   renderBoard(options);
   if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
+  if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove()})}
 }
 function endText(){if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
@@ -998,8 +1003,9 @@ function moveCell(record,index,records,signature){
   const current=(reviewState.viewing&&reviewState.currentPly===index+1)||(!reviewState.viewing&&browse?.ply===index+1)?' current':'';
   return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
+function moveRecords(){return watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
 function updateMoves(){
-  const records=watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true});
+  const records=moveRecords();
   syncMoveStrip(records);
   const target=$('#moves');if(!target)return;
   if(!records.length){target.innerHTML='<span class="moves-empty">Game ready — make a move.</span>';target.scrollTop=0;return}
@@ -1105,6 +1111,7 @@ function syncLowTimeWarning(values,active){
   const seconds=live?Number(values?.[own]):Infinity,low=live&&seconds>0&&seconds<10;
   $('#bottomClock')?.classList.toggle('low-time',low);
   if(low&&!lowTimeWarned){lowTimeWarned=true;toast('Low time · under 10 seconds');playUiSound('warning')}
+  if(live&&active===own){const line=clockAnnouncement(lastAnnouncedSeconds,seconds);lastAnnouncedSeconds=seconds;if(line)announce(translateText(line,uiLang)||line)}else lastAnnouncedSeconds=null;
   // Under 10 seconds on your own running clock: a soft tick every second.
   const tick=tickSecond(seconds,live&&active===own);
   if(tick!==null&&tick!==lastTickSecond){if(lastTickSecond!==null)playTick();lastTickSecond=tick}else if(tick===null)lastTickSecond=null;
@@ -2745,7 +2752,7 @@ function applyWatchState(payload){
   render({hint:changed&&prev?state.move_history?.at?.(-1):null,instant:!prev});afterBoardPaint(()=>{updateMoves();if(changed&&prev)playTone()});
   syncPlayerBars();syncMobileShell();
   const over=!['active','playing','in_progress'].includes(state.status);
-  if(over&&!watchSession.over){watchSession.over=true;toast(`Game over · ${state.result||''}${state.end_reason?` · ${state.end_reason}`:''}`)}
+  if(over&&!watchSession.over){watchSession.over=true;toast(`Game over · ${state.result||''}${state.end_reason?` · ${normalizedEndReason(state.end_reason)}`:''}`)}
 }
 // The mover's instant relay reaches spectators too: show it at once if it fits the board.
 function watchRelay(payload){
@@ -3239,11 +3246,13 @@ boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointer
 render();startClock();
 // ---- Interface language (src/i18n.js) ----
 let uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
-const i18nPending=new Set();let i18nFrame=0;
+const i18nPending=new Set();let i18nFrame=0,moreTranslations=null;
 function applyLanguage(lang,{save=false}={}){
   uiLang=LANGUAGES[lang]?lang:'en';
   document.documentElement.lang=uiLang;document.documentElement.dir=RTL.has(uiLang)?'rtl':'ltr';
   translateTree(document.body,uiLang);
+  // The rest of the dictionary (toasts, lessons, game-over messages…) loads on first use.
+  if(uiLang!=='en'&&!moreTranslations)moreTranslations=import('./i18n-more.js').then(m=>{addTranslations(m.MORE_ROWS,m.PATTERNS);if(uiLang!=='en')translateTree(document.body,uiLang)}).catch(()=>{moreTranslations=null});
   if(save)try{localStorage.setItem(LANG_KEY,uiLang)}catch{}
   const select=$('#languageSelect');if(select)select.value=uiLang;
 }
@@ -3254,6 +3263,47 @@ new MutationObserver(records=>{
 }).observe(document.body,{childList:true,subtree:true,characterData:true});
 $('#languageSelect').onchange=e=>applyLanguage(e.target.value,{save:true});
 applyLanguage(uiLang);
+// ---- Accessibility: moves read out, moves typed (src/a11y.js, src/typed-move.js) ----
+function speakOn(){try{return localStorage.getItem('vch.speak')==='1'}catch{return false}}
+function announce(text,{speak=true}={}){
+  const live=$('#a11yLive');if(live){live.textContent='';requestAnimationFrame(()=>{live.textContent=text})}
+  if(speak&&speakOn()&&'speechSynthesis' in window){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH_LANG[uiLang]||'en-US';speechSynthesis.speak(u)}catch{}}
+}
+function announceLatestMove(){
+  let records;try{records=moveRecords()}catch{return}
+  const key=`${mode}:${serverGameId||watchSession?.id||''}`,count=records.length;
+  const before=announceState;announceState={key,count};
+  if(before.key!==key||count!==before.count+1||browse)return; // a new game, a reload or a takeback: nothing to read
+  const last=records.at(-1);if(!last?.san)return;
+  announce(spokenMove({...last,color:last.color||(count%2?'w':'b')},uiLang));
+}
+$('#speakMoves').checked=speakOn();
+$('#speakMoves').onchange=e=>{try{localStorage.setItem('vch.speak',e.target.checked?'1':'0')}catch{}if(e.target.checked)announce(translateText('Moves will be read aloud',uiLang)||'Moves will be read aloud');else try{speechSynthesis.cancel()}catch{}};
+function typedMoveError(code){return {illegal:'That move is not legal here',ambiguous:'More than one piece can go there. Add its file or rank, like Nbd2',unreadable:'Type a move like Nf3, e4 or O-O',empty:'Type a move like Nf3, e4 or O-O'}[code]||'That move is not legal here'}
+async function submitTypedMove(event){
+  event.preventDefault();
+  const input=$('#typeMove'),text=input.value.trim();if(!text)return;
+  const say=msg=>{toast(msg);announce(translateText(msg,uiLang)||msg,{speak:false})};
+  if((studySession&&!studySession.editing)||mode==='watch'||(mode==='archive'&&!retrySession))return say('No moves to play here');
+  if(!retrySession&&!freeBoard()&&(reviewState.viewing||localGameOver||game.isGameOver()||(serverGameId&&myColor&&myColor!==game.turn())||(mode==='computer'&&(!computerStarted||game.turn()!==computerSide))))return say('Wait for your turn');
+  if(browse)exitBrowse();
+  if(!freeBoard()&&isOnlineGame()&&serverGame?.variant==='freestyle'&&/^[oO0]-?[oO0]/.test(text)){
+    const side=/^[oO0]-?[oO0]-?[oO0]/.test(text)?'O-O-O':'O-O',opt=castleOptions(game,serverGame.castling960||'-',Chess).find(o=>o.san===side);
+    if(!opt)return say(typedMoveError('illegal'));
+    input.value='';selected=null;return void castleOnline(opt);
+  }
+  const r=resolveTypedMove(game,text);
+  if(!r.move)return say(typedMoveError(r.error));
+  input.value='';selected=null;premoves.cancel();
+  makeMove({from:r.move.from,to:r.move.to,promotion:r.move.promotion||'q'});
+}
+$('#typeMoveForm').addEventListener('submit',submitTypedMove);
+document.addEventListener('keydown',e=>{
+  if(e.key!=='/'||e.ctrlKey||e.metaKey||e.altKey)return;
+  const t=e.target;if(t?.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+  const input=$('#typeMove');if(!input||!input.offsetParent)return;
+  e.preventDefault();input.focus();
+});
 // ---- Board sets earned in the league (src/season-themes.js) ----
 function setThemeVar(name,value){const input=$(`#themeStudio [data-theme="${name}"]`);if(input){input.value=value;input.oninput?.()}}
 function syncBoardSets(){
