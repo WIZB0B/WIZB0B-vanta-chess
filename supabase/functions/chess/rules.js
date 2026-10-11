@@ -202,3 +202,32 @@ export function abortDue({ moveCount, lastMoveAt, daily = false, now = Date.now(
 export const EXPLORER_PLIES = 24;
 // Position key: placement, side to move, castling, en passant (no move counters).
 export function explorerKey(fen) { return String(fen || '').split(' ').slice(0, 4).join(' '); }
+
+// ---- Anti-sandbagging ----
+// Losing rated games on purpose (to drop a rating, then beat weaker players) shows up as
+// quick losses (resigning, flagging or leaving within a few moves) and quick losses to much
+// weaker players. Each rated result moves the score; wins and normal games wash it out.
+// From SANDBAG_FLAG the player goes to the moderation queue, and matchmaking pairs them as
+// if they were rated higher, so a dumped rating doesn't buy easy opponents.
+export const SANDBAG_FLAG = 3;
+export function sandbagDelta({ score, plies = 0, endReason = '', myRating = 1200, oppRating = 1200 }) {
+  if (score === 1) return -0.25;
+  if (score === 0.5) return -0.1;
+  const quick = plies <= 12 && ['resign', 'timeout', 'abandoned'].includes(String(endReason || ''));
+  const toWeaker = oppRating <= myRating - 300 && plies <= 30;
+  return quick && toWeaker ? 1.5 : quick ? 1 : toWeaker ? 0.5 : -0.1;
+}
+export function nextSandbagScore(current, delta) { return Math.max(0, Math.min(10, Math.round((Number(current || 0) + delta) * 100) / 100)); }
+export function sandbagAdjust(score) { return Math.round(Math.min(300, Math.max(0, Number(score || 0) - 1) * 100)); }
+
+// ---- Club league table ----
+// A club's season score is the sum of its best CLUB_LEAGUE_TOP members' league points.
+export const CLUB_LEAGUE_TOP = 10;
+export function clubLeagueTable(entries = [], memberClub = new Map(), clubs = new Map()) {
+  const byClub = new Map();
+  for (const e of entries) { const c = memberClub.get(e.player_id); if (!c) continue; (byClub.get(c) || byClub.set(c, []).get(c)).push(Number(e.points || 0)); }
+  return [...byClub.entries()].map(([id, pts]) => {
+    const top = pts.sort((a, b) => b - a).slice(0, CLUB_LEAGUE_TOP);
+    return { id, name: clubs.get(id)?.name || 'Club', slug: clubs.get(id)?.slug || '', points: top.reduce((s, x) => s + x, 0), players: pts.length };
+  }).sort((a, b) => b.points - a.points || b.players - a.players);
+}

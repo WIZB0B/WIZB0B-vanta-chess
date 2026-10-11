@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
 import { calculateMoveTiming } from "./latency.js";
 import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle, rightsAfterMove } from "./castle960.js";
-import { EXPLORER_PLIES, abortDue, explorerKey, firstMovesPending, swissPairs } from "./rules.js";
+import { CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
 const admin = createClient(
@@ -56,7 +56,7 @@ const code8=()=>crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase();
 const poolFor=(base:number,inc=0)=>{const e=Number(base)+(Number(inc)*40);return e<180?"bullet":e<600?"blitz":e<1800?"rapid":"classical"};
 const ratingOf=(p:any,pool:string)=>Number(p?.ratings?.[pool]??p?.rating??1200);
 const gamesOf=(p:any,pool:string)=>Number(p?.provisional_games?.[pool]??0);
-const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
+const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool)+sandbagAdjust(p?.sandbag_score),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
 const publicPlayer=(p:any)=>({id:p.id,username:p.username,display_name:p.display_name,rating:p.rating,ratings:p.ratings,provisional_games:p.provisional_games,wins:p.wins,losses:p.losses,draws:p.draws,bot_stats:p.bot_stats,smurf_score:Number(p.smurf_score||0),account:!!p.auth_user_id,country_code:p.country_code||null,has_avatar:!!p.avatar_data,puzzle_rating:Number(p.puzzle_rating||1200),achievements:Array.isArray(p.achievements)?p.achievements:[]});
 // The player's own profile also carries their portrait (a small data: image, see profileUpdate).
 const ownPlayer=(p:any)=>({...publicPlayer(p),avatar_data:p.avatar_data||null,berserk_ready:!!p.berserk_ready,rated_win_streak:Number(p.rated_win_streak||0),puzzle_games:Number(p.puzzle_games||0),puzzle_best_streak:Number(p.puzzle_best_streak||0),league_division:Number(p.league_division||0),role:p.role||"player",muted_until:p.muted_until||null,banned:!!p.banned_at});
@@ -229,8 +229,8 @@ async function settleRatings(g:any){
   const nextW={...(w.ratings||{}),[pool]:Math.max(100,rw+dw)},nextB={...(b.ratings||{}),[pool]:Math.max(100,rb+db)};
   const pgW={...(w.provisional_games||{}),[pool]:nw+1},pgB={...(b.provisional_games||{}),[pool]:nb+1};
   await Promise.all([
-    admin.from("chess_players").update({ratings:nextW,provisional_games:pgW,rating:nextW.rapid??rw,wins:Number(w.wins)+(sw===1?1:0),losses:Number(w.losses)+(sw===0?1:0),draws:Number(w.draws)+(sw===.5?1:0),rated_games:Number(w.rated_games)+1,rated_win_streak:streakW,berserk_ready:berserkAfter({ready:!!w.berserk_ready,score:sw,newStreak:streakW}),smurf_score:Math.max(0,Number(w.smurf_score||0)+(nw<10&&sw===1&&rb>=rw-100?.45:-.15)),color_balance:Number(w.color_balance||0)+1,updated_at:nowIso()}).eq("id",w.id),
-    admin.from("chess_players").update({ratings:nextB,provisional_games:pgB,rating:nextB.rapid??rb,wins:Number(b.wins)+(sb===1?1:0),losses:Number(b.losses)+(sb===0?1:0),draws:Number(b.draws)+(sb===.5?1:0),rated_games:Number(b.rated_games)+1,rated_win_streak:streakB,berserk_ready:berserkAfter({ready:!!b.berserk_ready,score:sb,newStreak:streakB}),smurf_score:Math.max(0,Number(b.smurf_score||0)+(nb<10&&sb===1&&rw>=rb-100?.45:-.15)),color_balance:Number(b.color_balance||0)-1,updated_at:nowIso()}).eq("id",b.id)
+    admin.from("chess_players").update({ratings:nextW,provisional_games:pgW,rating:nextW.rapid??rw,wins:Number(w.wins)+(sw===1?1:0),losses:Number(w.losses)+(sw===0?1:0),draws:Number(w.draws)+(sw===.5?1:0),rated_games:Number(w.rated_games)+1,rated_win_streak:streakW,sandbag_score:nextSandbagScore(w.sandbag_score,sandbagDelta({score:sw,plies:Number(g.move_count||0),endReason:g.end_reason,myRating:rw,oppRating:rb})),berserk_ready:berserkAfter({ready:!!w.berserk_ready,score:sw,newStreak:streakW}),smurf_score:Math.max(0,Number(w.smurf_score||0)+(nw<10&&sw===1&&rb>=rw-100?.45:-.15)),color_balance:Number(w.color_balance||0)+1,updated_at:nowIso()}).eq("id",w.id),
+    admin.from("chess_players").update({ratings:nextB,provisional_games:pgB,rating:nextB.rapid??rb,wins:Number(b.wins)+(sb===1?1:0),losses:Number(b.losses)+(sb===0?1:0),draws:Number(b.draws)+(sb===.5?1:0),rated_games:Number(b.rated_games)+1,rated_win_streak:streakB,sandbag_score:nextSandbagScore(b.sandbag_score,sandbagDelta({score:sb,plies:Number(g.move_count||0),endReason:g.end_reason,myRating:rb,oppRating:rw})),berserk_ready:berserkAfter({ready:!!b.berserk_ready,score:sb,newStreak:streakB}),smurf_score:Math.max(0,Number(b.smurf_score||0)+(nb<10&&sb===1&&rw>=rb-100?.45:-.15)),color_balance:Number(b.color_balance||0)-1,updated_at:nowIso()}).eq("id",b.id)
   ]);
   const {data}=await admin.from("chess_games").update({white_rating_before:rw,black_rating_before:rb,white_rating_delta:dw,black_rating_delta:db,ended_at:g.ended_at||nowIso(),updated_at:nowIso()}).eq("id",g.id).is("white_rating_delta",null).select().maybeSingle();
   const settled=data||g;await settleTournament(settled);
@@ -268,7 +268,7 @@ async function resolveTimeout(g:any){
   const patch=!sideCanPossiblyMate(c,winner)
     ?{status:"draw",result:"1/2-1/2",...(side==="w"?{white_time_ms:0}:{black_time_ms:0})}
     :(side==="w"?{status:"black_won",result:"0-1",white_time_ms:0}:{status:"white_won",result:"1-0",black_time_ms:0});
-  const {data}=await admin.from("chess_games").update({...patch,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();
+  const {data}=await admin.from("chess_games").update({...patch,end_reason:"timeout",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();
   return data?settleRatings(data):g
 }
 async function freshGame(id:string){return resolveTimeout(await gameById(id))}
@@ -718,8 +718,22 @@ async function league(req:Request,b:any){
   const names=new Map((players||[]).map((x:any)=>[x.id,x]));
   const {count}=await admin.from("chess_league_entries").select("player_id",{count:"exact",head:true}).eq("season",season).eq("division",division);
   const badges=(Array.isArray(fresh?.achievements)?fresh.achievements:[]).filter((a:any)=>String(a?.id||"").startsWith("season-"));
+  // Clubs as teams: the best members' league points this season.
+  let clubTable:any[]=[],myClub:any=null;
+  try{
+    const {data:all}=await admin.from("chess_league_entries").select("player_id,points").eq("season",season).gt("points",0).limit(5000);
+    // Every club member (a long .in() list would overflow the request URL); entries without a club drop out.
+    const {data:mem}=(all||[]).length?await admin.from("chess_club_members").select("player_id,club_id").limit(20000):{data:[]};
+    const memberClub=new Map((mem||[]).map((m:any)=>[m.player_id,m.club_id]));
+    const ranked=clubLeagueTable(all||[],memberClub).slice(0,30),cids=ranked.map((c:any)=>c.id);
+    const {data:cl}=cids.length?await admin.from("chess_clubs").select("id,name,slug").in("id",cids):{data:[]};
+    const names=new Map((cl||[]).map((c:any)=>[c.id,c]));
+    clubTable=ranked.map((c:any,i:number)=>({...c,name:names.get(c.id)?.name||"Club",slug:names.get(c.id)?.slug||"",rank:i+1}));
+    if(p){const m=await clubOf(p.id);if(m)myClub=clubTable.find((c:any)=>c.id===m.club_id)||null}
+    clubTable=clubTable.map(({id,...rest}:any)=>rest);if(myClub){const {id,...rest}=myClub;myClub=rest}
+  }catch(e){console.error("club league",e)}
   return {season,ends:seasonEnds(season),division,divisions:DIVISIONS,myDivision:Number(fresh?.league_division||0),me:mine||null,minGames:LEAGUE_MIN_GAMES,zones:zoneSizes(Number(count||0)),total:Number(count||0),
-    standings:(rows||[]).map((r:any,i:number)=>{const x:any=names.get(r.player_id);return {rank:i+1,name:x?.username||x?.display_name||"Player",country_code:x?.country_code||null,points:r.points,games:r.games,wins:r.wins,me:r.player_id===p?.id}}),badges}
+    clubs:clubTable,myClub,clubTop:CLUB_LEAGUE_TOP,standings:(rows||[]).map((r:any,i:number)=>{const x:any=names.get(r.player_id);return {rank:i+1,name:x?.username||x?.display_name||"Player",country_code:x?.country_code||null,points:r.points,games:r.games,wins:r.wins,me:r.player_id===p?.id}}),badges}
 }
 // ---- Clubs and club battles ----
 const cleanSlug=(v:any)=>String(v||"").toLowerCase().trim().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,32);
@@ -878,7 +892,7 @@ async function adminFor(req:Request,b:any){
   if(p.role!=="admin")throw fail("Not found.",404); // the moderation API is invisible to players
   return p;
 }
-const modCard=(x:any)=>({id:x.id,username:x.username||x.display_name||"Player",account:!!x.auth_user_id,rating:ratingOf(x,"blitz"),rated_games:Number(x.rated_games||0),created_at:x.account_created_at||x.created_at,muted_until:x.muted_until||null,banned_at:x.banned_at||null,ban_reason:x.ban_reason||null});
+const modCard=(x:any)=>({sandbag_score:Number(x.sandbag_score||0),id:x.id,username:x.username||x.display_name||"Player",account:!!x.auth_user_id,rating:ratingOf(x,"blitz"),rated_games:Number(x.rated_games||0),created_at:x.account_created_at||x.created_at,muted_until:x.muted_until||null,banned_at:x.banned_at||null,ban_reason:x.ban_reason||null});
 async function modQueue(req:Request,b:any){
   await adminFor(req,b);
   const [{data:reports},{data:review},{data:log}]=await Promise.all([
@@ -899,6 +913,8 @@ async function modQueue(req:Request,b:any){
     const c=cases.get(f.player_id)||{player:modCard(map.get(f.player_id)||{id:f.player_id}),reports:[],reasons:{},fairplay:null};
     c.fairplay={reviewed_games:Number(f.reviewed_games||0),games_95_plus:Number(f.games_95_plus||0),avg_accuracy:f.avg_opponent_measured_accuracy===null?null:Number(f.avg_opponent_measured_accuracy)};cases.set(f.player_id,c);
   }
+  const {data:bags}=await admin.from("chess_players").select("*").gte("sandbag_score",SANDBAG_FLAG).is("banned_at",null).order("sandbag_score",{ascending:false}).limit(50);
+  for(const x of bags||[]){const c=cases.get(x.id)||{player:modCard(x),reports:[],reasons:{},fairplay:null};c.sandbag=Number(x.sandbag_score);cases.set(x.id,c)}
   const list=[...cases.values()].sort((a,c)=>(c.reports.length+(c.fairplay?.games_95_plus||0)*2)-(a.reports.length+(a.fairplay?.games_95_plus||0)*2));
   return {cases:list,log:(log||[]).map((l:any)=>({...l,player:(map.get(l.player_id) as any)?.username||"Player",moderator:(map.get(l.moderator_id) as any)?.username||"Moderator"}))}
 }
@@ -1122,6 +1138,20 @@ async function openingExplorer(req:Request,b:any){
     const {data:live}=await admin.from("chess_games").select("fen").eq("status","active").is("daily_days",null).or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).limit(5);
     if((live||[]).some((g:any)=>explorerKey(g.fen)===key))throw fail("The explorer is off for positions in your live games.",409);
   }catch(e:any){if(e?.status===409)throw e}
+  if(b.mine){
+    const p=await playerFor(req,b,false,{touch:false});
+    const {data:games}=await admin.from("chess_games").select("move_history,result,white_player_id,start_fen").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).in("result",["1-0","0-1","1/2-1/2"]).eq("variant","standard").gte("move_count",2).order("ended_at",{ascending:false}).limit(300);
+    const agg=new Map<string,any>();
+    for(const g of games||[]){
+      const c=new Chess();
+      for(const m of (Array.isArray(g.move_history)?g.move_history:[]).slice(0,EXPLORER_PLIES)){
+        const here=explorerKey(c.fen())===key;let made:any=null;try{made=c.move({from:m.from,to:m.to,promotion:m.promotion||undefined})}catch{}if(!made)break;
+        if(here){const r=agg.get(made.san)||{san:made.san,games:0,white:0,draws:0,black:0};r.games++;if(g.result==="1-0")r.white++;else if(g.result==="0-1")r.black++;else r.draws++;agg.set(made.san,r);break}
+      }
+    }
+    const moves=[...agg.values()].sort((a,c)=>c.games-a.games).slice(0,20);
+    return {position:key,moves,total:moves.reduce((s:number,x:any)=>s+x.games,0),mine:true}
+  }
   const {data,error}=await admin.from("chess_opening_moves").select("san,games,white,draws,black").eq("position",key).order("games",{ascending:false}).limit(20);
   if(error)throw error;
   return {position:key,moves:data||[],total:(data||[]).reduce((s:number,x:any)=>s+Number(x.games),0)}
@@ -1133,9 +1163,25 @@ async function explorerBackfill(req:Request,b:any){
   return {processed:(data||[]).length}
 }
 
+// Tournament lobby: standings, the current round's pairings, and live games to watch.
+async function tournamentLobby(req:Request,b:any){
+  const t=await one("chess_tournaments","id",String(b.tournamentId||""));if(!t)throw fail("Tournament not found.",404);
+  let viewer:any=null;try{viewer=await playerFor(req,b,false,{touch:false})}catch{}
+  if((await tournamentVisibleTo([t],viewer)).length===0)throw fail("Tournament not found.",404);
+  const fresh=t.format==="swiss"?await swissTick(t).catch(()=>t):t;
+  const [standings,{data:live},{data:round}]=await Promise.all([
+    tournamentStandings({tournamentId:t.id}),
+    admin.from("chess_games").select("id,white_name,black_name,white_rating_before,black_rating_before,white_player_id,black_player_id,move_count,fen,tournament_round,updated_at").eq("tournament_id",t.id).eq("status","active").order("updated_at",{ascending:false}).limit(40),
+    fresh.format==="swiss"&&Number(fresh.current_round)>0?admin.from("chess_games").select("white_name,black_name,result,status,invite_code,white_player_id,black_player_id").eq("tournament_id",t.id).eq("tournament_round",fresh.current_round).limit(100):Promise.resolve({data:[]})
+  ]);
+  const ratingSum=(g:any)=>Number(g.white_rating_before||0)+Number(g.black_rating_before||0);
+  return {tournament:fresh,standings:standings.standings,clubs:standings.clubs||[],
+    games:(live||[]).sort((a:any,c:any)=>ratingSum(c)-ratingSum(a)).map((g:any)=>({id:g.id,white:g.white_name,black:g.black_name,whiteRating:g.white_rating_before,blackRating:g.black_rating_before,moves:g.move_count,fen:g.fen,round:g.tournament_round,mine:!!viewer&&[g.white_player_id,g.black_player_id].includes(viewer.id)})),
+    pairings:(round||[]).map((g:any)=>({white:g.white_name,black:g.black_name,result:g.status==="active"?"playing":g.result,mine:!!viewer&&[g.white_player_id,g.black_player_id].includes(viewer.id),code:viewer&&[g.white_player_id,g.black_player_id].includes(viewer.id)?g.invite_code:null}))}
+}
 async function resign(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")return {game:g};let patch:any;
-  if(g.white_player_id===p.id)patch={status:"black_won",result:"0-1"};else if(g.black_player_id===p.id)patch={status:"white_won",result:"1-0"};else throw fail("Not your game.",403);
+  if(g.white_player_id===p.id)patch={status:"black_won",result:"0-1",end_reason:"resign"};else if(g.black_player_id===p.id)patch={status:"white_won",result:"1-0",end_reason:"resign"};else throw fail("Not your game.",403);
   const {data,error}=await admin.from("chess_games").update({...patch,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();if(error)throw error;return {game:data?await settleRatings(data):g}
 }
 async function offerDraw(req:Request,b:any){
@@ -1457,6 +1503,7 @@ Deno.serve(async(req)=>{
       case "notifications_read":out=await notificationsRead(req,b);break;
       case "opening_explorer":out=await openingExplorer(req,b);break;
       case "explorer_backfill":out=await explorerBackfill(req,b);break;
+      case "tournament_lobby":out=await tournamentLobby(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;
