@@ -19,7 +19,10 @@ test('capture desktop and mobile reference renders',async({browser})=>{
   await d.screenshot({path:'test-results/visual/batch-1.png',fullPage:false});
 
   const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
-  const m=await mobile.newPage();await mockProfile(m);await m.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));await m.goto('/');await m.waitForSelector('.board .square:nth-child(64)');
+  const m=await mobile.newPage();await mockProfile(m);await m.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));await m.goto('/');
+  // Phones open on the home screen (mobile shell); the board shows once a game starts.
+  if(await m.locator('body.m-app').count()){await m.locator('[data-mode="computer"]').click();await m.locator('#computerStart').click()}
+  await m.waitForSelector('.board .square:nth-child(64)');
   await m.screenshot({path:'test-results/visual/vch-mobile.png',fullPage:true});
   await desktop.close();await mobile.close();
 });
