@@ -45,6 +45,11 @@ import { SHADOW_PLIES, shadowBook, shadowElo, shadowLines } from './shadow.js';
 import { GAUNTLET_LIVES, GAUNTLET_STAGES, loadGauntlet, newRun as newGauntletRun, recordStage, saveGauntlet, stageColor } from './gauntlet.js';
 import { rivalLine, rivalsFrom } from './rivals.js';
 import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } from './relics.js';
+import { addGames, armyList, identitiesAfter, loadVeterans, rankOf, saveVeterans, totalsMap } from './veterans.js';
+import { dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from './oaths.js';
+import { atmosphereFor, tensionFor } from './atmosphere.js';
+import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
+import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
 import { SPEECH_LANG, clockAnnouncement, spokenMove } from './a11y.js';
@@ -79,6 +84,8 @@ const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuC
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
+// Round 12 state (the functions are in the round 12 section below)
+let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null;
 let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
@@ -236,7 +243,7 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -277,13 +284,14 @@ ${splashMarkup(splash)}
         <div class="player-info">
           <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag hidden" id="bottomFlag" aria-hidden="true"></span></div>
           <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span><span class="captured-tray" id="bottomCaptured" aria-label="Pieces captured"></span></div>
+          <div class="oath-line hidden" id="oathLine" aria-live="polite"></div>
         </div>
         <div class="player-connection hidden" id="bottomConnection" aria-label="Network latency">
           <span class="ping-bars" id="bottomPingBars" aria-hidden="true"><i></i><i></i><i></i></span><span id="bottomPing">-- ms</span>
         </div>
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
-      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button></div></details></div>
+      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button><button id="musicToggle" type="button" aria-pressed="false">Music: off</button></div></details></div>
       <div class="m-movebar"><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><div id="mMoves" class="m-moves" aria-label="Moves"></div><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
       <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="takeback" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span>Takeback</span></button><button type="button" data-m-action="leave" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Stop watching</span></button><button type="button" data-m-action="puzzle-next" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Next</span></button><button type="button" data-m-action="puzzle-streak" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3 0-3-1-5 0-8Z"/></svg><span>Streak</span></button><button type="button" data-m-action="puzzle-skip" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Skip once</span></button><button type="button" data-m-action="puzzle-end" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>End streak</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
     </section>
@@ -354,7 +362,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -584,6 +592,7 @@ function renderBoard({hint=null,instant=false}={}){
     if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
   }
   const motion=dom.pieces.sync(position,{flipped,animate:!instant,duration:(from,to)=>moveDurationMs(from,to,scale),hint});
+  syncVeteranMarks(dom,boardGame);queueAtmosphere();
   // A move or a change of turn can leave the hovered piece somewhere else or no longer yours.
   if(reactions.hovered&&(reactions.pieceAt(reactions.hoverSquare)!==reactions.hovered||!reactions.canPick(reactions.hoverSquare)))reactions.clearHover();
   if(reactions.hintSquare&&!legal.has(reactions.hintSquare))reactions.hint(null);
@@ -728,6 +737,7 @@ function gameOverBody(info,title){
   body.append(result,players);return body;
 }
 async function resetFinishedGame(nextMode=['match','room','computer'].includes(mode)?mode:'room'){
+  restoreRealmTheme();
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();roomCreated=false;lastDrawOffer=null;clearDrawOfferTimer();drawOfferKey=null;localGameOver=false;localGameOverInfo=null;computerStarted=false;localClockState=null;lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();rematchOfferPending=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();game.reset();history.replaceState(null,'',location.pathname);mode=nextMode;render();updateMoves();await activateLeftMode(nextMode);showMovesView();
 }
 function rematchSettings(){
@@ -760,7 +770,7 @@ async function joinRematchFromPeer(payload){
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
-  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);
+  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);roundTwelveGameOver(info);
   if(!info.online&&mode==='computer'){
     lastLocalArchiveId=`local-${Date.now()}`;
     saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason});
@@ -928,6 +938,7 @@ function startComputerGame(opts={}){
   const selectedBot=opts.bot||computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   computerRules=opts.variant||computerVariant;
+  if(opts.bot?.campaign)applyRealmTheme(realmById(opts.bot.campaign.realm));else restoreRealmTheme();
   currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;lowTimeWarned=false;computerStarted=true;computerSide=opts.side||selectedComputerSide();premoves.cancel();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();boardShapes=[];
   if(computerRules==='freestyle'){game.load(freestyleFen());toast(FREESTYLE_LABEL)}
@@ -936,6 +947,7 @@ function startComputerGame(opts={}){
   resetLocalClock();syncRoomUi();syncPlayerBars();render();updateMoves();
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
   showGameStartBanner(computerSide,computerRules==='blackout'?BLACKOUT_SECONDS:600,0,`computer:${Date.now()}`);
+  swearOath(`computer:${Date.now()}`,{startFen:computerRules==='freestyle'?game.fen():null});
   if(game.turn()!==computerSide)setTimeout(engineMove,280);
 }
 // ---- Round 11: Vanta Dark (fog of war) and Blackout Blitz, games against the computer ----
@@ -1328,7 +1340,7 @@ function applyServerState(payload,{animateMove=true}={}){
   if(provisional&&(confirms(provisional,state)||isExpired(provisional,performance.now())))clearProvisional();
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(browse&&(state.id!==previousGameId||Number(state.version)>previousVersion)){browse=null;syncBrowseUi()} // a new move returns to the live position
-  if(state.id&&state.id!==previousGameId){moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
+  if(state.id&&state.id!==previousGameId){restoreRealmTheme();if(['waiting','active'].includes(state.status))setTimeout(()=>{if(serverGameId===state.id&&myColor)swearOath(`online:${state.id}`,{startFen:state.start_fen||null,ok:(state.variant||'standard')==='standard'&&!state.start_fen,midGame:(state.move_history?.length||0)>1})},0);moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
   currentPlayerId=payload.player?.id||currentPlayerId;currentBot=payload.bot||currentBot;
@@ -1781,7 +1793,7 @@ function drawArchive(){
       <div class="archive-signature"><small>Signature opening</small><b>${insight.topOpening?escapeHtml(insight.topOpening.name):'—'}</b>${insight.topOpening?`<em>${insight.topOpening.games} games · ${insight.topOpening.percent}%</em>`:''}</div>
     </section>
     ${current?'<button type="button" class="archive-current">Tell the story of the game you just played</button>':''}
-    <div class="archive-tools"><button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button><button type="button" class="archive-together">Analyse together · a shared board with a friend</button><button type="button" class="archive-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button></div>
+    <div class="archive-tools"><button type="button" class="archive-trainer">Opening trainer · drill your own deviations</button><button type="button" class="archive-together">Analyse together · a shared board with a friend</button><button type="button" class="archive-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><button type="button" class="archive-army">Your army · veteran pieces and their deeds</button></div>
     <div class="archive-filters" role="tablist">${['all','win','loss','draw','computer'].map(f=>`<button type="button" data-archive-filter="${f}" class="${archiveFilter===f?'on':''}">${{all:'All',win:'Wins',loss:'Losses',draw:'Draws',computer:'vs Computer'}[f]}</button>`).join('')}</div>
     <div class="archive-list">${rows.map(({e,i})=>{
       const o=outcomeFor(e.result,e.myColor),opp=e.myColor==='w'?e.black:e.white,oppRating=e.myColor==='w'?e.blackRating:e.whiteRating,acc=reviews[e.id]?.accuracy?.[e.myColor],opening=detectOpening(sansFromPgn(e.pgn))?.name;
@@ -1793,6 +1805,7 @@ function drawArchive(){
   target.querySelector('.archive-current')?.addEventListener('click',()=>void startGameReview());
   target.querySelector('.archive-together')?.addEventListener('click',()=>{const h=archiveSession?game.history():[];startAnalysis(h.length?{sans:h}:archiveSession?{startFen:game.fen()}:{})});
   target.querySelector('.archive-trainer')?.addEventListener('click',()=>void renderTrainer());
+  target.querySelector('.archive-army')?.addEventListener('click',renderArmy);
   target.querySelector('.archive-mistakes')?.addEventListener('click',renderMistakes);
 }
 async function openArchivedGame(entry){
@@ -3160,8 +3173,10 @@ $$('[data-computer-side]').forEach(button=>button.onclick=()=>{
 });
 $('#findOpponent').onclick=beginMatchSearch;
 $('#computerStart').onclick=startComputerGame;
-$('.computer-shadow')?.addEventListener('click',()=>void renderShadow());
-$('.computer-gauntlet')?.addEventListener('click',renderGauntlet);
+// Phones show these views on the panel screen, not beside the board (fix: they opened off-screen).
+function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
+$('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
+$('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
 $('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='crazyhouse'&&String($('#time').value).startsWith('daily'))return toast('Crazyhouse is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
@@ -4313,6 +4328,274 @@ function drawRelics(){
   target.querySelectorAll('[data-relic]').forEach(b=>b.onclick=()=>{wearRelic(b.dataset.relic);drawRelics()});
   target.querySelector('[data-relic-off]')?.addEventListener('click',()=>{wearRelic(null);drawRelics()});
 }
+// ---- Round 12: Veteran pieces, Oaths, Living atmosphere, Adaptive music and the Vanta Campaign ----
+// (src/veterans.js, oaths.js, atmosphere.js, music.js, campaign.js). All of it lives on this device.
+// The state variables are declared near the top of this file (round 12 block) so the board can
+// call in here while the page is still starting.
+const R12_KEY='vch.r12';
+function r12Prefs(){
+  if(!r12PrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem(R12_KEY)||'')}catch{}
+    r12PrefsCache={veterans:v?.veterans==='off'?'off':'on',atmosphere:['full','subtle','off'].includes(v?.atmosphere)?v.atmosphere:'full'}}
+  return r12PrefsCache;
+}
+function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStorage.setItem(R12_KEY,JSON.stringify(r12PrefsCache))}catch{}}
+// Messages after a game come one after another instead of replacing each other.
+function queueToast(text,{sound=null,delay=1200}={}){
+  r12ToastQueue.push({text,sound});if(r12ToastTimer)return;
+  const next=()=>{const item=r12ToastQueue.shift();if(!item){r12ToastTimer=null;return}toast(item.text,{duration:2500});if(item.sound)playUiSound(item.sound);r12ToastTimer=setTimeout(next,2700)};
+  r12ToastTimer=setTimeout(next,delay);
+}
+function earnRelicQueued(id){const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;saveRelics(out.state);queueToast(`Relic earned: ${out.unlocked.name}`,{sound:'win'})}
+
+// Veteran pieces: your own pieces wear the ranks their careers have earned.
+function veteranTotals(){if(!veteranState)veteranState=loadVeterans();return veteranState.totals}
+// Which colours have any ranked piece at all (most boards have none: nothing to work out then).
+function rankedColors(){if(!veteranState?.ranked){const t=veteranTotals();veteranState.ranked=new Set(Object.keys(t).filter(id=>rankOf(t[id])).map(id=>id[0]))}return veteranState.ranked}
+function veteranColor(){if(watchSession)return null;if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
+function veteranGameOk(){
+  if(mode==='computer')return computerStarted&&['standard','dark','blackout'].includes(computerRules)&&!blackoutActive();
+  return !!serverGameId&&(serverGame?.variant||'standard')==='standard'&&!serverGame?.start_fen;
+}
+function veteranIds(){
+  const color=veteranColor();if(!color||!veteranGameOk()||!rankedColors().has(color))return null;
+  const sans=currentHistory(),game_=`${serverGameId||'computer'}:${color}`;
+  // Follow the game move by move; start again only for a new game or a takeback.
+  let cache=vetCache;
+  if(!cache||cache.game!==game_||cache.sans.length>sans.length||cache.sans.some((x,i)=>x!==sans[i]))cache=vetCache={game:game_,sans:[],chess:new Chess(),verbose:[],ids:null};
+  if(cache.ids&&cache.sans.length===sans.length)return cache.ids;
+  for(const san of sans.slice(cache.sans.length)){try{const m=cache.chess.move(san);if(!m)break;cache.verbose.push(m);cache.sans.push(san)}catch{break}}
+  if(cache.sans.length<sans.length)cache.sans=[...sans]; // an unreadable move: keep what we know
+  cache.ids=identitiesAfter(cache.verbose,color);return cache.ids;
+}
+function syncVeteranMarks(dom,boardGame){
+  const ids=r12Prefs().veterans==='on'&&boardGame===game&&!reviewState.viewing&&!browse?veteranIds():null,totals=ids?veteranTotals():null;
+  for(const [sq,el] of dom.pieces.elements){
+    const id=ids?.get(sq),stats=id?totals[id]:null,rank=stats?rankOf(stats)?.id||'':'';
+    if(rank){
+      el.dataset.vetId=id;if(el.dataset.veteran===rank)continue;el.dataset.veteran=rank;
+      if(!el.querySelector('.vet-mark')){const mark=document.createElement('i');mark.className='vet-mark';mark.setAttribute('aria-hidden','true');mark.append(document.createElement('b'),document.createElement('b'),document.createElement('b'));el.append(mark)}
+    }else if(el.dataset.veteran){delete el.dataset.veteran;delete el.dataset.vetId;el.querySelector('.vet-mark')?.remove()}
+  }
+}
+function veteranCardHtml(x){
+  const deeds=[[x.captures,'capture'],[x.forks,'fork'],[x.checks,'check'],[x.mates,'mate'],[x.promotions,'promotion']].filter(([n])=>n>0).map(([n,w])=>`${n} ${w}${n===1?'':'s'}`).join(' · ')||'No deeds yet';
+  return `<b>${escapeHtml(x.name)}</b>${x.epithet?`<em>${escapeHtml(x.epithet)}</em>`:''}<small>${escapeHtml(x.rankName)} · ${x.games} ${x.games===1?'game':'games'}${x.fell?` · fell ${x.fell}`:''}</small><span>${deeds}</span>`;
+}
+function showVeteranCard(el){
+  const id=el?.dataset.vetId,stats=id?veteranTotals()[id]:null;if(!stats||!el.isConnected)return;
+  const [x]=armyList(new Map([[id,stats]]));let card=$('#veteranCard');
+  if(!card){card=document.createElement('div');card.id='veteranCard';card.className='veteran-card';card.setAttribute('role','tooltip');document.body.append(card)}
+  card.innerHTML=veteranCardHtml(x);card.dataset.rank=x.rank||'';
+  const r=el.getBoundingClientRect(),w=Math.min(250,window.innerWidth-16);card.style.width=`${w}px`;
+  card.style.left=`${Math.max(8,Math.min(window.innerWidth-w-8,r.left+r.width/2-w/2))}px`;card.style.top=`${Math.max(8,r.top-8)}px`;
+  card.classList.add('show');
+}
+function hideVeteranCard(){clearTimeout(vetHoverTimer);$('#veteranCard')?.classList.remove('show')}
+// Careers grow one finished game at a time (this device's games and, signed in, your history).
+async function refreshVeterans(force=false){
+  if(veteranRefreshing)return veteranRefreshing;
+  if(!force&&Date.now()-veteranRefreshAt<120000)return;
+  veteranRefreshAt=Date.now();
+  veteranRefreshing=(async()=>{
+    const done=r=>['1-0','0-1','1/2-1/2'].includes(r),me=currentProfile?.id||currentPlayerId,entries=[];
+    for(const e of loadLocalArchive()){if(done(e.result)&&['w','b'].includes(e.myColor)&&!String(e.pgn||'').includes('[FEN '))entries.push({id:e.id,pgn:e.pgn,myColor:e.myColor,variant:e.variant||'standard'})}
+    if(signedIn())try{for(const g of (await api.archive(100)).games||[]){const color=g.white_player_id===me?'w':g.black_player_id===me?'b':null;if(color&&done(g.result))entries.push({id:g.id,sans:Array.isArray(g.sans)?g.sans:[],myColor:color,startFen:g.start_fen||null,variant:g.variant||'standard'})}}catch{}
+    let state=loadVeterans(),t=performance.now();const known=new Set(state.ids),fresh=entries.filter(e=>e.id&&!known.has(e.id));
+    for(const e of fresh){
+      if(!e.sans)e.sans=sansFromPgn(e.pgn);state=addGames(state,[e]);
+      if(performance.now()-t>20){await new Promise(resolve=>setTimeout(resolve,0));t=performance.now()} // keep the page responsive
+    }
+    if(state.ids.length!==loadVeterans().ids.length){saveVeterans(state);veteranState=state;vetCache=null;if(boardDom)render();if(currentRightView==='army')drawArmy()}
+  })().finally(()=>{veteranRefreshing=null});
+  return veteranRefreshing;
+}
+function renderArmy(){setDynamicView('army','Your army',brandLoading('Counting your veterans…'));void refreshVeterans(true).then(drawArmy,drawArmy)}
+function drawArmy(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='army')return;
+  const map=totalsMap(veteranTotals()),style=normalizePieceStyle(document.documentElement.dataset.pieceStyle);
+  const col=(color,label)=>{const list=armyList(map,color);
+    return `<div class="army-col"><h4>${label}</h4>${list.length?list.map(x=>`<article class="army-piece${x.rank?` rank-${x.rank}`:''}"><img src="${pieceAssetFor(style,x.color+x.type)}" alt=""><div>${veteranCardHtml(x)}</div>${x.rank?`<i class="vet-mark" data-rank="${x.rank}" aria-hidden="true"><b></b><b></b><b></b></i>`:''}</article>`).join(''):'<p class="menu-empty">No games yet.</p>'}</div>`};
+  target.innerHTML=`<article class="army"><p class="trainer-intro">Every piece is known by the square it starts on, and every standard game you finish adds to its record. Deeds earn ranks: Veteran at 5, Champion at 15, Legend at 40. Ranked pieces wear their marks on the board.</p><div class="army-cols">${col('w','As White')}${col('b','As Black')}</div></article>`;
+}
+
+// Oaths: three a day, sworn before a game, judged when it ends.
+function todayKey(){return new Date().toISOString().slice(0,10)}
+function oathPickId(){let v=null;try{v=JSON.parse(localStorage.getItem('vch.oathPick')||'')}catch{}return v?.day===todayKey()&&dailyOaths().includes(v.id)?v.id:''}
+function readSessionOath(){try{const v=JSON.parse(sessionStorage.getItem('vch.oathNow')||'');return v&&oathById(v.id)?v:null}catch{return null}}
+function writeSessionOath(v){try{if(v)sessionStorage.setItem('vch.oathNow',JSON.stringify(v));else sessionStorage.removeItem('vch.oathNow')}catch{}}
+function syncOathPicker(){
+  const sel=$('#oathPick');if(!sel)return;
+  const ids=dailyOaths(),pick=oathPickId(),st=loadOaths();
+  sel.innerHTML='<option value="">No oath</option>'+ids.map(id=>{const o=oathById(id);return `<option value="${id}">${escapeHtml(o.name)} · ${o.honor} honor</option>`}).join('');sel.value=pick;
+  const vow=$('#oathVow'),o=oathById(pick);if(!vow)return;
+  vow.innerHTML=o?`<b>${escapeHtml(o.vow)}</b> <span>${o.kind==='keep'?'Keep it and do not lose.':'Do it and win.'}</span> <em>Honor ${st.honor}</em>`:`<span>Optional. Keep it to earn honor and relics.</span>${st.honor?` <em>Honor ${st.honor}</em>`:''}`;
+}
+function swearOath(key,{startFen=null,ok=true,midGame=false}={}){
+  const saved=readSessionOath();
+  if(saved?.key===key)currentOath=saved;
+  else{const id=oathPickId(),color=premovePlayerColor();currentOath=id&&ok&&!midGame&&color?{key,id,color,startFen:startFen||null,lastStatus:null}:null;writeSessionOath(currentOath)}
+  oathLineKey='';syncOathLine();
+}
+function syncOathLine(){
+  const line=$('#oathLine');if(!line)return;
+  const o=currentOath;if(!o){if(!line.classList.contains('hidden')){line.classList.add('hidden');line.textContent=''}oathLineKey='';return}
+  if(blackoutActive())return; // the lights are out: no news about your blind moves
+  const sans=currentHistory(),key=`${o.key}:${sans.length}`;if(key===oathLineKey)return;oathLineKey=key;
+  const oath=oathById(o.id),status=oathStatus(o.id,oathSummary(sans,o.color,o.startFen),{over:false});
+  line.classList.remove('hidden');line.dataset.status=status;
+  line.innerHTML=`<b>${escapeHtml(oath.name)}</b><span>${escapeHtml(oath.vow)}</span><em>${{holding:'Holding',broken:'Broken',pending:'Sworn',done:'Done'}[status]||''}</em>`;
+  if(o.lastStatus&&o.lastStatus!==status){if(status==='broken')toast(`Oath broken · ${oath.name}`,{duration:1800});else if(status==='done')toast('Deed done · now win the game',{duration:1800})}
+  o.lastStatus=status;writeSessionOath(o);
+}
+function settleOath(info,score){
+  const o=currentOath;if(!o)return null;
+  const mine=info.online?o.key===`online:${serverGame?.id}`:o.key.startsWith('computer:');if(!mine)return null;
+  currentOath=null;writeSessionOath(null);syncOathLine();
+  const oath=oathById(o.id);if(score===null){queueToast(`Oath released · ${oath.name}`);return null}
+  const status=oathStatus(o.id,oathSummary(currentHistory(),o.color,o.startFen),{over:true,score}),out=recordOath(loadOaths(),o.id,status);saveOaths(out.state);
+  queueToast(status==='fulfilled'?`Oath fulfilled · ${oath.name} · +${out.gained} honor`:status==='broken'?`Oath broken · ${oath.name}`:`Oath failed · ${oath.name}`,{sound:status==='fulfilled'?'win':null});
+  for(const relic of out.relics)earnRelicQueued(relic);
+  syncOathPicker();return status;
+}
+
+// Living atmosphere and adaptive music: driven by the position and the clocks only.
+function ensureAtmosphere(){
+  if(atmoEl?.isConnected)return atmoEl;
+  atmoEl=document.createElement('div');atmoEl.id='atmosphere';atmoEl.setAttribute('aria-hidden','true');
+  atmoEl.innerHTML='<i class="atmo-glow"></i><i class="atmo-weather"></i><i class="atmo-flash"></i>';
+  document.body.prepend(atmoEl);return atmoEl;
+}
+function queueAtmosphere(){if(atmoQueued)return;atmoQueued=true;requestAnimationFrame(()=>{atmoQueued=false;syncAtmosphere()})}
+function currentAtmosphere(){
+  const color=premovePlayerColor(),live=liveGameOn()&&!!color;
+  if(!live&&atmoEnd&&Date.now()-atmoEnd.at<15000)return atmosphereFor({over:true,won:atmoEnd.won});
+  if(!live)return atmosphereFor({});
+  const clocks=currentClockSeconds(),daily=!!serverGame?.daily||Number(serverGame?.time_control_seconds)>=86400;
+  const base=mode==='computer'?(computerRules==='blackout'?BLACKOUT_SECONDS:600):Number(serverGame?.time_control_seconds||serverGame?.base_seconds||600);
+  return atmosphereFor({live:true,inCheck:game.inCheck()&&game.turn()===color,myColor:color,fen:blackoutActive()?'':game.fen(),myClockSec:daily?null:clocks?.[color],baseSec:base});
+}
+function syncAtmosphere(){
+  const el=ensureAtmosphere(),level=r12Prefs().atmosphere,mood=currentAtmosphere();
+  if(el.dataset.level!==level)el.dataset.level=level;
+  if(el.dataset.mood!==mood.mood)el.dataset.mood=mood.mood;
+  const realm=atmosphereRealm||'';if((el.dataset.realm||'')!==realm){if(realm)el.dataset.realm=realm;else delete el.dataset.realm}
+  const strength=String(mood.strength);if(el.style.getPropertyValue('--atmo')!==strength)el.style.setProperty('--atmo',strength);
+  syncMusic(mood);syncOathLine();
+}
+function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
+function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
+function syncMusic(mood){
+  const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&liveGameOn()&&document.visibilityState==='visible';
+  if(!want){if(vantaScore?.playing)vantaScore.stop();return}
+  if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
+  if(!vantaScore)vantaScore=new VantaScore();if(!vantaScore.available)return;
+  const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
+  vantaScore.setVolume(p.volume);vantaScore.setKey(musicKeyNow());vantaScore.setStorm(storm);
+  vantaScore.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
+  if(!vantaScore.playing)vantaScore.start();
+}
+function syncMusicUi(){
+  const on=musicPrefsGet().on,t=$('#musicToggle'),s=$('#musicSetting');
+  if(t){t.textContent=on?'Music: on':'Music: off';t.setAttribute('aria-pressed',String(on))}
+  if(s)s.value=on?'on':'off';
+}
+function setMusicOn(on){
+  musicPrefs=saveMusic({...musicPrefsGet(),on});syncMusicUi();
+  if(on&&!liveGameOn())toast('Music plays during your games');
+  if(!on)vantaScore?.stop();else syncAtmosphere();
+}
+
+// The Vanta Campaign: five realms, each with its own board, weather and music.
+function applyRealmTheme(realm){
+  const relic=realm&&relicById(realm.relic);if(!relic)return;
+  const root=document.documentElement.style;
+  if(!realmThemeSaved)realmThemeSaved={vars:Object.fromEntries(Object.keys(relic.theme).map(k=>[k,root.getPropertyValue(k)])),wallpaper:document.body.dataset.wallpaper||''};
+  for(const [k,v] of Object.entries(relic.theme))root.setProperty(k,v); // not saved: the realm's board is lent for the battle
+  document.body.dataset.wallpaper=relic.wallpaper;document.body.dataset.realm=realm.id;
+  atmosphereRealm=realm.atmosphere;musicKeyOverride=realm.music;queueAtmosphere();
+}
+function restoreRealmTheme(){
+  if(!realmThemeSaved)return;
+  const root=document.documentElement.style,saved=realmThemeSaved;realmThemeSaved=null;
+  for(const [k,v] of Object.entries(saved.vars)){const value=savedTheme[k]||v;if(value)root.setProperty(k,value);else root.removeProperty(k)}
+  const w=savedTheme.wallpaper||saved.wallpaper;if(w)document.body.dataset.wallpaper=w;else delete document.body.dataset.wallpaper;
+  delete document.body.dataset.realm;atmosphereRealm=null;musicKeyOverride=null;queueAtmosphere();
+}
+const campaignStars=n=>`<span class="camp-stars" role="img" aria-label="${n} of 3 stars">${[0,1,2].map(i=>`<i class="${i<n?'on':''}"></i>`).join('')}</span>`;
+function renderCampaign(){setDynamicView('campaign','The Vanta Campaign','');drawCampaign()}
+function drawCampaign(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='campaign')return;
+  const st=loadCampaign();
+  target.innerHTML=`<article class="campaign"><p class="trainer-intro">Five realms, each with its own board, weather and music. Win two battles to reach the realm's boss, whose battle bends the rules. Beat the boss to free the realm, earn its relic and open the next. Each battle has three stars: the win, a win in 40 moves or fewer, and a kept oath.</p>
+    <div class="gauntlet-head"><div><small>STARS</small><b>${totalStars(st)} / ${MAX_STARS}</b></div><div><small>REALMS FREED</small><b>${realmsFreed(st)} / ${REALMS.length}</b></div></div>
+    <ol class="camp-map">${REALMS.map((r,ri)=>{const open=realmOpen(st,ri),freed=realmFreed(st,r.id),relic=relicById(r.relic),t=relic.theme;
+      return `<li class="camp-realm${open?'':' locked'}${freed?' freed':''}" data-realm="${r.id}" style="--realm-light:${t['--light']};--realm-dark:${t['--dark']};--realm-accent:${t['--mint']}">
+        <header><span class="camp-sigil" aria-hidden="true"></span><div><h4>${escapeHtml(r.name)}</h4><small>${freed?'Freed':open?'Unlocked':'Locked'} · Relic: ${escapeHtml(relic.name)}</small></div></header>
+        <p>${escapeHtml(r.story)}</p>
+        <ol class="camp-battles">${r.battles.map((b,i)=>{const won=st.won[battleKey(r.id,i)],can=battleOpen(st,ri,i);
+          return `<li class="${b.boss?'boss ':''}${won?'won':can?'next':'locked'}"><span><b>${escapeHtml(b.name)}</b><small>${b.rules==='shadow'?'Your strength':`${b.elo} Elo`} · ${b.side==='w'?'you play White':'you play Black'}</small>${b.twist?`<em>${escapeHtml(b.twist)}</em>`:''}</span>${campaignStars(won?.stars||0)}${can?`<button type="button" class="${won?'':'gold '}camp-fight" data-realm-index="${ri}" data-battle="${i}">${won?'Replay':'Fight'}</button>`:''}</li>`}).join('')}</ol></li>`}).join('')}</ol></article>`;
+  target.querySelectorAll('.camp-fight').forEach(b=>b.onclick=()=>void startCampaignBattle(Number(b.dataset.realmIndex),Number(b.dataset.battle)));
+}
+async function startCampaignBattle(ri,i){
+  const realm=REALMS[ri],b=realm?.battles[i],st=loadCampaign();if(!b||!battleOpen(st,ri,i))return;
+  if(liveGameOn())return toast('Finish your game first');
+  let elo=b.elo,shadowTree=null;
+  if(b.rules==='shadow'){
+    let server=[];if(signedIn())try{server=(await api.archive(100)).games||[]}catch{}
+    elo=shadowElo(ratingFor('rapid'));shadowTree=shadowBook(shadowLines(server,currentProfile?.id||currentPlayerId,loadLocalArchive()),b.side==='w'?'b':'w');
+  }
+  saveCampaign({...st,pending:{realm:realm.id,i}});
+  const variant={blackout:'blackout',dark:'dark',freestyle:'freestyle'}[b.rules]||'standard';
+  await playComputer({bot:{slug:`campaign-${realm.id}-${i}`,display_name:b.name,elo,portrait:b.boss?'bk':i?'br':'bn',campaign:{realm:realm.id,i},...(shadowTree?{shadowTree}:{})},side:b.side,variant});
+  if(currentBot?.campaign?.realm===realm.id&&currentBot.campaign.i===i)toast(b.twist?`${b.name} · ${b.twist}`:`${realm.name} · ${b.name}`,{duration:2600});
+}
+function campaignGameOver(info,score,oath){
+  const c=currentBot?.campaign;if(!c||info.online||mode!=='computer')return;
+  const st=loadCampaign();if(score===null){saveCampaign({...st,pending:null});return}
+  const out=recordBattle(st,c.realm,c.i,{score,plies:game.history().length,oath});saveCampaign(out.state);
+  if(out.stars)queueToast(`Victory · ${out.stars} of 3 stars`,{delay:600});else queueToast('Defeat · try the battle again',{delay:600});
+  if(out.freed){queueToast(`${out.freed.name} is free`,{sound:'win'});earnRelicQueued(out.freed.relic)}
+  if(currentRightView==='campaign')drawCampaign();
+}
+
+function roundTwelveGameOver(info){
+  const score=scoreOf(info.result,info.myColor);
+  atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};queueAtmosphere();
+  if(vantaScore?.playing){vantaScore.sting(score===1?'win':score===0?'loss':'draw');vantaScore.stop()}
+  const oath=settleOath(info,score);
+  campaignGameOver(info,score,oath);
+  setTimeout(()=>void refreshVeterans(true),info.online?2500:400);
+}
+function initRoundTwelve(){
+  const prefs=r12Prefs(),vs=$('#veteranSetting'),as=$('#atmosphereSetting'),ms=$('#musicSetting'),mv=$('#musicVolume');
+  if(vs){vs.value=prefs.veterans;vs.onchange=e=>{setR12Pref('veterans',e.target.value);hideVeteranCard();render()}}
+  if(as){as.value=prefs.atmosphere;as.onchange=e=>{setR12Pref('atmosphere',e.target.value);syncAtmosphere()}}
+  if(ms)ms.onchange=e=>setMusicOn(e.target.value==='on');
+  if(mv){mv.value=String(Math.round(musicPrefsGet().volume*100));mv.oninput=e=>{musicPrefs=saveMusic({...musicPrefsGet(),volume:Number(e.target.value)/100});vantaScore?.setVolume(musicPrefs.volume)}}
+  $('#musicToggle')?.addEventListener('click',()=>setMusicOn(!musicPrefsGet().on));
+  syncMusicUi();
+  $('#oathPick')?.addEventListener('change',e=>{
+    try{localStorage.setItem('vch.oathPick',JSON.stringify({day:todayKey(),id:e.target.value}))}catch{}
+    syncOathPicker();
+    // Still before your first move: the new choice counts for this game.
+    const color=premovePlayerColor(),n=currentHistory().length,myMoves=color==='w'?Math.ceil(n/2):Math.floor(n/2);
+    if(liveGameOn()&&color&&myMoves===0){
+      const key=serverGameId?`online:${serverGameId}`:currentOath?.key||`computer:${Date.now()}`;writeSessionOath(null);
+      swearOath(key,serverGameId?{startFen:serverGame?.start_fen||null,ok:(serverGame?.variant||'standard')==='standard'&&!serverGame?.start_fen}:{startFen:game.getHeaders?.().FEN||null});
+    }
+  });
+  syncOathPicker();
+  $('.computer-campaign')?.addEventListener('click',()=>{renderCampaign();showSidePanel()});
+  ensureAtmosphere();setInterval(syncAtmosphere,1000);
+  document.addEventListener('visibilitychange',syncAtmosphere);
+  document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
+  document.addEventListener('pointerover',e=>{
+    if(e.pointerType!=='mouse')return;const el=e.target.closest?.('.board-piece[data-veteran]');if(!el)return;
+    clearTimeout(vetHoverTimer);vetHoverTimer=setTimeout(()=>showVeteranCard(el),420);
+  });
+  document.addEventListener('pointerout',e=>{const el=e.target.closest?.('.board-piece[data-veteran]');if(el&&!el.contains(e.relatedTarget))hideVeteranCard()});
+  const later=window.requestIdleCallback||(fn=>setTimeout(fn,1500));setTimeout(()=>later(()=>void refreshVeterans()),4000);
+}
 // ---- Round 11: Rivals (src/rivals.js) — from your own game history ----
 let rivalsCache=null;
 async function loadRivals(force=false){
@@ -4804,4 +5087,5 @@ $('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedThem
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=0;$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
-$('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics()};
+$('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
+initRoundTwelve();

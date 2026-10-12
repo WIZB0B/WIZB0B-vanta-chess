@@ -77,8 +77,8 @@ test('Relic sets: an earned relic restyles the board and comes off again', async
   await boot(page, () => localStorage.setItem('vch.relics', JSON.stringify({ unlocked: { umbra: '2026-10-11' } })));
   await page.locator('#theme').click();
   await page.locator('#openRelics').click();
-  await expect(page.locator('.relic')).toHaveCount(6);
-  await expect(page.locator('.relic.locked')).toHaveCount(5);
+  await expect(page.locator('.relic')).toHaveCount(13); // round 12 added seven (oaths and the campaign)
+  await expect(page.locator('.relic.locked')).toHaveCount(12);
   const dark = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--dark').trim());
   const before = await dark();
   await page.locator('[data-relic="umbra"]').click();
