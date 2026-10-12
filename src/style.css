@@ -3134,3 +3134,20 @@ body{isolation:isolate}
 .hall-realms .camp-sigil{width:10px;height:10px;margin:2px;background:var(--realm-accent)}
 .hall-veterans{display:grid;gap:6px}
 @media (max-width:560px){.hall-stats{grid-template-columns:repeat(2,1fr)}}
+/* Puzzles: no clocks in the player bars */
+body.puzzle-mode .player time{visibility:hidden}
+/* Vanta Dark: the piece giving check is revealed and ringed, so you can't miss it. */
+.board .square.checker{box-shadow:inset 0 0 0 3px rgba(255,92,72,.95),inset 0 0 18px rgba(255,60,40,.55)}
+.board .square.checker::before{content:"";position:absolute;inset:8%;border-radius:50%;border:2px solid rgba(255,120,96,.75);animation:checker-pulse 1.1s ease-in-out infinite;pointer-events:none}
+@keyframes checker-pulse{50%{transform:scale(1.08);opacity:.45}}
+/* Vanta Dark fog: hidden squares are covered by slow drifting mist instead of flat black. */
+.board.vanta-dark .square.fog{overflow:hidden}
+.board.vanta-dark .square.fog:not(.legal)::after{content:"";position:absolute;inset:-35%;pointer-events:none;
+  background:radial-gradient(ellipse 45% 35% at 30% 40%,rgba(150,160,185,.22),transparent 70%),radial-gradient(ellipse 40% 30% at 70% 65%,rgba(120,132,160,.2),transparent 70%),radial-gradient(ellipse 30% 25% at 55% 25%,rgba(180,188,210,.14),transparent 70%);
+  animation:fog-drift 9s ease-in-out infinite alternate;animation-delay:calc(var(--fog-i,0) * -0.7s)}
+.board.vanta-dark .square.fog:not(.legal):nth-child(3n)::after{--fog-i:3;animation-duration:11s}
+.board.vanta-dark .square.fog:not(.legal):nth-child(3n+1)::after{--fog-i:7;animation-duration:13s;animation-direction:alternate-reverse}
+.board.vanta-dark .square.fog:not(.legal):nth-child(5n)::after{--fog-i:11}
+@keyframes fog-drift{0%{transform:translate(-12%,-6%) scale(1)}50%{transform:translate(6%,4%) scale(1.12)}100%{transform:translate(12%,-4%) scale(1.04)}}
+@media (prefers-reduced-motion:reduce){.board.vanta-dark .square.fog:not(.legal)::after,.board .square.checker::before{animation:none}}
+:root[data-glass="clear"] .board.vanta-dark .square.fog:not(.legal)::after{animation:none}

@@ -32,6 +32,8 @@ import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './
 import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
+import { playablePuzzleFen } from './puzzle-start.js';
+import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
 import { lazyWorker } from './lazy-worker.js';
 import { resolveTypedMove } from './typed-move.js';
@@ -88,7 +90,7 @@ const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuC
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
 // Round 12 state (the functions are in the round 12 section below)
-let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null;
+let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
 let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
@@ -575,11 +577,13 @@ function renderBoard({hint=null,instant=false}={}){
   const browseFen=!reviewFen&&browse?browse.positions[browse.ply]:null;
   const boardGame=reviewFen||browseFen?new Chess(reviewFen||browseFen):game,placement=boardGame.fen().split(' ')[0];
   dom.board.classList.toggle('browsing',!!browseFen);
+  document.body.classList.toggle('puzzle-mode',mode==='puzzle'&&!!puzzleSession);
   dom.board.classList.toggle('blackout',!reviewFen&&!browseFen&&blackoutActive());
   if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
   const legal=new Set(reviewState.viewing||browse?[]:zhDropSelected?zhDropTargets(zhDropSelected):!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
   const lastMove=boardLastMove(),fullPosition=positionMap(boardGame.board());
-  const sight=boardGame===game&&darkActive()?visibleSquares(game.fen(),computerSide,{reveal:darkCheckers(game,computerSide)}):null;
+  const checkerSquares=boardGame===game&&darkActive()?new Set(darkCheckers(game,computerSide)):null; // revealed and marked in the dark
+  const sight=checkerSquares?visibleSquares(game.fen(),computerSide,{reveal:[...checkerSquares]}):null;
   const position=sight?fogPosition(fullPosition,sight,computerSide):fullPosition;
   dom.board.classList.toggle('vanta-dark',!!sight);
   let checked=null;
@@ -589,7 +593,7 @@ function renderBoard({hint=null,instant=false}={}){
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
     const key=position.get(sq),mark=marks.get(sq),fogged=sight&&!sight.has(sq);
-    const cls=`square ${el.dataset.shade}${key?' occupied':''}${fogged?' fog':''}${lastMove&&!fogged&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.moves.some(m=>m.from===sq||m.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
+    const cls=`square ${el.dataset.shade}${key?' occupied':''}${fogged?' fog':''}${lastMove&&!fogged&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.moves.some(m=>m.from===sq||m.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${checkerSquares?.has(sq)?' checker':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
     if(el.className!==cls)el.className=cls;
     const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
     if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
@@ -941,7 +945,7 @@ function startComputerGame(opts={}){
   if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   const selectedBot=opts.bot||computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
-  computerRules=opts.variant||computerVariant;
+  computerRules=opts.variant||computerVariant;engineSight=null;
   if(opts.bot?.campaign)applyRealmTheme(realmById(opts.bot.campaign.realm));else restoreRealmTheme();
   currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;lowTimeWarned=false;computerStarted=true;computerSide=opts.side||selectedComputerSide();premoves.cancel();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();boardShapes=[];
@@ -1081,17 +1085,39 @@ function updateMoves(){
     cell.onclick=jump;cell.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();jump()}};
   });
 }
+// Vanta Dark and Blackout Blitz: the computer plays blind too (src/blind-engine.js). It searches
+// the board it believes in, choosing only among moves legal there and on the real board.
+function blindSearch(){
+  if(mode!=='computer'||!['dark','blackout'].includes(computerRules))return null;
+  const color=game.turn(),realFen=game.fen(),history=game.history({verbose:true});
+  try{
+    if(computerRules==='dark'){
+      if(engineSight?.rules!=='dark')engineSight={rules:'dark',memory:startMemory(Chess,new Chess().fen(),color)};
+      const look=lookAround(Chess,realFen,color,engineSight.memory,{turn:history.length,captured:capturedBy(history,color)});
+      engineSight.memory=look.memory;
+      const fen=beliefFen(Chess,realFen,color,new Map([...look.memory].map(([sq,p])=>[sq,{type:p.type}])),{seen:look.seen});
+      return fen?{fen,searchmoves:sharedMoves(Chess,realFen,fen)}:null;
+    }
+    // Blackout: while its lights are on it sees the board (and remembers it); then it plays blind.
+    if(!engineBlind(history.map(m=>m.san),color)){engineSight={rules:'blackout',snapshot:realFen,at:history.length};return null}
+    const snap=engineSight?.rules==='blackout'?engineSight:{snapshot:realFen,at:history.length};
+    const fen=blackoutBelief(Chess,snap.snapshot,history.slice(snap.at).filter(m=>m.color===color),realFen,color);
+    return fen?{fen,searchmoves:sharedMoves(Chess,realFen,fen)}:null;
+  }catch{return null}
+}
 async function findEngineMove(){
   const moves=game.moves({verbose:true});if(!moves.length)return null;
-  const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`;
+  const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`,blind=blindSearch();
   if(enginePending)enginePending.resolve(null);
   const uci=await new Promise(resolve=>{
     enginePending={id,resolve};
-    stockfish.postMessage({mode:'bot',fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id});
+    stockfish.postMessage({mode:'bot',fen:blind?.fen||fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id,...(blind?{searchmoves:blind.searchmoves}:{})});
     setTimeout(()=>{if(enginePending?.id===id){enginePending=null;stockfish.postMessage({action:'stop'});resolve(null)}},BOT_MOVE_TIMEOUT_MS);
   });
   if(game.fen()!==fen)return undefined; // position changed while searching (new game, takeback): drop the result
-  return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
+  const chosen=uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
+  if(!chosen&&blind&&uci){const pool=moves.filter(x=>blind.searchmoves.includes(x.from+x.to+(x.promotion||'')));return pool[Math.floor(Math.random()*pool.length)]||moves[0]}
+  return chosen;
 }
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
@@ -1280,6 +1306,9 @@ function syncPlayerBars(){
   const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
+  // Puzzles have no opponent or clock: say so instead of "Waiting for opponent · 10:00".
+  const puzzling=mode==='puzzle'&&!!puzzleSession;document.body.classList.toggle('puzzle-mode',puzzling);
+  if(puzzling){$('#topPlayerName').textContent=puzzleSession.kind==='battle'?'Puzzle Battle':'Puzzle';$('#topRating').textContent=puzzleSession.rating?`${puzzleSession.rating} rating`:'Find the best move';setPresence($('#topPresence'),'PUZZLE',false);$('#bottomRating').textContent=`${puzzleRatingNow()} puzzle rating`;setPresence($('#bottomPresence'),'SOLVING',false)}
   $('#hint')?.classList.toggle('hidden',mode!=='computer');
   $('#undoMove')?.classList.toggle('hidden',mode!=='computer');
   syncConnectionUi();syncClockBars();
@@ -2475,7 +2504,7 @@ async function savePlan(){
   const lines=[...(planLines.gameId===serverGameId?planLines.lines:[]),planSession.moves];
   try{const out=await api.conditionalSet(serverGameId,lines);planLines={gameId:serverGameId,lines:out.lines};exitPlan({silent:true});toast('Plan saved')}catch(error){toast(error.message)}
 }
-const VARIANT_NOTES={dark:'Normal rules, but you only see your own pieces and the squares they can reach. The computer sees the whole board, so pick a weaker bot than usual.',blackout:'Three minutes. After every four of your moves, your next two are played blind: the pieces disappear until the lights come back.'};
+const VARIANT_NOTES={dark:'Normal rules, but you only see your own pieces and the squares they can reach. The computer plays in the dark too: it sees only what its pieces see and remembers where it last saw yours.',blackout:'Three minutes. After every four of your moves, your next two are played blind: the pieces disappear until the lights come back. The computer goes blind on the same rhythm and plays from the board it remembers.'};
 $$('[data-computer-variant]').forEach(b=>b.addEventListener('click',()=>{computerVariant=b.dataset.computerVariant;$$('[data-computer-variant]').forEach(x=>x.classList.toggle('on',x===b));const note=$('#computerVariantNote');if(note){note.textContent=VARIANT_NOTES[computerVariant]||'';note.classList.toggle('hidden',!VARIANT_NOTES[computerVariant])}}));
 // ---- Account: password, your data, delete ----
 async function authPut(path,body,token){
@@ -3776,7 +3805,10 @@ function updateOpeningLabel(){
   const opening=darkActive()?null:detectOpening(currentHistory());
   const state=$('#state');if(!state)return;
   const base=game.inCheck()?'Check · Real time':(serverGame?.rated?'Real time · Rated game':'Real time · Casual game');
-  state.textContent=opening?`${base} · ${opening.name}`:base;
+  // The 50-move rule: 50 moves each with no capture and no pawn move is a draw. Shown from 30 on
+  // (not in the blind modes, where the count would tell you about moves you can't see).
+  const half=Number(game.fen().split(' ')[4])||0,fifty=half>=60&&!darkActive()&&computerRules!=='blackout'?` · 50-move rule: ${Math.max(0,Math.ceil((100-half)/2))} ${Math.ceil((100-half)/2)===1?'move':'moves'} left`:'';
+  state.textContent=(opening?`${base} · ${opening.name}`:base)+fifty;
 }
 function formatPv(pv=''){
   try{
@@ -3939,6 +3971,7 @@ function renderReview(){
 function brandLoading(label){
   return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
 }
+let puzzleRetries=0;
 async function showBackendView(kind){
   if(kind==='puzzle-stats')return void renderPuzzleStats();
   if(kind==='puzzle'||kind==='streak'||kind==='daily'){
@@ -3948,10 +3981,13 @@ async function showBackendView(kind){
     try{
       const data=daily?await api.puzzleDaily():await api.puzzleNext(streak?streakDifficulty(streakSession.count):difficultyForRating(puzzleRatingNow()),puzzleRatingNow(),streak?null:puzzleAngle),puzzle=data.puzzle||data;
       if(streak&&!streakSession)return;
-      game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;
+      // Start where the solution's first move fits (older cached puzzles began one move early).
+      const startFen=playablePuzzleFen(Chess,{fen:puzzle.fen,solution:puzzle.solution||puzzle.moves||[],gamePgn:puzzle.gamePgn,initialPly:puzzle.initialPly});
+      if(!startFen){if(!daily&&puzzleRetries++<3)return void showBackendView(kind);puzzleRetries=0;throw new Error(daily?"Today's puzzle can't be played. Try the regular puzzles.":"Puzzles can't be loaded right now. Try again in a moment.")}
+      puzzleRetries=0;game.load(startFen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;
       flipped=game.turn()==='b';orientationSet=true; // you play the side to move
-      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now(),failed:false,daily};
-      render();
+      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now(),failed:false,daily,rating:Number(puzzle.rating)||null};
+      syncPlayerBars();render();
       const side=game.turn()==='w'?'White':'Black';
       $('#dynamicView .view-content').innerHTML=streak
         ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
@@ -4937,7 +4973,8 @@ function nextBattlePuzzle(){
   if(!battle)return;const l=battle.local,p=battle.puzzles[l.index];
   if(!p||l.misses>=battle.maxMisses||Date.now()>Date.parse(battle.ends_at)){puzzleSession=null;const st=$('#dynamicView .battle-status');if(st)st.textContent=l.misses>=battle.maxMisses?'Out of lives · waiting for the end':'Done · waiting for the end';return}
   cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});streakSession=null;
-  game.load(p.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];flipped=game.turn()==='b';orientationSet=true;
+  const startFen=playablePuzzleFen(Chess,{fen:p.fen,solution:p.solution});if(!startFen){l.index++;return nextBattlePuzzle()} // unplayable: skip it
+  game.load(startFen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];flipped=game.turn()==='b';orientationSet=true;
   puzzleSession={id:`battle-${p.id}`,solution:p.solution,index:0,played:[],started:Date.now(),failed:false,kind:'battle'};
   setPrimaryScreen('game');render();
   const st=$('#dynamicView .battle-status');if(st)st.textContent=`Puzzle ${l.index+1} · ${game.turn()==='w'?'White':'Black'} to move`;

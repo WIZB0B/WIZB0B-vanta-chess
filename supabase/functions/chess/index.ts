@@ -7,6 +7,7 @@ import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } fro
 import { MOMENT_DAYS, MOMENT_MIN_PLIES, momentCaption, momentScore } from "./rules.js";
 import { boardEndReason, gamePgn, isFullPgn, positionKey, repetitionCount } from "./rules.js";
 import { FATES, cleanCrest, fateById, pickFate, twinScore } from "./rules.js";
+import { playablePuzzleFen } from "./rules.js";
 import { BUGHOUSE_DEFAULT_SECONDS, BUGHOUSE_SEATS, boardResultFor, bughouseStatus, bughouseTransfer, isSeat, matchWinner, otherBoard, teamOfSeat } from "./bughouse.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
@@ -637,7 +638,8 @@ async function puzzleDaily(req:Request,b:any){
   const {data,error}=await admin.from("chess_puzzles").select("*").lt("fetched_at",today+"T00:00:00Z").gte("rating",1300).lte("rating",2100).order("id").range(idx,idx);if(error)throw error;
   const pick=data?.[0];if(!pick)throw fail("No puzzle today.",404);
   let solved=false;try{const p=await playerFor(req,b,false,{touch:false});const {data:a}=await admin.from("chess_puzzle_attempts").select("id").eq("player_id",p.id).eq("puzzle_id",pick.id).eq("success",true).gte("created_at",today+"T00:00:00Z").limit(1);solved=!!a?.length}catch{}
-  return {date:today,solved,puzzle:{id:pick.id,fen:pick.fen,solution:pick.solution,rating:pick.rating,plays:pick.plays,themes:pick.themes,source:pick.source}}
+  const fen=servedPuzzleFen(pick);if(!fen)throw fail("Today's puzzle can't be played. Try the regular puzzles.",404);
+  return {date:today,solved,puzzle:{id:pick.id,fen,solution:pick.solution,rating:pick.rating,plays:pick.plays,themes:pick.themes,source:pick.source}}
 }
 async function puzzleStats(req:Request,b:any){
   const p=await playerFor(req,b,false,{touch:false});
@@ -1227,8 +1229,9 @@ async function insights(req:Request,b:any){
 }
 // ---- Puzzle Battle: same puzzles, three minutes, three misses and you're out ----
 async function battlePuzzles(){
-  const {data}=await admin.from("chess_puzzles").select("id,fen,solution,rating").order("fetched_at",{ascending:false}).limit(400);
-  const set=battleSet(data||[]);if(set.length<10)throw fail("Not enough puzzles yet. Solve a few first, then try again.",503);
+  const {data}=await admin.from("chess_puzzles").select("id,fen,solution,rating,game_pgn,initial_ply").order("fetched_at",{ascending:false}).limit(400);
+  const playable=(data||[]).map((x:any)=>({...x,fen:servedPuzzleFen(x)})).filter((x:any)=>x.fen);
+  const set=battleSet(playable);if(set.length<10)throw fail("Not enough puzzles yet. Solve a few first, then try again.",503);
   return set.map((x:any)=>({id:x.id,fen:x.fen,solution:x.solution,rating:x.rating}))
 }
 const battleView=(t:any,p:any,names:Map<string,string>)=>{const seat=t.host_id===p.id?"host":t.guest_id===p.id?"guest":null;
@@ -1791,19 +1794,18 @@ async function chatSend(req:Request,b:any){
   if(error)throw error;
   return {message:data}
 }
+// The puzzle starts after the opponent's setting move: initialPly + 1 plies (rules.js).
 function puzzleFen(payload:any){
-  const c=new Chess();
-  const moves=String(payload?.game?.pgn||"").trim().split(/\s+/).filter(Boolean);
-  const plies=Math.max(0,Math.min(moves.length,Number(payload?.puzzle?.initialPly??moves.length)));
-  for(let i=0;i<plies;i++){try{const m=c.move(moves[i]);if(!m)break}catch{break}}
-  return c.fen()
+  return playablePuzzleFen(Chess,{solution:payload?.puzzle?.solution,gamePgn:payload?.game?.pgn,initialPly:payload?.puzzle?.initialPly})||new Chess().fen()
 }
+// Puzzles cached before that fix were stored one move early: rebuild them from their game.
+const servedPuzzleFen=(row:any)=>playablePuzzleFen(Chess,{fen:row.fen,solution:row.solution,gamePgn:row.game_pgn,initialPly:row.initial_ply})
 async function cachedPuzzle(b:any={}){
   let query=admin.from("chess_puzzles").select("*").order("fetched_at",{ascending:false}).limit(80);
   const rating=Number(b.rating||0);
   if(Number.isFinite(rating)&&rating>0)query=query.gte("rating",Math.max(400,rating-350)).lte("rating",rating+350);
   const {data,error}=await query;if(error)throw error;
-  const list=data||[];if(!list.length)return null;
+  const list=(data||[]).map((x:any)=>({...x,fen:servedPuzzleFen(x)})).filter((x:any)=>x.fen);if(!list.length)return null;
   const pick=list[crypto.getRandomValues(new Uint32Array(1))[0]%list.length];
   return {id:pick.id,fen:pick.fen,solution:pick.solution,rating:pick.rating,plays:pick.plays,themes:pick.themes,gameId:pick.game_id,gamePgn:pick.game_pgn,initialPly:pick.initial_ply,source:pick.source}
 }
