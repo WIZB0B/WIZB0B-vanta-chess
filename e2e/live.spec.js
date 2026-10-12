@@ -81,6 +81,8 @@ test('mobile layout has no horizontal overflow', async ({ browser }) => {
   const ctx=await browser.newContext({viewport:{width:390,height:844}}),page=await ctx.newPage();
   await enterGameOnFirstVisit(page);
   await page.goto('/');
+  // Phones open on the home screen (mobile shell); the board shows once a game starts.
+  if(await page.locator('body.m-app').count()){await page.locator('[data-mode="computer"]').click();await page.locator('#computerStart').click();await expect(page.locator('#board')).toBeVisible()}
   const widths=await page.evaluate(()=>({inner:innerWidth,scroll:document.documentElement.scrollWidth,board:Math.round(document.querySelector('.board').getBoundingClientRect().width)}));
   expect(widths.scroll).toBeLessThanOrEqual(widths.inner);
   expect(widths.board).toBeGreaterThan(300);

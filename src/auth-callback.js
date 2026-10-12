@@ -24,6 +24,7 @@ export function readAuthCallback(href){
   const hasError=params.has('error')||params.has('error_code')||params.has('error_description');
   return {
     hasTokens:params.has('access_token'),
+    type:params.get('type')||null,
     error:hasError?{code:params.get('error_code')||params.get('error')||'unknown'}:null
   };
 }
@@ -48,6 +49,6 @@ export async function handleAuthCallback({location,history,detectSession,onSigne
   catch(error){failure=error}
   finally{clear()}
   if(!session?.access_token){await onError({code:failure?.code||'invalid_link'});return {handled:true,status:'error'}}
-  await onSignedIn(session);
+  await onSignedIn(session,{type:info.type});
   return {handled:true,status:'signed-in'};
 }

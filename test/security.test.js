@@ -18,7 +18,10 @@ test('move request sends only non-authoritative input and expected version', asy
       from: 'e2', to: 'e4', promotion: 'q', clientMoveAt: '2026-10-06T10:00:00.000Z',
     });
     for (const forbidden of ['fen', 'san', 'clocks', 'result', 'rating', 'seat']) assert.equal(forbidden in request.body, false);
-    assert.equal(request.options.cache, 'no-store');
+    // Chrome skips its CORS preflight cache for no-store requests, costing an extra round
+    // trip per move; POST responses are not cached, and the server sends Cache-Control: no-store.
+    assert.notEqual(request.options.cache, 'no-store');
+    assert.equal(new URL(request.url).searchParams.get('forceFunctionRegion'), 'us-east-2');
     assert.equal(request.options.referrerPolicy, 'no-referrer');
   } finally { globalThis.fetch = originalFetch; }
 });

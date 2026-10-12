@@ -37,3 +37,20 @@ test('premoves stay disabled in puzzles and review analysis',()=>{
   const start=main.indexOf('function premoveBlocked'),end=main.indexOf('function canQueuePremove',start),body=main.slice(start,end);
   assert.match(body,/puzzleSession/);assert.match(body,/mode==='puzzle'/);assert.match(body,/reviewState\.running/);assert.match(body,/reviewState\.viewing/);assert.match(body,/currentRightView==='review'/);
 });
+
+test('premove chains: up to three, played in order; an illegal one clears the rest', async () => {
+  const { PREMOVE_LIMIT, premovedPieceAt } = await import('../src/premove.js');
+  const { Chess } = await import('chess.js');
+  const q = new PremoveQueue();
+  q.select('g1'); q.queue('f3'); q.select('f3'); q.queue('g5'); q.select('e2'); q.queue('e4'); q.select('d2'); q.queue('d4');
+  assert.equal(PREMOVE_LIMIT, 3);
+  assert.deepEqual(q.moves.map(m => m.from + m.to), ['g1f3', 'f3g5', 'e2e4']);
+  const board = new Chess();
+  assert.equal(premovedPieceAt(board, q.moves.slice(0, 1), 'f3')?.type, 'n', 'the knight premoved to f3 can be picked up again');
+  assert.equal(premovedPieceAt(board, q.moves.slice(0, 1), 'g1'), null);
+  assert.deepEqual(consumeLegalPremove(q, board), { from: 'g1', to: 'f3' });
+  assert.equal(q.moves.length, 2, 'the rest wait for the next turn');
+  const blocked = { moves: () => [] };
+  assert.equal(consumeLegalPremove(q, blocked), null);
+  assert.equal(q.moves.length, 0, 'an illegal premove clears the chain');
+});

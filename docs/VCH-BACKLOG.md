@@ -204,3 +204,271 @@ audit; chat content limits; basic anti-cheat flags noted for later.
 
 ## C1. Competitor comparison
 Feature matrix vs chess.com, lichess and others; list gaps.
+
+## Done 2026-10-09 (live in production via release PR #9)
+- Pieces (PR #7): Vanta (default) and Vanta Ink with bold dark outlines, fixed bishops, more
+  detailed Ink; new top-down 3D set Regal; filled selected square; selection clears after a move.
+- Piece reactions (PR #8): per-piece hover gestures, lean toward the cursor, press pull, touch
+  tap reaction, swelling legal-move dots.
+- Board fits the screen (PR #10, in review): board side = min(free height, free width).
+
+## N. Network and fair play (owner live test 2026-10-10)
+- N1 Instant online moves (PR #13): function pinned to us-east-2 next to the database; no
+  per-request CORS preflight; the mover relays each move over Realtime the moment it is played
+  (server stays the authority, `move_void` on rejection); 2 database round trips per move
+  instead of 5 (edge-function deploy needs owner approval).
+- N2 Fair play (PR #14): no engine analysis during live online games; returns at game end.
+- N3 Illegal-move feedback (PR #14): low double knock, king square blinks red when the king is
+  the reason.
+
+## MB. Mobile app layout (owner approved 2026-10-10; built in PR claude/mobile-app-layout)
+Desktop stays as it is. On phones the site should feel like the lichess / chess.com apps:
+- MB1 Bottom tab bar (Play, Puzzles, Learn, Watch, More) instead of the scrolling page; slim
+  top bar (logo, search, account). Menus open as bottom sheets.
+- MB2 Game screen with no scrolling: opponent bar (portrait, flag, tray, clock), board edge to
+  edge, own bar, a swipeable move strip, and an action bar (Options, Draw, Resign, Chat).
+  Top navigation hides while a game is on; the screen stays awake (Wake Lock).
+- MB3 Play home: one big Play button with a time sheet (Bullet / Blitz / Rapid), Play a friend,
+  Play the computer, Tournaments; below it a daily puzzle and live games.
+- MB4 App feel: safe areas, no pull-to-refresh or overscroll during a game, installable (PWA).
+- Built: body.m-app below 760px (src/mobile-shell.js). Views home / panel / game / review;
+  tabs Play, Puzzles, Learn, Games (famous games), More (sheet: Arena, Openings, Review, Board &
+  pieces, Portrait & flag, Account, Notifications, Install). Game view: back bar, player bars,
+  board, move strip (room code + copy while waiting), action bar Options / Draw / Resign / Chat /
+  Hint, and Review / Rematch / New game after the end. "Back to your game" pill on other screens.
+- Later: a Watch tab with live games once spectating exists; swipe through moves on the strip.
+
+## G. Game moments (owner approved 2026-10-10; PR #15)
+- G1 Claim win / draw 30s after the opponent leaves (server claim_win, deployed v17).
+- G2 Low-time tick under 10s. G3 Hint in computer games. G4 Screen stays awake. G5 "Your move"
+  tab title. Next ideas: takeback requests in casual games, a pre-move confirmation option for
+  slow connections, puzzle streaks, and a weekly arena.
+
+## R. Round 3 (owner approved 2026-10-10)
+- R1 Look back through any game without taking back; Undo against the computer (PR #17).
+- R2 Takeback requests in casual games; Watch tab for public live games; weekly arena every
+  Saturday 18:00 UTC (PR #18; chess v18 and migration takeback_offers deployed).
+- R3 My games + Game Story: archive with form insights, chapters, key moments, story
+  playback, replay your toughest moment (PR #19).
+- R4 Puzzle Streak, harder every three solves, one skip (PR #20). Fixed: tapped puzzle moves
+  never matched because taps always send a queen promotion.
+
+## S. Round 4 (owner approved 2026-10-10)
+Server code is in PR #21; the migration `20261010180000_round4_social_daily_berserk` and
+chess v19 are NOT deployed yet (owner cancelled the migration step; waiting for approval).
+- S1 Berserk: one charge at every 3rd straight rated win (never stacked); a loss removes an
+  unspent charge, a draw keeps it. Spend it before your first move in a live rated game:
+  half your clock, rating change x1.25 win or lose (same stakes both ways, so no free Elo).
+  Arena: 3 wins in a row = on fire (wins 4, draws 2); a Berserk win adds 1. (PR #21, #22)
+- S2 Friends: search, follow, online status, direct challenges (live or daily, casual or
+  rated, colour), bell notifications, realtime hints on `player:<id>`. (PR #22)
+- S3 Daily games: 1/3/7 days per move, own "daily" rating pool, no abandon claims; web push
+  for your move and challenges (VAPID private key only in `chess_server_secrets`). (PR #22)
+- S4 Achievements (11 badges) on the profile. (PR #21, #22)
+- S5 Puzzle rating (first try only), difficulty from your rating, daily puzzle, theme stats
+  and theme training, server streak record. (PR #23)
+- S6 Opening trainer from your own games; share Game Story as an image card or clip. (PR #24)
+- S7 Sign-in checked locally (ES256 JWKS) with a getUser fallback, to cut a round trip per
+  request. Verify after deploy: logs should rarely show "fell back to auth.getUser".
+
+## T. Round 5 (owner approved 2026-10-10)
+Server code in PR #25 (migration `20261010200000_round5_clubs_leagues_profiles`, needs the
+round-4 migration first). Not deployed; waiting for the owner's approval.
+- T1 Learn from your mistakes (browser-local spaced repetition from reviews). (PR #26)
+- T2 Offline play against the computer (service worker caches engine + bundles). (PR #26)
+- T3 Public profile: rating line, best wins, head-to-head, report player. (PR #27)
+- T4 Clubs with chat, Sunday club battle (best five count, never vs your own club). (PR #28)
+- T5 Monthly leagues Bronze to Diamond, top/bottom fifth move, season badges. (PR #28)
+- T6 Fair play: reports and opponent-measured accuracy signals; human review only through
+  the owner-only `chess_fairplay_review` view. No automatic bans. (PR #25-#27)
+- T7 Conditional moves in daily games; one automatic reply per move. (PR #29)
+- T8 Freestyle: Chess960 starts without castling (chess.js has no 960 castling), casual
+  only, rooms, challenges and the computer. (PR #29)
+
+## U. Round 6 (owner approved 2026-10-10)
+Server code in PR #31 (migration `20261010220000_round6_moderation_studies_swiss`, after the
+round-4 and round-5 migrations). Not deployed; waiting for the owner's approval.
+- U0 Loading fix (owner screenshot: empty board while loading): sprite preload, engines
+  start on first use, idle service-worker install, lazy bot portraits. (PR #30)
+- U0 Pending bug: online games in My games replayed only the last move (stored PGN held
+  one move); archive rebuilds from the move list, finished games store full PGN. (PR #30)
+- U1 Moderation page for admins (set `role='admin'` on the owner's player row at deploy). (PR #31, #32)
+- U2 Chess960 castling in Freestyle; Freestyle rated in its own pool. (PR #31, #33)
+- U3 Studies: annotated lines shared by /?study=CODE. (PR #31, #33)
+- U4 Coach mode against the computer. (PR #34)
+- U5 Player/club tournaments, arena or Swiss (auto-paired rounds). (PR #31, #34)
+- U6 Account: password reset, change password, download data, delete account. (PR #31, #32)
+- U7 Spectator reactions in Watch (text chips, players never see them). (PR #34)
+- Netlify deploy previews: the Netlify Drawer is blocked by our CSP (grey box at the bottom
+  of previews only). Turn it off in Netlify: Project configuration > Build & deploy >
+  Deploy Previews > Netlify Drawer. CSP stays strict.
+
+## V. Round 7 (owner approved 2026-10-10)
+Server code in PR #35 (migration `20261011000000_round7_notifications_explorer`, after
+rounds 4-6). Not deployed; waiting for the owner's approval. After deploy, an admin can
+fill the explorer from past games with the `explorer_backfill` action (150 games a call).
+- V1 Faster live moves: replies to a move still in flight go straight out; the server waits
+  for the move they answer. Preconnect to the game server. (PR #35, #36)
+  True peer-to-peer (WebRTC) was not used: it would show each player's IP address to the
+  opponent and need third-party STUN/TURN servers.
+- V2 Opening explorer from VCH games, off for positions in your live game. (PR #35, #37)
+- V3 Bullet: premove chains (up to 3); first moves untimed; 30 s to start or the game is
+  aborted (no rating). (PR #35, #36)
+- V4 Notifications inbox: bell + page. (PR #35, #37)
+- V5 Languages: French, Spanish, Portuguese, Arabic (right-to-left, board stays LTR). (PR #38)
+- V6 Season board sets unlocked by league division or season badge. (PR #38)
+- Known: e2e/board-motion animation-timing tests are flaky in the shared container (same
+  rate on round-5 builds); they pass when the machine is idle.
+
+## W. Round 8 (owner approved 2026-10-11)
+Server code in PR #39 (migration `20261011090000_round8_sandbagging`, after rounds 4-7).
+Not deployed; deploys with the round 4-7 batch once the owner accepts the prompts.
+- W1 Translations finished: toasts, lessons, openings, famous games, game-over messages and
+  the remaining screens; values inside messages via patterns. The extra dictionary loads
+  only for French, Spanish, Portuguese or Arabic. (PR #40)
+- W2 Explorer: Stockfish score for each listed move (own worker, depth 10, MultiPV +
+  searchmoves); "Your games" shows only your finished standard games; with no games the
+  engine suggests its top three. Still off for positions in your live game. (PR #39, #41)
+- W3 Tournament lobby: live games strongest first (your own marked), Swiss pairings for the
+  round, standings; refreshes every 10 s while open. Club events stay private. (PR #39, #41)
+- W4 Clubs in the league: each club scores its best 10 members' league points this season;
+  table under the division standings. (PR #39, #41)
+- W5 Accessibility: type moves (Nf3, e2e4, O-O; "/" focuses the box); every new move and
+  your clock at 1 min / 30 s / 10 s announced to screen readers in the interface language;
+  optional read-aloud in Theme Studio. (PR #40)
+- W6 Anti-sandbagging: a hidden score rises on quick rated losses (resign, flag or leave
+  within 6 moves; more against much weaker opponents) and falls with normal games. From 3
+  the player is listed in Moderation and matchmaking treats them as up to 300 points
+  stronger. A lead for a moderator, never an automatic penalty. (PR #39, #41)
+
+## X. Round 9 (owner approved 2026-10-11)
+Server code in PR #42 (migration `20261011120000_round9_repertoire_battle_simul_vacation`,
+after rounds 4-8). Not deployed.
+- X1 Opening repertoire: lines as White and Black, from the board or the explorer; drills
+  where the computer plays your prepared replies; explorer marks your moves. Synced to the
+  account, on the device for guests. (PR #42, #43)
+- X2 Insights: score by colour, opening, opponent strength and time control; rating line
+  per pool; how and when you lose; repertoire deviations; up to four things to work on with
+  a button to the fix. (PR #42, #43)
+- X3 Puzzle Battle: the same puzzles for two players, three minutes, three misses out;
+  invite by code, link or from a friend. Unrated. (PR #42, #44)
+- X4 Simuls: host plays everyone (White, casual), up to 20 boards, optional club-only;
+  host bar with the boards waiting. No abandon claim or 30 s abort on simul boards. (PR #42, #44)
+- X5 Endgame drills against Stockfish: queen, rook and two-bishop mates, king-and-pawn win
+  and hold, Lucena; par and stars saved on the device. (PR #45)
+- X6 Vacation for daily games: up to 14 days a year; clocks don't run out; opponents see
+  it in the daily list. (PR #42, #45)
+- Translations for all round 9 screens. (PR #45)
+
+## Y. Round 10 (owner approved 2026-10-11)
+Server code in PR #46 (migration `20261011150000_round10_crazyhouse_ladder_commentary`,
+after rounds 4-9). Rounds 4-9 are live in the database (owner ran the SQL 2026-10-11); the
+round 4-9 game server is waiting for the owner's deploy (CLI or dashboard).
+- Y1 Today's training: a daily plan from your own data with a streak. (PR #47)
+- Y2 Prep against a player: their rated openings, played back as often as they play them,
+  with their score per move, until their book runs out. (PR #46, #47)
+- Y3 Crazyhouse: drops from your pocket; own rated pool; live only. (PR #46, #48)
+- Y4 Analyse together: a shared board and arrows over a realtime channel, by link. (PR #49)
+- Y5 Puzzle Battle ladder: matched battles, weekly table, podium badges. (PR #46, #49)
+- Y6 Live commentary in tournament lobbies by the organiser, club owner or an admin. (PR #46, #49)
+- Translations for every round 10 screen. (PR #49)
+
+## Z. Round 11 (owner request 2026-10-11)
+Server code in PR claude/round11-server (migration `20261011180000_round11_moment_of_week`,
+after round 10). Not deployed: on 2026-10-11 the Supabase write tools timed out in the build
+session, so round 10's migration and function were not applied either.
+- Z1 Vanta Dark (fog of war), against the computer: normal rules, you see only your pieces and
+  the squares they reach; checking pieces are revealed; their moves show as "?"; no moods,
+  hints, coach, evaluation or opening names while it's dark. Online play needs the server to
+  hide the opponent's pieces from each player (later). (PR claude/round11-modes)
+- Z2 Blackout Blitz, against the computer: 3 minutes; after every four of your moves the next
+  two are blind (pieces fade, squares work, the move list goes dark). (PR claude/round11-modes)
+- Z3 Your Shadow: a bot from your own games that opens like you, as often as you play each
+  move, then plays at your rating. (PR claude/round11-modes)
+- Z4 The Vanta Gauntlet: seven bots, 900 to 2700, three lives, colours alternate; leaving a
+  stage unfinished costs a life. On the device. (PR claude/round11-modes)
+- Z5 Rivals (Community tab): players you meet often with close results, from your history;
+  challenge from the list. (PR claude/round11-rivals-moment)
+- Z6 Relic sets (Theme Studio): six earned board themes (squares, accent, gold, wallpaper;
+  pieces stay plain artwork) for Vanta Dark, Blackout Blitz, Your Shadow, two Gauntlet
+  milestones and beating a rival. On the device. (PR claude/round11-modes)
+- Z7 Vanta Moment of the Week: the week's best checkmate from rated games (mating while down
+  material first), or an admin's pick; on Watch and the main menu, with a replay.
+  (PR claude/round11-server, claude/round11-rivals-moment)
+- Translations for every round 11 screen. (PR claude/round11-rivals-moment)
+
+## R12. Round 12 (owner approved 2026-10-12: "implement all your wonderful ideas")
+Fixes first in PR #53 (full game records on every ending, threefold repetition online, the
+flag prompt no longer covers chat, the Back button returns to the previous screen). Server code
+in PR #54 (migration `20261012120000_round12_bughouse_twins_heraldry`, after round 11); its
+deploy waits for round 11 and the owner's approval for that deployment.
+- R12.1 The Vanta Campaign: five realms, each lending its board (relic), weather and music to
+  the battle; two guards and a boss whose battle bends the rules (Blackout Blitz, Vanta Dark,
+  Your Shadow, Chess960, the Vanta King); three stars per battle; freeing a realm earns its
+  relic. On the device. (PR #55)
+- R12.2 Veteran pieces: each piece's career from your finished standard games (captures,
+  forks, checks, mates, promotions); ranks as chevrons on the board, a hover card, and "Your
+  army" in Review. On the device. (PR #55)
+- R12.3 Oaths: three a day, sworn before a game, judged at the end; honor earns the Oathbound
+  and Paladin relics. On the device. (PR #55)
+- R12.4 Living atmosphere: the room reacts to check, a low clock, material and the result
+  (position and clocks only); full, subtle or off. (PR #55)
+- R12.5 Adaptive music: a Web Audio score in each theme's key that follows the game's
+  tension; off by default. Higgsfield stems could replace the synths later. (PR #55)
+- R12.6 Vanta Bughouse: two against two on two boards, tables by link, the partner's board
+  beside yours, team calls, the first board to finish decides the match. Casual. Server in
+  PR #54; app in PR claude/round12-social.
+- R12.7 Orders and heraldry: club owners design a crest (shield, division, colours, charge);
+  shown on clubs, profiles and player bars. Drawn in code, no image files. (PR #54, social)
+- R12.8 Twin Fates: one famous position played twice with colours swapped; the second game
+  starts by itself; the match is the total. Casual. (PR #54, social)
+- R12.9 Hall of Relics: the profile showroom (Moments of the Week won, club crest, and on your
+  own profile your relics, campaign, honor and veterans). (PR #54, social)
+- Fix: on phones, Your Shadow, the Vanta Gauntlet and Relic sets opened off-screen. (PR #55)
+- Translations for every round 12 screen. (PR #55, social)
+
+## E. Expressions (prototype PR, owner reviewing the demo video)
+Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
+- E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
+- E2 Landing ring on every drop; shockwave across the board when the mover is ahead and lands
+  within 2 squares of enemy pieces, which flinch nearest first. (prototype; "ahead" = material)
+- E3 Moods: fear (attacked, not safely defended; king in check), attack (leans toward a bigger
+  or undefended target), courage (attacked but defended), shock. Hover intensifies. 3D sets
+  express more than Ink sets. (prototype)
+- E4 Fair play (owner decision 2026-10-10): expressions stay ON in rated games, softer ("fair"
+  level), and decide automatically what to show: only contact threats (pieces next to each
+  other) and checks. Long-range bishop/rook/queen threats and hanging pieces are never shown,
+  so captures can still be a surprise. All other modes get full expressions. Players can set
+  Full / Subtle / Off in Theme Studio. Engine evaluation never drives effects in live games.
+  (prototype)
+- E5 More expressions: strength/triumph after a capture, despair for a lone king, victory and
+  defeat poses at game end, idle breathing.
+- E6 Setting: Expressions Full / Subtle / Off (prototype in Theme Studio); later in the Settings page, plus a separate shockwave toggle.
+- E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
+
+## P. Piece sets, themes and store (later; owner will send references)
+- P1 More piece sets, each in a 3D and a 2D version, all supporting expressions (3D fuller).
+- P2 Themed sets generated in Higgsfield: each theme = pieces + board + background + its own
+  theme song; users can still mix and customise.
+- P3 Medieval realistic 3D set: real soldiers with shields, swords and helmets as the pieces,
+  the king behind the lines. Owner will send a reference before we start.
+- P4 Premium piece sets and skins behind a paywall, better than anything on chess.com. Last
+  part of the project (needs payments, entitlements and a store page).
+
+## A. Accounts, profile and legal (owner request 2026-10-10)
+- A1 Player portraits (done 2026-10-10, PR claude/game-feel): guests show an empty silhouette;
+  signed-in players upload a picture (cropped to 128px, stored as a small inline image in
+  `chess_players.avatar_data`, so the CSP needs no new origin). Later: pick a VCH avatar.
+- A2 Country flag beside every name (done 2026-10-10, same PR): a one-time prompt and the
+  "Edit portrait & flag" menu. "Detect" asks `/api/geo` (Netlify edge) only when pressed and keeps
+  just the 2-letter code (`chess_players.country_code`, never the IP); players can change or hide
+  it. Migration applied and `chess` function v16 deployed with owner approval.
+- A3 Terms and conditions, privacy policy (what we store, why, how to delete it) and a cookie /
+  storage notice if analytics are ever added. Linked from sign-up and the footer.
+- A4 Backend security pass later (see S1): RLS review, rate limits, anti-cheat signals.
+
+## I. Ideas proposed by Claude (approved 2026-10-10; done in PR claude/game-feel)
+- I1 Captured-pieces tray by each player bar with the material difference (+3).
+- I2 Game-end cinematic: the winner's pieces cheer, the losing king topples (uses expressions).
+- I3 Review mode: pieces react to move quality (brilliant glow, blunder slump).
+- I4 Haptics on phones: light buzz on pick-up, firmer on capture and check.

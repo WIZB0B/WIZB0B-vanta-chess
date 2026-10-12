@@ -18,8 +18,8 @@ test('player bars expose avatar, flag, rating, live state, clock, and online-onl
   assert.match(main,/setPresence\(\$\('#topPresence'\),currentBot\?'ENGINE'/);
 });
 
-test('player flags use a real SVG and disappear when no supported country is set',()=>{
-  assert.match(main,/\/assets\/vch\/flags\/us\.svg/);
+test('player flags use a real SVG for any country and disappear when no supported country is set',()=>{
+  assert.match(main,/const flagSrc=normalized\?FLAG_URL\[normalized\]\|\|'':'';/);
   assert.match(main,/element\.classList\.toggle\('hidden',!flagSrc\)/);
   assert.doesNotMatch(main,/class="player-flag is-placeholder"/);
   assert.doesNotMatch(main,/element\.textContent=normalized\|\|'--'/);

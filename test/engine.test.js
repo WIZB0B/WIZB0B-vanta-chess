@@ -33,7 +33,7 @@ test('bot requests keep UCI_Elo / Skill Level and search a fixed node count',()=
   const bridge=loadBridge();
   bridge.request({mode:'bot',fen:START,elo:1800,nodes:150000,requestId:'bot-1'});
   assert.deepEqual(bridge.sent.slice(1),[
-    'setoption name Skill Level value 20','setoption name UCI_LimitStrength value true','setoption name UCI_Elo value 1800',
+    'setoption name MultiPV value 1','setoption name Skill Level value 20','setoption name UCI_LimitStrength value true','setoption name UCI_Elo value 1800',
     `position fen ${START}`,'go nodes 150000'
   ]);
   bridge.engineSays('bestmove e2e4');
@@ -44,11 +44,18 @@ test('bot requests keep UCI_Elo / Skill Level and search a fixed node count',()=
 test('analysis runs at full strength and searches to the requested depth',()=>{
   const bridge=loadBridge();
   bridge.request({mode:'analysis',fen:START,depth:ANALYSIS_MAX_DEPTH,requestId:'analysis-1'});
-  assert.deepEqual(bridge.sent.slice(1),['setoption name UCI_LimitStrength value false','setoption name Skill Level value 20',`position fen ${START}`,'go depth 18']);
+  assert.deepEqual(bridge.sent.slice(1),['setoption name MultiPV value 1','setoption name UCI_LimitStrength value false','setoption name Skill Level value 20',`position fen ${START}`,'go depth 18']);
   assert.ok(ANALYSIS_MIN_DEPTH===10&&ANALYSIS_MAX_DEPTH===18);
   bridge.request({mode:'analysis',fen:START,requestId:'analysis-2'});
   bridge.engineSays('bestmove e2e4');
   assert.equal(bridge.sent.at(-1),'go depth 18','a missing depth no longer collapses to depth 1');
+  // Explorer scoring: several lines, limited to the listed moves; junk never reaches the engine.
+  bridge.engineSays('bestmove e2e4');
+  bridge.request({mode:'analysis',fen:START,depth:10,multipv:3,searchmoves:['e2e4','d2d4','quit','g1f3'],requestId:'explore-1'});
+  assert.deepEqual(bridge.sent.slice(-5),['setoption name MultiPV value 3','setoption name UCI_LimitStrength value false','setoption name Skill Level value 20',`position fen ${START}`,'go depth 10 searchmoves e2e4 d2d4 g1f3']);
+  bridge.engineSays('bestmove e2e4');
+  bridge.request({mode:'bot',fen:START,elo:1800,nodes:150000,multipv:5,requestId:'bot-3'});
+  assert.ok(bridge.sent.includes('setoption name MultiPV value 1')&&bridge.sent.at(-1)==='go nodes 150000','bots always play from one line');
 });
 
 test('a new request stops the running search and output is tagged with the right request',()=>{
@@ -65,7 +72,7 @@ test('a new request stops the running search and output is tagged with the right
 });
 
 test('bot, live analysis and review each use their own Stockfish worker',()=>{
-  assert.match(main,/const stockfish=new Worker\('\/stockfish\.worker\.js'\);\nconst analysisWorker=new Worker\('\/stockfish\.worker\.js'\);\nconst reviewWorker=new Worker\('\/stockfish\.worker\.js'\);/);
+  assert.match(main,/const stockfish=lazyWorker\('\/stockfish\.worker\.js'\);\nconst analysisWorker=lazyWorker\('\/stockfish\.worker\.js'\);\nconst reviewWorker=lazyWorker\('\/stockfish\.worker\.js'\);/);
   assert.match(main,/stockfish\.postMessage\(\{mode:'bot',fen,elo:requestedElo,nodes:botSearchNodes\(requestedElo\),requestId:id\}\)/);
   assert.match(main,/analysisWorker\.postMessage\(\{mode:'analysis',fen,depth:ANALYSIS_MAX_DEPTH,requestId:analysisRequest\.id\}\)/);
   assert.match(main,/reviewWorker\.postMessage\(\{mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id\}\)/);
@@ -80,4 +87,21 @@ test('live analysis shows the real depth, ignores stale lines and never goes bac
   assert.match(body,/depthEl\.textContent=String\(depth\)/);
   assert.match(main,/if\(!analysisRequest\|\|data\.requestId!==analysisRequest\.id\)return/);
   assert.match(main,/if\(!force&&analysisRequest\?\.fen===fen\)return/,'an unchanged position keeps deepening instead of restarting');
+});
+
+test('first load: engines start on first use, a stop never starts one, the piece sprite is preloaded', async () => {
+  const { lazyWorker } = await import('../src/lazy-worker.js');
+  const made = [];
+  const w = lazyWorker('/x.js', url => { const fake = { url, sent: [], postMessage(m) { this.sent.push(m) } }; made.push(fake); return fake });
+  const handler = () => {};
+  w.onmessage = handler;
+  w.postMessage({ action: 'stop' });
+  assert.equal(made.length, 0);
+  w.postMessage({ mode: 'bot', fen: 'x' });
+  assert.equal(made.length, 1); assert.equal(made[0].onmessage, handler); assert.deepEqual(made[0].sent, [{ mode: 'bot', fen: 'x' }]);
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /rel="preload" as="image" href="\/assets\/vch\/pieces\/vanta-3d-1x\.png"/);
+  const bridge = workerSource;
+  assert.match(bridge, /if\(data\?\.action==='stop'\)\{queued=null;if\(engine&&searching\)/);
+  assert.match(main, /if\(!need&&!currentHistory\(\)\.length\)return; \/\/ "Analysis begins after your move"/);
 });
