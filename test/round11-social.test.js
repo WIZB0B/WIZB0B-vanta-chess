@@ -1,14 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { addTranslations, translateText } from '../src/i18n.js';
-import { MORE_ROWS, PATTERNS } from '../src/i18n-more.js';
+import { loadLanguage, translateText } from '../src/i18n.js';
 
 const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 const api = readFileSync(new URL('../src/vch-api.js', import.meta.url), 'utf8');
 
-test('round 11 translations: screens, toasts and patterns', () => {
-  addTranslations(MORE_ROWS, PATTERNS);
+test('round 11 translations: screens, toasts and patterns', async () => {
+  await Promise.all(['fr', 'es', 'pt', 'ar'].map(loadLanguage));
   assert.equal(translateText('Vanta Moment of the Week', 'fr'), 'Le moment Vanta de la semaine');
   assert.equal(translateText('Lights out · 2 blind moves', 'es'), 'Luces apagadas · 2 jugadas a ciegas');
   assert.equal(translateText('Stage cleared · next: The Lantern', 'pt'), 'Etapa superada · próximo: The Lantern');

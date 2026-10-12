@@ -1,4 +1,5 @@
 import './style.css';
+import './rtl.css';
 import { Chess } from 'chess.js';
 import { createClient } from '@supabase/supabase-js';
 import { VchApi, stableGuestToken } from './vch-api.js';
@@ -63,7 +64,7 @@ import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
 import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
 import { explorerRows, formatScore, parseMultiPv, scoreValue } from './explorer-view.js';
-import { LANGUAGES, LANG_KEY, RTL, addTranslations, detectLanguage, translateText, translateTree } from './i18n.js';
+import { LANGUAGES, LANG_KEY, RTL, addTranslations, detectLanguage, loadLanguage, translateText, translateTree } from './i18n.js';
 import { BOARD_SETS, unlockedSets } from './season-themes.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
@@ -3496,8 +3497,9 @@ function applyLanguage(lang,{save=false}={}){
   uiLang=LANGUAGES[lang]?lang:'en';
   document.documentElement.lang=uiLang;document.documentElement.dir=RTL.has(uiLang)?'rtl':'ltr';
   translateTree(document.body,uiLang);
-  // The rest of the dictionary (toasts, lessons, game-over messages…) loads on first use.
-  if(uiLang!=='en'&&!moreTranslations)moreTranslations=import('./i18n-more.js').then(m=>{addTranslations(m.MORE_ROWS,m.PATTERNS);if(uiLang!=='en')translateTree(document.body,uiLang)}).catch(()=>{moreTranslations=null});
+  // Each language's dictionary (src/locales/<code>.js) downloads the first time it is chosen;
+  // until it arrives the page shows English, never the previous language.
+  if(uiLang!=='en'){const wanted=uiLang;loadLanguage(wanted).then(()=>{if(uiLang===wanted)translateTree(document.body,uiLang)}).catch(()=>{})}
   if(save)try{localStorage.setItem(LANG_KEY,uiLang)}catch{}
   const select=$('#languageSelect');if(select)select.value=uiLang;
 }
