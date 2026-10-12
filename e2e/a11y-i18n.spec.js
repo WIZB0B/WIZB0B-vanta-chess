@@ -33,3 +33,25 @@ test('French: lazily loaded rows translate toasts, lessons and the typed-move bo
   await page.locator('.main-nav [data-nav="learn"]').click();
   await expect(page.getByText('Principes d', { exact: false }).first()).toBeVisible();
 });
+
+// The owner's report (2026-10-12): after French, Spanish/Portuguese/Arabic stayed French, and
+// switching back to English kept the old language until a reload.
+test('switching languages: each one translates, and English comes back without a reload', async ({ page }) => {
+  await mockBackend(page);
+  await page.addInitScript(() => { localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1') });
+  await page.goto('/');
+  const pick = async lang => page.evaluate(l => { const s = document.querySelector('#languageSelect'); s.value = l; s.dispatchEvent(new Event('change')) }, lang);
+  const play = page.locator('#computerStart span, #create span').first();
+  const english = (await play.textContent()).trim();
+  const seen = {};
+  for (const lang of ['fr', 'es', 'pt', 'ar', 'en', 'es', 'en']) {
+    await pick(lang);
+    await expect(page.locator('html')).toHaveAttribute('lang', lang);
+    await expect(page.locator('html')).toHaveAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+    await page.waitForTimeout(250);
+    seen[lang] = (await play.textContent()).trim();
+    if (lang === 'en') expect(seen[lang]).toBe(english);
+    else expect(seen[lang], `${lang} translates`).not.toBe(english);
+  }
+  expect(new Set([seen.fr, seen.es, seen.pt, seen.ar]).size).toBe(4);
+});

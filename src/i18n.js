@@ -243,14 +243,17 @@ export function translateText(text, lang) {
   return null;
 }
 
-const ORIGINAL = new WeakMap(); // text node -> its English source; element -> {attr: English source}
+// Text node -> {src: its English source, out: the text we last wrote}; element -> {attr: {src, out}}.
+const ORIGINAL = new WeakMap();
 const ATTRS = ['placeholder', 'aria-label', 'title'];
-// The English source of a value we may have translated before. If the app has since
-// written a new value (not our translation), that new value is the source.
-function sourceOf(saved, current, lang) {
-  if (saved == null) return current;
-  const done = translateText(saved, lang);
-  return current === saved || (done && current.trim() === done) ? saved : current;
+// The English source of a value we may have translated before: if it still holds exactly what
+// we wrote, its source is unchanged (whatever language we wrote it in); otherwise the app has
+// written a new value since, and that value is the source. (Comparing against a translation
+// into the *new* language was the bug that kept French on screen after switching to English
+// or to another language.)
+function sourceOf(saved, current) {
+  if (!saved) return current;
+  return current === saved.out ? saved.src : current;
 }
 // Translates a subtree in place (or restores English when lang is 'en').
 export function translateTree(root, lang) {
@@ -261,10 +264,10 @@ export function translateTree(root, lang) {
   while ((node = walker.nextNode())) {
     const parent = node.parentElement;
     if (!parent || parent.closest('script,style,textarea,[data-no-i18n]')) continue;
-    const source = sourceOf(ORIGINAL.get(node), node.nodeValue, lang);
-    ORIGINAL.set(node, source);
+    const source = sourceOf(ORIGINAL.get(node), node.nodeValue);
     const out = translateText(source, lang);
     const next = out ? source.match(/^\s*/)[0] + out + source.match(/\s*$/)[0] : source;
+    ORIGINAL.set(node, { src: source, out: next });
     if (node.nodeValue !== next) node.nodeValue = next;
   }
   const elements = root.querySelectorAll ? [root, ...root.querySelectorAll('[placeholder],[aria-label],[title]')] : [];
@@ -273,9 +276,9 @@ export function translateTree(root, lang) {
     const saved = ORIGINAL.get(el) || {};
     for (const attr of ATTRS) {
       if (!el.hasAttribute(attr)) continue;
-      const source = sourceOf(saved[attr], el.getAttribute(attr), lang);
-      saved[attr] = source;
+      const source = sourceOf(saved[attr], el.getAttribute(attr));
       const next = translateText(source, lang) || source;
+      saved[attr] = { src: source, out: next };
       if (el.getAttribute(attr) !== next) el.setAttribute(attr, next);
     }
     ORIGINAL.set(el, saved);
