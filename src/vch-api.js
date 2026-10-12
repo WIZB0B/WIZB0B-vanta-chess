@@ -138,6 +138,16 @@ export class VchApi {
   battleQueue() { return this.request('battle_queue'); }
   battleQueueStatus(leave = false) { return this.request('battle_queue_status', leave ? { leave: true } : {}); }
   battleLadder() { return this.request('battle_ladder'); }
+  // Round 12: Vanta Bughouse, Twin Fates, club heraldry
+  bughouseCreate(options) { return this.request('bughouse_create', options); }
+  bughouseJoin(code, seat = null, name = undefined) { return this.request('bughouse_join', { code, ...(seat ? { seat } : {}), ...(name ? { name } : {}) }); }
+  bughouseLeave(code) { return this.request('bughouse_leave', { code }); }
+  bughouseState(code) { return this.request('bughouse_state', { code }); }
+  bughouseForGame(gameId) { return this.request('bughouse_state', { gameId }); }
+  fates() { return this.request('fates'); }
+  twinCreate(options) { return this.request('twin_create', options); }
+  twinState(twinId) { return this.request('twin_state', { twinId }); }
+  clubCrest(slug, crest) { return this.request('club_crest', { slug, crest }); }
   commentaryPost(tournamentId, body, gameId = null) { return this.request('commentary_post', gameId ? { tournamentId, body, gameId } : { tournamentId, body }); }
   explorerBackfill() { return this.request('explorer_backfill'); }
   momentOfWeek() { return this.request('moment_of_week'); }

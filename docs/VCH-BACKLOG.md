@@ -397,6 +397,36 @@ session, so round 10's migration and function were not applied either.
   (PR claude/round11-server, claude/round11-rivals-moment)
 - Translations for every round 11 screen. (PR claude/round11-rivals-moment)
 
+## R12. Round 12 (owner approved 2026-10-12: "implement all your wonderful ideas")
+Fixes first in PR #53 (full game records on every ending, threefold repetition online, the
+flag prompt no longer covers chat, the Back button returns to the previous screen). Server code
+in PR #54 (migration `20261012120000_round12_bughouse_twins_heraldry`, after round 11); its
+deploy waits for round 11 and the owner's approval for that deployment.
+- R12.1 The Vanta Campaign: five realms, each lending its board (relic), weather and music to
+  the battle; two guards and a boss whose battle bends the rules (Blackout Blitz, Vanta Dark,
+  Your Shadow, Chess960, the Vanta King); three stars per battle; freeing a realm earns its
+  relic. On the device. (PR #55)
+- R12.2 Veteran pieces: each piece's career from your finished standard games (captures,
+  forks, checks, mates, promotions); ranks as chevrons on the board, a hover card, and "Your
+  army" in Review. On the device. (PR #55)
+- R12.3 Oaths: three a day, sworn before a game, judged at the end; honor earns the Oathbound
+  and Paladin relics. On the device. (PR #55)
+- R12.4 Living atmosphere: the room reacts to check, a low clock, material and the result
+  (position and clocks only); full, subtle or off. (PR #55)
+- R12.5 Adaptive music: a Web Audio score in each theme's key that follows the game's
+  tension; off by default. Higgsfield stems could replace the synths later. (PR #55)
+- R12.6 Vanta Bughouse: two against two on two boards, tables by link, the partner's board
+  beside yours, team calls, the first board to finish decides the match. Casual. Server in
+  PR #54; app in PR claude/round12-social.
+- R12.7 Orders and heraldry: club owners design a crest (shield, division, colours, charge);
+  shown on clubs, profiles and player bars. Drawn in code, no image files. (PR #54, social)
+- R12.8 Twin Fates: one famous position played twice with colours swapped; the second game
+  starts by itself; the match is the total. Casual. (PR #54, social)
+- R12.9 Hall of Relics: the profile showroom (Moments of the Week won, club crest, and on your
+  own profile your relics, campaign, honor and veterans). (PR #54, social)
+- Fix: on phones, Your Shadow, the Vanta Gauntlet and Relic sets opened off-screen. (PR #55)
+- Translations for every round 12 screen. (PR #55, social)
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)

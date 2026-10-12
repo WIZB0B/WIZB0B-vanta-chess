@@ -1578,7 +1578,11 @@ async function bughouseLeave(req:Request,b:any){
 }
 async function bughouseState(req:Request,b:any){
   let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
-  const m=await bughouseByCode(b.code);if(!m)throw fail("Bughouse table not found.",404);
+  // By the table's code, or by one of its boards (a player reloading their own board).
+  let m:any=null;
+  if(b.gameId){const g=await gameById(String(b.gameId));m=g?.bughouse_id?await one("chess_bughouse","id",g.bughouse_id):null}
+  else m=await bughouseByCode(b.code);
+  if(!m)throw fail("Bughouse table not found.",404);
   return bughouseView(m,p?.id||null)
 }
 // A capture on one board lands in the partner's pocket on the other board.

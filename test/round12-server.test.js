@@ -177,3 +177,8 @@ test('migration: server-only tables, the pocket function only for the chess func
   assert.match(sql, /'crazyhouse','bughouse'\)\);/);
   assert.match(sql, /octet_length\(crest::text\) <= 400/);
 });
+test('server: a player reloading their Bughouse board finds the table by the board', () => {
+  assert.match(fn, /if\(b\.gameId\)\{const g=await gameById\(String\(b\.gameId\)\);m=g\?\.bughouse_id\?await one\("chess_bughouse","id",g\.bughouse_id\):null\}/);
+  // The view never carries player ids: seats are names and "me".
+  assert.match(fn, /const seats=Object\.fromEntries\(BUGHOUSE_SEATS\.map\(s=>\[s,m\.seats\?\.\[s\]\?\{name:m\.seats\[s\]\.name,me:m\.seats\[s\]\.id===viewerId\}:null\]\)\);/);
+});

@@ -48,6 +48,9 @@ import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } fr
 import { addGames, armyList, identitiesAfter, loadVeterans, rankOf, saveVeterans, totalsMap } from './veterans.js';
 import { dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from './oaths.js';
 import { atmosphereFor, tensionFor } from './atmosphere.js';
+import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
+import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
+import { FATES, points as twinPoints } from './twin-fates.js';
 import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
@@ -85,7 +88,7 @@ const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuC
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
 // Round 12 state (the functions are in the round 12 section below)
-let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null;
+let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null;
 let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
@@ -243,12 +246,12 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
         <div class="player-info">
-          <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag hidden" id="topFlag" aria-hidden="true"></span></div>
+          <div class="player-name-row"><b id="topPlayerName">Waiting for opponent</b><span class="player-flag hidden" id="topFlag" aria-hidden="true"></span><span class="player-crest hidden" id="topCrest"></span></div>
           <div class="player-meta"><span class="player-rating" id="topRating">1200</span><span class="player-presence" id="topPresence"><i class="live-dot" aria-hidden="true"></i><span>WAITING</span></span><span class="captured-tray" id="topCaptured" aria-label="Pieces captured"></span></div>
         </div>
         <time id="topClock" data-color="b">10:00</time>
@@ -282,7 +285,7 @@ ${splashMarkup(splash)}
       <div class="player bottom" data-player-bar="local">
         <span class="avatar light" id="bottomAvatar">GU</span>
         <div class="player-info">
-          <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag hidden" id="bottomFlag" aria-hidden="true"></span></div>
+          <div class="player-name-row"><b id="bottomPlayerName">You · ${guestName}</b><span class="player-flag hidden" id="bottomFlag" aria-hidden="true"></span><span class="player-crest hidden" id="bottomCrest"></span></div>
           <div class="player-meta"><span class="player-rating" id="bottomRating">1200</span><span class="player-presence" id="bottomPresence"><i class="live-dot" aria-hidden="true"></i><span>LOCAL</span></span><span class="captured-tray" id="bottomCaptured" aria-label="Pieces captured"></span></div>
           <div class="oath-line hidden" id="oathLine" aria-live="polite"></div>
         </div>
@@ -291,7 +294,7 @@ ${splashMarkup(splash)}
         </div>
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
-      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button><button id="musicToggle" type="button" aria-pressed="false">Music: off</button></div></details></div>
+      <div class="twin-line hidden" id="twinLine" aria-live="polite"></div>\n      <div class="bh-partner hidden" id="bhPartner" aria-label="Your partner's board"></div>\n      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button><button id="musicToggle" type="button" aria-pressed="false">Music: off</button></div></details></div>
       <div class="m-movebar"><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><div id="mMoves" class="m-moves" aria-label="Moves"></div><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
       <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="takeback" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span>Takeback</span></button><button type="button" data-m-action="leave" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Stop watching</span></button><button type="button" data-m-action="puzzle-next" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Next</span></button><button type="button" data-m-action="puzzle-streak" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3 0-3-1-5 0-8Z"/></svg><span>Streak</span></button><button type="button" data-m-action="puzzle-skip" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Skip once</span></button><button type="button" data-m-action="puzzle-end" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>End streak</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
     </section>
@@ -581,7 +584,7 @@ function renderBoard({hint=null,instant=false}={}){
   dom.board.classList.toggle('vanta-dark',!!sight);
   let checked=null;
   if(boardGame.inCheck())for(const [sq,key] of position)if(key===boardGame.turn()+'k')checked=sq;
-  const mated=!reviewState.viewing&&checked&&(isZhGame()&&boardGame===game?zhStatus(Chess,game,zhClientState()).over:boardGame.isCheckmate());
+  const mated=!reviewState.viewing&&checked&&(isZhGame()&&boardGame===game?zhGameStatus().over:boardGame.isCheckmate());
   const marks=new Map(boardShapes.filter(shape=>!shape.to||shape.to===shape.from).map(shape=>[shape.from,shape.brush]));
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
@@ -645,7 +648,7 @@ function render(options){
   if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
   if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove();if(analysis){const key=JSON.stringify([analysis.sans,boardShapes]);if(key!==analysis.sentKey){analysis.seq++;analysisSend()}}})}
 }
-function endText(){if(isZhGame()){const st=zhStatus(Chess,game,zhClientState());if(st.over)return st.result==='1/2-1/2'?'Draw · Stalemate':`Checkmate · ${st.result==='1-0'?'White':'Black'} wins`}if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
+function endText(){if(isZhGame()){const st=zhGameStatus();if(st.over)return st.result==='1/2-1/2'?'Draw · Stalemate':`Checkmate · ${st.result==='1-0'?'White':'Black'} wins`}if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
   const base=Math.max(0,Number(seconds)||0),label=base%60===0?String(base/60):`${base}s`;
   return `${label}+${Math.max(0,Number(increment)||0)}`;
@@ -671,6 +674,7 @@ function normalizedEndReason(value=''){
   const reason=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ');
   if(!reason)return '';
   if(reason.includes('checkmate'))return 'by checkmate';
+  if(reason==='partner')return 'on the partner board';
   if(reason.includes('timeout')||reason.includes('time'))return 'on time';
   if(reason.includes('resign'))return 'by resignation';
   if(reason.includes('abort'))return 'aborted';
@@ -1131,7 +1135,7 @@ function playerBarClockColors(){
 }
 function activeClockColor(){
   if(mode==='watch')return watchSession&&['active','playing','in_progress'].includes(watchSession.state?.status)&&!browse?game.turn():null;
-  if(reviewState.viewing||localGameOver||game.isGameOver())return null;
+  if(reviewState.viewing||localGameOver||boardOver())return null;
   if(mode==='computer')return computerStarted&&localClockState?.running?game.turn():null;
   return serverGameId&&['active','playing','in_progress'].includes(serverGame?.status)&&clockSnapshot?.running!==false?game.turn():null;
 }
@@ -1271,6 +1275,8 @@ function syncPlayerBars(){
   const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
   setPlayerFlag($('#topFlag'),opponent?.country_code||(opponentColor?serverGame?.[`${opponentColor}_country_code`]:null));
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code||(ownColor?serverGame?.[`${ownColor}_country_code`]:null));
+  drawPartnerStrip();drawTwinLine();
+  setCrest($('#topCrest'),currentBot?null:opponent?.club);setCrest($('#bottomCrest'),ownClubInfo&&ownClubInfo.gameId===serverGameId?ownClubInfo.club:null);
   const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
@@ -1340,6 +1346,7 @@ function applyServerState(payload,{animateMove=true}={}){
   if(provisional&&(confirms(provisional,state)||isExpired(provisional,performance.now())))clearProvisional();
   const previousVersion=serverVersion,previousGameId=serverGameId,previousState=serverGame;
   if(browse&&(state.id!==previousGameId||Number(state.version)>previousVersion)){browse=null;syncBrowseUi()} // a new move returns to the live position
+  syncTwinFromState(payload,state);if(state.variant==='bughouse'&&state.bughouse_id&&bhSession?.id!==state.bughouse_id)void resumeBughouse(state.id);else drawPartnerStrip();
   if(state.id&&state.id!==previousGameId){restoreRealmTheme();if(['waiting','active'].includes(state.status))setTimeout(()=>{if(serverGameId===state.id&&myColor)swearOath(`online:${state.id}`,{startFen:state.start_fen||null,ok:(state.variant||'standard')==='standard'&&!state.start_fen,midGame:(state.move_history?.length||0)>1})},0);moveEvalByPly=[];moveTimeByPly=[];premoves.cancel();lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();clearDrawOfferTimer();drawOfferKey=null;rematchOfferPending=false;resetReviewState()}
   syncServerMoveTimes(previousState,state);
   serverGame=state;serverGameId=state.id||serverGameId;serverVersion=Number(state.version??serverVersion);
@@ -1402,7 +1409,7 @@ async function loadOpponentInfo(gameId,opponentId){
   const key=`${gameId}:${opponentId}`;if(opponentInfoKey===key)return;opponentInfoKey=key;
   try{
     const out=await api.gamePlayers(gameId),them=(out.players||[]).find(p=>p.id===opponentId);
-    opponentInfo=them?{gameId,...them}:null;syncPlayerBars();
+    opponentInfo=them?{gameId,...them}:null;const me=(out.players||[]).find(p=>p.id!==opponentId);ownClubInfo={gameId,club:me?.club||null};syncPlayerBars();
   }catch{opponentInfoKey=''}
 }
 // Country detection asks Netlify's edge for the country code only, and only when the player
@@ -1474,7 +1481,7 @@ async function loadProfile(){
   }
 }
 function openAccount(){syncIdentityUI();menus.open('account')}
-async function connect(){try{await loadProfile();if(params.get('game')){const state=await api.join(room,guestName);applyServerState(state);await loadChat();toast(`Joined room ${room}`)}}catch(error){toast(error.message)}}
+async function connect(){try{await loadProfile();if(params.get('game')){let state;try{state=await api.join(room,guestName)}catch(error){if(error.status===404&&await openBughouse(room,{quiet:true}))return;throw error}applyServerState(state);await loadChat();toast(`Joined room ${room}`)}else if(params.get('bughouse'))await openBughouse(String(params.get('bughouse')).slice(0,12))}catch(error){toast(error.message)}}
 function stopPolling(){
   if(pollTimer){clearInterval(pollTimer);pollTimer=null}
   pollCount=0;
@@ -1603,6 +1610,7 @@ async function refreshFromRealtime(message){
   return realtimeRefreshPromise;
 }
 function handleRealtimeMessage(message){
+  mergeBughousePockets(message);
   const incoming=realtimeMove(message);
   if(!isOnlineGame()||incoming.gameId!==serverGameId)return;
   if(isOwnRealtimeMove(incoming))return;
@@ -1811,6 +1819,7 @@ function drawArchive(){
 async function openArchivedGame(entry){
   if(!entry)return;
   if(entry.variant==='crazyhouse')return toast("Crazyhouse games can't be replayed here yet");
+  if(entry.variant==='bughouse')return toast("Bughouse games can't be replayed here yet");
   const freestyle=entry.variant==='freestyle'&&entry.startFen&&Array.isArray(entry.sans);
   const replayed=freestyle?replay960(Chess,entry.startFen,entry.sans):null;
   const loaded=new Chess();if(!freestyle){try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}}
@@ -2302,7 +2311,7 @@ function drawProfile(){
   const p=d.player,h=d.headToHead,pools=poolsPlayed(d.history),earned=achievementBoard(p.achievements).filter(a=>a.earned);
   const seasons=(p.achievements||[]).filter(a=>String(a?.id||'').startsWith('season-')).map(a=>a.id.replace(/^season-/,'').split('-')).map(([y,m,div])=>({label:`${div[0].toUpperCase()+div.slice(1)} · ${y}-${m}`,div}));
   target.innerHTML=`<article class="pp">
-    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · <button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small></div></header>
+    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · ${d.club.crest?`<span class="pp-crest">${crestSvg(d.club.crest,{size:16,label:`${d.club.name} crest`})}</span>`:''}<button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small></div></header>
     <div class="pp-actions">${d.self?'':`<button class="pp-follow">${d.following?'Following':'Follow'}</button><button class="pp-challenge primary">Challenge</button><button class="pp-prep">Prep against ${escapeHtml(p.username)}</button>`}<button class="pp-copy">Copy link</button>${d.self?'':'<button class="pp-report">Report</button>'}</div>
     ${h?`<div class="pp-h2h"><small>YOU VS ${escapeHtml(p.username.toUpperCase())}</small><b>${recordText(h)}</b><span>${h.wins+h.draws+h.losses?`${Math.round(100*(h.wins+h.draws/2)/(h.wins+h.draws+h.losses))}% score`:'No games yet'}</span></div>`:''}
     <div class="rating-grid">${['bullet','blitz','rapid','classical','daily'].map(pool=>`<div><small>${pool}</small><b>${Number(p.ratings?.[pool]??1200)}</b><em>${Number(p.provisional_games?.[pool]||0)} games</em></div>`).join('')}<div><small>Puzzles</small><b>${p.puzzle_rating}</b><em>${recordText(p)}</em></div></div>
@@ -2310,6 +2319,7 @@ function drawProfile(){
     ${d.bestWins.length?`<h4>Best wins</h4><div class="pp-list">${d.bestWins.map(w=>`<div><b>${escapeHtml(w.opponent||'Player')}</b><span>${w.opponent_rating} · ${escapeHtml(w.pool)}</span><small>${escapeHtml(new Date(w.at).toLocaleDateString())}</small></div>`).join('')}</div>`:''}
     ${d.recent.length?`<h4>Recent rated games</h4><div class="pp-list">${d.recent.map(g=>`<div class="r-${g.result}"><b>${escapeHtml(g.opponent||'Player')}</b><span>${g.result} · ${g.opponent_rating} · ${escapeHtml(g.pool)}</span><small>${escapeHtml(new Date(g.at).toLocaleDateString())}</small></div>`).join('')}</div>`:''}
     <h4>Achievements <small>${earned.length}</small></h4><div class="pp-badges">${earned.map(a=>`<span class="achievement earned" title="${escapeHtml(a.text)}"><span class="achievement-mark">${escapeHtml(a.mark)}</span><b>${escapeHtml(a.title)}</b></span>`).join('')}${seasons.map(s=>`<span class="achievement earned season-${escapeHtml(s.div)}"><span class="achievement-mark">S</span><b>${escapeHtml(s.label)}</b></span>`).join('')||(earned.length?'':'<p class="menu-empty">None yet.</p>')}</div>
+    ${hallOfRelicsHtml(d)}
   </article>`;
   setPortrait(target.querySelector('.pp-avatar'),{avatar:p.avatar_data,label:p.username});setPlayerFlag(target.querySelector('.pp-flag'),p.country_code);
   target.querySelectorAll('[data-pp-pool]').forEach(b=>b.onclick=()=>{profilePool=b.dataset.ppPool;drawProfile()});
@@ -2346,7 +2356,7 @@ async function renderClubs(){
   setDynamicView('friends','Community',communityTabs('clubs')+brandLoading('Loading clubs…'));wireCommunityTabs();
   try{
     const out=await api.clubList(),target=$('#dynamicView .view-content');if(!target||currentRightView!=='friends')return;
-    const list=c=>`<article class="club-row" data-club="${escapeHtml(c.slug)}"><div><b>${escapeHtml(c.name)}</b><small>${c.member_count} ${c.member_count===1?'member':'members'}${c.description?` · ${escapeHtml(c.description)}`:''}</small></div><button class="club-open">Open</button></article>`;
+    const list=c=>`<article class="club-row" data-club="${escapeHtml(c.slug)}">${c.crest?`<span class="club-crest">${crestSvg(c.crest,{size:26,label:`${c.name} crest`})}</span>`:''}<div><b>${escapeHtml(c.name)}</b><small>${c.member_count} ${c.member_count===1?'member':'members'}${c.description?` · ${escapeHtml(c.description)}`:''}</small></div><button class="club-open">Open</button></article>`;
     target.innerHTML=communityTabs('clubs')+`<div class="friends-view">
       ${out.mine?`<section class="friends-block my-club"><h4>Your club</h4>${list(out.mine)}</section>`:''}
       <section class="friends-block"><h4>Club battle</h4><p class="arena-rules">Every Sunday 18:00 UTC · 90 minutes · rated 5+0. Your club scores its best five players' arena points, and you never meet your own club. Register in Arena.</p></section>
@@ -2367,8 +2377,8 @@ async function openClub(slug){
   try{
     const d=await api.clubView(slug),target=$('#dynamicView .view-content');if(!target)return;clubOpen=d.club.slug;
     target.innerHTML=communityTabs('clubs')+`<article class="club">
-      <header><h4>${escapeHtml(d.club.name)}</h4><small>${d.club.member_count} members${d.role==='owner'?' · you run this club':''}</small>${d.club.description?`<p>${escapeHtml(d.club.description)}</p>`:''}</header>
-      <div class="pp-actions">${d.member?'<button class="club-leave">Leave club</button>':'<button class="club-join primary">Join club</button>'}<button class="club-copy">Copy invite link</button><button class="club-back">All clubs</button></div>
+      <header>${d.club.crest?`<span class="club-crest big">${crestSvg(d.club.crest,{size:48,label:`${d.club.name} crest`})}</span>`:''}<h4>${escapeHtml(d.club.name)}</h4><small>${d.club.member_count} members${d.role==='owner'?' · you run this club':''}</small>${d.club.description?`<p>${escapeHtml(d.club.description)}</p>`:''}</header>
+      <div class="pp-actions">${d.member?'<button class="club-leave">Leave club</button>':'<button class="club-join primary">Join club</button>'}<button class="club-copy">Copy invite link</button>${d.role==='owner'||currentProfile?.role==='admin'?`<button class="club-crest-edit">${d.club.crest?'Edit crest':'Design a crest'}</button>`:''}<button class="club-back">All clubs</button></div>
       ${d.member?`<section class="friends-block club-chat"><h4>Club chat</h4><div class="club-messages">${d.messages.map(m=>`<p class="${m.mine?'mine':''}"><b>${escapeHtml(m.name)}</b> ${escapeHtml(m.body)}</p>`).join('')||'<p class="menu-empty">Say hello to your club.</p>'}</div><form class="club-say"><input maxlength="280" placeholder="Message your club" required><button type="submit">Send</button></form></section>`:''}
       <section class="friends-block"><h4>Members</h4>${d.members.map(m=>`<article class="friend-row"><span class="presence-dot${m.online?' on':''}"></span><div><button class="friend-name" data-name="${escapeHtml(m.name)}">${escapeHtml(m.name)}</button><small>${m.rating} rapid${m.role==='owner'?' · owner':''}</small></div></article>`).join('')}</section>
     </article>`;
@@ -2376,6 +2386,7 @@ async function openClub(slug){
     const box=target.querySelector('.club-messages');if(box)box.scrollTop=box.scrollHeight;
     target.querySelectorAll('.friend-name').forEach(b=>b.onclick=()=>void openProfile(b.dataset.name));
     target.querySelector('.club-back').onclick=()=>void renderClubs();
+    target.querySelector('.club-crest-edit')?.addEventListener('click',()=>void editCrest(d.club));
     target.querySelector('.club-copy').onclick=async()=>{const url=`${location.origin}/?club=${encodeURIComponent(d.club.slug)}`;try{await navigator.clipboard.writeText(url);toast('Invite link copied')}catch{toast(url)}};
     target.querySelector('.club-join')?.addEventListener('click',async()=>{if(!signedIn())return openAccount();try{await api.clubJoin(d.club.slug);toast(`Welcome to ${d.club.name}`);void openClub(d.club.slug)}catch(error){toast(error.message)}});
     target.querySelector('.club-leave')?.addEventListener('click',async()=>{const ok=await vchDialog({title:'Leave the club?',body:d.role==='owner'?'The longest-standing member takes over. If you are the last member, the club closes.':'You can join again later.',actions:[{label:'Stay',value:false},{label:'Leave',value:true,primary:true}]});if(!ok)return;try{await api.clubLeave();toast('You left the club');void renderClubs()}catch(error){toast(error.message)}});
@@ -2568,9 +2579,11 @@ async function castleOnline(opt){
   }catch(error){onlineMovePending=false;try{game.load(before)}catch{}render();toast(error.message);void refreshServerState()}
 }
 // ---- Crazyhouse (src/crazyhouse.js): captured pieces go to your pocket; drop them instead of moving ----
-function isZhGame(){const g=watchSession?.state||serverGame;return g?.variant==='crazyhouse'&&(isOnlineGame()||mode==='watch')}
+function isZhGame(){const g=watchSession?.state||serverGame;return ['crazyhouse','bughouse'].includes(g?.variant)&&(isOnlineGame()||mode==='watch')}
+// Bughouse mate is different: a check a dropped piece could block is not mate, and nobody is stalemated.
+function zhGameStatus(){const st=zhClientState();return (watchSession?.state||serverGame)?.variant==='bughouse'?bughouseStatus(Chess,game,st):zhStatus(Chess,game,st)}
 function zhClientState(){const g=watchSession?.state||serverGame||{};return zhState(g.zh_pockets,g.zh_promoted)}
-function boardOver(){return isZhGame()?zhStatus(Chess,game,zhClientState()).over:game.isGameOver()}
+function boardOver(){return isZhGame()?zhGameStatus().over:game.isGameOver()}
 function zhDropTargets(type){if(!isZhGame())return [];return zhDrops(Chess,game,zhClientState()).filter(d=>d.drop===type).map(d=>d.to)}
 function drawPockets(style,bars){
   const st=zhClientState(),mine=myColor&&isOnlineGame()&&serverGame?.status==='active'&&game.turn()===myColor;
@@ -3178,7 +3191,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='crazyhouse'&&String($('#time').value).startsWith('daily'))return toast('Crazyhouse is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if($('#variant').value==='crazyhouse'&&String($('#time').value).startsWith('daily'))return toast('Crazyhouse is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -4564,6 +4577,7 @@ function roundTwelveGameOver(info){
   if(vantaScore?.playing){vantaScore.sting(score===1?'win':score===0?'loss':'draw');vantaScore.stop()}
   const oath=settleOath(info,score);
   campaignGameOver(info,score,oath);
+  void twinGameOver(info);
   setTimeout(()=>void refreshVeterans(true),info.online?2500:400);
 }
 function initRoundTwelve(){
@@ -4595,6 +4609,228 @@ function initRoundTwelve(){
   });
   document.addEventListener('pointerout',e=>{const el=e.target.closest?.('.board-piece[data-veteran]');if(el&&!el.contains(e.relatedTarget))hideVeteranCard()});
   const later=window.requestIdleCallback||(fn=>setTimeout(fn,1500));setTimeout(()=>later(()=>void refreshVeterans()),4000);
+}
+// ---- Round 12: Vanta Bughouse (src/bughouse.js): two against two on two boards ----
+// Your own board is an ordinary online game (Crazyhouse drops, server pockets). The table view
+// shows the four seats; the partner strip under your board shows your partner's game live.
+const BH_SEAT_NAMES={aw:'Board A · White',ab:'Board A · Black',bw:'Board B · White',bb:'Board B · Black'};
+const BH_CALLS=[['n','Need a knight'],['b','Need a bishop'],['r','Need a rook'],['q','Need a queen'],['p','Need a pawn'],['sit','Sit: wait for pieces'],['go','Go: play fast'],['trade','Trade pieces'],['hold',"Don't trade"]];
+const BH_PUBLIC=['id','invite_code','fen','version','status','result','end_reason','white_name','black_name','white_time_ms','black_time_ms','last_move_at','zh_pockets','move_count'];
+function bhPartnerGame(){const d=bhSession?.data,seat=d?.seat;return seat?d.games?.[otherBoard(seat[0])]||null:null}
+async function createBughouse(){
+  const tc=timeChoice($('#time').value);if(tc.dailyDays)return toast('Bughouse is played live, not as a daily game');
+  try{openBughouseView(await api.bughouseCreate({seconds:Math.min(900,tc.seconds),increment:tc.increment||0,name:currentProfile?.username||guestName}))}catch(error){toast(error.message)}
+}
+async function openBughouse(code,{quiet=false}={}){
+  try{openBughouseView(await api.bughouseState(code));return true}catch(error){if(!quiet)toast(error.message);return false}
+}
+function openBughouseView(out,{keepUrl=false,show=true}={}){
+  if(!out?.bughouse)return;
+  if(bhSession&&bhSession.id!==out.bughouse.id)stopBughouse();
+  if(!bhSession)bhSession={id:out.bughouse.id,code:out.bughouse.code,data:null,timer:null,clock:null,channel:null,partnerChannel:null,partnerId:null,teamChannel:null,entered:serverGameId,call:null,stripKey:''};
+  applyBughouse(out);
+  if(!bhSession.timer&&!['finished','aborted'].includes(out.bughouse.status))bhSession.timer=setInterval(()=>{if(!document.hidden)void refreshBughouse()},5000);
+  if(!bhSession.clock)bhSession.clock=setInterval(tickPartnerClocks,1000);
+  if(!bhSession.channel)bhSession.channel=realtimeClient.channel(`bughouse:${bhSession.id}`).on('broadcast',{event:'bughouse'},()=>void refreshBughouse()).subscribe();
+  if(!keepUrl)history.replaceState(null,'',`?bughouse=${encodeURIComponent(bhSession.code)}`);
+  if(show){setPrimaryScreen('game');showBughouseTable()}
+}
+function showBughouseTable(){setDynamicView('bughouse','Vanta Bughouse','');drawBughouse();showSidePanel()}
+function stopBughouse(){
+  if(!bhSession)return;
+  clearInterval(bhSession.timer);clearInterval(bhSession.clock);
+  for(const ch of [bhSession.channel,bhSession.partnerChannel,bhSession.teamChannel])if(ch)realtimeClient.removeChannel(ch).catch(()=>{});
+  bhSession=null;drawPartnerStrip();
+}
+async function refreshBughouse(){if(!bhSession)return;try{applyBughouse(await api.bughouseState(bhSession.code))}catch{}}
+async function resumeBughouse(gameId){try{openBughouseView(await api.bughouseForGame(gameId),{keepUrl:true,show:false})}catch{}}
+function applyBughouse(out){
+  if(!bhSession||out?.bughouse?.id!==bhSession.id)return;
+  const prev=bhSession.data,b=out.bughouse,seat=out.seat;bhSession.data=out;bhSession.code=b.code;
+  const partner=bhPartnerGame();
+  if(partner?.id&&bhSession.partnerId!==partner.id){
+    if(bhSession.partnerChannel)realtimeClient.removeChannel(bhSession.partnerChannel).catch(()=>{});
+    const id=partner.id;bhSession.partnerId=id;
+    bhSession.partnerChannel=realtimeClient.channel(`game:${id}`).on('broadcast',{event:'state'},message=>{
+      const g=message?.payload?.game,d=bhSession?.data;if(!d?.seat||g?.id!==id)return;
+      const key=otherBoard(d.seat[0]),cur=d.games[key];if(cur&&Number(g.version)<Number(cur.version))return;
+      d.games[key]={...cur,...Object.fromEntries(BH_PUBLIC.map(k=>[k,g[k]??null]))};drawPartnerStrip();if(currentRightView==='bughouse')drawBughouse();
+    }).subscribe();
+  }
+  if(seat&&b.status==='active'&&!bhSession.teamChannel)
+    bhSession.teamChannel=realtimeClient.channel(`bughouse:${b.id}:team${teamOfSeat(seat)}`,{config:{broadcast:{self:false}}}).on('broadcast',{event:'call'},message=>receiveCall(message?.payload)).subscribe();
+  if(seat&&b.status==='active'){
+    const mine=out.games?.[seat[0]];
+    if(mine?.invite_code&&serverGameId!==mine.id&&bhSession.entered!==mine.id){bhSession.entered=mine.id;toast('The match starts · your board is ready');void enterBughouseBoard(mine.invite_code)}
+  }
+  if(prev&&prev.bughouse.status!==b.status&&['finished','aborted'].includes(b.status))bughouseEnded(b,seat);
+  if(['finished','aborted'].includes(b.status)&&bhSession.timer){clearInterval(bhSession.timer);bhSession.timer=null}
+  drawPartnerStrip();if(currentRightView==='bughouse')drawBughouse();
+}
+async function enterBughouseBoard(code){await openGameByCode(code);if(bhSession)showBughouseTable()}
+function bughouseEnded(b,seat){
+  if(b.status==='aborted')return queueToast('The Bughouse match was aborted',{delay:300});
+  if(b.winner==='draw')return queueToast('The Bughouse match is drawn',{delay:300});
+  if(!seat)return queueToast(`Team ${b.winner==='team1'?1:2} won the match`,{delay:300});
+  const won=b.winner===(teamOfSeat(seat)===1?'team1':'team2');queueToast(won?'Your team won the match':'Your team lost the match',{delay:300,sound:won?'win':null});
+}
+function sendCall(call){
+  const ch=bhSession?.teamChannel;if(!ch)return;
+  ch.send({type:'broadcast',event:'call',payload:{from:realtimeClientId,call}}).catch(()=>{});
+  const label=BH_CALLS.find(c=>c[0]===call)?.[1];if(label)toast(`Sent · ${label}`,{duration:1200});
+}
+function receiveCall(payload){
+  const label=BH_CALLS.find(c=>c[0]===payload?.call)?.[1];if(!label||payload.from===realtimeClientId||!bhSession)return;
+  bhSession.call={label,at:Date.now()};toast(`Partner · ${label}`,{duration:2200});playUiSound('warning');drawPartnerStrip();
+  setTimeout(()=>{if(bhSession?.call&&Date.now()-bhSession.call.at>=6000){bhSession.call=null;drawPartnerStrip()}},6100);
+}
+function bhPocketHtml(pocket,color,style){return ZH_PIECES.filter(t=>pocket?.[t]>0).map(t=>`<span class="zh-piece"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></span>`).join('')||'<em>empty</em>'}
+function bhBoardHtml(fen,flip){
+  let rows;try{rows=new Chess(fen).board()}catch{return ''}
+  const cells=rows.flat().map((p,i)=>({p,i}));if(flip)cells.reverse();
+  return `<div class="study-board bh-board">${cells.map(({p,i})=>{const r=Math.floor(i/8),f=i%8;return `<div class="study-square ${(r+f)%2?'dark':'light'}">${p?`<span class="piece ${p.color} piece-${p.type}" aria-hidden="true"></span>`:''}</div>`}).join('')}</div>`;
+}
+function bhClockMs(g,color){
+  let t=Number(g?.[color==='w'?'white_time_ms':'black_time_ms']||0);
+  if(g?.status==='active'&&g.last_move_at&&String(g.fen||'').split(' ')[1]===color)t-=Date.now()-Date.parse(g.last_move_at);
+  return Math.max(0,t);
+}
+function drawPartnerStrip(){
+  const el=$('#bhPartner');if(!el)return;
+  const d=bhSession?.data,seat=d?.seat,g=bhPartnerGame();
+  const show=!!(g&&seat&&d.bughouse.status!=='waiting'&&serverGame?.variant==='bughouse'&&serverGame?.bughouse_id===d.bughouse.id);
+  el.classList.toggle('hidden',!show);if(!show){if(el.innerHTML)el.innerHTML='';if(bhSession)bhSession.stripKey='';return}
+  const pc=partnerSeat(seat)[1],oc=other(pc),style=normalizePieceStyle(document.documentElement.dataset.pieceStyle);
+  const key=JSON.stringify([g.fen,g.zh_pockets,g.status,g.result,bhSession.call?.label,style,d.bughouse.status]);if(key===bhSession.stripKey)return tickPartnerClocks();bhSession.stripKey=key;
+  const name=c=>escapeHtml((c==='w'?g.white_name:g.black_name)||(c==='w'?'White':'Black'));
+  el.innerHTML=`<div class="bh-mini" aria-hidden="true">${bhBoardHtml(g.fen,pc==='b')}</div>
+    <div class="bh-info"><small>PARTNER BOARD</small>
+      <div class="bh-row mine"><b>${name(pc)}</b><time data-bh-clock="${pc}"></time><span class="bh-pocket" aria-label="Partner pocket">${bhPocketHtml(g.zh_pockets?.[pc],pc,style)}</span></div>
+      <div class="bh-row"><b>${name(oc)}</b><time data-bh-clock="${oc}"></time><span class="bh-pocket">${bhPocketHtml(g.zh_pockets?.[oc],oc,style)}</span></div>
+      ${bhSession.call?`<em class="bh-call">Partner · ${escapeHtml(bhSession.call.label)}</em>`:''}
+      ${d.bughouse.status==='active'?`<div class="bh-calls" aria-label="Call to your partner">${BH_CALLS.map(([k,l])=>`<button type="button" data-bh-call="${k}" title="${escapeHtml(l)}" aria-label="${escapeHtml(l)}">${'nbrqp'.includes(k)?`<img src="${pieceAssetFor(style,pc+k)}" alt="">`:escapeHtml({sit:'Wait',go:'Fast',trade:'Trade',hold:'Hold'}[k])}</button>`).join('')}<button type="button" class="bh-table">Table</button></div>`:'<div class="bh-calls"><button type="button" class="bh-table">Table</button></div>'}
+    </div>`;
+  el.querySelectorAll('[data-bh-call]').forEach(b=>b.onclick=()=>sendCall(b.dataset.bhCall));
+  el.querySelector('.bh-table')?.addEventListener('click',showBughouseTable);
+  tickPartnerClocks();
+}
+function tickPartnerClocks(){const g=bhPartnerGame();for(const t of document.querySelectorAll('#bhPartner [data-bh-clock]'))t.textContent=clockLabel(bhClockMs(g,t.dataset.bhClock)/1000)}
+function drawBughouse(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='bughouse'||!bhSession?.data)return;
+  const {bughouse:b,seat}=bhSession.data,waiting=b.status==='waiting',count=BUGHOUSE_SEATS.filter(s=>b.seats?.[s]).length,link=`${location.origin}/?bughouse=${encodeURIComponent(b.code)}`;
+  const status=waiting?`${count} / 4 seated`:b.status==='active'?'Playing':b.status==='aborted'?'Aborted':b.winner==='draw'?'Draw':`Team ${b.winner==='team1'?1:2} won`;
+  const seatHtml=s=>{const x=b.seats?.[s];return `<div class="bh-seat${x?.me?' me':''}"><small>${BH_SEAT_NAMES[s]}</small>${x?`<b>${escapeHtml(x.name)}</b>${x.me?'<em>You</em>':''}`:waiting?`<button type="button" data-bh-seat="${s}">Sit here</button>`:'<em>Empty</em>'}</div>`};
+  target.innerHTML=`<article class="bughouse"><p class="trainer-intro">Two against two on two boards. Your partner plays the other colour on the other board: every piece you capture goes to them, ready to drop, and theirs come to you. A check that a dropped piece could block is not mate. The first board to finish decides the match.</p>
+    <div class="gauntlet-head"><div><small>TABLE</small><b>${escapeHtml(b.code)}</b></div><div><small>CLOCK</small><b>${formatTimeControl(b.time_control_seconds,b.increment_seconds)}</b></div><div><small>STATUS</small><b>${status}</b></div></div>
+    <div class="bh-teams"><section class="bh-team team1"><h4>Team 1</h4>${seatHtml('aw')}${seatHtml('bb')}</section><section class="bh-team team2"><h4>Team 2</h4>${seatHtml('ab')}${seatHtml('bw')}</section></div>
+    ${waiting?`<div class="bh-share"><input readonly value="${escapeHtml(link)}" aria-label="Table link"><button type="button" class="bh-copy">Copy link</button></div><p class="computer-note">The match starts the moment the fourth seat is taken. Casual: Bughouse has no rating.</p>`:''}
+    ${b.status==='active'&&seat?`<h4>Calls to your partner</h4><div class="bh-calls wide">${BH_CALLS.map(([k,l])=>`<button type="button" data-bh-call="${k}">${l}</button>`).join('')}</div>`:''}
+    <div class="streak-actions">${waiting&&seat?'<button type="button" class="bh-leave">Leave table</button>':''}${!waiting&&seat&&serverGame?.bughouse_id!==b.id&&b.status==='active'?'<button type="button" class="gold bh-board-go">Go to your board</button>':''}${['finished','aborted'].includes(b.status)?'<button type="button" class="gold bh-new">New table</button>':''}</div></article>`;
+  target.querySelectorAll('[data-bh-seat]').forEach(btn=>btn.onclick=async()=>{try{applyBughouse(await api.bughouseJoin(b.code,btn.dataset.bhSeat,currentProfile?.username||guestName))}catch(error){toast(error.message)}});
+  target.querySelector('.bh-copy')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(link);toast('Table link copied')}catch{toast(link)}});
+  target.querySelector('.bh-leave')?.addEventListener('click',async()=>{try{await api.bughouseLeave(b.code);stopBughouse();history.replaceState(null,'',location.pathname);showMovesView();toast('You left the table')}catch(error){toast(error.message)}});
+  target.querySelector('.bh-board-go')?.addEventListener('click',()=>{const g=bhSession?.data?.games?.[seat[0]];if(g?.invite_code)void enterBughouseBoard(g.invite_code)});
+  target.querySelector('.bh-new')?.addEventListener('click',()=>{stopBughouse();void createBughouse()});
+  target.querySelectorAll('[data-bh-call]').forEach(btn=>btn.onclick=()=>sendCall(btn.dataset.bhCall));
+}
+// Pockets on your board change when your partner captures: the server sends your game again
+// with the same version, so only the pockets are taken from it.
+function mergeBughousePockets(message){
+  const st=message?.payload?.game;
+  if(serverGame?.variant!=='bughouse'||st?.id!==serverGameId||Number(st.version)!==Number(serverVersion)||!st.zh_pockets)return;
+  if(JSON.stringify(st.zh_pockets)===JSON.stringify(serverGame.zh_pockets))return;
+  serverGame={...serverGame,zh_pockets:st.zh_pockets};syncCapturedTrays.key='';render();
+}
+
+// ---- Round 12: Twin Fates (src/twin-fates.js): one famous position, played twice ----
+function renderFates(){
+  setPrimaryScreen('game');setDynamicView('twin','Twin Fates','');showSidePanel();
+  const target=$('#dynamicView .view-content');if(!target)return;
+  target.innerHTML=`<article class="fates"><p class="trainer-intro">One famous position, played twice: once from each side. Send the link to your opponent; when the first game ends, the second starts at once with the colours swapped. The match is the total of both games. Casual.</p>
+    <button type="button" class="gold fate-random">Surprise me</button>
+    <div class="fate-grid">${FATES.map(f=>`<article class="fate">${studyBoardHtml(f.fen)}<div><b>${escapeHtml(f.title)}</b><small>${escapeHtml(f.note)}</small><button type="button" class="gold" data-fate="${f.id}">Play this fate</button></div></article>`).join('')}</div></article>`;
+  target.querySelectorAll('[data-fate]').forEach(b=>b.onclick=()=>void createTwin(b.dataset.fate));
+  target.querySelector('.fate-random').onclick=()=>void createTwin('');
+}
+async function createTwin(fate){
+  const tc=timeChoice($('#time').value);if(tc.dailyDays)return toast('Twin Fates is played live, not as a daily game');
+  try{
+    const out=await api.twinCreate({fate,seconds:tc.seconds,increment:tc.increment||0,name:currentProfile?.username||guestName});
+    applyServerState(out);room=(out.game||out).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();
+    if(out.twin)setTwin(out.twin);toast('Twin Fates room is ready · share the link');
+    setDynamicView('twin','Twin Fates','');drawTwin();
+  }catch(error){toast(error.message)}
+}
+function setTwin(info){if(!info?.id)return;twinSession={id:info.id,info};drawTwinLine();if(currentRightView==='twin')drawTwin()}
+async function loadTwin(id){try{const out=await api.twinState(id);setTwin(out.twin)}catch{}}
+function syncTwinFromState(payload,state){
+  if(payload?.twin)return setTwin(payload.twin);
+  if(state?.twin_id){if(twinSession?.id!==state.twin_id)void loadTwin(state.twin_id);else drawTwinLine();return}
+  if(twinSession&&state?.id){twinSession=null;drawTwinLine()}
+}
+function twinScoreText(info){const s=info?.score;return s?`${s.first.name} ${twinPoints(s.first.points)} – ${twinPoints(s.second.points)} ${s.second.name}`:''}
+function drawTwinLine(){
+  const el=$('#twinLine');if(!el)return;
+  const info=twinSession?.info,on=!!(info&&serverGame?.twin_id===info.id);
+  el.classList.toggle('hidden',!on);if(!on){if(el.textContent)el.textContent='';el.dataset.key='';return}
+  const key=JSON.stringify([info,serverGame?.twin_leg]);if(el.dataset.key===key)return;el.dataset.key=key;
+  el.innerHTML=`<b>Twin Fates</b><span>${escapeHtml(info.title)}</span><em>${Number(serverGame?.twin_leg)===2?'Game 2 of 2':'Game 1 of 2'}</em>${info.score?`<strong>${escapeHtml(twinScoreText(info))}</strong>`:''}`;
+}
+function drawTwin(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='twin')return;
+  const info=twinSession?.info;if(!info){renderFates();return}
+  const fate=FATES.find(f=>f.id===info.fate);
+  target.innerHTML=`<article class="fates twin">${fate?studyBoardHtml(fate.fen):''}<div><h4>${escapeHtml(info.title)}</h4><p class="trainer-intro">${escapeHtml(info.note)}</p>
+    <ol class="gauntlet-stages">${[1,2].map(n=>{const leg=info.legs.find(l=>l.leg===n);return `<li class="${leg&&leg.result!=='*'?'done':leg?'current':'locked'}"><span><b>${n===1?'Game 1':'Game 2'}</b><small>${leg?`${escapeHtml(leg.white||'White')} vs ${escapeHtml(leg.black||'Black')}`:'Colours swapped'}</small></span><em>${leg?leg.result!=='*'?leg.result:'Playing':'Next'}</em></li>`}).join('')}</ol>
+    ${info.score?`<div class="gauntlet-head twin-score"><div><small>${escapeHtml(info.score.first.name)}</small><b>${twinPoints(info.score.first.points)}</b></div><div><small>${escapeHtml(info.score.second.name)}</small><b>${twinPoints(info.score.second.points)}</b></div></div>`:''}
+    <button type="button" class="fate-more">Other fates</button></div></article>`;
+  target.querySelector('.fate-more').onclick=renderFates;
+}
+async function twinGameOver(info){
+  if(!info.online||!serverGame?.twin_id)return;
+  const twinId=serverGame.twin_id,leg=Number(serverGame.twin_leg),gameId=serverGame.id;
+  if(scoreOf(info.result,info.myColor)===null)return;
+  if(leg===2){await loadTwin(twinId);if(twinSession?.info?.score)queueToast(`Twin Fates · ${twinScoreText(twinSession.info)}`,{delay:900});return}
+  let code=serverGame.twin_next?.code||null;
+  for(let i=0;i<10&&!code;i++){await new Promise(r=>setTimeout(r,1500));try{const out=await api.twinState(twinId);setTwin(out.twin);code=out.twin.legs.find(l=>l.leg===2)?.code||null}catch{}}
+  if(!code)return toast('The second game could not start');
+  queueToast('Game 2 · the same position, colours swapped',{delay:600});
+  setTimeout(()=>{if(serverGameId!==gameId)return;document.querySelector('.vch-dialog-layer .vch-dialog-close')?.click();void openGameByCode(code)},3600);
+}
+
+// ---- Round 12: Orders and heraldry (src/heraldry.js) and the Hall of Relics ----
+function setCrest(el,club){
+  if(!el)return;const key=club?.crest?JSON.stringify([club.slug,club.crest]):'';if(el.dataset.key===key)return;el.dataset.key=key;
+  el.classList.toggle('hidden',!key);el.innerHTML=key?crestSvg(club.crest,{size:14,label:`${club.name} crest`}):'';el.title=key?club.name:'';
+}
+async function editCrest(club){
+  let crest={...(cleanCrest(club.crest)||DEFAULT_CREST)};
+  const body=document.createElement('div');body.className='crest-builder';
+  const opts=(list,names,value)=>list.map(k=>`<option value="${k}"${k===value?' selected':''}>${names[k]}</option>`).join('');
+  const field=(key,label,list,names)=>`<label><span>${label}</span><select data-crest="${key}">${opts(list,names,crest[key])}</select></label>`;
+  body.innerHTML=`<div class="crest-preview"></div><div class="crest-fields">${field('shield','Shield',CREST_SHIELDS,SHIELD_NAMES)}${field('division','Division',CREST_DIVISIONS,DIVISION_NAMES)}${field('field','Field',CREST_TINCTURES,TINCTURE_NAMES)}${field('field2','Second colour',CREST_TINCTURES,TINCTURE_NAMES)}${field('charge','Charge',CREST_CHARGES,CHARGE_NAMES)}${field('ink','Charge colour',CREST_TINCTURES,TINCTURE_NAMES)}</div>`;
+  const preview=()=>{body.querySelector('.crest-preview').innerHTML=crestSvg(crest,{size:110,label:crestText(crest)})};preview();
+  body.querySelectorAll('[data-crest]').forEach(s=>s.onchange=()=>{crest={...crest,[s.dataset.crest]:s.value};preview()});
+  const action=await vchDialog({title:'Club crest',body,actions:[...(club.crest?[{label:'Remove crest',value:'remove'}]:[]),{label:'Cancel',value:false},{label:'Save crest',value:'save',primary:true}]});
+  if(!action)return;
+  try{await api.clubCrest(club.slug,action==='remove'?null:crest);toast(action==='remove'?'Crest removed':'Crest saved');void openClub(club.slug)}catch(error){toast(error.message)}
+}
+// The profile's showroom: what the server knows (Moments of the Week won, the club's crest) for
+// everyone, and on your own profile what this device keeps (relics, campaign, oaths, veterans).
+function hallOfRelicsHtml(d){
+  const parts=[],moments=Array.isArray(d.moments)?d.moments:[];
+  if(d.club?.crest)parts.push(`<div class="hall-crest">${crestSvg(d.club.crest,{size:54,label:`${d.club.name} crest`})}<span><b>${escapeHtml(d.club.name)}</b><small>${escapeHtml(crestText(d.club.crest))}</small></span></div>`);
+  if(moments.length)parts.push(`<div class="hall-moments">${moments.map(m=>`<figure class="hall-moment">${studyBoardHtml(m.fen)}<figcaption><b>Moment of the Week</b><small>${escapeHtml(m.week)} · vs ${escapeHtml(m.opponent||'Player')}</small>${m.caption?`<em>${escapeHtml(m.caption)}</em>`:''}</figcaption></figure>`).join('')}</div>`);
+  if(d.self){
+    const relics=loadRelics(),earned=RELICS.filter(r=>relics.unlocked[r.id]),camp=loadCampaign(),oaths=loadOaths(),vets=armyList(totalsMap(veteranTotals())).filter(x=>x.rank).slice(0,3),style=normalizePieceStyle(document.documentElement.dataset.pieceStyle);
+    parts.push(`<div class="hall-stats"><div><small>RELICS</small><b>${earned.length} / ${RELICS.length}</b></div><div><small>CAMPAIGN STARS</small><b>${totalStars(camp)} / ${MAX_STARS}</b></div><div><small>HONOR</small><b>${oaths.honor}</b></div><div><small>OATHS KEPT</small><b>${oaths.kept} / ${oaths.sworn}</b></div></div>`);
+    if(earned.length)parts.push(`<div class="hall-relics">${earned.map(r=>`<span class="hall-relic" title="${escapeHtml(r.how)}"><span class="relic-swatch" aria-hidden="true">${RELIC_VARS.map(k=>`<i style="background:${r.theme[k]}"></i>`).join('')}</span><b>${escapeHtml(r.name)}</b></span>`).join('')}</div>`);
+    if(realmsFreed(camp))parts.push(`<div class="hall-realms">${REALMS.filter(r=>realmFreed(camp,r.id)).map(r=>`<span><i class="camp-sigil" style="--realm-accent:${relicById(r.relic).theme['--mint']};--realm-dark:${relicById(r.relic).theme['--dark']}"></i>${escapeHtml(r.name)}</span>`).join('')}</div>`);
+    if(vets.length)parts.push(`<div class="hall-veterans">${vets.map(x=>`<article class="army-piece rank-${x.rank}"><img src="${pieceAssetFor(style,x.color+x.type)}" alt=""><div>${veteranCardHtml(x)}</div><i class="vet-mark" data-rank="${x.rank}" aria-hidden="true"><b></b><b></b><b></b></i></article>`).join('')}</div>`);
+    parts.push('<p class="computer-note">Relics, the campaign, oaths and veterans are kept on this device.</p>');
+  }
+  if(!parts.length)return '';
+  return `<section class="hall"><h4>Hall of Relics</h4>${parts.join('')}</section>`;
 }
 // ---- Round 11: Rivals (src/rivals.js) — from your own game history ----
 let rivalsCache=null;
