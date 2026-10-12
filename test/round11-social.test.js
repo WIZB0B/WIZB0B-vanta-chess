@@ -30,5 +30,5 @@ test('round 11 modes stay fair: no engine help in the dark or a blackout', () =>
   assert.match(main, /if\(computerRules!=='standard'&&computerRules!=='freestyle'&&computerLive\(\)\)return true; \/\/ no evaluation/);
   assert.match(main, /if\(computerRules==='dark'\|\|computerRules==='blackout'\)return toast\('No hints in this mode'\)/);
   assert.match(main, /moods would give hidden pieces away/);
-  assert.match(main, /const position=sight\?fogPosition\(fullPosition,sight,computerSide\):fullPosition;/, 'hidden pieces are not in the DOM at all');
+  assert.match(main, /const position=sight&&!darkOnline\?fogPosition\(fullPosition,sight,computerSide\):fullPosition;/, 'hidden pieces are not in the DOM at all (online, the server never sends them)');
 });

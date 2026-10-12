@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { Chess } from "npm:chess.js@1.4.0";
-import { calculateMoveTiming } from "./latency.js";
+import { applyLagQuota, calculateMoveTiming, lagUsed } from "./latency.js";
 import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle, rightsAfterMove } from "./castle960.js";
 import { zhPlay, zhState, zhStatus } from "./crazyhouse.js";
 import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } from "./rules.js";
@@ -10,6 +10,7 @@ import { FATES, cleanCrest, fateById, pickFate, twinScore } from "./rules.js";
 import { playablePuzzleFen } from "./rules.js";
 import { isReactionBody, moderateText, nextSanction, sanctionMessage, strikesInForce } from "./moderation.js";
 import { cleanBio, isPortraitPreset } from "./profile-rules.js";
+import { FOG_VARIANTS, viewFor as fogViewFor } from "./fog.js";
 import { BUGHOUSE_DEFAULT_SECONDS, BUGHOUSE_SEATS, boardResultFor, bughouseStatus, bughouseTransfer, isSeat, matchWinner, otherBoard, teamOfSeat } from "./bughouse.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
@@ -42,17 +43,43 @@ const corsFor=(req:Request)=>{
   };
 };
 const START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const POOLS=["bullet","blitz","rapid","classical","daily","freestyle","crazyhouse"];
+const POOLS=["bullet","blitz","rapid","classical","daily","freestyle","crazyhouse","dark","blackout"];
 const nowIso=()=>new Date().toISOString();
+// Realtime topics (security review C1/H2, round 13). Supabase broadcast topics are open to
+// anyone holding the public key, so the topics that carry a game's full state or a player's
+// events are named from a server secret: only the players (who get the name from the server)
+// can listen or send there. Spectators get a separate public topic with the trimmed watch
+// fields only (never for hidden-information variants).
+const TOPIC_SEED=Deno.env.get("VCH_TOPIC_SECRET")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
+async function topicFor(...parts:string[]){return (await hash("topic:"+TOPIC_SEED+":"+parts.join(":"))).slice(0,32)}
+const viewFor=(g:any,seat:string)=>fogViewFor(Chess,g,seat);
+// Rate limits that hold across function instances and new guest identities (security review
+// M1): fixed windows counted in Postgres (chess_rate_hit). Keys use a hash of the address,
+// never the address itself. If the counter is unavailable the request goes through.
+const clientAddress=(req:Request)=>(req.headers.get("cf-connecting-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]||"").trim();
+async function rateLimit(key:string,limit:number,windowSeconds:number,message="Too many requests. Try again in a moment."){
+  try{const {data,error}=await admin.rpc("chess_rate_hit",{p_key:key.slice(0,120),p_limit:limit,p_window:windowSeconds});if(error){console.error("rate limit",error.message);return}if(data===false)throw fail(message,429)}
+  catch(e:any){if(e?.status===429)throw e;console.error("rate limit",e)}
+}
+const ipKey=async(req:Request,kind:string)=>`${kind}:ip:${(await hash("ip:"+TOPIC_SEED+":"+clientAddress(req))).slice(0,20)}`;
 async function broadcastGameState(game:any){
   if(!game?.id)return;
   const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if(!url||!key)return;
   try{
+    const serverNow=nowIso(),messages:any[]=[];
+    if(FOG_VARIANTS.has(game.variant)){
+      // Each seat gets only what it may see (fog.js); spectators get nothing until the end.
+      for(const seat of ["w","b"])messages.push({topic:"seat:"+await topicFor("seat",game.id,seat),event:"state",payload:{game:viewFor(game,seat),serverNow}});
+      if(game.status!=="active"&&["queue","tournament"].includes(game.source))messages.push({topic:"watch:"+game.id,event:"state",payload:{game:watchView(game),serverNow}});
+    }else{
+      messages.push({topic:"game:"+await topicFor("game",game.id),event:"state",payload:{game,serverNow}});
+      if(["queue","tournament"].includes(game.source)||game.variant==="bughouse")messages.push({topic:"watch:"+game.id,event:"state",payload:{game:watchView(game),serverNow}});
+    }
     const response=await fetch(url+"/realtime/v1/api/broadcast",{
       method:"POST",
       headers:{apikey:key,authorization:"Bearer "+key,"content-type":"application/json"},
-      body:JSON.stringify({messages:[{topic:"game:"+game.id,event:"state",payload:{game,serverNow:nowIso()}}]})
+      body:JSON.stringify({messages})
     });
     if(!response.ok)console.error("Realtime game broadcast failed",response.status,await response.text());
   }catch(error){console.error("Realtime game broadcast failed",error)}
@@ -63,6 +90,8 @@ const cleanUsername=(v:any)=>String(v||"").trim().replace(/[^A-Za-z0-9_]/g,"").s
 const hash=async(v:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const code8=()=>crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase();
 const poolFor=(base:number,inc=0)=>{const e=Number(base)+(Number(inc)*40);return e<180?"bullet":e<600?"blitz":e<1800?"rapid":"classical"};
+// Vanta Dark and Blackout Blitz are rated in pools of their own, whatever the clock.
+const fogVariant=(v:any)=>v==="dark"||v==="blackout"?String(v):null;
 const ratingOf=(p:any,pool:string)=>Number(p?.ratings?.[pool]??p?.rating??1200);
 const gamesOf=(p:any,pool:string)=>Number(p?.provisional_games?.[pool]??0);
 const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool)+sandbagAdjust(p?.sandbag_score),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
@@ -135,10 +164,13 @@ async function playerFor(req:Request,b:any={},requireAccount=false,{touch=true}:
     return p
   }
   if(requireAccount)throw fail("Sign in to use rated play.",401);
-  const token=String(b.token||"");if(token.length<20)throw fail("Player identity is missing.");
+  // Guest tokens are the browser's random id (src/vch-api.js stableGuestToken). Anything else,
+  // e.g. "auth:<user id>" (the seed of an account's device hash), is refused: security review H1.
+  const token=String(b.token||"");if(!/^[A-Za-z0-9_-]{20,128}$/.test(token))throw fail("Player identity is missing.");
   const dh=await hash(token);let p=await one("chess_players","device_hash",dh);
   if(p&&!touch)return p;
   if(!p){
+    await rateLimit(await ipKey(req,"guest"),20,3600,"Too many new players from this connection. Try again later.");
     const {data,error}=await admin.from("chess_players").insert({device_hash:dh,display_name:friendlyName(b.name)?cleanName(b.name):"Guest",last_seen_at:nowIso()}).select().single();
     if(error){
       if(error.code==="23505"){p=await one("chess_players","device_hash",dh);if(!p)throw error}
@@ -309,14 +341,15 @@ async function createGame(req:Request,b:any,{players=null,source="private",tourn
   let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),active=!!black;
   // Daily games: days per move instead of a clock, rated in their own "daily" pool.
   const zh=b.variant==="crazyhouse"&&!bot;if(zh&&b.dailyDays)throw fail("Crazyhouse is played live, not as a daily game.");
-  const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":b.variant==="freestyle"&&!bot?"freestyle":zh?"crazyhouse":poolFor(base,inc),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
+  const fog=bot||customStart?null:fogVariant(b.variant);if(fog&&b.dailyDays)throw fail("Vanta Dark and Blackout Blitz are played live, not as daily games.");
+  const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":fog||(b.variant==="freestyle"&&!bot?"freestyle":zh?"crazyhouse":poolFor(base,inc)),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
   // Freestyle: a random Chess960 start with Chess960 castling (castle960.js), rated in its own pool.
   const freestyle=b.variant==="freestyle"&&!bot&&!customStart,startFen=customStart||(freestyle?freestyleFen():START_FEN);
   if(customStart&&(zh||dailyDays))throw fail("Twin Fates is played live, in standard chess.");
   const {data,error}=await admin.from("chess_games").insert({
     invite_code:code,white_player_id:white.id,black_player_id:black?.id||null,
     white_name:white.username||white.display_name,black_name:black?(black.username||black.display_name):null,
-    fen:startFen,start_fen:freestyle||customStart?startFen:null,twin_id:twinId,twin_leg:twinLeg,variant:freestyle?"freestyle":zh?"crazyhouse":"standard",zh_pockets:zh?{w:{},b:{}}:null,zh_promoted:zh?[]:null,castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
+    fen:startFen,start_fen:freestyle||customStart?startFen:null,twin_id:twinId,twin_leg:twinLeg,variant:fog||(freestyle?"freestyle":zh?"crazyhouse":"standard"),zh_pockets:zh?{w:{},b:{}}:null,zh_promoted:zh?[]:null,castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
     time_control_seconds:dailyDays?dailyDays*86400:base,increment_seconds:dailyDays?0:inc,white_time_ms:moveMs,black_time_ms:moveMs,daily_days:dailyDays,challenge_id:b.challengeId||null,
     last_move_at:active?nowIso():null,started_at:active?nowIso():null,white_last_seen_at:nowIso(),black_last_seen_at:black?nowIso():null,
     bot_player_id:bot?.player_id||null,bot_elo:bot?.elo||null,bot_style:bot?.style||null
@@ -343,7 +376,7 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
     if(!r)throw fail("Illegal move.");c=new Chess(r.fen);m=r.move;zhNext=r.state;
   }else{try{m=c.move({from:String(b.from),to:String(b.to),promotion:String(b.promotion||"q")[0]})}catch{}if(!m)throw fail("Illegal move.")}
   const castling960=g.variant==="freestyle"?(m.castle?rightsAfterCastle(g.castling960,color):rightsAfterMove(g.castling960,m)):undefined;
-  const timing=calculateMoveTiming({clientMoveAt:b.clientMoveAt,lastMoveAt:g.last_move_at,serverReceivedAt:serverReceivedMs});
+  const timing=applyLagQuota(calculateMoveTiming({clientMoveAt:b.clientMoveAt,lastMoveAt:g.last_move_at,serverReceivedAt:serverReceivedMs}),lagUsed(g.move_history,color),Number(g.time_control_seconds||600)*1000);
   if(!g.daily_days&&firstMovesPending(g.move_count))timing.chargedElapsedMs=0; // first moves are free; clocks start after both
   let wt=Number(g.white_time_ms),bt=Number(g.black_time_ms);
   if(color==="w")wt=Math.max(0,wt-timing.chargedElapsedMs);else bt=Math.max(0,bt-timing.chargedElapsedMs);
@@ -391,6 +424,7 @@ function fullPgn(g:any,moves:any[],result:string,reason:string|null=null){return
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
   // Player and game are fetched at the same time; nothing else is read before the move is written.
   let [p,g]=await Promise.all([playerFor(req,b,false,{touch:false}),gameById(b.gameId)]);if(!g)throw fail("Game not found.",404);
+  if(g.white_player_id!==p.id&&g.black_player_id!==p.id)throw fail("You are not a player in this game.",403);
   // A reply sent while the move it answers is still on its way here (both players' clients
   // see moves through the realtime relay first): wait briefly for that move to land.
   if(Number(b.expectedVersion)===Number(g.version)+1&&g.status==="active"){
@@ -480,11 +514,14 @@ async function takebackRespond(req:Request,b:any){
 }
 // Watch: recent public games (matchmaking and tournament games; private rooms are never
 // listed). Spectators get the board, names, ratings and clocks, nothing else.
+// What spectators receive live (and the bughouse partner board): the watch fields only.
+const watchView=(g:any)=>Object.fromEntries(WATCH_FIELDS.split(",").filter(k=>k in g).map(k=>[k,g[k]]));
 const WATCH_FIELDS="zh_pockets,zh_promoted,variant,start_fen,id,white_name,black_name,status,result,rated,pool,source,fen,version,move_count,move_history,time_control_seconds,increment_seconds,white_time_ms,black_time_ms,last_move_at,started_at,ended_at,end_reason,white_rating_before,black_rating_before,bot_player_id,updated_at";
 const publicGame=(g:any)=>{const {bot_player_id,...rest}=g;return {...rest,bot:!!bot_player_id}};
 async function liveGames(){
   const since=new Date(Date.now()-3*60000).toISOString();
-  const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("status","active").in("source",["queue","tournament"]).gte("updated_at",since).gt("move_count",0).order("updated_at",{ascending:false}).limit(30);
+  // Hidden-information games are never listed while they're played.
+  const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("status","active").in("source",["queue","tournament"]).not("variant","in","(dark,blackout)").gte("updated_at",since).gt("move_count",0).order("updated_at",{ascending:false}).limit(30);
   if(error)throw error;
   return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=publicGame(g);return {...rest,last_move:Array.isArray(move_history)?move_history.at(-1)||null:null}})}
 }
@@ -492,7 +529,9 @@ async function watchState(b:any){
   const id=String(b.gameId||"");if(!/^[0-9a-f-]{36}$/i.test(id))throw fail("Game not found.",404);
   const {data,error}=await admin.from("chess_games").select(WATCH_FIELDS).eq("id",id).in("source",["queue","tournament"]).maybeSingle();
   if(error)throw error;if(!data)throw fail("This game can't be watched.",404);
-  return {game:publicGame(await resolveTimeout(data))}
+  const g=await resolveTimeout(data);
+  if(FOG_VARIANTS.has(g.variant)&&g.status==="active")throw fail("This game can be watched once it's over.",409);
+  return {game:publicGame(g)}
 }
 // The weekly arena: every Saturday 18:00 UTC for 90 minutes, rated 3+2 blitz. tournaments()
 // makes sure this week's (or next week's) exists and moves arenas through their statuses.
@@ -578,8 +617,11 @@ async function challengeSend(req:Request,b:any){
   const {count}=await admin.from("chess_challenges").select("id",{count:"exact",head:true}).eq("from_player_id",p.id).eq("status","pending").gt("expires_at",nowIso());
   if(Number(count||0)>=5)throw fail("You have too many open challenges.",429);
   const color=["w","b"].includes(b.color)?b.color:"random";
-  const variant=["freestyle","crazyhouse"].includes(b.variant)?b.variant:"standard";
-  if(variant==="crazyhouse"&&b.dailyDays)throw fail("Crazyhouse is played live, not as a daily game.");
+  const variant=["freestyle","crazyhouse","dark","blackout"].includes(b.variant)?b.variant:"standard";
+  if(["crazyhouse","dark","blackout"].includes(variant)&&b.dailyDays)throw fail("This variant is played live, not as a daily game.");
+  // Sending and cancelling can't be used to flood someone: 20 challenges an hour (review M1).
+  const {count:recent}=await admin.from("chess_challenges").select("id",{count:"exact",head:true}).eq("from_player_id",p.id).gte("created_at",new Date(Date.now()-3600000).toISOString());
+  if(Number(recent||0)>=20)throw fail("That's a lot of challenges. Try again in a while.",429);
   const {data,error}=await admin.from("chess_challenges").insert({variant,from_player_id:p.id,to_player_id:to,base_seconds:Math.max(30,Math.min(7200,Number(b.seconds||600))),increment_seconds:Math.max(0,Math.min(60,Number(b.increment||0))),daily_days:dailyDays,rated,color,expires_at:new Date(Date.now()+(dailyDays?3*86400000:10*60000)).toISOString()}).select().single();
   if(error)throw error;
   EdgeRuntime.waitUntil(Promise.all([
@@ -590,6 +632,7 @@ async function challengeSend(req:Request,b:any){
 }
 async function broadcastTo(topic:string,event:string,payload:any){
   const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!url||!key)return;
+  if(topic.startsWith("player:"))topic="player:"+await topicFor("player",topic.slice(7)); // the player's private topic
   try{await fetch(url+"/realtime/v1/api/broadcast",{method:"POST",headers:{apikey:key,authorization:"Bearer "+key,"content-type":"application/json"},body:JSON.stringify({messages:[{topic,event,payload}]})})}catch{}
 }
 async function challengeList(req:Request,b:any){
@@ -1279,9 +1322,10 @@ async function battleSettle(t:any){
 }
 async function battleCreate(req:Request,b:any){
   const p=await playerFor(req,b,false,{touch:false});assertAllowed(p);
+  await rateLimit(`battle:${p.id}`,10,600);
   let code=code6();while(await one("chess_puzzle_battles","code",code))code=code6();
   const {data,error}=await admin.from("chess_puzzle_battles").insert({code,host_id:p.id,puzzles:await battlePuzzles()}).select().single();if(error)throw error;
-  if(b.to){const to=await playerById(String(b.to));if(to&&to.id!==p.id)EdgeRuntime.waitUntil(notifyPlayer(to.id,{title:"Puzzle Battle",body:`${p.username||p.display_name||"A player"} wants to race you through puzzles.`,url:`/?battle=${code}`,tag:"battle-"+code},{push:true}).catch(()=>{}))}
+  if(b.to&&p.auth_user_id){const to=await playerById(String(b.to));if(to&&to.id!==p.id&&to.auth_user_id)EdgeRuntime.waitUntil(notifyPlayer(to.id,{title:"Puzzle Battle",body:`${p.username||p.display_name||"A player"} wants to race you through puzzles.`,url:`/?battle=${code}`,tag:"battle-"+code},{push:true}).catch(()=>{}))}
   return {battle:battleView(data,p,new Map([[p.id,p.username||p.display_name]]))}
 }
 async function battleJoin(req:Request,b:any){
@@ -1820,6 +1864,12 @@ async function gameHistory(req:Request,b:any){
 const cleanChat=(v:any)=>String(v||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\s+/g," ").trim().slice(0,280);
 const cleanNonce=(v:any)=>String(v||"").replace(/[^A-Za-z0-9_-]/g,"").slice(0,64);
 
+// The caller's seat in a game ('w' or 'b'); 403 for anyone else.
+async function gameSeat(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false}),g=await gameById(b.gameId);if(!g)throw fail("Game not found.",404);
+  const color=g.white_player_id===p.id?"w":g.black_player_id===p.id?"b":null;if(!color)throw fail("You are not a player in this game.",403);
+  return {p,g,color}
+}
 async function assertGameParticipant(req:Request,b:any){
   const p=await playerFor(req,b);
   const g=await freshGame(b.gameId);
@@ -1876,6 +1926,7 @@ async function cachedPuzzle(b:any={}){
   return {id:pick.id,fen:pick.fen,solution:pick.solution,rating:pick.rating,plays:pick.plays,themes:pick.themes,gameId:pick.game_id,gamePgn:pick.game_pgn,initialPly:pick.initial_ply,source:pick.source}
 }
 async function puzzleNext(_req:Request,b:any){
+  await rateLimit(await ipKey(_req,"puzzle"),120,600);
   const allowed=new Set(["easiest","easier","normal","harder","hardest"]);
   const difficulty=allowed.has(String(b.difficulty))?String(b.difficulty):"normal";
   const angle=String(b.angle||"").replace(/[^A-Za-z0-9_-]/g,"").slice(0,40);
@@ -1931,6 +1982,35 @@ async function heartbeat(req:Request,b:any){
   const game=await resolveTimeout(seen||raw);
   return {ok:true,game,player:publicPlayer(p),seat}
 }
+// Rematch (round 13, security review C1): the server holds the offer and makes the new game
+// for the two players of the finished one, colours swapped, same clock, variant and rating
+// mode. Clients learn of it from the game state (rematch_offer_by / rematch_game_id) and open
+// the new game by id, so no game code ever comes from another browser.
+async function rematch(req:Request,b:any){
+  const {p,g,color}=await gameSeat(req,b);
+  if(g.status==="active"||g.status==="waiting")throw fail("The game isn't over yet.",409);
+  if(g.bot_player_id||g.bughouse_id||g.twin_id||g.simul_id||g.tournament_id)throw fail("This game has no rematch.",409);
+  if(g.rematch_game_id)return {game:g,seat:color,rematchGameId:g.rematch_game_id};
+  const other=color==="w"?g.black_player_id:g.white_player_id;if(!other)throw fail("No opponent to play.",409);
+  if(b.decline){
+    if(g.rematch_offer_by&&g.rematch_offer_by!==p.id){const {data}=await admin.from("chess_games").update({rematch_offer_by:null}).eq("id",g.id).select().maybeSingle();if(data)EdgeRuntime.waitUntil(broadcastGameState(data));return {game:data||g,seat:color,declined:true}}
+    return {game:g,seat:color}
+  }
+  if(!g.rematch_offer_by||g.rematch_offer_by===p.id){
+    const {data,error}=await admin.from("chess_games").update({rematch_offer_by:p.id}).eq("id",g.id).is("rematch_game_id",null).select().maybeSingle();if(error)throw error;
+    if(data)EdgeRuntime.waitUntil(broadcastGameState(data));
+    return {game:data||g,seat:color,offered:true}
+  }
+  // The opponent offered and this player accepts: one new game, whoever gets here first.
+  const [me,them]=await Promise.all([playerById(p.id),playerById(other)]);if(!me||!them)throw fail("Player not found.",404);
+  assertAllowed(me);if(g.rated&&(!me.auth_user_id||!them.auth_user_id))throw fail("Rated games are between signed-in players.",401);
+  const players=color==="w"?[them,me]:[me,them]; // colours swap: White in the old game plays Black
+  const made=await createGame(req,{seconds:g.daily_days?600:Number(g.time_control_seconds||600),increment:Number(g.increment_seconds||0),rated:!!g.rated,variant:g.variant,dailyDays:g.daily_days||null},{players,source:"private"});
+  const {data:linked}=await admin.from("chess_games").update({rematch_game_id:made.game.id}).eq("id",g.id).is("rematch_game_id",null).select().maybeSingle();
+  if(!linked){await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"rematch_race"}).eq("id",made.game.id);const fresh=await gameById(g.id);return {game:fresh,seat:color,rematchGameId:fresh?.rematch_game_id||null}}
+  EdgeRuntime.waitUntil(broadcastGameState(linked));
+  return {game:linked,seat:color,rematchGameId:made.game.id}
+}
 async function gameState(req:Request,b:any){
   const p=await playerFor(req,b),raw=await gameById(b.gameId);
   if(!raw)throw fail("Game not found.",404);
@@ -1940,7 +2020,7 @@ async function gameState(req:Request,b:any){
   return {game,player:publicPlayer(p),seat,...(game.twin_id?{twin:await twinInfo(game.twin_id).catch(()=>null)}:{})}
 }
 async function queueJoin(req:Request,b:any){
-  const p=await playerFor(req,b,!!b.rated);assertAllowed(p);const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0)));let pool=poolFor(base,inc),rated=!!b.rated,tournament:any=null;
+  const p=await playerFor(req,b,!!b.rated);assertAllowed(p);const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),fog=b.tournamentId?null:fogVariant(b.variant);let pool=fog||poolFor(base,inc),rated=!!b.rated,tournament:any=null;
   if(b.tournamentId){tournament=await one("chess_tournaments","id",b.tournamentId);if(!tournament||!["active","scheduled"].includes(tournament.status))throw fail("Tournament is not available.",409);if(tournament.format==="swiss")throw fail("Swiss rounds are paired for you. Wait for your game.",409);arenaOpen(tournament);pool=tournament.pool;rated=tournament.rated;if(rated&&!p.auth_user_id)throw fail("Sign in to play this rated tournament.",401)}
   await admin.from("chess_matchmaking_queue").update({state:"cancelled"}).eq("player_id",p.id).eq("state","searching");
   const r=ratingOf(p,pool),er=effectiveRating(p,pool);const {data:q,error}=await admin.from("chess_matchmaking_queue").insert({player_id:p.id,rated,pool,base_seconds:tournament?.base_seconds||base,increment_seconds:tournament?.increment_seconds||inc,rating:r,effective_rating:er,tournament_id:tournament?.id||null,state:"searching",heartbeat_at:nowIso()}).select().single();if(error)throw error;
@@ -1953,7 +2033,7 @@ async function queueJoin(req:Request,b:any){
   }const wait=(x:any)=>(Date.now()-Date.parse(x.created_at))/1000;
   candidates=candidates.filter((x:any)=>Math.abs(Number(x.effective_rating)-er)<=Math.max(searchRange(wait(q)),searchRange(wait(x)))&&(Math.abs(Number(x.base_seconds)-(tournament?.base_seconds||base))+20*Math.abs(Number(x.increment_seconds)-(tournament?.increment_seconds||inc)))<=Math.max(60,(tournament?.base_seconds||base)*.35)).sort((a:any,bx:any)=>Math.abs(Number(a.effective_rating)-er)-wait(a)*1.4-(Math.abs(Number(bx.effective_rating)-er)-wait(bx)*1.4));
   for(const cand of candidates){const {data:claimed}=await admin.from("chess_matchmaking_queue").update({state:"matched"}).eq("id",cand.id).eq("state","searching").select().maybeSingle();if(!claimed)continue;const opp=await playerById(cand.player_id);if(!opp)continue;const players=Number(p.color_balance||0)<=Number(opp.color_balance||0)?[p,opp]:[opp,p];
-    try{const made=await createGame(req,{seconds:tournament?.base_seconds||base,increment:tournament?.increment_seconds||inc,rated},{players,source:tournament?"tournament":"queue",tournamentId:tournament?.id||null});await Promise.all([admin.from("chess_matchmaking_queue").update({state:"matched",matched_game_id:made.game.id}).eq("id",q.id),admin.from("chess_matchmaking_queue").update({state:"matched",matched_game_id:made.game.id}).eq("id",cand.id)]);return {matched:true,game:made.game,player:publicPlayer(p),seat:made.game.white_player_id===p.id?"w":"b"}}catch(err){await admin.from("chess_matchmaking_queue").update({state:"searching"}).eq("id",cand.id);throw err}}
+    try{const made=await createGame(req,{seconds:tournament?.base_seconds||base,increment:tournament?.increment_seconds||inc,rated,...(fog?{variant:fog}:{})},{players,source:tournament?"tournament":"queue",tournamentId:tournament?.id||null});await Promise.all([admin.from("chess_matchmaking_queue").update({state:"matched",matched_game_id:made.game.id}).eq("id",q.id),admin.from("chess_matchmaking_queue").update({state:"matched",matched_game_id:made.game.id}).eq("id",cand.id)]);return {matched:true,game:made.game,player:publicPlayer(p),seat:made.game.white_player_id===p.id?"w":"b"}}catch(err){await admin.from("chess_matchmaking_queue").update({state:"searching"}).eq("id",cand.id);throw err}}
   return {matched:false,queue:q,range:searchRange(0),player:publicPlayer(p)}
 }
 async function runtimeConfig(){
@@ -1978,7 +2058,7 @@ async function queueStatus(req:Request,b:any){
     await admin.from("chess_matchmaking_queue").update({heartbeat_at:nowIso()}).eq("id",q.id);
     const secs=(Date.now()-Date.parse(q.created_at))/1000;
     const cfg=await runtimeConfig(), botAfter=Math.max(3,Number(cfg.bot_fallback_seconds||15));
-    if(!q.rated&&!q.tournament_id&&cfg.bot_fallback_enabled&&b.allowBots!==false&&secs>=botAfter){
+    if(!q.rated&&!q.tournament_id&&!fogVariant(q.pool)&&cfg.bot_fallback_enabled&&b.allowBots!==false&&secs>=botAfter){
       const {data:claimed}=await admin.from("chess_matchmaking_queue").update({state:"matched"}).eq("id",q.id).eq("state","searching").select().maybeSingle();
       if(claimed){
         try{
@@ -2047,10 +2127,12 @@ Deno.serve(async(req)=>{
     if(b.action==="ping") return send(req,{pong:true});
     switch(b.action){
       case "config":out=await publicConfig();break;
-      case "profile":out={player:ownPlayer(await playerFor(req,b))};break;
+      case "profile":{const me=await playerFor(req,b);out={player:{...ownPlayer(me),notify_topic:await topicFor("player",me.id)}};break}
+      case "game_channel":{const {g,color}=await gameSeat(req,b);out=FOG_VARIANTS.has(g.variant)?{topic:"seat:"+await topicFor("seat",g.id,color),seat:color}:{topic:"game:"+await topicFor("game",g.id),seat:color};break}
+      case "rematch":out=await rematch(req,b);break;
       case "profile_update":out=await profileUpdate(req,b);break;
       case "game_players":out=await gamePlayers(req,b);break;
-      case "create":out=await createGame(req,b);break;
+      case "create":await rateLimit(await ipKey(req,"create"),40,600);out=await createGame(req,b);break;
       case "join":out=await joinGame(req,b);break;
       case "move":out=await makeMove(req,b,serverReceivedMs);break;
       case "bot_move":out=await botMove(req,b);break;
@@ -2144,7 +2226,7 @@ Deno.serve(async(req)=>{
       case "puzzle_next":out=await puzzleNext(req,b);break;
       case "puzzle_attempt":out=await puzzleAttempt(req,b);break;
       case "heartbeat":out=await heartbeat(req,b);break;
-      case "queue_join":out=await queueJoin(req,b);break;
+      case "queue_join":await rateLimit(await ipKey(req,"queue"),90,600);out=await queueJoin(req,b);break;
       case "queue_status":out=await queueStatus(req,b);break;
       case "queue_leave":out=await queueLeave(req,b);break;
       case "tournaments":out=await tournaments(req,b);break;
@@ -2154,6 +2236,12 @@ Deno.serve(async(req)=>{
       case "bots":out=await botCatalog();break;
       case "bot_result":out=await botResult(req,b);break;
       default:return send(req,{error:"Unknown chess action."},400)
+    }
+    // Hidden-information games: whatever a response carries goes out as the caller's view.
+    if(out?.game&&FOG_VARIANTS.has(out.game.variant)&&out.game.status==="active"){
+      let seat=out.seat==="w"||out.seat==="b"?out.seat:null;
+      if(!seat){const me=await playerFor(req,b,false,{touch:false}).catch(()=>null);seat=me?.id===out.game.white_player_id?"w":me?.id===out.game.black_player_id?"b":null}
+      out={...out,game:seat?viewFor(out.game,seat):{...watchView(out.game),fen:null,move_history:[]}};
     }
     return send(req,out)
   }catch(e){console.error(e);return send(req,{error:e?.message||"Server error."},Number(e?.status)||500)}

@@ -3379,3 +3379,6 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .stream-actions{display:flex;gap:6px;flex-wrap:wrap}
 .stream-actions a{text-decoration:none}
 .stream-source{font-size:11px;color:#7f9590;margin-top:10px}
+.match-variants{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+.match-variants button{padding:9px 6px;border-radius:10px;border:1px solid #2c3a38;background:#0f1918;font-size:11.5px;color:#cfd8d4}
+.match-variants button.on{border-color:var(--mint,#82edba);background:#13241f;color:#eef6f2;box-shadow:0 0 12px rgba(101,212,156,.25)}

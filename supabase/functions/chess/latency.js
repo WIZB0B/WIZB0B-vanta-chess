@@ -24,3 +24,16 @@ export function calculateMoveTiming({clientMoveAt,lastMoveAt,serverReceivedAt=Da
     serverReceivedMs:receivedMs,
   };
 }
+
+// Lag compensation has a budget per player per game (security review M2): the client's own
+// timestamp can claim up to MAX_NETWORK_COMPENSATION_MS a move, but no more than 5% of the
+// starting clock in total (between 1 and 5 seconds). Past the budget, moves are charged in full.
+export const LAG_QUOTA_SHARE=0.05,LAG_QUOTA_MIN_MS=1000,LAG_QUOTA_MAX_MS=5000;
+export function lagQuotaMs(baseMs){return Math.round(Math.max(LAG_QUOTA_MIN_MS,Math.min(LAG_QUOTA_MAX_MS,Number(baseMs||0)*LAG_QUOTA_SHARE)))}
+// Compensation already given to `color` in this game (stored on each move).
+export function lagUsed(history,color){return (Array.isArray(history)?history:[]).reduce((sum,m)=>sum+(m?.color===color?Math.max(0,Number(m?.network_compensation_ms)||0):0),0)}
+export function applyLagQuota(timing,used,baseMs){
+  const left=Math.max(0,lagQuotaMs(baseMs)-Math.max(0,Number(used)||0));
+  if(timing.networkCompensationMs<=left)return timing;
+  return {...timing,networkCompensationMs:left,chargedElapsedMs:Math.max(0,timing.elapsedMs-left)};
+}

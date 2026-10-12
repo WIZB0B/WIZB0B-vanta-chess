@@ -119,7 +119,7 @@ const reactions=new PieceReactions({
   squareEl:square=>boardDom?.squares.get(square)||null,
   enabled:()=>!prefersReducedMotion()&&motionScale()>0,
 });
-let matchSelection={seconds:600,increment:0,rated:false};
+let matchSelection={seconds:600,increment:0,rated:false,variant:'standard'};
 const DEFAULT_COMPUTER_BOTS=[
   {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
   {slug:'forge',display_name:'Forge',elo:1200,portrait:'bb'},
@@ -262,7 +262,8 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <p class="special-opponent hidden" id="specialOpponent" role="status"></p>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="match-variants" aria-label="Variant"><button class="on" data-match-variant="standard" title="Classic chess">Standard</button><button data-match-variant="dark" title="Fog of war: you only see what your pieces see. Own rating.">Vanta Dark</button><button data-match-variant="blackout" title="Every four of your moves, the lights go out for two. Own rating.">Blackout Blitz</button></div>
+          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="dark">Vanta Dark · fog of war (own rating)</option><option value="blackout">Blackout Blitz · the lights go out (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <p class="special-opponent hidden" id="specialOpponent" role="status"></p>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -378,7 +379,7 @@ ${splashMarkup(splash)}
   <header><div><small>PLAYER CHAT</small><h3>Game conversation</h3></div><button id="closeChat" aria-label="Close chat">×</button></header>
   <div id="messages"></div>
   <div id="chatTray" class="chat-tray hidden" role="dialog" aria-label="Emoji and reactions"><div class="chat-tray-tabs" role="tablist"><button type="button" data-tray="reactions" class="on" role="tab">Reactions</button><button type="button" data-tray="emoji" role="tab">Emoji</button></div><div class="chat-tray-body"></div></div>
-  <form id="chat"><button type="button" id="chatTrayBtn" class="chat-tray-btn" aria-label="Emoji and reactions" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.4 2.2 2 3.5 2s2.5-.6 3.5-2"/><circle cx="9" cy="10" r="1.1"/><circle cx="15" cy="10" r="1.1"/></svg></button><input id="message" maxlength="160" placeholder="Send a friendly message…"><button>Send</button></form>
+  <form id="chat"><button type="button" id="chatTrayBtn" class="chat-tray-btn" aria-label="Emoji and reactions" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.4 2.2 2 3.5 2s2.5-.6 3.5-2"/><circle cx="9" cy="10" r="1.1"/><circle cx="15" cy="10" r="1.1"/></svg></button><input id="message" maxlength="160" placeholder="Send a friendly message…"><button class="chat-send">Send</button></form>
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
@@ -513,7 +514,7 @@ function renderArrows(dom=ensureBoardDom()){
 // and shockwaves react to a move already made, so they stay on at every level but Off.
 function ratedLiveGame(){return !!(serverGameId&&serverGame?.rated&&!localGameOver&&serverGame?.status==='active'&&!serverGame?.bot_player_id)}
 function expressionLevel(){
-  if(typeof darkActive==='function'&&(darkActive()||computerRules==='blackout'&&computerLive()))return 'off'; // moods would give hidden pieces away
+  if(typeof darkActive==='function'&&(darkActive()||computerRules==='blackout'&&computerLive()||fogOnline()))return 'off'; // moods would give hidden pieces away
   if(prefersReducedMotion()||motionScale()<=0||expressionSetting==='off')return 'off';
   if(ratedLiveGame())return 'fair';
   return expressionSetting==='subtle'?'subtle':'full';
@@ -598,13 +599,14 @@ function renderBoard({hint=null,instant=false}={}){
   dom.board.classList.toggle('browsing',!!browseFen);
   document.body.classList.toggle('puzzle-mode',mode==='puzzle'&&!!puzzleSession);
   document.body.classList.toggle('puzzle-board',mode==='puzzle'); // no Resign or clocks, solved or not
-  dom.board.classList.toggle('blackout',!reviewFen&&!browseFen&&blackoutActive());
+  dom.board.classList.toggle('blackout',!reviewFen&&!browseFen&&(blackoutActive()||onlineBlind()));
   if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
-  const legal=new Set(reviewState.viewing||browse?[]:zhDropSelected?zhDropTargets(zhDropSelected):!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
+  const legal=new Set(reviewState.viewing||browse?[]:zhDropSelected?zhDropTargets(zhDropSelected):!selected?[]:fogOnline()?(Array.isArray(serverGame.legal)?serverGame.legal.filter(m=>m.startsWith(selected)).map(m=>m.slice(2,4)):[]):game.moves({square:selected,verbose:true}).map(m=>m.to));
   const lastMove=boardLastMove(),fullPosition=positionMap(boardGame.board());
-  const checkerSquares=boardGame===game&&darkActive()?new Set(darkCheckers(game,computerSide)):null; // revealed and marked in the dark
-  const sight=checkerSquares?visibleSquares(game.fen(),computerSide,{reveal:[...checkerSquares]}):null;
-  const position=sight?fogPosition(fullPosition,sight,computerSide):fullPosition;
+  const darkOnline=boardGame===game&&onlineDark();
+  const checkerSquares=darkOnline?new Set(serverGame.fog?.checkers||[]):boardGame===game&&darkActive()?new Set(darkCheckers(game,computerSide)):null; // revealed and marked in the dark
+  const sight=darkOnline?new Set(serverGame.fog?.seen||[]):checkerSquares?visibleSquares(game.fen(),computerSide,{reveal:[...checkerSquares]}):null;
+  const position=sight&&!darkOnline?fogPosition(fullPosition,sight,computerSide):fullPosition; // online, the server already left the hidden pieces out
   dom.board.classList.toggle('vanta-dark',!!sight);
   let checked=null;
   if(boardGame.inCheck())for(const [sq,key] of position)if(key===boardGame.turn()+'k')checked=sq;
@@ -791,29 +793,32 @@ function rematchSettings(){
   const ended=serverGame||{};
   return {seconds:Number(ended.time_control_seconds||ended.base_seconds||600),increment:Number(ended.increment_seconds||0),rated:!!ended.rated};
 }
+// Rematches are made by the server (security review C1): an offer and the new game are kept on
+// the finished game, and each client opens the new game by id once the server says it exists.
 async function startOnlineRematch(){
-  if(!serverGameId||!realtimeChannel||!realtimeReady)return toast('Rematch is unavailable because the game connection has closed');
-  rematchOfferPending=true;broadcastAux('rematch_offer',{from:realtimeClientId,...rematchSettings()});toast('Rematch offered');
+  if(!serverGameId)return toast('Rematch is unavailable');
+  try{const out=await api.request('rematch',{gameId:serverGameId});if(out?.rematchGameId)return void openRematchGame(out.rematchGameId);if(out?.game)serverGame={...serverGame,...out.game};rematchOfferPending=true;toast('Rematch offered')}catch(error){toast(error.message)}
 }
-async function acceptRematchOffer(payload){
-  if(!payload?.from||payload.gameId!==serverGameId)return;
-  broadcastAux('rematch_accept',{from:realtimeClientId,to:payload.from});toast('Rematch accepted');
+async function acceptRematchOffer(){
+  if(!serverGameId)return;
+  try{const out=await api.request('rematch',{gameId:serverGameId});if(out?.rematchGameId)void openRematchGame(out.rematchGameId)}catch(error){toast(error.message)}
 }
-async function createRematchForPeer(payload){
-  if(!rematchOfferPending||payload?.to!==realtimeClientId||payload.gameId!==serverGameId)return;
-  rematchOfferPending=false;const oldChannel=realtimeChannel,oldGameId=serverGameId,{seconds,increment,rated}=rematchSettings();
-  try{
-    const state=await api.create({name:(currentProfile?.username||guestName),seconds,increment,rated}),next=state.game||state,code=next.invite_code;
-    if(oldChannel&&realtimeReady)await oldChannel.send({type:'broadcast',event:'rematch_ready',payload:{gameId:oldGameId,from:realtimeClientId,to:payload.from,code}});
-    applyServerState(state);room=code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(code)}`);syncRoomUi();await loadChat();toast('Rematch ready');
-  }catch(error){toast(error.message)}
-}
-async function joinRematchFromPeer(payload){
-  if(payload?.to!==realtimeClientId||payload.gameId!==serverGameId||!payload.code)return;
+let rematchOpening=null,rematchOfferSeen=null;
+async function openRematchGame(id){
+  if(rematchOpening===id||serverGameId===id)return;rematchOpening=id;
   document.querySelector('.vch-dialog-layer .vch-dialog-close')?.click();
   try{
-    const state=await api.join(payload.code,guestName);applyServerState(state);room=(state.game||state).invite_code||payload.code;roomCreated=false;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
-  }catch(error){toast(error.message)}
+    const state=await api.state(id);applyServerState(state);room=(state.game||state).invite_code||room;roomCreated=false;rematchOfferPending=false;
+    history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
+  }catch(error){toast(error.message)}finally{rematchOpening=null}
+}
+// Called with each server state of a finished game: a rematch offer from the opponent, or
+// the new game the server made.
+function syncRematch(g){
+  if(!g||!serverGameId||g.id!==serverGameId||['active','waiting'].includes(g.status))return;
+  if(g.rematch_game_id)return void openRematchGame(g.rematch_game_id);
+  const offer=g.rematch_offer_by&&g.rematch_offer_by!==currentPlayerId?`${g.id}:${g.rematch_offer_by}`:null;
+  if(offer&&offer!==rematchOfferSeen){rematchOfferSeen=offer;toast('Rematch offered',{duration:10000,actionLabel:'Accept',onAction:()=>acceptRematchOffer()})}
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
@@ -831,7 +836,7 @@ async function maybeShowGameOver(){
 }
 function premovePlayerColor(){if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
 function premoveBlocked(){return !!puzzleSession||mode==='puzzle'||reviewState.running||reviewState.viewing||currentRightView==='review'}
-function canQueuePremove(){if(freeBoard())return false;
+function canQueuePremove(){if(freeBoard()||fogOnline())return false;
   const color=premovePlayerColor();
   if(!color||premoveBlocked()||localGameOver||game.isGameOver())return false;
   if(serverGameId&&!['active','playing','in_progress'].includes(serverGame?.status||'active'))return false;
@@ -862,6 +867,7 @@ async function clickSquare(sq,p,{instant=false}={}){
   if(browse){exitBrowse();return} // a tap on the board while looking back returns to the game
   if(mode==='watch')return; // spectators can't move
   if(mode==='archive'&&!retrySession)return;
+  if(fogOnline())return fogClick(sq,p);
   if(premoves.move?.from===sq){cancelPremove();return}
   if(canQueuePremove()){
     const color=premovePlayerColor();
@@ -938,7 +944,7 @@ async function beginMatchSearch(){
   game.reset();render();updateMoves();setMatchSearching(true);
   const started=Date.now();
   try{
-    const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated});
+    const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated,...(matchSelection.variant!=='standard'?{variant:matchSelection.variant}:{})});
     if(first.game||first.matched){setMatchSearching(false);updateOnlineCount(2);applyServerState(first);showMovesView();toast('Player matched');return}
     matchTimer=setInterval(async()=>{
       try{
@@ -1012,6 +1018,39 @@ function startComputerGame(opts={}){
 // ---- Round 11: Vanta Dark (fog of war) and Blackout Blitz, games against the computer ----
 function computerLive(){return mode==='computer'&&computerStarted&&!localGameOver&&!game.isGameOver()&&!reviewState.viewing&&!browse}
 function darkActive(){return computerRules==='dark'&&computerLive()}
+// Online Vanta Dark / Blackout Blitz (round 13): the server sends each player only what they may
+// see (supabase/functions/chess/fog.js). The board shows that view, moves go straight to the
+// server (no relay, no optimistic move, no premoves), and the whole game shows at the end.
+function fogOnline(){return isOnlineGame()&&['dark','blackout'].includes(serverGame?.variant)&&serverGame?.status==='active'&&!!myColor}
+const onlineDark=()=>fogOnline()&&serverGame.variant==='dark';
+const onlineBlind=()=>fogOnline()&&serverGame.variant==='blackout'&&!!serverGame.fog?.blind;
+// The position to put in chess.js for a fog view: the fogged FEN (an enemy king may be out of
+// sight, so validation is skipped) or an empty board while the lights are out.
+function loadFogView(state){
+  const turn=Number(state.move_count||0)%2?'b':'w';
+  const fen=state.fen||`8/8/8/8/8/8/8/8 ${turn} - - 0 1`;
+  try{game.load(fen,{skipValidation:true})}catch{}
+}
+async function fogClick(sq,p){
+  const g=serverGame;if(!myColor||onlineMovePending||game.turn()!==myColor)return;
+  const blind=onlineBlind();
+  if(!selected){if(blind||p?.color===myColor){selected=sq;render()}return}
+  if(sq===selected){selected=null;render();return}
+  if(!blind&&p?.color===myColor){selected=sq;render();return}
+  const from=selected;selected=null;
+  const options=Array.isArray(g.legal)?g.legal.filter(m=>m.startsWith(from+sq)):null;
+  if(options&&!options.length){rejectMove(from,sq,{quietRule:true});render();return}
+  let promotion='q';if(options?.some(m=>m.length===5)){promotion=await choosePromotion();if(!promotion){render();return}}
+  render();await fogSend({from,to:sq,promotion});
+}
+async function fogSend(move){
+  onlineMovePending=true;
+  try{const out=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});applyServerState(out);afterBoardPaint(playTone)}
+  catch(error){
+    if(error?.status===409)await refreshServerState();
+    else{playIllegalTone();buzz(HAPTICS.illegal);toast(/illegal/i.test(error?.message||'')?'That move is not legal here':error.message)}
+  }finally{onlineMovePending=false}
+}
 function blackoutActive(){return computerRules==='blackout'&&computerLive()&&inBlackout(myMoveCount(game.history(),computerSide))}
 let blackoutWas=false;
 function syncBlackout(){
@@ -1021,6 +1060,7 @@ function syncBlackout(){
 }
 function maskedRecords(records){
   if(darkActive())return records.map((r,i)=>({...r,san:darkSan(r,i,computerSide)}));
+  if(fogOnline())return records.map(r=>r?.hidden?{...r,san:serverGame.variant==='blackout'?'•':'?'}:r);
   if(blackoutActive())return records.map(r=>({...r,san:'•'}));
   return records;
 }
@@ -1038,7 +1078,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(lessonSession&&mode==='lesson'&&!remote)return lessonMove(move);if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(lessonSession&&mode==='lesson'&&!remote)return lessonMove(move);if(fogOnline()&&!remote){if(Array.isArray(serverGame.legal)&&!serverGame.legal.some(m=>m.startsWith(move.from+move.to)))return rejectMove(move.from,move.to,{quietRule:true});return fogSend(move)}if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -1436,8 +1476,10 @@ function applyServerState(payload,{animateMove=true}={}){
   if(myColor&&!orientationSet){flipped=myColor==='b';orientationSet=true}
   if(myColor&&['active','playing','in_progress'].includes(state.status)&&(previousState?.status==='waiting'||Number(state.move_count||0)===0))showGameStartBanner(myColor,state.time_control_seconds||state.base_seconds||600,state.increment_seconds||0,`online:${state.id}:${state.started_at||'active'}`);
   clockSnapshot=createClockSnapshot(payload);
-  if(state.fen){try{game.load(state.fen)}catch{}}
+  if(['dark','blackout'].includes(state.variant)&&state.status==='active')loadFogView(state);
+  else if(state.fen){try{game.load(state.fen)}catch{}}
   if(state.id&&state.id!==previousGameId)void loadChat();
+  syncRematch(state);
   const lastServerMove=previousGameId===state.id&&Number(state.version)>previousVersion?state.move_history?.at?.(-1):null;
   syncRoomUi();render({hint:lastServerMove,instant:!animateMove});afterBoardPaint(updateMoves);syncOpponentConnectionToast(state);
   if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
@@ -1628,7 +1670,7 @@ function sendRealtimePing(){
   });
 }
 function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={},{early=false}={}){
-  if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId)return;
+  if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId||fogOnline())return; // hidden-information games never relay moves
   realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore,...(early?{provisional:true}:{})}}).catch(()=>{});
 }
 // Provisional moves (see online-sync.js): shown at once, confirmed by the server shortly after.
@@ -1693,6 +1735,9 @@ function applyRealtimeMove(incoming){
     legalMove=game.moves({square:incoming.from,verbose:true}).find(candidate=>candidate.to===incoming.to&&(!candidate.promotion||candidate.promotion===requestedPromotion));
   }catch{return false}
   if(!legalMove)return false;
+  // A relayed move is only ever the opponent's: a message that would move your own pieces is
+  // ignored (security review C1). The server's state settles everything either way.
+  if(!myColor||legalMove.color===myColor||fogOnline())return false;
   let made;
   try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
   rememberLastMove(made);
@@ -1740,29 +1785,33 @@ function handleDrawResponse(message){
   const payload=message?.payload||{};if(payload.gameId!==serverGameId||payload.from===realtimeClientId||payload.to!==currentPlayerId)return;
   if(payload.status==='declined')toast('Draw offer declined');if(payload.status==='expired')toast('Draw offer expired');
 }
-function handleRematchOffer(message){
-  const payload=message?.payload||{};if(payload.gameId!==serverGameId||payload.from===realtimeClientId)return;
-  toast('Rematch offered',{duration:8000,actionLabel:'Accept',onAction:()=>acceptRematchOffer(payload)});
+// The game's realtime topic is private to its two players: the server names it from a secret
+// (game_channel; per seat for hidden-information games). Before the round 13 server is live
+// the action is unknown and the old public topic is used.
+let realtimeTopicFor=null,realtimeTopicPending=null;
+async function gameTopic(gameId){
+  if(realtimeTopicFor?.gameId===gameId)return realtimeTopicFor.topic;
+  try{const out=await api.request('game_channel',{gameId});if(out?.topic){realtimeTopicFor={gameId,topic:out.topic};return out.topic}}catch(error){if(error?.status===403||error?.status===404)return null}
+  return `game:${gameId}`;
 }
-function handleRematchAccept(message){const payload=message?.payload||{};if(payload.from===realtimeClientId)return;void createRematchForPeer(payload)}
-function handleRematchReady(message){const payload=message?.payload||{};if(payload.from===realtimeClientId)return;void joinRematchFromPeer(payload)}
 function startRealtime(){
   if(!isOnlineGame()){stopRealtime();return}
   if(realtimeChannel&&realtimeGameId===serverGameId)return;
+  if(realtimeTopicPending===serverGameId)return;
+  const gameId=serverGameId;realtimeTopicPending=gameId;
+  void gameTopic(gameId).then(topic=>{realtimeTopicPending=null;if(topic&&serverGameId===gameId&&!(realtimeChannel&&realtimeGameId===gameId))openRealtime(gameId,topic)});
+}
+function openRealtime(gameId,topic){
   stopRealtime();
-  const gameId=serverGameId;
   realtimeGameId=gameId;latencyMs=null;syncConnectionUi();
   realtimeChannel=realtimeClient
-    .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
+    .channel(topic,{config:{broadcast:{self:true}}})
     .on('broadcast',{event:'state'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'moved'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'move_void'},message=>{handleMoveVoid(message)})
     .on('broadcast',{event:'draw_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void refreshServerState()})
     .on('broadcast',{event:'draw_response'},message=>{handleDrawResponse(message)})
     .on('broadcast',{event:'chat_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void loadChat()})
-    .on('broadcast',{event:'rematch_offer'},message=>{handleRematchOffer(message)})
-    .on('broadcast',{event:'rematch_accept'},message=>{handleRematchAccept(message)})
-    .on('broadcast',{event:'rematch_ready'},message=>{handleRematchReady(message)})
     .on('broadcast',{event:'ping'},message=>{
       const nonce=message?.payload?.nonce;
       if(!pingProbe||nonce!==pingProbe.nonce)return;
@@ -2329,20 +2378,25 @@ function startSocial(){
   if(socialState.channelFor!==currentProfile.id){
     if(socialState.channel)realtimeClient.removeChannel(socialState.channel).catch(()=>{});
     socialState.channelFor=currentProfile.id;
-    socialState.channel=realtimeClient.channel(`player:${currentProfile.id}`)
+    // Your player topic is private (named by the server, security review H2). Events are only
+    // hints: games are opened from what the server lists for you, never from a code in a message.
+    socialState.channel=realtimeClient.channel(`player:${currentProfile.notify_topic||currentProfile.id}`)
       .on('broadcast',{event:'notify'},()=>void refreshInbox())
-      .on('broadcast',{event:'tournament_game'},message=>{const code=message?.payload?.code;if(!code)return;toast(`Round ${message.payload.round} is ready`);if(!isOnlineGame()&&mode!=='computer')setTimeout(()=>{location.search='?game='+encodeURIComponent(code)},1200)})
+      .on('broadcast',{event:'tournament_game'},message=>{toast(`Round ${Number(message?.payload?.round)||''} is ready`.trim());void openTournamentRound()})
       .on('broadcast',{event:'challenge'},()=>{toast('New challenge');void refreshSocial()})
-      .on('broadcast',{event:'battle'},message=>{const code=message?.payload?.code;if(code&&(!battle||battle.status!=='live')){clearInterval(battleQueueTimer);battleQueueTimer=null;void joinBattle(code)}})
+      .on('broadcast',{event:'battle'},message=>{const code=String(message?.payload?.code||'');if(battleQueueTimer&&/^[A-Za-z0-9]{4,12}$/.test(code)&&(!battle||battle.status!=='live')){clearInterval(battleQueueTimer);battleQueueTimer=null;void joinBattle(code)}})
       .on('broadcast',{event:'challenge_answer'},message=>{
         const p=message?.payload||{};
         if(!p.accepted){toast('Your challenge was declined');return void refreshSocial()}
-        socialState.seenAccepted.add(p.id);
-        if(p.code&&!isOnlineGame()&&mode!=='computer'){toast('Challenge accepted · opening the game');openGameCode(p.code)}
-        else{toast('Challenge accepted');void refreshSocial()}
+        toast('Challenge accepted');void refreshSocial(); // refreshSocial opens the game the server lists
       })
       .subscribe();
   }
+}
+// A Swiss round is ready: open your game from the server's list of your tournament games.
+async function openTournamentRound(){
+  if(isOnlineGame()||mode==='computer')return;
+  try{const data=await api.tournaments(),game=(data.myGames||[]).find(g=>g?.code);if(game)setTimeout(()=>{location.search='?game='+encodeURIComponent(game.code)},1200)}catch{}
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&socialState.timer)void refreshSocial()});
 function drawFriendsLists(){
@@ -3062,9 +3116,10 @@ async function startWatching(id){
     watchSession={id,state:null,prevMode,timer:null,channel:null};
     applyWatchState(out);
     watchSession.timer=setInterval(()=>{if(!watchSession||document.hidden)return;api.watchState(id).then(applyWatchState).catch(()=>{})},5000);
-    watchSession.channel=realtimeClient.channel(`game:${id}`)
+    // Spectators listen on the public watch topic: the server sends the trimmed watch fields
+    // there; the players' own topic is private (security review C1).
+    watchSession.channel=realtimeClient.channel(`watch:${id}`)
       .on('broadcast',{event:'state'},message=>{const state=message?.payload?.game;if(watchSession?.id===id&&state?.id===id)applyWatchState({game:state,serverNow:message.payload.serverNow})})
-      .on('broadcast',{event:'moved'},message=>watchRelay(message?.payload))
       .on('broadcast',{event:'reaction'},message=>showReaction(String(message?.payload?.r||'')))
       .subscribe();
     showMovesView();
@@ -3084,10 +3139,6 @@ function applyWatchState(payload){
   if(over&&!watchSession.over){watchSession.over=true;toast(`Game over · ${state.result||''}${state.end_reason?` · ${normalizedEndReason(state.end_reason)}`:''}`)}
 }
 // The mover's instant relay reaches spectators too: show it at once if it fits the board.
-function watchRelay(payload){
-  if(!watchSession||payload?.gameId!==watchSession.id||!payload.from||!payload.to||payload.fenBefore!==game.fen())return;
-  try{const made=game.move({from:payload.from,to:payload.to,promotion:payload.promotion||undefined});if(made){browse=null;render({hint:made});afterBoardPaint(playTone)}}catch{}
-}
 function stopWatching({reset=true}={}){$('#reactionBar')?.classList.add('hidden');
   const session=watchSession;if(!session)return;
   watchSession=null;clearInterval(session.timer);if(session.channel)realtimeClient.removeChannel(session.channel).catch(()=>{});
@@ -3380,6 +3431,7 @@ $('#chatTray').addEventListener('click',event=>{
   const em=event.target.closest('[data-emoji]');if(em){const input=$('#message'),at=input.selectionStart??input.value.length;input.value=(input.value.slice(0,at)+em.dataset.emoji+input.value.slice(input.selectionEnd??at)).slice(0,160);input.focus();const pos=Math.min(160,at+em.dataset.emoji.length);input.setSelectionRange(pos,pos)}
 });
 $$('.modes button').forEach(button=>button.onclick=()=>activateLeftMode(button.dataset.mode));
+$$('[data-match-variant]').forEach(button=>button.onclick=()=>{matchSelection={...matchSelection,variant:button.dataset.matchVariant};$$('[data-match-variant]').forEach(item=>item.classList.toggle('on',item===button))});
 $$('[data-match-time]').forEach(button=>button.onclick=()=>{
   const [seconds,increment]=button.dataset.matchTime.split('-').map(Number);
   matchSelection={...matchSelection,seconds,increment};
@@ -3400,7 +3452,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if($('#variant').value==='crazyhouse'&&String($('#time').value).startsWith('daily'))return toast('Crazyhouse is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -3653,7 +3705,7 @@ function announceLatestMove(){
   const before=announceState;announceState={key,count};
   if(before.key!==key||count!==before.count+1||browse)return; // a new game, a reload or a takeback: nothing to read
   const last=records.at(-1);if(!last?.san)return;
-  if(blackoutActive()||darkActive()&&(last.color||(count%2?'w':'b'))!==computerSide)return; // the dark stays dark for screen readers too
+  if(blackoutActive()||darkActive()&&(last.color||(count%2?'w':'b'))!==computerSide||last?.hidden||onlineBlind())return; // the dark stays dark for screen readers too
   announce(spokenMove({...last,color:last.color||(count%2?'w':'b')},uiLang));
 }
 $('#speakMoves').checked=speakOn();
@@ -3989,13 +4041,13 @@ function syncServerMoveTimes(previous,state){
 function currentHistory(){if(watchSession)return (watchSession.state?.move_history||[]).map(x=>x.san||x.lan||'');return serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.map(x=>x.san||x.lan||''):game.history()}
 function updateOpeningLabel(){
   if(isGameFinishedForReview())return;
-  const opening=darkActive()?null:detectOpening(currentHistory());
+  const opening=darkActive()||fogOnline()?null:detectOpening(currentHistory());
   const state=$('#state');if(!state)return;
   const ctx=boardContext(),line=ctx?ctx.line:serverGame?.rated?'Real time · Rated game':'Real time · Casual game';
   const base=game.inCheck()?(ctx?`Check · ${ctx.line}`:'Check · Real time'):line;
   // The 50-move rule: 50 moves each with no capture and no pawn move is a draw. Shown from 30 on
   // (not in the blind modes, where the count would tell you about moves you can't see).
-  const half=Number(game.fen().split(' ')[4])||0,fifty=half>=60&&!darkActive()&&computerRules!=='blackout'?` · 50-move rule: ${Math.max(0,Math.ceil((100-half)/2))} ${Math.ceil((100-half)/2)===1?'move':'moves'} left`:'';
+  const half=Number(game.fen().split(' ')[4])||0,fifty=half>=60&&!darkActive()&&computerRules!=='blackout'&&!fogOnline()?` · 50-move rule: ${Math.max(0,Math.ceil((100-half)/2))} ${Math.ceil((100-half)/2)===1?'move':'moves'} left`:'';
   state.textContent=(opening?`${base} · ${opening.name}`:base)+fifty;
 }
 function formatPv(pv=''){
@@ -5056,7 +5108,7 @@ function applyBughouse(out){
   if(partner?.id&&bhSession.partnerId!==partner.id){
     if(bhSession.partnerChannel)realtimeClient.removeChannel(bhSession.partnerChannel).catch(()=>{});
     const id=partner.id;bhSession.partnerId=id;
-    bhSession.partnerChannel=realtimeClient.channel(`game:${id}`).on('broadcast',{event:'state'},message=>{
+    bhSession.partnerChannel=realtimeClient.channel(`watch:${id}`).on('broadcast',{event:'state'},message=>{
       const g=message?.payload?.game,d=bhSession?.data;if(!d?.seat||g?.id!==id)return;
       const key=otherBoard(d.seat[0]),cur=d.games[key];if(cur&&Number(g.version)<Number(cur.version))return;
       d.games[key]={...cur,...Object.fromEntries(BH_PUBLIC.map(k=>[k,g[k]??null]))};drawPartnerStrip();if(currentRightView==='bughouse')drawBughouse();

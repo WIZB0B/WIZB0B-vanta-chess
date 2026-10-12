@@ -35,7 +35,7 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   // Chat lives in the board's "More game actions" (⋯) menu since the Batch 5 right-panel cleanup.
   for(const page of [a,b]){await page.locator('.game-more>summary').click();await page.locator('#openChat').click();await expect(page.locator('#chatDrawer')).toHaveClass(/open/)}
   await a.locator('#message').fill('acceptance-chat');
-  await a.locator('#chat button').click();
+  await a.locator('#chat .chat-send').click();
   await expect(b.locator('#messages')).toContainText('acceptance-chat',{timeout:6000});
 
   await a.reload();
