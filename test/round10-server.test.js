@@ -40,9 +40,9 @@ test('ladder weeks are ISO weeks', () => {
 });
 test('server wiring: crazyhouse moves, no takebacks or explorer for it, ladder, commentary rights', () => {
   assert.match(fn, /const r=zhPlay\(Chess,g\.fen,zhState\(g\.zh_pockets,g\.zh_promoted\),b\.drop\?\{drop:b\.drop,to:b\.to\}:/);
-  assert.match(fn, /let o:any=zhNext\?zhStatus\(Chess,c,zhNext\):outcome\(c\)/, 'mate counts drops');
+  assert.match(fn, /let o:any=g\.variant==="bughouse"&&zhNext\?bughouseStatus\(Chess,c,zhNext\):zhNext\?zhStatus\(Chess,c,zhNext\):outcome\(c\)/, 'mate counts drops');
   assert.match(fn, /if\(g\.variant==="crazyhouse"\)throw fail\("Takebacks aren't available in Crazyhouse\.",409\);/);
-  assert.match(fn, /g\.variant==="freestyle"\|\|g\.variant==="crazyhouse"\|\|Number\(g\.move_count\|\|0\)<6\)return;/);
+  assert.match(fn, /g\.variant!=="standard"\|\|g\.start_fen\|\|Number\(g\.move_count\|\|0\)<6\)return;/, 'the explorer skips Crazyhouse (and every variant)');
   assert.match(fn, /if\(p\.role==="admin"\|\|t\.created_by===p\.id\)return true;/);
   assert.match(fn, /if\(t\.ladder\)EdgeRuntime\.waitUntil\(ladderRecord\(t\)/);
   for (const a of ['player_openings', 'battle_queue', 'battle_queue_status', 'battle_ladder', 'commentary_post']) assert.match(fn, new RegExp(`case "${a}":out=await`));

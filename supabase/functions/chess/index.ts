@@ -6,6 +6,8 @@ import { zhPlay, zhState, zhStatus } from "./crazyhouse.js";
 import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } from "./rules.js";
 import { MOMENT_DAYS, MOMENT_MIN_PLIES, momentCaption, momentScore } from "./rules.js";
 import { boardEndReason, gamePgn, isFullPgn, positionKey, repetitionCount } from "./rules.js";
+import { FATES, cleanCrest, fateById, pickFate, twinScore } from "./rules.js";
+import { BUGHOUSE_DEFAULT_SECONDS, BUGHOUSE_SEATS, boardResultFor, bughouseStatus, bughouseTransfer, isSeat, matchWinner, otherBoard } from "./bughouse.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
@@ -168,7 +170,8 @@ async function gamePlayers(req:Request,b:any){
   const ids=[g.white_player_id,g.black_player_id].filter(Boolean);
   const {data,error}=ids.length?await admin.from("chess_players").select("id,username,display_name,country_code,avatar_data").in("id",ids):{data:[],error:null};
   if(error)throw error;
-  return {players:(data||[]).map((x:any)=>({id:x.id,name:x.username||x.display_name,country_code:x.country_code||null,avatar_data:x.avatar_data||null,seat:x.id===g.white_player_id?"w":"b"}))}
+  const clubs=await clubsFor(ids).catch(()=>new Map());
+  return {players:(data||[]).map((x:any)=>({id:x.id,name:x.username||x.display_name,country_code:x.country_code||null,avatar_data:x.avatar_data||null,club:clubs.get(x.id)||null,seat:x.id===g.white_player_id?"w":"b"}))}
 }
 // ---- Achievements (rules.js ACHIEVEMENTS) ----
 async function awardAchievements(p:any,extra:any={}){
@@ -225,6 +228,11 @@ async function settleTournament(g:any){
 }
 async function settleRatings(g:any){
   if(g?.result&&g.result!=="*")EdgeRuntime.waitUntil(recordExplorer(g).catch(e=>console.error("explorer",e)));
+  // Round 12: the first Bughouse board to finish decides the match; a Twin Fates first leg starts the second.
+  if(g?.result&&g.result!=="*"){
+    if(g.bughouse_id)await bughouseFinish(g).catch(e=>console.error("bughouse finish",e));
+    if(g.twin_id&&Number(g.twin_leg)===1){const next=await twinNext(g).catch(e=>{console.error("twin next",e);return null});if(next)g={...g,twin_next:{id:next.id,code:next.invite_code}}}
+  }
   if(!g.rated||!g.white_player_id||!g.black_player_id||g.result==="*"||g.white_rating_delta!=null)return g;
   const [w,b]=await Promise.all([playerById(g.white_player_id),playerById(g.black_player_id)]);if(!w||!b)return g;
   const pool=POOLS.includes(g.pool)?g.pool:"rapid",rw=ratingOf(w,pool),rb=ratingOf(b,pool),sw=scoreFor(g.result,"w"),sb=1-sw,nw=gamesOf(w,pool),nb=gamesOf(b,pool);
@@ -268,29 +276,32 @@ async function resolveTimeout(g:any){
     if(!abortDue({moveCount:g.move_count,lastMoveAt:g.last_move_at}))return g;
     const {data}=await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"aborted",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
     if(data)EdgeRuntime.waitUntil(broadcastGameState(data));
+    if(data?.bughouse_id)EdgeRuntime.waitUntil(bughouseAbort(data).catch(e=>console.error("bughouse abort",e)));
+    if(data?.twin_id)EdgeRuntime.waitUntil(Promise.resolve(admin.from("chess_twins").update({status:"aborted"}).eq("id",data.twin_id).in("status",["first","second"])).then(()=>{}));
     return data||g;
   }const c=new Chess(g.fen),side=c.turn(),elapsed=Math.max(0,Date.now()-Date.parse(g.last_move_at)),remain=side==="w"?Number(g.white_time_ms):Number(g.black_time_ms);if(elapsed<remain)return g;
   if(g.daily_days){const pid=side==="w"?g.white_player_id:g.black_player_id,away=pid?await playerById(pid):null;if(away&&elapsed-vacationOverlapMs(away,Date.parse(g.last_move_at))<remain)return g}
   const winner=(side==="w"?"b":"w") as "w"|"b";
-  const patch=!sideCanPossiblyMate(c,winner)
+  const patch=g.variant!=="bughouse"&&!sideCanPossiblyMate(c,winner)
     ?{status:"draw",result:"1/2-1/2",...(side==="w"?{white_time_ms:0}:{black_time_ms:0})}
     :(side==="w"?{status:"black_won",result:"0-1",white_time_ms:0}:{status:"white_won",result:"1-0",black_time_ms:0});
   const {data}=await admin.from("chess_games").update({...patch,...endRecord(g,patch.result,"timeout"),end_reason:"timeout",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();
   return data?settleRatings(data):g
 }
 async function freshGame(id:string){return resolveTimeout(await gameById(id))}
-async function createGame(req:Request,b:any,{players=null,source="private",tournamentId=null,bot=null,simulId=null}:any={}){
+async function createGame(req:Request,b:any,{players=null,source="private",tournamentId=null,bot=null,simulId=null,startFen:customStart=null,twinId=null,twinLeg=null}:any={}){
   let white:any,black:any;if(players)[white,black]=players;else{white=await playerFor(req,b,!!b.rated);assertAllowed(white)}
   let code=code8();while(await gameByCode(code))code=code8();const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0))),active=!!black;
   // Daily games: days per move instead of a clock, rated in their own "daily" pool.
   const zh=b.variant==="crazyhouse"&&!bot;if(zh&&b.dailyDays)throw fail("Crazyhouse is played live, not as a daily game.");
   const dailyDays=b.dailyDays?Math.max(1,Math.min(14,Number(b.dailyDays))):null,pool=dailyDays?"daily":b.variant==="freestyle"&&!bot?"freestyle":zh?"crazyhouse":poolFor(base,inc),moveMs=dailyDays?dailyMoveMs(dailyDays):base*1000;
   // Freestyle: a random Chess960 start with Chess960 castling (castle960.js), rated in its own pool.
-  const freestyle=b.variant==="freestyle"&&!bot,startFen=freestyle?freestyleFen():START_FEN;
+  const freestyle=b.variant==="freestyle"&&!bot&&!customStart,startFen=customStart||(freestyle?freestyleFen():START_FEN);
+  if(customStart&&(zh||dailyDays))throw fail("Twin Fates is played live, in standard chess.");
   const {data,error}=await admin.from("chess_games").insert({
     invite_code:code,white_player_id:white.id,black_player_id:black?.id||null,
     white_name:white.username||white.display_name,black_name:black?(black.username||black.display_name):null,
-    fen:startFen,start_fen:freestyle?startFen:null,variant:freestyle?"freestyle":zh?"crazyhouse":"standard",zh_pockets:zh?{w:{},b:{}}:null,zh_promoted:zh?[]:null,castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
+    fen:startFen,start_fen:freestyle||customStart?startFen:null,twin_id:twinId,twin_leg:twinLeg,variant:freestyle?"freestyle":zh?"crazyhouse":"standard",zh_pockets:zh?{w:{},b:{}}:null,zh_promoted:zh?[]:null,castling960:freestyle?initialRights(startFen):null,status:active?"active":"waiting",result:"*",rated:!!b.rated,pool,source,tournament_id:tournamentId,simul_id:simulId,
     time_control_seconds:dailyDays?dailyDays*86400:base,increment_seconds:dailyDays?0:inc,white_time_ms:moveMs,black_time_ms:moveMs,daily_days:dailyDays,challenge_id:b.challengeId||null,
     last_move_at:active?nowIso():null,started_at:active?nowIso():null,white_last_seen_at:nowIso(),black_last_seen_at:black?nowIso():null,
     bot_player_id:bot?.player_id||null,bot_elo:bot?.elo||null,bot_style:bot?.style||null
@@ -312,7 +323,7 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
     if(!opt)throw fail("Castling isn't allowed here.");
     c=new Chess(applyCastle(c.fen(),opt));
     m={from:opt.kingFrom,to:opt.kingTo,san:opt.san+(c.isCheckmate()?"#":c.inCheck()?"+":""),lan:opt.san,color,piece:"k",captured:null,promotion:null,castle:true,rook_from:opt.rookFrom,rook_to:opt.rookTo};
-  }else if(g.variant==="crazyhouse"){
+  }else if(g.variant==="crazyhouse"||g.variant==="bughouse"){
     const r=zhPlay(Chess,g.fen,zhState(g.zh_pockets,g.zh_promoted),b.drop?{drop:b.drop,to:b.to}:{from:b.from,to:b.to,promotion:b.promotion});
     if(!r)throw fail("Illegal move.");c=new Chess(r.fen);m=r.move;zhNext=r.state;
   }else{try{m=c.move({from:String(b.from),to:String(b.to),promotion:String(b.promotion||"q")[0]})}catch{}if(!m)throw fail("Illegal move.")}
@@ -327,18 +338,26 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
     EdgeRuntime.waitUntil(broadcastGameState(timedOutGame));
     return {game:timedOutGame,move:null,timedOut:true};
   }
-  const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;let o:any=zhNext?zhStatus(Chess,c,zhNext):outcome(c);const history=Array.isArray(g.move_history)?g.move_history:[];
+  const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;const bug=g.variant==="bughouse"&&zhNext?bughouseTransfer(g.bughouse_board,color,zhState(g.zh_pockets,g.zh_promoted),zhNext):null;
+  if(bug?.gift){const mine={...zhNext.pockets[color]};mine[bug.gift.piece]=Math.max(0,Number(mine[bug.gift.piece]||0)-1);if(!mine[bug.gift.piece])delete mine[bug.gift.piece];zhNext={...zhNext,pockets:{...zhNext.pockets,[color]:mine}}} // the capture goes to the partner
+  let o:any=g.variant==="bughouse"&&zhNext?bughouseStatus(Chess,c,zhNext):zhNext?zhStatus(Chess,c,zhNext):outcome(c);const history=Array.isArray(g.move_history)?g.move_history:[];
+  if(g.variant==="bughouse")m={...m,san:String(m.san).replace(/[+#]$/,"")+(o.result!=="*"&&o.result!=="1/2-1/2"?"#":c.inCheck()?"+":"")};
   // Threefold repetition: each stored move keeps its position key (rules.js repetitionCount).
   const posKey=zhNext?null:positionKey(c.fen(),g.variant==="freestyle"?String(castling960||"-"):"");
   if(posKey&&o.result==="*"){const start=g.start_fen||START_FEN,startKey=positionKey(start,g.variant==="freestyle"?String(initialRights(start)||"-"):"");if(repetitionCount([...history,{k:posKey}],posKey,startKey,Number(c.fen().split(" ")[4]||0))>=3)o={status:"draw",result:"1/2-1/2",reason:"repetition"}}
   if(g.daily_days){wt=dailyMoveMs(g.daily_days);bt=wt} // each move gets the full days again
   const {data,error}=await admin.from("chess_games").update({
-    fen:c.fen(),pgn:o.result==="*"?(zhNext?"":c.pgn()):fullPgn(g,[...history,m],o.result,o.reason||null),...(zhNext?{zh_pockets:zhNext.pockets,zh_promoted:zhNext.promoted}:{}),...(o.result!=="*"?{end_reason:o.reason||null}:{}),move_history:[...history,{...(m.drop?{drop:m.drop}:{}),...(posKey?{k:posKey}:{}),from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,...(m.castle?{castle:true,rook_from:m.rook_from,rook_to:m.rook_to}:{}),client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
+    fen:c.fen(),pgn:o.result==="*"?(zhNext?"":c.pgn()):fullPgn(g,[...history,m],o.result,o.reason||null),...(zhNext?{...(g.variant==="bughouse"?{}:{zh_pockets:zhNext.pockets}),zh_promoted:zhNext.promoted}:{}),...(o.result!=="*"?{end_reason:o.reason||null}:{}),move_history:[...history,{...(m.drop?{drop:m.drop}:{}),...(posKey?{k:posKey}:{}),from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,...(m.castle?{castle:true,rook_from:m.rook_from,rook_to:m.rook_to}:{}),client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,...(castling960!==undefined?{castling960}:{}),
     white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,takeback_offer_by:null,takeback_offer_version:null,
     ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
   }).eq("id",g.id).eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("Move conflict. Syncing latest position.",409);
+  // Bughouse pockets change one piece at a time (both boards feed them), never by rewriting them.
+  if(bug){
+    if(bug.spent){const {data:pk,error:pe}=await admin.rpc("chess_bughouse_pocket",{p_game:g.id,p_color:color,p_piece:bug.spent,p_delta:-1});if(pe)console.error("bughouse pocket",pe);else data.zh_pockets=pk}
+    if(bug.gift)EdgeRuntime.waitUntil(bughouseGift(g,bug.gift).catch(e=>console.error("bughouse gift",e)));
+  }
   const nextGame=o.result==="*"?data:await settleRatings(data);
   // Daily games: the opponent may have planned a reply to exactly this move.
   if(g.daily_days&&o.result==="*"&&!b.conditional){const auto=await conditionalReply(nextGame,color,m).catch(e=>{console.error("conditional",e);return null});if(auto)return {...auto,move:m,conditionalReply:auto.move}}
@@ -410,6 +429,7 @@ function takebackPlies(g:any,requesterColor:string){
 function takebackAllowed(g:any){
   if(g.status!=="active")throw fail("Game is not active.",409);
   if(g.rated||g.bot_player_id||g.tournament_id)throw fail("Takebacks are for casual games between two players.",409);
+  if(g.variant==="bughouse"||g.variant==="crazyhouse")throw fail("Takebacks aren't available in drop games.",409);
 }
 async function takebackOffer(req:Request,b:any){
   const {p,g}=await assertGameParticipant(req,b);takebackAllowed(g);
@@ -747,7 +767,7 @@ const cleanSlug=(v:any)=>String(v||"").toLowerCase().trim().replace(/[^a-z0-9-]+
 const cleanClubName=(v:any)=>String(v||"").replace(/[<>\u0000-\u001F]/g,"").replace(/\s+/g," ").trim().slice(0,40);
 async function clubOf(playerId:string){const {data}=await admin.from("chess_club_members").select("club_id,role").eq("player_id",playerId).maybeSingle();return data}
 async function recountClub(id:string){const {count}=await admin.from("chess_club_members").select("player_id",{count:"exact",head:true}).eq("club_id",id);await admin.from("chess_clubs").update({member_count:Number(count||0)}).eq("id",id);return Number(count||0)}
-const clubCard=(c:any)=>({slug:c.slug,name:c.name,description:c.description,member_count:c.member_count,created_at:c.created_at});
+const clubCard=(c:any)=>({slug:c.slug,name:c.name,description:c.description,member_count:c.member_count,created_at:c.created_at,crest:cleanCrest(c.crest)});
 async function clubList(req:Request,b:any){
   let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
   const q=cleanClubName(b.q).replace(/[%_\\]/g,"");
@@ -853,9 +873,9 @@ async function publicProfile(req:Request,b:any){
     headToHead=r;
     const {data:f}=await admin.from("chess_follows").select("followee_id").eq("follower_id",viewer.id).eq("followee_id",t.id).maybeSingle();following=!!f;
   }
-  const m=await clubOf(t.id),club=m?await one("chess_clubs","id",m.club_id):null;
+  const m=await clubOf(t.id),club=m?await one("chess_clubs","id",m.club_id):null,moments=await momentsWonBy(t.id).catch(()=>[]);
   return {player:{id:t.id,username:t.username,country_code:t.country_code||null,avatar_data:t.avatar_data||null,ratings:t.ratings||{},provisional_games:t.provisional_games||{},wins:t.wins,losses:t.losses,draws:t.draws,rated_games:t.rated_games,puzzle_rating:Number(t.puzzle_rating||1200),achievements:Array.isArray(t.achievements)?t.achievements:[],league_division:Number(t.league_division||0),member_since:String(t.account_created_at||t.created_at||"").slice(0,7),suspended:!!t.banned_at,online:!!t.last_seen_at&&Date.now()-Date.parse(t.last_seen_at)<ONLINE_MS},
-    history,bestWins,recent:list.slice(-10).reverse().map(row),headToHead,following,self:viewer?.id===t.id,club:club?{slug:club.slug,name:club.name}:null,division:DIVISIONS[Number(t.league_division||0)]}
+    history,bestWins,recent:list.slice(-10).reverse().map(row),headToHead,following,self:viewer?.id===t.id,club:club?{slug:club.slug,name:club.name,crest:cleanCrest(club.crest)}:null,moments,division:DIVISIONS[Number(t.league_division||0)]}
 }
 // ---- Fair play ----
 async function reportPlayer(req:Request,b:any){
@@ -1122,7 +1142,7 @@ async function notificationsRead(req:Request,b:any){
 }
 // ---- Opening explorer from VCH games ----
 async function recordExplorer(g:any){
-  if(!g||g.result==="*"||g.bot_player_id||g.variant==="freestyle"||g.variant==="crazyhouse"||Number(g.move_count||0)<6)return;
+  if(!g||g.result==="*"||g.bot_player_id||g.variant!=="standard"||g.start_fen||Number(g.move_count||0)<6)return; // only standard games from the usual start
   const {data:claimed}=await admin.from("chess_games").update({explorer_at:nowIso()}).eq("id",g.id).is("explorer_at",null).select("id").maybeSingle();
   if(!claimed)return;
   const w=g.result==="1-0"?1:0,bl=g.result==="0-1"?1:0,d=g.result==="1/2-1/2"?1:0;
@@ -1471,10 +1491,10 @@ async function momentOfWeek(){
   const week=isoWeek();
   if(momentCache&&momentCache.week===week&&Date.now()-momentCache.at<600000)return {week,moment:momentCache.moment};
   let moment:any=null;
-  const {data:pick}=await admin.from("chess_moments").select("game_id,caption").eq("week",week).maybeSingle();
-  if(pick?.game_id){const g=await gameById(pick.game_id);const banned=g?await bannedAmong([g.white_player_id,g.black_player_id].filter(Boolean)):new Set();
+  const {data:pick}=await admin.from("chess_moments").select("game_id,caption,picked_by").eq("week",week).maybeSingle();
+  if(pick?.game_id&&pick.picked_by){const g=await gameById(pick.game_id);const banned=g?await bannedAmong([g.white_player_id,g.black_player_id].filter(Boolean)):new Set();
     if(g&&g.status!=="active"&&!banned.size)moment=momentCard(g,{caption:pick.caption||"Picked by the Vanta team",picked:true})}
-  if(!moment)moment=await momentAuto();
+  if(!moment){moment=await momentAuto();if(moment?.gameId&&!pick?.picked_by)EdgeRuntime.waitUntil(Promise.resolve(admin.from("chess_moments").upsert({week,game_id:moment.gameId,caption:moment.caption||null,picked_by:null,picked_at:nowIso()})).then(()=>{}))}
   momentCache={at:Date.now(),week,moment};
   return {week,moment}
 }
@@ -1486,6 +1506,169 @@ async function momentPick(req:Request,b:any){
   const caption=cleanChat(b.caption).slice(0,120)||null;
   const {error}=await admin.from("chess_moments").upsert({week,game_id:g.id,caption,picked_by:p.id,picked_at:nowIso()});if(error)throw error;
   return momentOfWeek()
+}
+
+
+// ======== Round 12: Vanta Bughouse, Twin Fates, club heraldry, Hall of Relics ========
+// ---- Vanta Bughouse (bughouse.js): two against two on two boards ----
+const BUGHOUSE_GAME_FIELDS=["id","invite_code","status","result","end_reason","fen","version","move_count","move_history","white_name","black_name","time_control_seconds","increment_seconds","white_time_ms","black_time_ms","last_move_at","started_at","ended_at","zh_pockets","zh_promoted","bughouse_board","variant"];
+const bughousePublicGame=(g:any)=>g?Object.fromEntries(BUGHOUSE_GAME_FIELDS.map(k=>[k,g[k]??null])):null;
+const cleanBughouseCode=(v:any)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10);
+async function bughouseByCode(code:any){const c=cleanBughouseCode(code);return c.length>=6?one("chess_bughouse","code",c):null}
+const bughouseSeatOf=(m:any,pid:string|null)=>pid?BUGHOUSE_SEATS.find(s=>m?.seats?.[s]?.id===pid)||null:null;
+async function bughouseView(m:any,viewerId:string|null){
+  const [a,bb]=await Promise.all([m.game_a?freshGame(m.game_a):null,m.game_b?freshGame(m.game_b):null]);
+  if(m.status==="active")m=(await one("chess_bughouse","id",m.id))||m; // a clock may just have ended it
+  const seats=Object.fromEntries(BUGHOUSE_SEATS.map(s=>[s,m.seats?.[s]?{name:m.seats[s].name,me:m.seats[s].id===viewerId}:null]));
+  return {bughouse:{id:m.id,code:m.code,status:m.status,seats,winner:m.winner||null,end_reason:m.end_reason||null,time_control_seconds:m.time_control_seconds,increment_seconds:m.increment_seconds,started_at:m.started_at,ended_at:m.ended_at},
+    games:{a:bughousePublicGame(a),b:bughousePublicGame(bb)},seat:bughouseSeatOf(m,viewerId)}
+}
+async function bughouseCreate(req:Request,b:any){
+  const p=await playerFor(req,b);assertAllowed(p);
+  const {count}=await admin.from("chess_bughouse").select("id",{count:"exact",head:true}).eq("created_by",p.id).eq("status","waiting");
+  if(Number(count||0)>=3)throw fail("You already have open Bughouse tables.",429);
+  const seconds=Math.max(60,Math.min(900,Math.round(Number(b.seconds||BUGHOUSE_DEFAULT_SECONDS)))),inc=Math.max(0,Math.min(15,Math.round(Number(b.increment||0))));
+  const seat=isSeat(b.seat)?b.seat:"aw";
+  let code=code8();while(await one("chess_bughouse","code",code))code=code8();
+  const {data,error}=await admin.from("chess_bughouse").insert({code,seats:{[seat]:{id:p.id,name:p.username||p.display_name}},time_control_seconds:seconds,increment_seconds:inc,created_by:p.id}).select().single();if(error)throw error;
+  return bughouseView(data,p.id)
+}
+// Takes (or switches to) a seat while the table fills; the fourth player starts both boards.
+async function bughouseJoin(req:Request,b:any){
+  const p=await playerFor(req,b);let m=await bughouseByCode(b.code);if(!m)throw fail("Bughouse table not found.",404);
+  for(let tries=0;tries<4;tries++){
+    const mine=bughouseSeatOf(m,p.id);
+    if(m.status!=="waiting"){if(mine)return bughouseView(m,p.id);throw fail("This match has already started.",409)}
+    const want=isSeat(b.seat)?b.seat:null;
+    if(mine&&(!want||want===mine||m.seats?.[want]))return bughouseView(await bughouseStart(m),p.id);
+    if(!mine)assertAllowed(p);
+    const free=BUGHOUSE_SEATS.filter(s=>!m.seats?.[s]);if(!free.length&&!mine)throw fail("All four seats are taken.",409);
+    const seat=want&&free.includes(want)?want:free[0];
+    const seats={...m.seats};if(mine)delete seats[mine];seats[seat]={id:p.id,name:p.username||p.display_name};
+    const {data}=await admin.from("chess_bughouse").update({seats,seat_version:Number(m.seat_version||0)+1}).eq("id",m.id).eq("status","waiting").eq("seat_version",Number(m.seat_version||0)).select().maybeSingle();
+    if(data){EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"seats"}));return bughouseView(await bughouseStart(data),p.id)}
+    m=(await one("chess_bughouse","id",m.id))||m; // someone else changed the seats: try again
+  }
+  throw fail("The table is busy. Try again.",409);
+}
+async function bughouseStart(m:any){
+  if(m.status!=="waiting"||BUGHOUSE_SEATS.some(s=>!m.seats?.[s]))return m;
+  const now=nowIso(),ms=Number(m.time_control_seconds)*1000;
+  const board=async(bd:string)=>{
+    let code=code8();while(await gameByCode(code))code=code8();
+    const w=m.seats[bd+"w"],bl=m.seats[bd+"b"];
+    const {data,error}=await admin.from("chess_games").insert({invite_code:code,white_player_id:w.id,black_player_id:bl.id,white_name:w.name,black_name:bl.name,fen:START_FEN,variant:"bughouse",pool:"bughouse",rated:false,source:"private",status:"active",result:"*",
+      zh_pockets:{w:{},b:{}},zh_promoted:[],time_control_seconds:Number(m.time_control_seconds),increment_seconds:Number(m.increment_seconds),white_time_ms:ms,black_time_ms:ms,last_move_at:now,started_at:now,white_last_seen_at:now,black_last_seen_at:now,bughouse_id:m.id,bughouse_board:bd}).select().single();
+    if(error)throw error;return data};
+  const [a,bb]=await Promise.all([board("a"),board("b")]);
+  const {data}=await admin.from("chess_bughouse").update({status:"active",game_a:a.id,game_b:bb.id,started_at:now}).eq("id",m.id).eq("status","waiting").eq("seat_version",Number(m.seat_version||0)).select().maybeSingle();
+  if(!data){await admin.from("chess_games").delete().in("id",[a.id,bb.id]);return (await one("chess_bughouse","id",m.id))||m} // another request started it first
+  EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"active"}));
+  return data
+}
+async function bughouseLeave(req:Request,b:any){
+  const p=await playerFor(req,b);const m=await bughouseByCode(b.code);if(!m)return {left:true};
+  const mine=bughouseSeatOf(m,p.id);if(!mine)return {left:true};
+  if(m.status!=="waiting")throw fail("The match has started: resign on your board instead.",409);
+  const seats={...m.seats};delete seats[mine];
+  if(!Object.keys(seats).length){await admin.from("chess_bughouse").delete().eq("id",m.id).eq("status","waiting");return {left:true}}
+  await admin.from("chess_bughouse").update({seats,seat_version:Number(m.seat_version||0)+1}).eq("id",m.id).eq("status","waiting").eq("seat_version",Number(m.seat_version||0));
+  EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"seats"}));
+  return {left:true}
+}
+async function bughouseState(req:Request,b:any){
+  let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
+  const m=await bughouseByCode(b.code);if(!m)throw fail("Bughouse table not found.",404);
+  return bughouseView(m,p?.id||null)
+}
+// A capture on one board lands in the partner's pocket on the other board.
+async function bughouseGift(g:any,gift:any){
+  const m=await one("chess_bughouse","id",g.bughouse_id);if(!m||m.status!=="active")return;
+  const target=gift.board==="a"?m.game_a:m.game_b;if(!target)return;
+  const {error}=await admin.rpc("chess_bughouse_pocket",{p_game:target,p_color:gift.color,p_piece:gift.piece,p_delta:1});if(error)throw error;
+  const other=await gameById(target);if(other)await broadcastGameState(other);
+}
+// The first board to end decides the match; the other board ends with it.
+async function bughouseFinish(g:any){
+  const m=await one("chess_bughouse","id",g.bughouse_id);if(!m||m.status!=="active")return;
+  const winner=matchWinner(g.bughouse_board,g.result);if(!winner)return;
+  const {data:room}=await admin.from("chess_bughouse").update({status:"finished",winner,end_reason:String(g.end_reason||"").slice(0,40)||null,ended_at:nowIso()}).eq("id",m.id).eq("status","active").select().maybeSingle();
+  if(!room)return;
+  const otherId=g.bughouse_board==="a"?m.game_b:m.game_a,other=otherId?await gameById(otherId):null;
+  if(other&&other.status==="active"){
+    const r=boardResultFor(otherBoard(g.bughouse_board),winner);
+    const {data:o}=await admin.from("chess_games").update({...r,end_reason:"partner",...endRecord(other,r.result,"partner"),version:Number(other.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",other.id).eq("status","active").select().maybeSingle();
+    if(o)EdgeRuntime.waitUntil(broadcastGameState(o));
+  }
+  EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"finished",winner}));
+}
+async function bughouseAbort(g:any){
+  const m=await one("chess_bughouse","id",g.bughouse_id);if(!m||m.status!=="active")return;
+  const {data:room}=await admin.from("chess_bughouse").update({status:"aborted",end_reason:"aborted",ended_at:nowIso()}).eq("id",m.id).eq("status","active").select().maybeSingle();if(!room)return;
+  const otherId=g.bughouse_board==="a"?m.game_b:m.game_a;
+  if(otherId){const {data:o}=await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"aborted",ended_at:nowIso(),updated_at:nowIso()}).eq("id",otherId).eq("status","active").select().maybeSingle();if(o)EdgeRuntime.waitUntil(broadcastGameState(o))}
+  EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"aborted"}));
+}
+// ---- Twin Fates: one famous position, played twice, once with each colour ----
+async function twinCreate(req:Request,b:any){
+  const fate=pickFate(String(b.fate||""));
+  const {data:twin,error}=await admin.from("chess_twins").insert({fate:fate.id,start_fen:fate.fen}).select().single();if(error)throw error;
+  let out:any;
+  try{out=await createGame(req,{seconds:b.seconds,increment:b.increment,name:b.name,rated:false,variant:"standard"},{startFen:fate.fen,twinId:twin.id,twinLeg:1})}
+  catch(e){await admin.from("chess_twins").delete().eq("id",twin.id);throw e}
+  await admin.from("chess_twins").update({game_1:out.game.id}).eq("id",twin.id);
+  return {...out,twin:await twinInfo(twin.id)}
+}
+// When the first leg ends, the second starts at once with the colours swapped.
+async function twinNext(g:any){
+  if(!g.white_player_id||!g.black_player_id)return null;
+  const {data:t}=await admin.from("chess_twins").update({status:"second"}).eq("id",g.twin_id).eq("status","first").select().maybeSingle();if(!t)return null;
+  const [w,bl]=await Promise.all([playerById(g.black_player_id),playerById(g.white_player_id)]);if(!w||!bl)return null;
+  const out=await createGame(req0,{seconds:g.time_control_seconds,increment:g.increment_seconds,rated:false,variant:"standard"},{players:[w,bl],startFen:t.start_fen,twinId:t.id,twinLeg:2});
+  await admin.from("chess_twins").update({game_2:out.game.id}).eq("id",t.id);
+  return out.game
+}
+const req0=new Request("https://vch.invalid/");
+async function twinInfo(id:string){
+  const t=await one("chess_twins","id",id);if(!t)return null;const fate=fateById(t.fate);
+  const legs=await Promise.all([t.game_1,t.game_2].map((gid:string|null)=>gid?gameById(gid):null));
+  const [l1,l2]=legs,score=l1?twinScore(l1.result,l2?.result||null):null;
+  if(l2&&["1-0","0-1","1/2-1/2"].includes(l2.result)&&t.status==="second")await admin.from("chess_twins").update({status:"finished"}).eq("id",t.id).eq("status","second");
+  return {id:t.id,fate:t.fate,title:fate?.title||"Twin Fates",note:fate?.note||"",status:l2&&["1-0","0-1","1/2-1/2"].includes(l2.result)?"finished":t.status,
+    legs:legs.map((g:any,i:number)=>g?{leg:i+1,id:g.id,code:g.invite_code,status:g.status,result:g.result,white:g.white_name,black:g.black_name}:null).filter(Boolean),
+    // "first" is whoever was White in the first leg
+    score:score&&l1?{first:{name:l1.white_name||"White",points:score.first},second:{name:l1.black_name||"Black",points:score.second},done:score.done}:null}
+}
+async function twinState(req:Request,b:any){
+  const p=await playerFor(req,b,false,{touch:false});const t=await one("chess_twins","id",String(b.twinId||""));if(!t)throw fail("Twin Fates match not found.",404);
+  const g1=t.game_1?await gameById(t.game_1):null;if(!g1||![g1.white_player_id,g1.black_player_id].includes(p.id))throw fail("Twin Fates match not found.",404);
+  return {twin:await twinInfo(t.id)}
+}
+// ---- Club heraldry: the owner (or an admin) sets the club's crest ----
+async function clubCrest(req:Request,b:any){
+  const p=await playerFor(req,b,true,{touch:false});const club=await one("chess_clubs","slug",cleanSlug(b.slug));if(!club)throw fail("Club not found.",404);
+  const m=await clubOf(p.id);if(p.role!=="admin"&&!(m&&m.club_id===club.id&&m.role==="owner"))throw fail("Only the club's owner can change its crest.",403);
+  const crest=b.crest===null?null:cleanCrest(b.crest);if(b.crest!==null&&!crest)throw fail("That crest can't be used.");
+  const {data,error}=await admin.from("chess_clubs").update({crest}).eq("id",club.id).select().single();if(error)throw error;
+  return {club:clubCard(data)}
+}
+async function clubsFor(ids:string[]){
+  const map=new Map<string,any>();if(!ids.length)return map;
+  const {data:mem}=await admin.from("chess_club_members").select("player_id,club_id").in("player_id",ids);
+  const cids=[...new Set((mem||[]).map((x:any)=>x.club_id))];if(!cids.length)return map;
+  const {data:clubs}=await admin.from("chess_clubs").select("id,slug,name,crest").in("id",cids);
+  const byId=new Map((clubs||[]).map((c:any)=>[c.id,{slug:c.slug,name:c.name,crest:cleanCrest(c.crest)}]));
+  for(const x of mem||[])if(byId.has(x.club_id))map.set(x.player_id,byId.get(x.club_id));
+  return map
+}
+// ---- Hall of Relics: the Moments of the Week a player won ----
+async function momentsWonBy(playerId:string){
+  const {data:rows}=await admin.from("chess_moments").select("week,game_id,caption").order("week",{ascending:false}).limit(60);
+  const ids=(rows||[]).map((r:any)=>r.game_id);if(!ids.length)return [];
+  const {data:games}=await admin.from("chess_games").select("id,white_player_id,black_player_id,white_name,black_name,result,fen").in("id",ids);
+  const byId=new Map((games||[]).map((g:any)=>[g.id,g]));
+  return (rows||[]).map((r:any)=>{const g:any=byId.get(r.game_id);if(!g)return null;const won=(g.result==="1-0"&&g.white_player_id===playerId)||(g.result==="0-1"&&g.black_player_id===playerId);
+    return won?{week:r.week,caption:r.caption||null,fen:g.fen,opponent:g.white_player_id===playerId?g.black_name:g.white_name}:null}).filter(Boolean).slice(0,12)
 }
 
 // Tournament lobby: standings, the current round's pairings, and live games to watch.
@@ -1513,6 +1696,7 @@ async function offerDraw(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);
   if(g.status!=="active")throw fail("Game is not active.",409);
   if(g.bot_player_id)throw fail("Draw offers are for human games.",409);
+  if(g.variant==="bughouse")throw fail("There are no draw offers in Bughouse.",409);
   if(p.id!==g.white_player_id&&p.id!==g.black_player_id)throw fail("Not your game.",403);
   if(g.draw_offer_by===p.id)return {game:g,offered:true};
   if(g.draw_offer_by&&g.draw_offer_by!==p.id)throw fail("Your opponent already offered a draw. Accept or reject it.",409);
@@ -1666,7 +1850,8 @@ async function gameState(req:Request,b:any){
   if(!raw)throw fail("Game not found.",404);
   const seat=raw.white_player_id===p.id?"w":raw.black_player_id===p.id?"b":null;
   if(!seat)throw fail("You are not a player in this game.",403);
-  return {game:await resolveTimeout(raw),player:publicPlayer(p),seat}
+  const game=await resolveTimeout(raw);
+  return {game,player:publicPlayer(p),seat,...(game.twin_id?{twin:await twinInfo(game.twin_id).catch(()=>null)}:{})}
 }
 async function queueJoin(req:Request,b:any){
   const p=await playerFor(req,b,!!b.rated);assertAllowed(p);const base=Math.max(30,Math.min(7200,Number(b.seconds||600))),inc=Math.max(0,Math.min(60,Number(b.increment||0)));let pool=poolFor(base,inc),rated=!!b.rated,tournament:any=null;
@@ -1851,6 +2036,14 @@ Deno.serve(async(req)=>{
       case "commentary_post":out=await commentaryPost(req,b);break;
       case "moment_of_week":out=await momentOfWeek();break;
       case "moment_pick":out=await momentPick(req,b);break;
+      case "bughouse_create":out=await bughouseCreate(req,b);break;
+      case "bughouse_join":out=await bughouseJoin(req,b);break;
+      case "bughouse_leave":out=await bughouseLeave(req,b);break;
+      case "bughouse_state":out=await bughouseState(req,b);break;
+      case "twin_create":out=await twinCreate(req,b);break;
+      case "twin_state":out=await twinState(req,b);break;
+      case "fates":out={fates:FATES.map(({id,title,note,fen})=>({id,title,note,fen}))};break;
+      case "club_crest":out=await clubCrest(req,b);break;
       case "takeback_respond":out=await takebackRespond(req,b);break;
       case "live_games":out=await liveGames();break;
       case "watch_state":out=await watchState(b);break;

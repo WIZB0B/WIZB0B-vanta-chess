@@ -353,7 +353,7 @@ export const PGN_START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
 const TERMINATION = {
   checkmate: 'checkmate', resign: 'resignation', timeout: 'time forfeit', abandoned: 'abandoned',
   agreement: 'draw by agreement', stalemate: 'stalemate', repetition: 'threefold repetition',
-  insufficient_material: 'insufficient material', fifty_moves: '50-move rule',
+  insufficient_material: 'insufficient material', fifty_moves: '50-move rule', partner: 'decided on the partner board',
 };
 const pgnText = (v, fallback) => String(v || fallback).replace(/["\\\u0000-\u001F]/g, '').slice(0, 64) || fallback;
 // The whole game as PGN, written whenever a game ends, however it ends (a move, resignation,
@@ -364,11 +364,12 @@ export function gamePgn(g = {}, moves = [], result = '*', endReason = null) {
   const variant = g.variant || 'standard', start = g.start_fen || PGN_START_FEN;
   const when = new Date(g.started_at || g.created_at || Date.now());
   const date = Number.isFinite(when.getTime()) ? when.toISOString().slice(0, 10).replace(/-/g, '.') : '????.??.??';
-  const event = variant === 'freestyle' ? 'VCH Freestyle' : variant === 'crazyhouse' ? 'VCH Crazyhouse' : g.rated ? 'VCH rated game' : 'VCH casual game';
+  const event = variant === 'freestyle' ? 'VCH Freestyle' : variant === 'crazyhouse' ? 'VCH Crazyhouse' : variant === 'bughouse' ? 'VCH Bughouse' : g.twin_id ? 'VCH Twin Fates' : g.rated ? 'VCH rated game' : 'VCH casual game';
   const tags = [['Event', event], ['Site', 'VCH'], ['Date', date], ['White', pgnText(g.white_name, 'White')], ['Black', pgnText(g.black_name, 'Black')], ['Result', result]];
   if (variant === 'freestyle') tags.push(['Variant', 'Chess960']);
   if (variant === 'crazyhouse') tags.push(['Variant', 'Crazyhouse']);
-  if (variant !== 'crazyhouse' && start !== PGN_START_FEN) tags.push(['SetUp', '1'], ['FEN', start]);
+  if (variant === 'bughouse') tags.push(['Variant', 'Bughouse'], ['Board', g.bughouse_board === 'b' ? 'B' : 'A']);
+  if (variant !== 'crazyhouse' && variant !== 'bughouse' && start !== PGN_START_FEN) tags.push(['SetUp', '1'], ['FEN', start]);
   if (!g.daily_days && Number(g.time_control_seconds) > 0) tags.push(['TimeControl', `${Number(g.time_control_seconds)}+${Number(g.increment_seconds || 0)}`]);
   if (TERMINATION[endReason]) tags.push(['Termination', TERMINATION[endReason]]);
   const [, turn, , , , full] = start.split(' ');
@@ -388,3 +389,50 @@ export function gamePgn(g = {}, moves = [], result = '*', endReason = null) {
 }
 // Records from before every ending wrote the full game hold only the last move.
 export function isFullPgn(pgn) { return /^\[Event /.test(String(pgn || '')); }
+
+// ---- Twin Fates (round 12) ----
+// Both players get the same famous position and play it twice, once with each colour; the
+// combined score wins. A lopsided position is still fair, because each player gets both sides.
+// Positions come from the famous games in the app and from classic opening tabiyas (each FEN is
+// checked against its moves in test/round12-server.test.js).
+export const FATES = [
+  { id: 'opera', title: 'The Opera box', note: 'Morphy vs the Duke and the Count, Paris 1858, after 8...c6', fen: 'rn2kb1r/pp2qppp/2p2n2/4p3/2B1P3/1QN5/PPP2PPP/R1B1K2R w KQkq - 0 9' },
+  { id: 'immortal', title: 'The Immortal Game', note: 'Anderssen vs Kieseritzky, London 1851, after 8...Qg5', fen: 'rnb1kb1r/p1pp1ppp/8/1B4qn/4Pp1N/3P4/PPP3PP/RNBQ1K1R w kq - 3 9' },
+  { id: 'century', title: 'Game of the Century', note: 'Byrne vs Fischer, New York 1956, after 11...Na4', fen: 'r2q1rk1/pp2ppbp/2p2np1/2Q3B1/n2PP1b1/2N2N2/PP3PPP/3RKB1R w K - 7 12' },
+  { id: 'kasparov', title: "Kasparov's Immortal", note: 'Kasparov vs Topalov, Wijk aan Zee 1999, after 18...Ba8', fen: 'bk1r3r/4qp1p/pn1p1npQ/Npp5/4P3/P1N2PP1/1PP4P/1K1R1B1R w - - 3 19' },
+  { id: 'deep-blue', title: 'Deep Blue, game 6', note: 'Deep Blue vs Kasparov, New York 1997, after 7...h6', fen: 'r1bqkb1r/pp1n1pp1/2p1pn1p/6N1/3P4/3B1N2/PPP2PPP/R1BQK2R w KQkq - 0 8' },
+  { id: 'najdorf', title: 'The Najdorf', note: 'The Sicilian at its sharpest, after 5...a6', fen: 'rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6' },
+  { id: 'kings-indian', title: "King's Indian Classical", note: 'Closed centre, races on both wings, after 8...Ne7', fen: 'r1bq1rk1/ppp1npbp/3p1np1/3Pp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 1 9' },
+  { id: 'marshall', title: 'The Marshall Attack', note: 'Black gives a pawn for the attack, after 8...d5', fen: 'r1bq1rk1/2p1bppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - - 0 9' },
+  { id: 'winawer', title: 'The Winawer', note: 'French Defence, bishop pair against structure, after 6...Ne7', fen: 'rnbqk2r/pp2nppp/4p3/2ppP3/3P4/P1P5/2P2PPP/R1BQKBNR w KQkq - 1 7' },
+  { id: 'orthodox', title: "Queen's Gambit Orthodox", note: 'The classical main line, after 6...Nbd7', fen: 'r1bq1rk1/pppnbppp/4pn2/3p2B1/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQ - 3 7' },
+  { id: 'dragon', title: 'The Yugoslav Dragon', note: 'Opposite-side castling, both kings under fire, after 10.O-O-O', fen: 'r2q1rk1/pp1bppbp/2np1np1/8/2BNP3/2N1BP2/PPPQ2PP/2KR3R b - - 6 10' },
+];
+export const fateById = id => FATES.find(f => f.id === id) || null;
+export function pickFate(id, rand = Math.random) { return fateById(id) || FATES[Math.floor(rand() * FATES.length) % FATES.length]; }
+// The combined score of a twin match for the player who was White in the first leg.
+export function twinScore(leg1Result, leg2Result) {
+  const s = (r, asWhite) => (r === '1/2-1/2' ? 0.5 : r === (asWhite ? '1-0' : '0-1') ? 1 : 0);
+  const first = s(leg1Result, true), second = leg2Result ? s(leg2Result, false) : 0;
+  const done = ['1-0', '0-1', '1/2-1/2'].includes(leg1Result) && ['1-0', '0-1', '1/2-1/2'].includes(leg2Result);
+  return { first: first + second, second: (['1-0', '0-1', '1/2-1/2'].includes(leg1Result) ? 1 - first : 0) + (leg2Result && ['1-0', '0-1', '1/2-1/2'].includes(leg2Result) ? 1 - second : 0), done };
+}
+
+// ---- Club heraldry (round 12) ----
+// A crest: shield shape, a division of the field in two tinctures, and a charge in a third.
+// Stored on the club as a small object; anything else is refused.
+export const CREST_SHIELDS = ['heater', 'round', 'kite', 'swiss'];
+export const CREST_DIVISIONS = ['plain', 'pale', 'fess', 'bend', 'quarterly', 'chevron', 'saltire'];
+export const CREST_TINCTURES = ['or', 'argent', 'azure', 'gules', 'vert', 'sable', 'purpure', 'teal'];
+export const CREST_CHARGES = ['none', 'knight', 'rook', 'crown', 'king', 'star', 'crescent', 'sword', 'swords'];
+export const DEFAULT_CREST = { shield: 'heater', division: 'plain', field: 'sable', field2: 'or', charge: 'knight', ink: 'or' };
+export function cleanCrest(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const pick = (val, list) => (list.includes(val) ? val : null);
+  const out = {
+    shield: pick(v.shield, CREST_SHIELDS), division: pick(v.division, CREST_DIVISIONS),
+    field: pick(v.field, CREST_TINCTURES), field2: pick(v.field2, CREST_TINCTURES),
+    charge: pick(v.charge, CREST_CHARGES), ink: pick(v.ink, CREST_TINCTURES),
+  };
+  return Object.values(out).every(Boolean) ? out : null;
+}
