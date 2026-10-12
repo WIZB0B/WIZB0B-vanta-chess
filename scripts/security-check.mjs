@@ -41,6 +41,21 @@ for (const asset of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wa
   if (!existsSync(join('public/engines', asset))) failures.push(`prepared Stockfish asset missing: ${asset}`);
 }
 if (existsSync('public/engines/Copying.txt') && !readFileSync('public/engines/Copying.txt', 'utf8').includes('GNU GENERAL PUBLIC LICENSE')) failures.push('prepared Stockfish GPL license is invalid');
+// Multi-variant Stockfish (Crazyhouse): pinned, WebAssembly only, no eval, no other engine builds.
+if (packageJson.dependencies?.['stockfish.js'] !== '10.0.2') failures.push('multi-variant Stockfish dependency must be pinned to stockfish.js 10.0.2');
+for (const asset of ['stockfish-mv-10.js', 'stockfish-mv-10.wasm', 'README-stockfish-mv-10.md']) {
+  if (!existsSync(join('public/engines', asset))) failures.push(`prepared multi-variant Stockfish asset missing: ${asset}`);
+}
+if (existsSync('public/engines/stockfish-mv-10.js')) {
+  const loader = readFileSync('public/engines/stockfish-mv-10.js', 'utf8');
+  if (/\beval\s*\(|\bFunction\s*\(/.test(loader)) failures.push('multi-variant Stockfish loader must not use eval or the Function constructor');
+  if (!loader.includes('wasmBinaryFile="stockfish-mv-10.wasm"')) failures.push('multi-variant Stockfish loader must fetch stockfish-mv-10.wasm');
+}
+const shippedEngines = new Set(['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-mv-10.js', 'stockfish-mv-10.wasm']);
+for (const directory of ['public/engines', 'dist/engines']) {
+  if (!existsSync(directory)) continue;
+  for (const name of readdirSync(directory)) if (/\.(js|wasm)$/.test(name) && !shippedEngines.has(name)) failures.push(`${directory}/${name}: only the Stockfish 19 lite single and multi-variant WebAssembly builds may ship (no asm.js fallback)`);
+}
 const vchAssets = [
   'pieces/wk.webp','pieces/wq.webp','pieces/wr.webp','pieces/wb.webp','pieces/wn.webp','pieces/wp.webp',
   'pieces/bk.webp','pieces/bq.webp','pieces/br.webp','pieces/bb.webp','pieces/bn.webp','pieces/bp.webp',

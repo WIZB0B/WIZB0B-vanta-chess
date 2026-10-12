@@ -10,3 +10,6 @@ public/engines/stockfish-19-lite-single.wasm
 public/engines/Copying.txt
 public/engines/README.md
 public/engines/.prepared
+public/engines/stockfish-mv-10.js
+public/engines/stockfish-mv-10.wasm
+public/engines/README-stockfish-mv-10.md

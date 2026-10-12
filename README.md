@@ -35,3 +35,9 @@ GPLv3 license into the gitignored `public/engines/` runtime directory; no engine
 binary is stored in the Git patch or fetched from a CDN at runtime. Exact source
 links remain in `public/engines/SOURCE.md`. The worker fails closed and never
 substitutes random moves while presenting them as Stockfish.
+
+Crazyhouse needs piece drops, which Stockfish 19 does not play. The pinned
+`stockfish.js@10.0.2` dependency (GPLv3 multi-variant Stockfish, single-threaded
+WebAssembly) is prepared the same way into `public/engines/stockfish-mv-10.*` and
+driven by `public/variant.worker.js`; `src/variant-engine.js` builds its positions
+(holdings in brackets, `~` after promoted pieces) and reads its drop moves (`N@f3`).

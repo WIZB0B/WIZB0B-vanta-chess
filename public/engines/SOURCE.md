@@ -16,3 +16,31 @@ lite build avoids cross-origin-isolation requirements while retaining Stockfish
 
 Run `npm run prepare:stockfish` to materialize the runtime files. No engine file
 is fetched from a CDN at runtime.
+
+# Multi-variant Stockfish (Crazyhouse) browser distribution
+
+Stockfish 19 cannot play variants with piece drops. For Crazyhouse (and Bughouse
+boards, searched as Crazyhouse) the build prepares `stockfish-mv-10.js` and
+`stockfish-mv-10.wasm` locally from the pinned GPL-3.0 `stockfish.js@10.0.2` npm
+dependency: the multi-variant Stockfish fork (Stockfish 2019-08-15 Multi-Variant,
+by D. Dugovic, F. Fichter et al.) compiled to single-threaded WebAssembly by
+Niklas Fiekas with Emscripten. `/variant.worker.js` drives it. The generated files
+and the package README (`README-stockfish-mv-10.md`) are gitignored like the
+Stockfish 19 files:
+
+- Browser port/source: <https://github.com/niklasf/stockfish.js/tree/ddugovic>
+- Upstream multi-variant Stockfish source: <https://github.com/ddugovic/Stockfish>
+- Exact npm source archive: <https://registry.npmjs.org/stockfish.js/-/stockfish.js-10.0.2.tgz>
+  (`sha512-treB3AYcdvRJ9SDPOyL0R2NcEAtQgG432nStfRzR4wzVELGQ6iVoeBHwvirHTfocNOTims7XNkK3SADaocsJmQ==`)
+
+Only the package's WebAssembly build is shipped: `stockfish.wasm.js` as
+`stockfish-mv-10.js` and `stockfish.wasm` as `stockfish-mv-10.wasm`. Its asm.js
+fallback (`stockfish.js`) is not. `scripts/prepare-variant-engine.mjs` checks both
+files against pinned SHA-256 digests and makes one change to the loader, recorded
+in a notice at its top (2026-10-12): the WebAssembly file name it fetches,
+`stockfish.wasm`, becomes `stockfish-mv-10.wasm`. The `.wasm` binary is unmodified.
+The package's GPLv3 text is byte-identical to `Copying.txt` above, which covers
+both engines. The loader uses neither `eval` nor `new Function`, so it runs under
+the site CSP with only `'wasm-unsafe-eval'`, and it needs no SharedArrayBuffer.
+
+Run `npm run prepare:variant-engine` to materialize these runtime files.
