@@ -46,11 +46,59 @@ export function classifyMove({beforeCp=0,afterCp=0,color='w',isBook=false,isBest
   return 'good';
 }
 
+// Accuracy, as Lichess publishes it (https://lichess.org/page/accuracy). A move's accuracy
+// falls exponentially with the winning chances it gives away (a curve fitted so a 20-point drop
+// scores about 42 and a 60-point drop about 5; one point is added for engine uncertainty). A
+// game's accuracy is the average of two means of its moves' accuracies: one weighted by how
+// volatile the position was around each move (calm moves count less), and the harmonic mean,
+// which a few bad moves pull down hard. The earlier VCH formula (100*e^(-0.04*mean loss)) was
+// our own and read far too high.
+export function moveAccuracy(loss=0){
+  const drop=Math.max(0,finite(loss));
+  if(drop<=0)return 100;
+  return clamp(103.1668100711649*Math.exp(-0.04354415386753951*drop)-3.166924740191411+1,0,100);
+}
+const mean=values=>values.reduce((sum,value)=>sum+value,0)/values.length;
+const harmonicMean=values=>values.length/values.reduce((sum,value)=>sum+1/Math.max(1,value),0);
+function standardDeviation(values){
+  if(values.length<2)return 0;
+  const m=mean(values);
+  return Math.sqrt(values.reduce((sum,value)=>sum+(value-m)**2,0)/values.length);
+}
+// Without the positions' win chances (only each move's loss): the plain mean stands in for the
+// weighted one.
 export function accuracyFromLosses(losses=[]){
   const values=losses.map(finite).filter(value=>value>=0);
   if(!values.length)return 100;
-  const average=values.reduce((sum,value)=>sum+value,0)/values.length;
-  return clamp(100*Math.exp(-0.04*average),0,100);
+  const accuracies=values.map(moveAccuracy);
+  return clamp((mean(accuracies)+harmonicMean(accuracies))/2,0,100);
+}
+// Both sides' accuracy from White-view evaluations: `cps` holds the centipawns before the first
+// move and after every move (length = moves + 1; mates as large numbers). `start` is the side
+// that made the first move. Returns {w, b}; a side with no moves gets null.
+export function gameAccuracy(cps=[],start='w'){
+  const wins=cps.map(cp=>lichessWinPercent(cp)),moves=wins.length-1;
+  if(moves<1)return {w:null,b:null};
+  const size=clamp(Math.floor(moves/10),2,8);
+  // One window per move: the first few repeat the opening stretch, then the window slides.
+  const windows=[];
+  for(let i=0;i<Math.min(size,wins.length)-2;i++)windows.push(wins.slice(0,size));
+  for(let i=0;i+size<=wins.length;i++)windows.push(wins.slice(i,i+size));
+  if(!windows.length)windows.push(wins);
+  const by={w:[],b:[]};
+  for(let i=0;i<moves;i++){
+    const color=(i%2===0)===(start==='w')?'w':'b';
+    const before=color==='w'?wins[i]:100-wins[i],after=color==='w'?wins[i+1]:100-wins[i+1];
+    const weight=clamp(standardDeviation(windows[Math.min(i,windows.length-1)]),0.5,12);
+    by[color].push({accuracy:moveAccuracy(before-after),weight});
+  }
+  const side=list=>{
+    if(!list.length)return null;
+    const total=list.reduce((sum,x)=>sum+x.weight,0);
+    const weighted=list.reduce((sum,x)=>sum+x.accuracy*x.weight,0)/total;
+    return clamp((weighted+harmonicMean(list.map(x=>x.accuracy)))/2,0,100);
+  };
+  return {w:side(by.w),b:side(by.b)};
 }
 
 export function classificationAsset(key){

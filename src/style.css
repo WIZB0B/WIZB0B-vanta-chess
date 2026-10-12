@@ -3151,3 +3151,20 @@ body.puzzle-mode .player time{visibility:hidden}
 @keyframes fog-drift{0%{transform:translate(-12%,-6%) scale(1)}50%{transform:translate(6%,4%) scale(1.12)}100%{transform:translate(12%,-4%) scale(1.04)}}
 @media (prefers-reduced-motion:reduce){.board.vanta-dark .square.fog:not(.legal)::after,.board .square.checker::before{animation:none}}
 :root[data-glass="clear"] .board.vanta-dark .square.fog:not(.legal)::after{animation:none}
+/* Sweep fixes: the home hero grows with its text instead of clipping it (narrow left panels
+   between 1181 and 1500px wrap the title onto three lines). */
+.lpanel .hero{height:auto}
+@media (min-width:1181px) and (max-width:1500px){.lpanel .hero h1{font-size:40px!important}.lpanel .hero p{max-width:72%!important}}
+/* Arena cards: the details read top to bottom (badge, format, name, time, rules); only the
+   buttons share a row. */
+.arena-list article.arena-card>div:first-child{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px}
+.arena-list article.arena-card>div:first-child>*{margin:0}
+.arena-list article.arena-card>div:first-child h4{font-size:16px;line-height:1.2}
+.arena-list article.arena-card .arena-rules{color:#93a29d;font-size:11px;line-height:1.45}
+.arena-list article.arena-card>div:last-of-type{flex-wrap:wrap;margin-top:8px}
+/* A Campaign boss, Gauntlet rung or Your Shadow is on the board: say so, and stop showing the
+   regular opponent and variant as picked. */
+.special-opponent{margin:0 0 10px;padding:9px 11px;border:1px solid rgba(229,193,124,.45);border-radius:9px;background:rgba(229,193,124,.08);color:#f2dfaf;font-size:11px;line-height:1.45}
+.computer-view.special-game #botGrid .bot-card.on,.computer-view.special-game .computer-variant button.on{border-color:var(--line,#ffffff18)!important;background:transparent!important;box-shadow:none!important}
+/* Puzzles have nothing to resign (sweep fix). */
+body.puzzle-board #resign{display:none}

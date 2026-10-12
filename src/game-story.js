@@ -1,5 +1,5 @@
 import { Chess } from 'chess.js';
-import { accuracyFromLosses } from './review.js';
+import { accuracyFromLosses, gameAccuracy } from './review.js';
 
 // Game archive and "Game Story": every finished game can be reopened, reviewed and replayed
 // as a story told in chapters (opening, middlegame, endgame), with its turning points and a
@@ -109,8 +109,14 @@ export function storyChapters(positions = [], bookFlags = []) {
   if (endgameStart <= plies) chapters.push({ key: 'endgame', title: 'Endgame', from: endgameStart, to: plies });
   return chapters.filter(c => c.to >= c.from);
 }
-// Accuracy of one side inside a chapter (plies are 1-based; results are per move).
+// Accuracy of one side inside a chapter (plies are 1-based; results are per move), by the
+// Lichess formula (src/review.js). Uses the evaluations when the review kept them.
 export function chapterAccuracy(results = [], moves = [], chapter, color) {
+  const slice = results.slice(chapter.from - 1, chapter.to), mine = moves.slice(chapter.from - 1, chapter.to);
+  if (!mine.some(m => m?.color === color)) return null;
+  if (slice.length && slice.every(r => Number.isFinite(r?.beforeCp) && Number.isFinite(r?.afterCp))) {
+    return gameAccuracy([slice[0].beforeCp, ...slice.map(r => r.afterCp)], mine[0]?.color === 'b' ? 'b' : 'w')[color];
+  }
   const losses = [];
   for (let ply = chapter.from; ply <= chapter.to; ply++) if (moves[ply - 1]?.color === color) losses.push(results[ply - 1]?.loss ?? 0);
   return losses.length ? accuracyFromLosses(losses) : null;
