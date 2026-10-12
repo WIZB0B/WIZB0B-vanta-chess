@@ -29,5 +29,5 @@ test('moment of the week: server actions, admin-only pick, banned players exclud
   assert.match(sql, /using \(false\) with check \(false\)/);
 });
 test('history tells matched-bot games apart (Rivals skips them)', () => {
-  assert.match(fn, /async function gameHistory[\s\S]{0,700}move_history,bot_player_id"\)/);
+  assert.match(fn, /async function gameHistory[\s\S]{0,700}move_history,bot_player_id,end_reason"\)/);
 });

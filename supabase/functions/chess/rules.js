@@ -320,3 +320,71 @@ export function momentScore({ fen, result, mate = false, plies = 0 }) {
 export function momentCaption({ down = 0, moves = 0 } = {}) {
   return down > 0 ? `Checkmate while ${down} ${down === 1 ? 'point' : 'points'} down` : `Checkmate in ${moves} moves`;
 }
+
+// ---- Game endings and records ----
+// Why a finished board ended the game (end_reason). Threefold repetition is counted across the
+// game's stored positions (repetitionCount), because the server rebuilds each board from a FEN
+// and chess.js alone can't see earlier positions.
+export function boardEndReason(c) {
+  if (c.isCheckmate()) return 'checkmate';
+  if (c.isStalemate()) return 'stalemate';
+  if (c.isInsufficientMaterial()) return 'insufficient_material';
+  if (c.isThreefoldRepetition()) return 'repetition';
+  if (c.isDrawByFiftyMoves()) return 'fifty_moves';
+  return null;
+}
+// A position for repetition: placement, side to move, castling and en passant (chess.js only
+// writes an en-passant square when the capture is possible). Freestyle adds its own castling
+// rights, which live beside the FEN.
+export function positionKey(fen, extra = '') { const k = explorerKey(fen); return extra ? `${k} ${extra}` : k; }
+// How often the current position has occurred. `history` ends with the move just played; each
+// move stores `k`, the key after it. Only positions since the last capture or pawn move (the
+// FEN's half-move clock) can match, plus the position right before that run.
+export function repetitionCount(history = [], currentKey = '', startKey = '', halfmove = 0) {
+  if (!currentKey) return 1;
+  const n = history.length, run = Math.max(0, Math.min(Number(halfmove) || 0, n));
+  let count = 0;
+  for (let i = n - run; i < n; i++) if (history[i]?.k === currentKey) count++;
+  const before = n - run - 1 >= 0 ? history[n - run - 1]?.k : startKey;
+  if (before === currentKey) count++;
+  return Math.max(1, count);
+}
+export const PGN_START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const TERMINATION = {
+  checkmate: 'checkmate', resign: 'resignation', timeout: 'time forfeit', abandoned: 'abandoned',
+  agreement: 'draw by agreement', stalemate: 'stalemate', repetition: 'threefold repetition',
+  insufficient_material: 'insufficient material', fifty_moves: '50-move rule',
+};
+const pgnText = (v, fallback) => String(v || fallback).replace(/["\\\u0000-\u001F]/g, '').slice(0, 64) || fallback;
+// The whole game as PGN, written whenever a game ends, however it ends (a move, resignation,
+// time, agreement, an abandoned game). Built from the stored SAN, so it works for every variant
+// (chess.js can't replay Chess960 castles or Crazyhouse drops).
+/** @param {any} g @param {any[]} moves @param {string} result @param {string|null} [endReason] */
+export function gamePgn(g = {}, moves = [], result = '*', endReason = null) {
+  const variant = g.variant || 'standard', start = g.start_fen || PGN_START_FEN;
+  const when = new Date(g.started_at || g.created_at || Date.now());
+  const date = Number.isFinite(when.getTime()) ? when.toISOString().slice(0, 10).replace(/-/g, '.') : '????.??.??';
+  const event = variant === 'freestyle' ? 'VCH Freestyle' : variant === 'crazyhouse' ? 'VCH Crazyhouse' : g.rated ? 'VCH rated game' : 'VCH casual game';
+  const tags = [['Event', event], ['Site', 'VCH'], ['Date', date], ['White', pgnText(g.white_name, 'White')], ['Black', pgnText(g.black_name, 'Black')], ['Result', result]];
+  if (variant === 'freestyle') tags.push(['Variant', 'Chess960']);
+  if (variant === 'crazyhouse') tags.push(['Variant', 'Crazyhouse']);
+  if (variant !== 'crazyhouse' && start !== PGN_START_FEN) tags.push(['SetUp', '1'], ['FEN', start]);
+  if (!g.daily_days && Number(g.time_control_seconds) > 0) tags.push(['TimeControl', `${Number(g.time_control_seconds)}+${Number(g.increment_seconds || 0)}`]);
+  if (TERMINATION[endReason]) tags.push(['Termination', TERMINATION[endReason]]);
+  const [, turn, , , , full] = start.split(' ');
+  let n = Number(full) || 1, side = turn === 'b' ? 'b' : 'w';
+  const tokens = [];
+  moves.forEach((m, i) => {
+    const san = String(m?.san || '').trim(); if (!san) return;
+    if (side === 'w') tokens.push(`${n}.`, san); else tokens.push(...(i === 0 ? [`${n}...`, san] : [san]));
+    if (side === 'b') n++;
+    side = side === 'w' ? 'b' : 'w';
+  });
+  tokens.push(result);
+  const lines = []; let line = '';
+  for (const t of tokens) { if (line && line.length + 1 + t.length > 79) { lines.push(line); line = t; } else line = line ? `${line} ${t}` : t; }
+  if (line) lines.push(line);
+  return `${tags.map(([k, v]) => `[${k} "${v}"]`).join('\n')}\n\n${lines.join('\n')}`;
+}
+// Records from before every ending wrote the full game hold only the last move.
+export function isFullPgn(pgn) { return /^\[Event /.test(String(pgn || '')); }

@@ -1409,8 +1409,12 @@ function scheduleFlagPrompt(){
   if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending)return;
   scheduleFlagPrompt.pending=true;setTimeout(showFlagPrompt,2500);
 }
+// The flag prompt never interrupts a game or a conversation: it waits for a quiet moment, and
+// steps aside (to come back later) if a game starts or the chat opens while it is showing.
+function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')}
 function showFlagPrompt(){
   if(flagPromptDone()||currentProfile?.country_code||document.querySelector('.flag-prompt'))return;
+  if(!flagPromptCalm()){setTimeout(showFlagPrompt,6000);return}
   const card=document.createElement('section');card.className='flag-prompt';card.setAttribute('role','dialog');card.setAttribute('aria-label','Show your country flag');
   card.innerHTML=`<b>Show your country flag?</b><p>Opponents see it beside your name. "Detect" looks up only your country from your connection; we keep the 2-letter code, never your IP address.</p><div><button type="button" data-flag="detect" class="primary">Detect my country</button><button type="button" data-flag="choose">Choose myself</button><button type="button" data-flag="no">No thanks</button></div>`;
   const done=()=>{try{localStorage.setItem('vanta.flagPrompt','1')}catch{}card.remove()};
@@ -1422,6 +1426,10 @@ function showFlagPrompt(){
     catch(error){done();toast(error.message);void openProfileEditor()}
   });
   document.body.append(card);
+  const watch=setInterval(()=>{
+    if(!card.isConnected){clearInterval(watch);return}
+    if(!flagPromptCalm()){clearInterval(watch);card.remove();setTimeout(showFlagPrompt,6000)}
+  },700);
 }
 async function openProfileEditor(){
   const account=!!authSession?.access_token&&!!currentProfile?.account;

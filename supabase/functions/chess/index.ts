@@ -5,6 +5,7 @@ import { applyCastle, castleOptions, initialRights, replay960, rightsAfterCastle
 import { zhPlay, zhState, zhStatus } from "./crazyhouse.js";
 import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } from "./rules.js";
 import { MOMENT_DAYS, MOMENT_MIN_PLIES, momentCaption, momentScore } from "./rules.js";
+import { boardEndReason, gamePgn, isFullPgn, positionKey, repetitionCount } from "./rules.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
@@ -66,7 +67,9 @@ const ownPlayer=(p:any)=>({...publicPlayer(p),avatar_data:p.avatar_data||null,be
 // Portraits: small inline images only (data: URLs, so the site's CSP needs no new origin).
 const AVATAR_MAX=48000;
 const AVATAR_RE=/^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+\/]+={0,2}$/;
-const outcome=(c:Chess)=>!c.isGameOver()?{status:"active",result:"*"}:c.isCheckmate()?(c.turn()==="w"?{status:"black_won",result:"0-1"}:{status:"white_won",result:"1-0"}):{status:"draw",result:"1/2-1/2"};
+const outcome=(c:Chess):any=>!c.isGameOver()?{status:"active",result:"*"}:c.isCheckmate()?(c.turn()==="w"?{status:"black_won",result:"0-1",reason:"checkmate"}:{status:"white_won",result:"1-0",reason:"checkmate"}):{status:"draw",result:"1/2-1/2",reason:boardEndReason(c)};
+// Every ending writes the whole game (rules.js gamePgn), whatever ended it.
+const endRecord=(g:any,result:string,reason:string|null)=>({pgn:fullPgn(g,Array.isArray(g.move_history)?g.move_history:[],result,reason)});
 const expected=(ra:number,rb:number)=>1/(1+Math.pow(10,(rb-ra)/400));
 const scoreFor=(result:string,color:string)=>result==="1/2-1/2"?.5:(result===(color==="w"?"1-0":"0-1")?1:0);
 const searchRange=(seconds:number)=>seconds<10?75:seconds<20?125:seconds<35?200:seconds<50?300:seconds<75?450:800;
@@ -272,7 +275,7 @@ async function resolveTimeout(g:any){
   const patch=!sideCanPossiblyMate(c,winner)
     ?{status:"draw",result:"1/2-1/2",...(side==="w"?{white_time_ms:0}:{black_time_ms:0})}
     :(side==="w"?{status:"black_won",result:"0-1",white_time_ms:0}:{status:"white_won",result:"1-0",black_time_ms:0});
-  const {data}=await admin.from("chess_games").update({...patch,end_reason:"timeout",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();
+  const {data}=await admin.from("chess_games").update({...patch,...endRecord(g,patch.result,"timeout"),end_reason:"timeout",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();
   return data?settleRatings(data):g
 }
 async function freshGame(id:string){return resolveTimeout(await gameById(id))}
@@ -324,10 +327,13 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
     EdgeRuntime.waitUntil(broadcastGameState(timedOutGame));
     return {game:timedOutGame,move:null,timedOut:true};
   }
-  const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;const o=zhNext?zhStatus(Chess,c,zhNext):outcome(c),history=Array.isArray(g.move_history)?g.move_history:[];
+  const bonus=Number(g.increment_seconds||0)*1000;if(color==="w")wt+=bonus;else bt+=bonus;let o:any=zhNext?zhStatus(Chess,c,zhNext):outcome(c);const history=Array.isArray(g.move_history)?g.move_history:[];
+  // Threefold repetition: each stored move keeps its position key (rules.js repetitionCount).
+  const posKey=zhNext?null:positionKey(c.fen(),g.variant==="freestyle"?String(castling960||"-"):"");
+  if(posKey&&o.result==="*"){const start=g.start_fen||START_FEN,startKey=positionKey(start,g.variant==="freestyle"?String(initialRights(start)||"-"):"");if(repetitionCount([...history,{k:posKey}],posKey,startKey,Number(c.fen().split(" ")[4]||0))>=3)o={status:"draw",result:"1/2-1/2",reason:"repetition"}}
   if(g.daily_days){wt=dailyMoveMs(g.daily_days);bt=wt} // each move gets the full days again
   const {data,error}=await admin.from("chess_games").update({
-    fen:c.fen(),pgn:o.result==="*"?(zhNext?"":c.pgn()):fullPgn(g,[...history,m],o.result),...(zhNext?{zh_pockets:zhNext.pockets,zh_promoted:zhNext.promoted,...(o.result!=="*"?{end_reason:(o as any).reason}:{})}:{}),move_history:[...history,{...(m.drop?{drop:m.drop}:{}),from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,...(m.castle?{castle:true,rook_from:m.rook_from,rook_to:m.rook_to}:{}),client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
+    fen:c.fen(),pgn:o.result==="*"?(zhNext?"":c.pgn()):fullPgn(g,[...history,m],o.result,o.reason||null),...(zhNext?{zh_pockets:zhNext.pockets,zh_promoted:zhNext.promoted}:{}),...(o.result!=="*"?{end_reason:o.reason||null}:{}),move_history:[...history,{...(m.drop?{drop:m.drop}:{}),...(posKey?{k:posKey}:{}),from:m.from,to:m.to,san:m.san,lan:m.lan,color:m.color,piece:m.piece,captured:m.captured||null,promotion:m.promotion||null,...(m.castle?{castle:true,rook_from:m.rook_from,rook_to:m.rook_to}:{}),client_move_at:timing.clientMoveAt,server_received_at:timing.serverReceivedAt,network_compensation_ms:timing.networkCompensationMs}],
     status:o.status,result:o.result,version:Number(g.version)+1,move_count:Number(g.move_count||0)+1,...(castling960!==undefined?{castling960}:{}),
     white_time_ms:wt,black_time_ms:bt,last_move_at:timing.serverReceivedAt,ended_at:o.result==="*"?null:timing.serverReceivedAt,updated_at:timing.serverReceivedAt,draw_offer_by:null,takeback_offer_by:null,takeback_offer_version:null,
     ...(color==="w"?{white_last_seen_at:timing.serverReceivedAt}:{black_last_seen_at:timing.serverReceivedAt})
@@ -347,19 +353,7 @@ async function applyMove(g:any,color:string,b:any,serverReceivedMs=Date.now()){
 }
 // The whole game as PGN (each move is applied to a board built from the stored FEN, so
 // c.pgn() alone only holds the last move). Written when the game ends.
-function fullPgn(g:any,moves:any[],result:string){
-  if(g.variant==="freestyle"||g.variant==="crazyhouse"){ // chess.js can't write 960 castles or drops; the PGN is assembled by hand
-    const fen=g.start_fen||START_FEN,[,turn,,,,full]=fen.split(" ");let n=Number(full)||1,side=turn||"w";const parts:string[]=[];
-    moves.forEach((m:any,i:number)=>{if(side==="w")parts.push(`${n}. ${m.san}`);else parts.push(i===0?`${n}... ${m.san}`:m.san);if(side==="b")n++;side=side==="w"?"b":"w"});
-    return `[Event "VCH Freestyle"]\n[Site "VCH"]\n[White "${String(g.white_name||"White").replace(/"/g,"")}"]\n[Black "${String(g.black_name||"Black").replace(/"/g,"")}"]\n[Result "${result}"]\n${g.variant==="crazyhouse"?`[Variant "Crazyhouse"]`:`[Variant "Chess960"]\n[SetUp "1"]\n[FEN "${fen}"]`}\n\n${parts.join(" ")} ${result}`;
-  }
-  try{
-    const c=new Chess(g.start_fen||START_FEN);
-    for(const m of moves)c.move({from:m.from,to:m.to,promotion:m.promotion||undefined});
-    c.setHeader("White",String(g.white_name||"White"));c.setHeader("Black",String(g.black_name||"Black"));c.setHeader("Result",result);c.setHeader("Site","VCH");
-    return c.pgn();
-  }catch{return ""}
-}
+function fullPgn(g:any,moves:any[],result:string,reason:string|null=null){return gamePgn(g,moves,result,reason)}
 async function makeMove(req:Request,b:any,serverReceivedMs=Date.now()){
   // Player and game are fetched at the same time; nothing else is read before the move is written.
   let [p,g]=await Promise.all([playerFor(req,b,false,{touch:false}),gameById(b.gameId)]);if(!g)throw fail("Game not found.",404);
@@ -397,7 +391,7 @@ async function claimWin(req:Request,b:any){
   if(Date.now()-seen<CLAIM_AFTER_MS)throw fail("Your opponent is still connected.",409);
   const draw=b.outcome==="draw"||!sideCanPossiblyMate(new Chess(g.fen),seat as "w"|"b");
   const patch=draw?{status:"draw",result:"1/2-1/2"}:seat==="w"?{status:"white_won",result:"1-0"}:{status:"black_won",result:"0-1"};
-  const {data,error}=await admin.from("chess_games").update({...patch,end_reason:"abandoned",draw_offer_by:null,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
+  const {data,error}=await admin.from("chess_games").update({...patch,...endRecord(g,patch.result,"abandoned"),end_reason:"abandoned",draw_offer_by:null,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
   const settled=await settleRatings(data);
   EdgeRuntime.waitUntil(broadcastGameState(settled));
@@ -1513,7 +1507,7 @@ async function tournamentLobby(req:Request,b:any){
 async function resign(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);if(g.status!=="active")return {game:g};let patch:any;
   if(g.white_player_id===p.id)patch={status:"black_won",result:"0-1",end_reason:"resign"};else if(g.black_player_id===p.id)patch={status:"white_won",result:"1-0",end_reason:"resign"};else throw fail("Not your game.",403);
-  const {data,error}=await admin.from("chess_games").update({...patch,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();if(error)throw error;return {game:data?await settleRatings(data):g}
+  const {data,error}=await admin.from("chess_games").update({...patch,...endRecord(g,patch.result,"resign"),version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();if(error)throw error;return {game:data?await settleRatings(data):g}
 }
 async function offerDraw(req:Request,b:any){
   const p=await playerFor(req,b),g=await freshGame(b.gameId);if(!g)throw fail("Game not found.",404);
@@ -1542,15 +1536,15 @@ async function respondDraw(req:Request,b:any){
     const {data,error}=await admin.from("chess_games").update({draw_offer_by:null,updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("draw_offer_by",g.draw_offer_by).select().maybeSingle();
     if(error)throw error;return {game:data||g,accepted:false}
   }
-  const {data,error}=await admin.from("chess_games").update({draw_offer_by:null,status:"draw",result:"1/2-1/2",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("draw_offer_by",g.draw_offer_by).select().maybeSingle();
+  const {data,error}=await admin.from("chess_games").update({draw_offer_by:null,status:"draw",result:"1/2-1/2",end_reason:"agreement",...endRecord(g,"1/2-1/2","agreement"),version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("draw_offer_by",g.draw_offer_by).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("The draw offer changed. Sync the game.",409);
   return {game:await settleRatings(data),accepted:true}
 }
 async function gameHistory(req:Request,b:any){
   const p=await playerFor(req,b),limit=Math.max(1,Math.min(100,Number(b.limit||30)));
-  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen,move_history,bot_player_id").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
+  const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen,move_history,bot_player_id,end_reason").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
   if(error)throw error;
-  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=g;return {...rest,sans:Array.isArray(move_history)?move_history.map((m:any)=>m.san||"").filter(Boolean):[]}})}
+  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=g;const finished=["1-0","0-1","1/2-1/2"].includes(g.result);return {...rest,...(finished&&!isFullPgn(g.pgn)?{pgn:fullPgn(g,Array.isArray(move_history)?move_history:[],g.result,g.end_reason||null)}:{}),sans:Array.isArray(move_history)?move_history.map((m:any)=>m.san||"").filter(Boolean):[]}})}
 }
 
 const cleanChat=(v:any)=>String(v||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\s+/g," ").trim().slice(0,280);

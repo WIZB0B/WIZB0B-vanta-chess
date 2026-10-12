@@ -44,7 +44,7 @@ test('server wiring: new actions, server-only tables, club battles never pair cl
     assert.match(fn, new RegExp(`case "${a}":out=await`));
   assert.match(fn, /candidates=candidates\.filter\(\(x:any\)=>!mine\|\|clubOfP\.get\(x\.player_id\)!==mine\)/);
   assert.match(fn, /if\(me\)\{ \/\/ club chat is for members only/);
-  assert.match(fn, /c=new Chess\(g\.start_fen\|\|START_FEN\)/, 'takebacks rebuild from the real start');
+  assert.match(fn, /replay960\(Chess,g\.start_fen\|\|START_FEN,history,/, 'takebacks rebuild from the real start');
   assert.match(fn, /const freestyle=b\.variant==="freestyle"&&!bot/);
   assert.match(fn, /if\(g\.daily_days&&o\.result==="\*"&&!b\.conditional\)/, 'one automatic reply, no chains');
   for (const t of ['chess_clubs', 'chess_club_members', 'chess_club_messages', 'chess_league_entries', 'chess_league_seasons', 'chess_conditional_moves', 'chess_reports', 'chess_fairplay_signals'])
