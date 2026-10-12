@@ -23,15 +23,17 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
   await expect(page.locator('#studyCount')).toContainText('1 /');
 
   await page.locator('[data-nav="famous"]').click();
-  await expect(page.locator('[data-famous="0"]')).toBeVisible();
-  await page.locator('[data-famous="0"]').click();
+  await expect(page.locator('[data-famous-replay="opera-game"]')).toBeVisible();
+  await page.locator('[data-famous-replay="opera-game"]').click();
   await expect(page.locator('.study-board .study-square')).toHaveCount(64);
   await page.locator('#studyLast').click();
   await expect(page.locator('#studyCount')).not.toContainText('0 /');
 
   await page.locator('[data-nav="learn"]').click();
-  await page.locator('[data-lesson="0"]').click();
-  await expect(page.locator('.lesson-detail')).toContainText('Training focus');
+  await page.locator('[data-course="tactics"]').click();
+  await page.locator('[data-lesson="tactics/forks"]').click();
+  await expect(page.locator('.lesson-player h4')).toHaveText('Forks');
+  await page.locator('[data-nav="learn"]').click();
   await expect(page.locator('.start-puzzle')).toBeVisible();
 
   await page.locator('[data-nav="review"]').click();

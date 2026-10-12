@@ -31,7 +31,7 @@ test('French: lazily loaded rows translate toasts, lessons and the typed-move bo
   await page.locator('#typeMove').fill('e4'); await page.locator('#typeMove').press('Enter');
   await expect(page.locator('#a11yLive')).toHaveText('Blancs pion en e4');
   await page.locator('.main-nav [data-nav="learn"]').click();
-  await expect(page.getByText('Principes d', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('Bibliothèque de cours', { exact: false }).first()).toBeVisible();
 });
 
 // The owner's report (2026-10-12): after French, Spanish/Portuguese/Arabic stayed French, and

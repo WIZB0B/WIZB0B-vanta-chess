@@ -5,7 +5,10 @@ import { createClient } from '@supabase/supabase-js';
 import { VchApi, stableGuestToken } from './vch-api.js';
 import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
-import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
+import { OPENINGS, FAMOUS_GAMES, detectOpening } from './content.js';
+import { COURSES, COURSE_LEVELS, courseById, lessonById } from './courses.js';
+import { FAMOUS_ERAS, FAMOUS_LESSONS, checkAnswer, famousLessonById, lessonScore, momentPosition, momentSide } from './famous-lessons.js';
+import { answerQuiz, courseProgress, courseStars, currentStep, loadProgress as loadLessonProgress, newFamousRun, nextLesson, nextMoment, nextStep, playCourseMove, recordFamousAnswer, saveLessonResult, startRun } from './lesson-player.js';
 import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, gameAccuracy, winPercentageLoss } from './review.js';
 import { migratePieceStyle, normalizePieceStyle, pieceAssetFor, pieceStyleOptions } from './piece-styles.js';
 import { PremoveQueue, consumeLegalPremove, premovedPieceAt } from './premove.js';
@@ -16,7 +19,9 @@ import { PieceReactions } from './piece-reactions.js';
 import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
 import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
 import { FLAG_URL, countryList, countryName } from './flags.js';
-import { avatarFromFile, setPortrait } from './portrait.js';
+import { BIO_MAX, PORTRAIT_PRESETS, avatarFromFile, cleanBio, cleanDisplayName, isDisplayName, isPortraitPreset, presetLabel, presetMarkup, setPortrait } from './portrait.js';
+import { moderateText } from './moderation.js';
+import { EMOJI_SET, REACTIONS as CHAT_REACTIONS, REACTION_CSS, parseReaction, reactionMarkup, reactionMessage } from './reactions.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
@@ -34,6 +39,7 @@ import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { playablePuzzleFen } from './puzzle-start.js';
+import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
 import { lazyWorker } from './lazy-worker.js';
@@ -64,7 +70,7 @@ import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
 import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
 import { explorerRows, formatScore, parseMultiPv, scoreValue } from './explorer-view.js';
-import { LANGUAGES, LANG_KEY, RTL, addTranslations, detectLanguage, loadLanguage, translateText, translateTree } from './i18n.js';
+import { LANGUAGES, LANG_KEY, RTL, detectLanguage, loadLanguage, translateText, translateTree } from './i18n.js';
 import { BOARD_SETS, unlockedSets } from './season-themes.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
@@ -85,15 +91,21 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_q3KU0sdaVKOeMcLND2D15Q_Qsu2X5pN';
 const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
-const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
+const defaultGuestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
+// A guest may choose a display name (Portrait & profile); it is kept on this device and sent
+// with every request that carries the guest's name.
+let guestName=(()=>{try{const v=cleanDisplayName(localStorage.getItem('vch.guestName')||'');return isDisplayName(v)?v:defaultGuestName}catch{return defaultGuestName}})();
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
 // Round 12 state (the functions are in the round 12 section below)
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
+let uiLang='en'; // the interface language; set from the saved choice in the language section below
+let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
 let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
-let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
+let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
+let runTimer=0; // ticks the run clock while a run puzzle is on the board
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
@@ -205,7 +217,7 @@ ${splashMarkup(splash)}
         <nav class="profile-menu-items" aria-label="Account">
           <button id="profileMenuProfile" type="button">Profile</button>
           <button id="profileMenuInsights" type="button">Insights</button>
-          <button id="profileMenuEdit" type="button">Edit portrait &amp; flag</button>
+          <button id="profileMenuEdit" type="button">Edit profile</button>
           <button id="profileMenuSettings" type="button">Settings</button>
           <button id="profileMenuModeration" type="button" class="hidden">Moderation</button>
           <button id="profileMenuAuth" type="button">Sign in</button>
@@ -365,7 +377,8 @@ ${splashMarkup(splash)}
 <aside id="chatDrawer" class="chat-drawer" aria-hidden="true">
   <header><div><small>PLAYER CHAT</small><h3>Game conversation</h3></div><button id="closeChat" aria-label="Close chat">×</button></header>
   <div id="messages"></div>
-  <form id="chat"><input id="message" maxlength="160" placeholder="Send a friendly message…"><button>Send</button></form>
+  <div id="chatTray" class="chat-tray hidden" role="dialog" aria-label="Emoji and reactions"><div class="chat-tray-tabs" role="tablist"><button type="button" data-tray="reactions" class="on" role="tab">Reactions</button><button type="button" data-tray="emoji" role="tab">Emoji</button></div><div class="chat-tray-body"></div></div>
+  <form id="chat"><button type="button" id="chatTrayBtn" class="chat-tray-btn" aria-label="Emoji and reactions" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.4 2.2 2 3.5 2s2.5-.6 3.5-2"/><circle cx="9" cy="10" r="1.1"/><circle cx="15" cy="10" r="1.1"/></svg></button><input id="message" maxlength="160" placeholder="Send a friendly message…"><button>Send</button></form>
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
@@ -460,7 +473,10 @@ function ensureBoardDom(){
     board.insertBefore(fragment,boardDom.pieceLayer);boardDom.squaresFlipped=flipped;
     const rankCoords=$('#rankCoords'),fileCoords=$('#fileCoords');
     if(rankCoords)rankCoords.innerHTML=(flipped?['1','2','3','4','5','6','7','8']:['8','7','6','5','4','3','2','1']).map(value=>`<span>${value}</span>`).join('');
-    if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map(value=>`<span>${value}</span>`).join('');
+    // Coordinates sit inside the edge squares, each in the other square colour so it reads.
+    // The bottom-left square is dark and the top-left light whichever way the board faces.
+    if(rankCoords)[...rankCoords.children].forEach((el,i)=>el.className=i%2?'on-dark':'on-light');
+    if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map((value,i)=>`<span class="${i%2?'on-light':'on-dark'}">${value}</span>`).join('');
   }
   return boardDom;
 }
@@ -479,6 +495,7 @@ function boardLastMove(){
   return reviewLast||serverLast||localLastMove();
 }
 function grabbableColor(){
+  if(lessonSession&&mode==='lesson')return lessonAwaitsMove()?game.turn():'';
   if(retrySession||freeBoard())return game.turn();
   if(studySession)return ''; // reading a study
   if(browse||mode==='watch'||mode==='archive')return '';
@@ -599,7 +616,8 @@ function renderBoard({hint=null,instant=false}={}){
     const cls=`square ${el.dataset.shade}${key?' occupied':''}${fogged?' fog':''}${lastMove&&!fogged&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.moves.some(m=>m.from===sq||m.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${checkerSquares?.has(sq)?' checker':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
     if(el.className!==cls)el.className=cls;
     const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
-    if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
+    const spoken=uiLang==='en'?label:(translateText(label,uiLang)||label); // re-set every render, so translate here
+    if(el.getAttribute('aria-label')!==spoken)el.setAttribute('aria-label',spoken);
   }
   const motion=dom.pieces.sync(position,{flipped,animate:!instant,duration:(from,to)=>moveDurationMs(from,to,scale),hint});
   syncVeteranMarks(dom,boardGame);queueAtmosphere();
@@ -637,7 +655,7 @@ function boardContext(){
   if(watchSession)return {kicker:'Watching',line:'Live game · Spectating'};
   if(archiveSession)return {kicker:'Game review',line:'A finished game'};
   if(mode==='puzzle'){
-    const kind=puzzleSession?.kind==='battle'?'Puzzle Battle':streakSession?'Puzzle Streak':puzzleSession?.daily?'Daily puzzle':'Puzzle';
+    const kind=puzzleSession?.kind==='battle'?'Puzzle Battle':streakSession?(streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'):puzzleSession?.daily?'Daily puzzle':'Puzzle';
     return {kicker:kind,line:puzzleSession?'Find the best move':'Puzzle complete'};
   }
   if(egSession||mode==='endgame')return {kicker:'Endgame drill',line:'Practice position'};
@@ -1020,7 +1038,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(lessonSession&&mode==='lesson'&&!remote)return lessonMove(move);if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -1213,6 +1231,7 @@ function currentClockSeconds(){
   return {w:Math.max(0,clocks.w),b:Math.max(0,clocks.b)};
 }
 function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
+  if(mode==='puzzle'&&runTimer)return; // the run clock owns your clock during a puzzle run
   const colors=playerBarClockColors(),top=$('#topClock'),bottom=$('#bottomClock');
   const apply=(element,color)=>{
     if(!element)return;
@@ -1328,8 +1347,8 @@ function syncPlayerBars(){
   $('#bottomRating').textContent=`${ratingFor(pool)} rating`;
   const opponent=opponentInfo&&opponentInfo.gameId===serverGameId?opponentInfo:null;
   {const link=!currentBot&&!serverGame?.bot_player_id&&opponent?.account?opponentUsername(serverGame,myColor):null,tn=$('#topPlayerName');tn.dataset.profile=link||'';tn.classList.toggle('pp-link',!!link);tn.title=link?'View profile':''}
-  setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,label:topName});
-  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:ownName});
+  setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,preset:opponent?.avatar_preset,label:topName});
+  setPortrait($('#bottomAvatar'),ownPortrait(ownName));
   if(serverGameId&&opponentId&&!currentBot)void loadOpponentInfo(serverGameId,opponentId);
   const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
   setPlayerFlag($('#topFlag'),opponent?.country_code||(opponentColor?serverGame?.[`${opponentColor}_country_code`]:null));
@@ -1446,13 +1465,14 @@ function syncIdentityUI(){
   const signed=!!authSession?.access_token&&!!currentProfile?.account;
   const name=signed?(currentProfile.username||currentProfile.display_name||'Player'):guestName;
   const rating=ratingFor('rapid');
-  const user=$('#accountBtn');if(user){user.querySelector('span').textContent=name;user.querySelector('small').textContent=rating+' rating'}
+  const user=$('#accountBtn');if(user){user.querySelector(':scope>span').textContent=name;user.querySelector(':scope>small').textContent=rating+' rating'}
   const bottom=$('#bottomPlayerName');if(bottom)bottom.textContent='You · '+name;
   const bottomRating=$('#bottomRating');if(bottomRating)bottomRating.textContent=rating+' rating';
-  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:name});
+  setPortrait($('#bottomAvatar'),ownPortrait(name));
+  const headerAvatar=$('#accountBtn>i');if(headerAvatar){headerAvatar.classList.add('avatar');setPortrait(headerAvatar,ownPortrait(name))}
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code);
   syncPlayerBars();
-  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),{avatar:currentProfile?.avatar_data,label:name});$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
+  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),ownPortrait(name));$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
@@ -1483,6 +1503,12 @@ async function detectCountry(){
   if(!/^[A-Z]{2}$/.test(code)||!FLAG_URL[code])throw new Error('Could not detect your country. Pick it from the list.');
   return code;
 }
+// Your VCH portrait: the server's copy once the round 13 server is live, else this device's.
+function ownPreset(){
+  const server=currentProfile?.avatar_preset;if(isPortraitPreset(server))return server;
+  try{const v=localStorage.getItem('vch.portraitPreset');return isPortraitPreset(v)?v:null}catch{return null}
+}
+function ownPortrait(label){return {avatar:currentProfile?.avatar_data,preset:ownPreset(),label}}
 async function saveProfileChanges(changes){
   const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
 }
@@ -1513,26 +1539,52 @@ function showFlagPrompt(){
     if(!flagPromptCalm()){clearInterval(watch);card.remove();setTimeout(showFlagPrompt,6000)}
   },700);
 }
+// Portrait & profile: name, VCH portrait or picture, About line and flag. Guests can change
+// their display name (kept on this device), wear a VCH portrait and set a flag; pictures and
+// usernames belong to signed-in accounts.
 async function openProfileEditor(){
   const account=!!authSession?.access_token&&!!currentProfile?.account;
-  let avatar=currentProfile?.avatar_data||null,country=currentProfile?.country_code||'';
+  let avatar=currentProfile?.avatar_data||null,preset=ownPreset(),country=currentProfile?.country_code||'';
+  const startName=account?(currentProfile.username||''):guestName,startBio=currentProfile?.bio||'';
   const body=document.createElement('div');body.className='profile-editor';
   const options=['<option value="">No flag</option>',...countryList().map(([code,name])=>`<option value="${code}">${escapeHtml(name)}</option>`)].join('');
-  body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div>${account?`<label class="pe-upload"><input type="file" accept="image/*" hidden><span>Upload picture</span></label><button type="button" class="pe-remove">Remove picture</button><small>Square crop, 128px. JPEG, PNG or WebP.</small>`:`<small>Sign in to add a profile picture. Guests show an empty portrait.</small>`}</div></div>
+  body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div class="pe-who">
+    <label class="pe-field"><span>${account?'Username':'Display name'}</span><input class="pe-name" maxlength="20" autocomplete="${account?'username':'nickname'}" value="${escapeHtml(startName)}" placeholder="${account?'3–20 letters, numbers or _':'3–20 characters'}"></label>
+    <small class="pe-name-note">${account?'Your username is unique and shown everywhere.':'Guests: your name is kept on this device. Sign in to keep it everywhere and add a picture.'}</small></div></div>
+<div class="pe-section"><span class="pe-title">VCH portrait</span><div class="pe-presets" role="listbox" aria-label="VCH portraits">${PORTRAIT_PRESETS.map(id=>`<button type="button" class="pe-preset avatar" role="option" data-preset="${id}" aria-label="${escapeHtml(presetLabel(id))}" title="${escapeHtml(presetLabel(id))}">${presetMarkup(id)}</button>`).join('')}</div>
+${account?`<div class="pe-upload-row"><label class="pe-upload"><input type="file" accept="image/*" hidden><span>Upload picture</span></label><button type="button" class="pe-remove">No picture</button><small>Square crop, 128px. JPEG, PNG or WebP. A picture shows instead of your portrait.</small></div>`:''}</div>
+<label class="pe-field pe-bio"><span>About you <em class="pe-count"></em></span><textarea maxlength="${BIO_MAX}" rows="2" placeholder="Favourite opening, club, a line about you">${escapeHtml(startBio)}</textarea></label>
 <label class="pe-country"><span>Country flag</span><select>${options}</select></label>
 <button type="button" class="pe-detect">Detect from my connection</button>
 <p class="pe-note">Your flag is shown to opponents. Detect looks up only your country from your connection; we keep the 2-letter code, never your IP address. Choose "No flag" to hide it.</p>`;
-  const preview=body.querySelector('.pe-avatar'),select=body.querySelector('select');
-  const draw=()=>setPortrait(preview,{avatar});draw();select.value=country;
-  select.onchange=()=>{country=select.value};
+  const previewEl=body.querySelector('.pe-avatar'),select=body.querySelector('select'),nameInput=body.querySelector('.pe-name'),bio=body.querySelector('textarea'),count=body.querySelector('.pe-count');
+  const draw=()=>{setPortrait(previewEl,{avatar,preset});body.querySelectorAll('.pe-preset').forEach(b=>{const on=!avatar&&b.dataset.preset===preset;b.classList.toggle('on',on);b.setAttribute('aria-selected',on?'true':'false')})};
+  const counter=()=>{count.textContent=`${bio.value.length}/${BIO_MAX}`};draw();counter();select.value=country;
+  bio.oninput=counter;select.onchange=()=>{country=select.value};
+  body.querySelectorAll('.pe-preset').forEach(b=>b.onclick=()=>{preset=b.dataset.preset===preset&&!avatar?null:b.dataset.preset;if(preset)avatar=null;draw()});
   body.querySelector('.pe-detect').onclick=async()=>{try{country=await detectCountry();select.value=country}catch(error){toast(error.message)}};
   body.querySelector('input[type=file]')?.addEventListener('change',async event=>{try{avatar=await avatarFromFile(event.target.files?.[0]);draw()}catch(error){toast(error.message)}});
   const remove=body.querySelector('.pe-remove');if(remove)remove.onclick=()=>{avatar=null;draw()};
-  const action=await vchDialog({title:'Portrait & flag',body,actions:[{label:'Cancel',value:false},{label:'Save',value:true,primary:true}]});
+  const action=await vchDialog({title:'Portrait & profile',body,actions:[{label:'Cancel',value:false},{label:'Save',value:true,primary:true}]});
   if(!action)return;
-  const changes={country_code:country||null};
+  const name=cleanDisplayName(nameInput.value),about=cleanBio(bio.value);
+  // Names and the About line follow the chat rules (src/moderation.js); the server checks again.
+  for(const text of [name,about]){if(text&&!moderateText(text).ok)return toast('Please keep your name and About line friendly')}
+  const changes={country_code:country||null,avatar_preset:preset||null,bio:about||null};
   if(account&&avatar!==(currentProfile?.avatar_data||null))changes.avatar_data=avatar;
-  try{await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')}catch(error){toast(error.message)}
+  try{
+    if(account&&name&&name!==startName){
+      if(!/^[A-Za-z0-9_]{3,20}$/.test(name))return toast('Usernames are 3–20 letters, numbers or _');
+      const out=await api.request('profile',{name,username:name});currentProfile={...currentProfile,...(out.player||out.profile||{})};
+    }
+    if(!account&&name!==guestName){
+      if(!isDisplayName(name))return toast('Names are 3–20 letters or numbers (spaces, _ . - inside)');
+      guestName=name;try{localStorage.setItem('vch.guestName',name)}catch{}
+      await api.profile(guestName).then(out=>{currentProfile={...currentProfile,...(out.player||out.profile||{})}}).catch(()=>{});
+    }
+    try{if(preset)localStorage.setItem('vch.portraitPreset',preset);else localStorage.removeItem('vch.portraitPreset')}catch{}
+    await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')
+  }catch(error){syncIdentityUI();toast(error.message)}
 }
 async function loadProfile(){
   try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();scheduleFlagPrompt();if(signedIn())startSocial();return out}
@@ -1813,26 +1865,56 @@ async function renderPuzzleStats(){
     target.querySelector('.next-puzzle').onclick=()=>showBackendView('puzzle');
   }catch(error){toast(error.message);showBackendView('puzzle')}
 }
-function startStreak(){streakSession={count:0,best:loadBestStreak(),skipUsed:false};puzzleSession=null;showBackendView('streak')}
+function startStreak(runMode=RUN_MODES.streak){
+  if(runMode instanceof Event||typeof runMode!=='string')runMode=RUN_MODES.streak;
+  const survival=runMode===RUN_MODES.survival;
+  streakSession={mode:survival?'survival':'streak',count:0,best:survival?loadBestSurvival():loadBestStreak(),startedAt:Date.now()};
+  puzzleSession=null;showBackendView('streak');
+}
+const startSurvival=()=>startStreak(RUN_MODES.survival);
+// The run clock: Streak counts up (this puzzle and the whole run); Survival counts down and
+// ends the run at zero. It shows in the card and in your clock under the board.
+function stopRunTimer(){if(runTimer){clearInterval(runTimer);runTimer=0}document.body.classList.remove('puzzle-timed','puzzle-hurry')}
+function tickRunTimer(){
+  const run=streakSession,p=puzzleSession;
+  if(!run||!p||mode!=='puzzle'){stopRunTimer();return}
+  const survival=run.mode==='survival',now=Date.now();
+  const left=survival?survivalLeft(run.count,p.started,now):0;
+  const main=survival?runClock(left+999):runClock(now-p.started);
+  const clock=$('#bottomClock');if(clock){clock.textContent=main;clock.classList.toggle('low-time',survival&&left<10000)}
+  document.body.classList.toggle('puzzle-hurry',survival&&left<10000);
+  const card=$('#dynamicView .run-clock b');if(card)card.textContent=main;
+  const total=$('#dynamicView .run-total');if(total)total.textContent=`Run ${runClock(now-run.startedAt)}`;
+  if(survival&&left<=0){stopRunTimer();endStreak(null,{timeout:true})}
+}
+function startRunTimer(){stopRunTimer();document.body.classList.add('puzzle-timed');tickRunTimer();runTimer=setInterval(tickRunTimer,250)}
+function skipRunPuzzle(){
+  if(!streakSession||!puzzleSession)return;
+  const purse=spendSkip();if(!purse)return toast('No skip tokens left · one more tomorrow');
+  puzzleSession=null;stopRunTimer();toast(`Skipped · ${purse.tokens} ${purse.tokens===1?'token':'tokens'} left`,{duration:1200});showBackendView('streak');
+}
 function puzzleSolved(){
   const session=puzzleSession;puzzleSession=null;markPlan('puzzles');
   renderStatus();syncPlayerBars(); // "Puzzle complete", not the solving labels
   if(!streakSession){toast('Puzzle solved');return}
-  streakSession.count++;streakSession.best=saveBestStreak(streakSession.count);
+  stopRunTimer();
+  streakSession.count++;streakSession.best=streakSession.mode==='survival'?saveBestSurvival(streakSession.count):saveBestStreak(streakSession.count);
+  if(earnMilestone(streakSession.count))setTimeout(()=>toast(`${streakSession?.count||''} solved · a skip token earned`,{duration:1600}),700);
   toast(`Streak ${streakSession.count}${streakSession.count===streakSession.best&&streakSession.count>1?' · new best':''}`,{duration:1200});
   setTimeout(()=>{if(streakSession)showBackendView('streak')},900);
 }
-function endStreak(move){
-  const session=streakSession;if(!session)return;streakSession=null;
+function endStreak(move,{timeout=false}={}){
+  const session=streakSession;if(!session)return;streakSession=null;stopRunTimer();
+  const survival=session.mode==='survival',runName=survival?'Survival':'Streak';
   if(move){playIllegalTone();buzz(HAPTICS.illegal)}
   const solution=puzzleSession?.solution?.[puzzleSession.index];
   if(puzzleSession&&move)void recordPuzzle(false,move);
-  if(session.count>0)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
+  if(session.count>0&&!survival)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
   if(solution){boardShapes=[{from:solution.slice(0,2),to:solution.slice(2,4),brush:'green'}];render()}
   puzzleSession=null;
-  const best=Math.max(saveBestStreak(session.count),Number(currentProfile?.puzzle_best_streak||0)),target=$('#dynamicView .view-content');
-  if(target)target.innerHTML=`<article class="puzzle-info streak-info streak-over"><div class="streak-count"><small>STREAK</small><b>${session.count}</b><span>Best ${best}</span></div><h4>${move?'Streak over':'Streak ended'}</h4><p>${move&&solution?'The green arrow shows the move that kept it going.':session.count?'Well played.':'Have another go.'}</p><div class="streak-actions"><button class="primary-action start-streak">Start again</button><button class="next-puzzle">Back to training</button></div></article>`;
-  $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
+  const best=survival?saveBestSurvival(session.count):Math.max(saveBestStreak(session.count),Number(currentProfile?.puzzle_best_streak||0)),target=$('#dynamicView .view-content');
+  if(target)target.innerHTML=`<article class="puzzle-info streak-info streak-over run-${session.mode}"><div class="streak-count"><small>${runName.toUpperCase()}</small><b>${session.count}</b><span>Best ${best}</span></div><h4>${timeout?"Time's up":move?`${runName} over`:`${runName} ended`}</h4><p class="run-total-final">Run time ${runClock(Date.now()-session.startedAt)}</p><p>${move&&solution?'The green arrow shows the move that kept it going.':session.count?'Well played.':'Have another go.'}</p><div class="streak-actions"><button class="primary-action start-streak">Start again</button><button class="next-puzzle">Back to training</button></div></article>`;
+  $('#dynamicView .start-streak')?.addEventListener('click',()=>startStreak(session.mode));
   $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
   if(isMobileApp())setTimeout(()=>{mTab='puzzles';setMView('panel')},move?1600:0); // phones: the result card lives in the panel
 }
@@ -2377,7 +2459,7 @@ function drawProfile(){
   const p=d.player,h=d.headToHead,pools=poolsPlayed(d.history),earned=achievementBoard(p.achievements).filter(a=>a.earned);
   const seasons=(p.achievements||[]).filter(a=>String(a?.id||'').startsWith('season-')).map(a=>a.id.replace(/^season-/,'').split('-')).map(([y,m,div])=>({label:`${div[0].toUpperCase()+div.slice(1)} · ${y}-${m}`,div}));
   target.innerHTML=`<article class="pp">
-    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · ${d.club.crest?`<span class="pp-crest">${crestSvg(d.club.crest,{size:16,label:`${d.club.name} crest`})}</span>`:''}<button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small></div></header>
+    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · ${d.club.crest?`<span class="pp-crest">${crestSvg(d.club.crest,{size:16,label:`${d.club.name} crest`})}</span>`:''}<button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small>${p.bio?`<p class="pp-bio">${escapeHtml(p.bio)}</p>`:''}</div></header>
     <div class="pp-actions">${d.self?'':`<button class="pp-follow">${d.following?'Following':'Follow'}</button><button class="pp-challenge primary">Challenge</button><button class="pp-prep">Prep against ${escapeHtml(p.username)}</button>`}<button class="pp-copy">Copy link</button>${d.self?'':'<button class="pp-report">Report</button>'}</div>
     ${h?`<div class="pp-h2h"><small>YOU VS ${escapeHtml(p.username.toUpperCase())}</small><b>${recordText(h)}</b><span>${h.wins+h.draws+h.losses?`${Math.round(100*(h.wins+h.draws/2)/(h.wins+h.draws+h.losses))}% score`:'No games yet'}</span></div>`:''}
     <div class="rating-grid">${['bullet','blitz','rapid','classical','daily'].map(pool=>`<div><small>${pool}</small><b>${Number(p.ratings?.[pool]??1200)}</b><em>${Number(p.provisional_games?.[pool]||0)} games</em></div>`).join('')}<div><small>Puzzles</small><b>${p.puzzle_rating}</b><em>${recordText(p)}</em></div></div>
@@ -2387,7 +2469,7 @@ function drawProfile(){
     <h4>Achievements <small>${earned.length}</small></h4><div class="pp-badges">${earned.map(a=>`<span class="achievement earned" title="${escapeHtml(a.text)}"><span class="achievement-mark">${escapeHtml(a.mark)}</span><b>${escapeHtml(a.title)}</b></span>`).join('')}${seasons.map(s=>`<span class="achievement earned season-${escapeHtml(s.div)}"><span class="achievement-mark">S</span><b>${escapeHtml(s.label)}</b></span>`).join('')||(earned.length?'':'<p class="menu-empty">None yet.</p>')}</div>
     ${hallOfRelicsHtml(d)}
   </article>`;
-  setPortrait(target.querySelector('.pp-avatar'),{avatar:p.avatar_data,label:p.username});setPlayerFlag(target.querySelector('.pp-flag'),p.country_code);
+  setPortrait(target.querySelector('.pp-avatar'),{avatar:p.avatar_data,preset:p.avatar_preset,label:p.username});setPlayerFlag(target.querySelector('.pp-flag'),p.country_code);
   target.querySelectorAll('[data-pp-pool]').forEach(b=>b.onclick=()=>{profilePool=b.dataset.ppPool;drawProfile()});
   wireProfileChart();
   target.querySelector('.pp-copy').onclick=async()=>{try{await navigator.clipboard.writeText(profileUrl(p.username));toast('Profile link copied')}catch{toast(profileUrl(p.username))}};
@@ -2940,13 +3022,28 @@ if(params.get('league'))setTimeout(()=>{openSection('friends');void renderLeague
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
+// Watch has two tabs: VCH games being played now, and chess streamers live on Twitch or
+// YouTube (from Lichess's public list, through the chess function). Streams open in a new tab.
+let watchTab='games';
+const watchTabs=()=>`<div class="watch-tabs" role="tablist"><button type="button" role="tab" data-watch-tab="games" class="${watchTab==='games'?'on':''}">VCH games</button><button type="button" role="tab" data-watch-tab="streams" class="${watchTab==='streams'?'on':''}"><i class="live-dot" aria-hidden="true"></i>Streamers live</button></div>`;
+function wireWatchTabs(){$$('#dynamicView [data-watch-tab]').forEach(b=>b.onclick=()=>{watchTab=b.dataset.watchTab;void renderWatch()})}
+async function renderStreams(){
+  setDynamicView('watch','Watch',watchTabs()+brandLoading('Finding streamers…'));wireWatchTabs();
+  try{
+    const {streams=[]}=await api.request('live_streams'),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch'||watchTab!=='streams')return;
+    const card=x=>`<article class="stream-card service-${x.service}"><div class="stream-head"><span class="stream-badge">${x.service==='youtube'?'YouTube':'Twitch'}</span>${x.lang?`<em>${escapeHtml(x.lang.toUpperCase())}</em>`:''}<i class="live-dot" aria-hidden="true"></i></div><b>${x.title?`<span class="stream-title">${escapeHtml(x.title)}</span> `:''}${escapeHtml(x.name)}</b><p>${escapeHtml(x.status||x.headline||'')}</p><div class="stream-actions"><a class="library-action" href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">Watch on ${x.service==='youtube'?'YouTube':'Twitch'}</a><a class="library-action ghost" href="${escapeHtml(x.profile)}" target="_blank" rel="noopener noreferrer">Profile</a></div></article>`;
+    target.innerHTML=watchTabs()+(streams.length?`<p class="watch-intro">Chess streamers live now. Streams open on Twitch or YouTube in a new tab.</p><div class="stream-grid">${streams.map(card).join('')}</div><p class="stream-source">Live list from Lichess's streamer directory. <button type="button" class="watch-refresh">Refresh</button></p>`:`<div class="watch-empty"><h4>No streamers live right now</h4><p>Check back soon: the list refreshes every minute.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
+    wireWatchTabs();target.querySelector('.watch-refresh')?.addEventListener('click',()=>void renderStreams());
+  }catch(error){toast(error.message)}
+}
 async function renderWatch(){
-  setDynamicView('watch','Watch',brandLoading('Finding live games…'));
+  if(watchTab==='streams')return renderStreams();
+  setDynamicView('watch','Watch',watchTabs()+brandLoading('Finding live games…'));wireWatchTabs();
   try{
     const [{games=[]},moment]=await Promise.all([api.liveGames(),loadMoment()]),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch')return;
-    target.innerHTML=momentHtml(moment)+(games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
+    target.innerHTML=watchTabs()+momentHtml(moment)+(games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
       :`<div class="watch-empty"><h4>No live games right now</h4><p>Games from matchmaking and arenas appear here while they're played. Private rooms are never listed.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
-    wireMoment(target,moment);
+    wireMoment(target,moment);wireWatchTabs();
     target.querySelectorAll('[data-watch]').forEach(el=>el.onclick=()=>startWatching(games[Number(el.dataset.watch)].id));
     target.querySelector('.watch-refresh')?.addEventListener('click',()=>void renderWatch());
   }catch(error){toast(error.message)}
@@ -3065,6 +3162,7 @@ function currentGameKey(){
   if(puzzleSession)return `puzzle:${puzzleSession.id}`;
   // Board tools (endgames, studies, explorer, repertoire, prep, analyse together) open the board on phones too.
   if(egSession)return `endgame:${egSession.drill?.id||egSession.drill?.name||''}`;
+  if(lessonSession&&mode==='lesson')return `lesson:${lessonSession.lesson.id}`;
   if(studySession)return `study:${studySession.code||'new'}`;
   if(exploreSession)return 'explore';
   if(repEdit)return `repertoire:${repEdit.color}`;
@@ -3108,12 +3206,12 @@ function syncMobileShell(){
   const show=(action,visible)=>$(`[data-m-action="${action}"]`)?.classList.toggle('hidden',!visible);
   const watching=!!watchSession;
   const puzzling=!!puzzleSession,puzzleMode=mode==='puzzle'; // after a solve the session ends but you're still in puzzles
-  show('puzzle-next',puzzleMode&&!streakSession);show('puzzle-streak',puzzleMode&&!streakSession);show('puzzle-menu',puzzleMode&&!streakSession);show('puzzle-skip',puzzling&&!!streakSession&&!streakSession.skipUsed);show('puzzle-end',puzzling&&!!streakSession);
+  show('puzzle-next',puzzleMode&&!streakSession);show('puzzle-streak',puzzleMode&&!streakSession);show('puzzle-menu',puzzleMode&&!streakSession);show('puzzle-skip',puzzling&&!!streakSession&&loadSkips().tokens>0);show('puzzle-end',puzzling&&!!streakSession);
   show('options',true);show('draw',human&&live);show('resign',live);show('takeback',takebackAvailable());show('leave',watching);show('chat',human);show('hint',mode==='computer'&&live);show('undo',mode==='computer'&&live);
   show('review',over);show('rematch',over&&human);show('new',over);
   const title=$('#mGameTitle'),sub=$('#mGameSub');
   if(title){
-    const t=puzzleSession&&streakSession?`Puzzle Streak · ${streakSession.count}`:archiveSession?'Game story':watchSession?'Watching':puzzleSession||mode==='puzzle'?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
+    const t=puzzleSession&&streakSession?`${streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'} · ${streakSession.count}`:archiveSession?'Game story':watchSession?'Watching':puzzleSession||mode==='puzzle'?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
     if(title.textContent!==t)title.textContent=t;
   }
   if(sub){
@@ -3145,7 +3243,7 @@ function openMoreSheet(){
     {label:'Famous games',run:()=>openSection('famous')},
     {label:'My games & Game Story',run:()=>openSection('review')},
     {label:'Board & pieces',run:()=>$('#theme').click()},
-    {label:'Portrait & flag',run:()=>void openProfileEditor()},
+    {label:'Edit profile',run:()=>void openProfileEditor()},
     {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
     {label:'Notifications',run:()=>void openNotifications()},
     {label:'Install the app',run:()=>$('#installBtn').click()},
@@ -3171,7 +3269,7 @@ const M_ACTIONS={
   'puzzle-next':()=>void showBackendView('puzzle'),
   'puzzle-streak':startStreak,
   'puzzle-menu':()=>{mTab='puzzles';setMView('panel')}, // daily puzzle, stats, battle, themes
-  'puzzle-skip':()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;void showBackendView('streak')},
+  'puzzle-skip':()=>skipRunPuzzle(),
   'puzzle-end':()=>endStreak(null),
   leave:()=>{stopWatching();mTab='watch';openSection('watch')},
   review:()=>void startGameReview(),
@@ -3228,13 +3326,40 @@ function syncOnlineTransport(){
   if(!isOnlineGame()){stopOnlineSync();return}
   startRealtime();startPolling();
 }
-function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
+// A chat line: text, or one of VCH's animated reactions (":r:<id>", src/reactions.js).
+function addMessage(text,mine=true){
+  const e=document.createElement('p'),reaction=parseReaction(text);
+  e.className=(mine?'mine':'')+(reaction?' reaction-line':'');
+  if(reaction){e.innerHTML=reactionMarkup(reaction.id,{size:72});e.setAttribute('aria-label',reaction.label)}else e.textContent=String(text).slice(0,160);
+  $('#messages').append(e);e.scrollIntoView({block:'nearest'});
+}
+// Emoji and reactions tray under the chat. Reactions send at once; emoji go into the message.
+let chatTrayTab='reactions';
+function ensureReactionCss(){if(document.getElementById('vchReactionCss'))return;const st=document.createElement('style');st.id='vchReactionCss';st.textContent=REACTION_CSS;document.head.append(st)}
+function renderChatTray(){
+  const body=$('#chatTray .chat-tray-body');if(!body)return;ensureReactionCss();
+  $$('#chatTray [data-tray]').forEach(b=>b.classList.toggle('on',b.dataset.tray===chatTrayTab));
+  body.innerHTML=chatTrayTab==='reactions'
+    ?`<div class="reaction-grid">${CHAT_REACTIONS.map(r=>`<button type="button" class="reaction-pick" data-reaction="${r.id}" title="${escapeHtml(r.label)}" aria-label="${escapeHtml(r.label)}">${reactionMarkup(r.id,{size:52})}<span>${escapeHtml(r.label)}</span></button>`).join('')}</div>`
+    :EMOJI_SET.map(g=>`<div class="emoji-group"><small>${escapeHtml(g.group)}</small><div>${g.items.map(x=>`<button type="button" class="emoji-pick" data-emoji="${escapeHtml(x.char)}" aria-label="${escapeHtml(x.name)}" title="${escapeHtml(x.name)}" data-no-i18n>${x.char}</button>`).join('')}</div></div>`).join('');
+}
+function toggleChatTray(force){
+  const tray=$('#chatTray'),open=force??tray.classList.contains('hidden');
+  tray.classList.toggle('hidden',!open);$('#chatTrayBtn')?.setAttribute('aria-expanded',open?'true':'false');if(open)renderChatTray();
+}
+async function sendChatBody(body){
+  if(!serverGameId)return toast('Start or join a game to chat');
+  // Friendly first: blocked words never leave the device (the server checks again and keeps
+  // the strikes, src/moderation.js).
+  const verdict=moderateText(body);if(!verdict.ok&&!parseReaction(body))return toast("That message wasn't sent: keep chat friendly",{duration:3200});
+  try{await api.chatSend(serverGameId,body);broadcastAux('chat_hint',{from:realtimeClientId});await loadChat();return true}catch(error){toast(error.message,{duration:4200});return false}
+}
 function chatIsOpen(){return $('#chatDrawer')?.classList.contains('open')===true}
 function updateChatUnread(){const badge=$('#chatUnread');if(!badge)return;badge.textContent=String(chatUnread);badge.classList.toggle('hidden',chatUnread<=0)}
 function openChatDrawer(){chatUnread=0;updateChatUnread();$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');void loadChat()}
 function closeChatDrawer(){$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')}
 function previewChatMessage(item){
-  const name=String(item?.display_name||'Opponent'),body=String(item?.body||'').slice(0,60);
+  const name=String(item?.display_name||'Opponent'),reaction=parseReaction(item?.body),body=reaction?reaction.label:String(item?.body||'').slice(0,60);
   toast(`${name}: ${body}`,{duration:4200,onClick:openChatDrawer});
 }
 async function loadChat(){
@@ -3247,7 +3372,13 @@ async function loadChat(){
   if(fresh.length&&!chatIsOpen()){chatUnread+=fresh.length;updateChatUnread();previewChatMessage(fresh.at(-1))}
   if(chatIsOpen()){chatUnread=0;updateChatUnread()}
 }
-$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);broadcastAux('chat_hint',{from:realtimeClientId});$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
+$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(await sendChatBody(v))$('#message').value=''};
+$('#chatTrayBtn').onclick=()=>toggleChatTray();
+$('#chatTray').addEventListener('click',event=>{
+  const tab=event.target.closest('[data-tray]');if(tab){chatTrayTab=tab.dataset.tray;renderChatTray();return}
+  const r=event.target.closest('[data-reaction]');if(r){toggleChatTray(false);void sendChatBody(reactionMessage(r.dataset.reaction));return}
+  const em=event.target.closest('[data-emoji]');if(em){const input=$('#message'),at=input.selectionStart??input.value.length;input.value=(input.value.slice(0,at)+em.dataset.emoji+input.value.slice(input.selectionEnd??at)).slice(0,160);input.focus();const pos=Math.min(160,at+em.dataset.emoji.length);input.setSelectionRange(pos,pos)}
+});
 $$('.modes button').forEach(button=>button.onclick=()=>activateLeftMode(button.dataset.mode));
 $$('[data-match-time]').forEach(button=>button.onclick=()=>{
   const [seconds,increment]=button.dataset.matchTime.split('-').map(Number);
@@ -3491,8 +3622,8 @@ boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointer
 render();startClock();
 recordNav(); // the starting screen is the first entry Back returns to
 // ---- Interface language (src/i18n.js) ----
-let uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
-const i18nPending=new Set();let i18nFrame=0,moreTranslations=null;
+uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
+const i18nPending=new Set();let i18nFrame=0;
 function applyLanguage(lang,{save=false}={}){
   uiLang=LANGUAGES[lang]?lang:'en';
   document.documentElement.lang=uiLang;document.documentElement.dir=RTL.has(uiLang)?'rtl':'ltr';
@@ -3952,6 +4083,7 @@ function setDynamicView(kind,title,html){
   if(kind!=='endgames'&&egSession)endEndgame();
   if(kind!=='prep'&&prepSession)endPrep();
   if(kind!=='analysis'&&analysis)leaveAnalysis();
+  if(kind!=='lesson'&&lessonSession)leaveLesson({restore:false});
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
@@ -3998,19 +4130,182 @@ function renderOpenings(){
   $('#dynamicView .rep-open')?.addEventListener('click',()=>void renderRepertoire());
   $$('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }
-function renderFamous(){
-  setDynamicView('famous','Famous Games',`<div class="library-list famous-list">${FAMOUS_GAMES.map((g,i)=>`<article><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.players)} · ${g.place} ${g.year}</small></div><p><strong>${g.result}</strong> · ${escapeHtml(g.opening)} — ${escapeHtml(g.lesson)}</p><button class="library-action" data-famous="${i}">Replay game</button></article>`).join('')}</div>`);
-  $$('#dynamicView [data-famous]').forEach(b=>b.onclick=()=>{const g=FAMOUS_GAMES[Number(b.dataset.famous)];renderStudy('famous',g.title,g.moves,`${g.players} · ${g.year} · ${g.result}`)});
+// ---- Learn library (round 13): courses (src/courses.js) and famous-game lessons
+// (src/famous-lessons.js), played on the board by the lesson player (src/lesson-player.js). ----
+const stars=n=>`<span class="lesson-stars" aria-label="${n} of 3 stars">${[0,1,2].map(i=>`<i class="${i<n?'on':''}"></i>`).join('')}</span>`;
+function lessonAwaitsMove(){
+  const s=lessonSession;if(!s)return false;
+  if(s.kind==='famous')return !s.run.answered&&!s.busy;
+  const step=currentStep(s.lesson,s.run);return step?.type==='move'&&!s.run.stepDone&&!s.busy;
 }
-function renderLesson(index){
-  const lesson=LESSONS[index];
-  setDynamicView('learn',lesson.title,`<article class="lesson-detail"><small>${escapeHtml(lesson.level)}</small><h4>${escapeHtml(lesson.title)}</h4><p>${escapeHtml(lesson.body)}</p><div class="lesson-checklist"><b>Training focus</b><span>✓ Identify the position goal before calculating.</span><span>✓ Compare forcing moves: checks, captures and threats.</span><span>✓ Explain the move in words before playing it.</span></div><button class="primary-action start-puzzle">Practice with a live puzzle</button><button class="secondary-action all-lessons">Back to lessons</button></article>`);
-  $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
-  $('#dynamicView .all-lessons').onclick=renderLearn;
+function leaveLesson({restore=true}={}){
+  if(!lessonSession)return;lessonSession=null;
+  if(mode==='lesson'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
+}
+function lessonGuard(){
+  if(onlineGameBusy())return false;
+  if(liveGameOn()&&mode==='computer'&&computerStarted&&!localGameOver){toast('Finish your game first');return false}
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  puzzleSession=null;streakSession=null;stopRunTimer();if(egSession)endEndgame({restore:false});if(exploreSession)endExplore({restore:false});if(repEdit)endRepEdit({restore:false});
+  return true;
+}
+// Puts a position on the board for the lesson, facing `side`.
+function lessonBoard(fen,shapes=[],side=null){
+  try{game.load(fen)}catch{toast('This position could not be shown');return false}
+  boardShapes=shapes;selected=null;mode='lesson';serverGameId=null;clockSnapshot=null;browse=null;
+  flipped=(side||game.turn())==='b';orientationSet=true;setPrimaryScreen('game');render();updateMoves();
+  return true;
+}
+const stepShapes=step=>[...(step?.arrows||[]).map(([from,to])=>({from,to,brush:'green'})),...(step?.marks||[]).map(sq=>({from:sq,brush:'yellow'}))];
+function courseOfLesson(id){return COURSES.find(c=>c.lessons.some(l=>l.id===id))||null}
+function startCourseLesson(id){
+  const lesson=lessonById(id),course=courseOfLesson(id);if(!lesson||!course||!lessonGuard())return;
+  const first=lesson.steps.find(st=>st.type==='move'),side=first?new Chess(first.fen).turn():'w';
+  lessonSession={kind:'course',lesson,course,run:startRun(lesson),side,feedback:null,busy:false,showHint:false};
+  showCourseStep();
+}
+function showCourseStep(){
+  const s=lessonSession;if(!s)return;const step=currentStep(s.lesson,s.run);
+  s.feedback=null;s.showHint=false;
+  if(step.fen)lessonBoard(step.fen,stepShapes(step),s.side);
+  drawLesson();
+}
+function drawLesson(){
+  const s=lessonSession;if(!s)return;
+  if(s.kind==='famous')return drawFamous();
+  const {lesson,course,run}=s,step=currentStep(lesson,run),index=course.lessons.findIndex(l=>l.id===lesson.id);
+  const dots=lesson.steps.map((st,i)=>`<i class="${i<run.step||(i===run.step&&run.stepDone)?'done':''}${i===run.step?' now':''} kind-${st.type}"></i>`).join('');
+  const last=run.step===lesson.steps.length-1;
+  let body='';
+  if(step.type==='read')body=`<p class="lesson-text">${escapeHtml(step.text)}</p>`;
+  if(step.type==='move')body=`<p class="lesson-prompt">${escapeHtml(step.prompt)}</p>${s.showHint&&!run.stepDone?`<p class="lesson-hint">${escapeHtml(step.hint||'')}</p>`:''}${s.feedback?`<p class="lesson-feedback ${s.feedback.ok?'ok':'no'}">${escapeHtml(s.feedback.text)}</p>`:''}${run.stepDone?`<p class="lesson-explain">${escapeHtml(step.explain||'')}</p>`:''}`;
+  if(step.type==='quiz')body=`<p class="lesson-prompt">${escapeHtml(step.question)}</p><div class="lesson-options">${step.options.map((o,i)=>`<button type="button" data-quiz="${i}" class="${run.stepDone&&i===step.answer?'right':s.wrong?.includes(i)?'wrong':''}"${run.stepDone?' disabled':''}>${escapeHtml(o)}</button>`).join('')}</div>${run.stepDone?`<p class="lesson-explain">${escapeHtml(step.explain||'')}</p>`:s.feedback&&!s.feedback.ok?`<p class="lesson-feedback no">${escapeHtml(s.feedback.text)}</p>`:''}`;
+  const html=`<article class="lesson-player"><small>${escapeHtml(course.title.toUpperCase())} · LESSON ${index+1} OF ${course.lessons.length}</small><h4>${escapeHtml(lesson.title)}</h4>${run.step===0?`<p class="lesson-goal">${escapeHtml(lesson.goal)}</p>`:''}<div class="lesson-dots" aria-label="Step ${run.step+1} of ${lesson.steps.length}">${dots}</div>
+<div class="lesson-step kind-${step.type}">${body}</div>
+<div class="lesson-actions">${step.type==='move'&&!run.stepDone?'<button type="button" class="lesson-hint-btn">Hint</button>':''}${run.step>0?'<button type="button" class="lesson-back">Back</button>':''}<button type="button" class="primary-action lesson-next"${run.stepDone?'':' disabled'}>${last?'Finish lesson':'Next'}</button></div>
+<button type="button" class="lesson-course-link">${escapeHtml(course.title)} · all lessons</button></article>`;
+  if(currentRightView!=='lesson')setDynamicView('lesson',course.title,html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const root=$('#dynamicView');
+  root.querySelector('.lesson-next')?.addEventListener('click',()=>{if(!s.run.stepDone)return;if(last)return finishCourseLesson();s.wrong=null;nextStep(lesson,run);showCourseStep()});
+  root.querySelector('.lesson-back')?.addEventListener('click',()=>{run.step=Math.max(0,run.step-1);run.ply=0;run.stepDone=true;s.wrong=null;showCourseStep()});
+  root.querySelector('.lesson-hint-btn')?.addEventListener('click',()=>{if(!s.showHint){run.hints++;s.showHint=true}const want=step.solution?.[run.ply];if(want)boardShapes=[...stepShapes(step),{from:want.slice(0,2),brush:'green'}];render();drawLesson()});
+  root.querySelectorAll('[data-quiz]').forEach(b=>b.onclick=()=>{const out=answerQuiz(lesson,run,Number(b.dataset.quiz));if(out.ok){playTone();s.feedback=null}else{playIllegalTone();s.wrong=[...(s.wrong||[]),Number(b.dataset.quiz)];s.feedback={ok:false,text:'Not that one. Try again.'}}drawLesson()});
+  root.querySelector('.lesson-course-link')?.addEventListener('click',()=>renderCourse(course.id));
+}
+function lessonMove(move){
+  const s=lessonSession;if(!s)return;
+  if(s.kind==='famous')return famousMove(move);
+  const step=currentStep(s.lesson,s.run);if(step?.type!=='move'||s.run.stepDone||s.busy)return;
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||undefined})}catch{}
+  if(!made)return;
+  const uci=made.from+made.to+(made.promotion||''),out=playCourseMove(s.lesson,s.run,uci);
+  if(!out.ok){game.undo();selected=null;render();playIllegalTone();buzz(HAPTICS.illegal);s.feedback={ok:false,text:'Not quite. Look again: that is not the move this position asks for.'};drawLesson();return}
+  rememberLastMove(made);boardShapes=[];render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
+  s.feedback=out.stepDone?{ok:true,text:out.alternative?'Also good! Here is the idea:':'Correct!'}:{ok:true,text:'Good. Keep going.'};
+  if(out.reply){s.busy=true;drawLesson();setTimeout(()=>{if(lessonSession!==s)return;try{const r=game.move({from:out.reply.slice(0,2),to:out.reply.slice(2,4),promotion:out.reply[4]});rememberLastMove(r);render({hint:r});afterBoardPaint(playTone)}catch{}s.busy=false;drawLesson()},420);return}
+  drawLesson();
+}
+function finishCourseLesson(){
+  const s=lessonSession;if(!s)return;const {lesson,course,run}=s,earned=courseStars(run);
+  const progress=saveLessonResult(lesson.id,earned),next=nextLesson(course,progress),done=courseProgress(course,progress);
+  const html=`<article class="lesson-player lesson-done"><small>${escapeHtml(course.title.toUpperCase())}</small><h4>${escapeHtml(lesson.title)} · complete</h4>${stars(earned)}<p>${run.mistakes+run.hints===0?'Flawless: no mistakes, no hints.':`${run.mistakes} ${run.mistakes===1?'mistake':'mistakes'} · ${run.hints} ${run.hints===1?'hint':'hints'}`}</p><div class="course-meter"><i style="width:${Math.round(100*done.done/done.total)}%"></i></div><p class="course-meter-text">${done.done} of ${done.total} lessons in ${escapeHtml(course.title)}</p><div class="lesson-actions">${next&&next.id!==lesson.id?`<button type="button" class="primary-action lesson-go" data-lesson="${escapeHtml(next.id)}">Next: ${escapeHtml(next.title)}</button>`:''}<button type="button" class="lesson-again">Again</button><button type="button" class="lesson-course-link">All lessons</button></div></article>`;
+  const t=$('#dynamicView .view-content');if(t)t.innerHTML=html;
+  const root=$('#dynamicView');
+  root.querySelector('.lesson-go')?.addEventListener('click',e=>startCourseLesson(e.currentTarget.dataset.lesson));
+  root.querySelector('.lesson-again')?.addEventListener('click',()=>startCourseLesson(lesson.id));
+  root.querySelector('.lesson-course-link')?.addEventListener('click',()=>renderCourse(course.id));
+}
+function renderCourse(id){
+  const course=courseById(id);if(!course)return;const progress=loadLessonProgress(),done=courseProgress(course,progress);
+  const html=`<article class="course-head"><small>${escapeHtml(course.level.toUpperCase())} · ${course.minutes} MIN · ${course.lessons.length} LESSONS</small><h4>${escapeHtml(course.title)}</h4><p>${escapeHtml(course.summary)}</p><div class="course-meter"><i style="width:${Math.round(100*done.done/done.total)}%"></i></div><p class="course-meter-text">${done.done} of ${done.total} done</p></article>
+<ol class="course-lessons">${course.lessons.map((l,i)=>`<li><button type="button" data-lesson="${escapeHtml(l.id)}" class="${progress[l.id]?'done':''}"><span class="course-num">${i+1}</span><span><b>${escapeHtml(l.title)}</b><small>${escapeHtml(l.goal)}</small></span>${progress[l.id]?stars(progress[l.id].stars):'<em>Start</em>'}</button></li>`).join('')}</ol>
+<details class="course-sources"><summary>Sources</summary><ul>${course.sources.map(src=>`<li>${escapeHtml(src.author?`${src.author}, `:'')}<i>${escapeHtml(src.title)}</i>${src.year?` (${escapeHtml(String(src.year))})`:''}${src.note?` · ${escapeHtml(src.note)}`:''} · <a href="${escapeHtml(src.url)}" target="_blank" rel="noopener noreferrer">link</a></li>`).join('')}</ul><p>Lessons are written by VCH in our own words, based on these works.</p></details>
+<button type="button" class="secondary-action course-back">Course library</button>`;
+  if(lessonSession)leaveLesson({restore:false});
+  setDynamicView('learn',course.title,html);
+  $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>startCourseLesson(b.dataset.lesson));
+  $('#dynamicView .course-back').onclick=renderLearn;
+}
+// Famous games as lessons: at each moment you find the master's move (on the board or from
+// the choices), then see what was played and why.
+function startFamousLesson(id){
+  const lesson=famousLessonById(id);if(!lesson||!lessonGuard())return;
+  lessonSession={kind:'famous',lesson,run:newFamousRun(lesson),busy:false,showChoices:false,verdict:null,fenCache:new Map()};
+  showMoment();
+}
+function momentFen(s,m){if(!s.fenCache.has(m.ply))s.fenCache.set(m.ply,momentPosition(Chess,s.lesson,m));return s.fenCache.get(m.ply)}
+function showMoment(){
+  const s=lessonSession;if(!s)return;const m=s.lesson.moments[s.run.moment];
+  s.showChoices=false;s.verdict=null;s.busy=false;
+  lessonBoard(momentFen(s,m),[],momentSide(m));drawFamous();
+}
+function drawFamous(){
+  const s=lessonSession;if(!s||s.kind!=='famous')return;const {lesson,run}=s,m=lesson.moments[run.moment],n=lesson.moments.length;
+  const side=momentSide(m)==='w'?lesson.white:lesson.black,v=s.verdict;
+  const dots=lesson.moments.map((_,i)=>{const r=run.results[i];return `<i class="${r?(r.correct?'done':'miss'):''}${i===run.moment?' now':''}"></i>`}).join('');
+  const html=`<article class="lesson-player famous-player"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))} · MOMENT ${run.moment+1} OF ${n}</small><h4>${escapeHtml(lesson.title)}</h4>${run.moment===0&&!run.answered?`<p class="lesson-goal">${escapeHtml(lesson.intro)}</p>`:''}<div class="lesson-dots">${dots}</div>
+<div class="lesson-step"><p class="lesson-prompt">${escapeHtml(m.prompt)}</p><p class="famous-side">${escapeHtml(side)} to move · play it on the board${s.showChoices?' or pick one':''}</p>
+${s.showChoices&&!run.answered?`<div class="lesson-options famous-choices">${m.choices.map(c=>`<button type="button" data-choice="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div>`:''}
+${run.hinted&&!run.answered?`<p class="lesson-hint">${escapeHtml(m.hint||'')}</p>`:''}
+${v?`<p class="lesson-feedback ${v.correct?'ok':'no'}">${v.correct?(v.accepted?`Good move! The engine likes it too. ${escapeHtml(side)} played ${escapeHtml(v.best)}.`:`Yes! ${escapeHtml(v.best)} is what ${escapeHtml(side)} played.`):`${escapeHtml(side)} played ${escapeHtml(v.best)}.`}</p><p class="lesson-explain">${escapeHtml(m.explain||'')}</p>`:''}</div>
+<div class="lesson-actions">${run.answered?`<button type="button" class="primary-action famous-next">${run.moment+1<n?'Next moment':'See your score'}</button>`:`${s.showChoices?'':'<button type="button" class="famous-choices-btn">Show choices</button>'}<button type="button" class="lesson-hint-btn">Hint</button><button type="button" class="famous-reveal">Show me</button>`}</div>
+<button type="button" class="lesson-course-link">Famous games</button></article>`;
+  if(currentRightView!=='lesson')setDynamicView('lesson','Famous Games',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const root=$('#dynamicView');
+  root.querySelector('.famous-choices-btn')?.addEventListener('click',()=>{s.showChoices=true;drawFamous()});
+  root.querySelector('.lesson-hint-btn')?.addEventListener('click',()=>{run.hinted=true;drawFamous()});
+  root.querySelector('.famous-reveal')?.addEventListener('click',()=>answerMoment(null));
+  root.querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>answerMoment(b.dataset.choice));
+  root.querySelector('.famous-next')?.addEventListener('click',()=>{if(nextMoment(lesson,run))showMoment();else finishFamous()});
+  root.querySelector('.lesson-course-link')?.addEventListener('click',renderFamous);
+}
+// The learner answers with a SAN (board move or choice), or null to just be shown.
+function answerMoment(san){
+  const s=lessonSession;if(!s||s.kind!=='famous'||s.run.answered)return;const m=s.lesson.moments[s.run.moment];
+  const v=san?checkAnswer(s.lesson,m,san):{correct:false,accepted:false,best:m.answer};
+  recordFamousAnswer(s.run,v.correct);s.verdict=v;
+  if(v.correct)playTone();else if(san){playIllegalTone();buzz(HAPTICS.illegal)}
+  // Show the master's move on the board.
+  try{game.load(momentFen(s,m));const made=game.move(m.answer);rememberLastMove(made);boardShapes=[];render({hint:made})}catch{}
+  drawFamous();
+}
+function famousMove(move){
+  const s=lessonSession;if(!s||s.run.answered||s.busy)return;
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||undefined})}catch{}
+  if(!made)return;
+  render({hint:made,instant:instantMoveAnimation});
+  s.busy=true;setTimeout(()=>{if(lessonSession!==s)return;s.busy=false;answerMoment(made.san)},350);
+}
+function finishFamous(){
+  const s=lessonSession;if(!s)return;const {lesson,run}=s,score=lessonScore(run.results);
+  if(score.stars)saveLessonResult(`famous/${lesson.id}`,score.stars);
+  const right=run.results.filter(r=>r.correct).length;
+  const html=`<article class="lesson-player lesson-done"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))}</small><h4>${escapeHtml(lesson.title)}</h4>${stars(score.stars)}<p>You found ${right} of ${run.results.length} moves · ${score.score} of ${score.max} points.</p><p class="lesson-explain">${escapeHtml(lesson.ending||lesson.theme||'')}</p><div class="lesson-actions"><button type="button" class="primary-action famous-replay">Replay the whole game</button><button type="button" class="lesson-again">Try again</button><button type="button" class="lesson-course-link">Famous games</button></div></article>`;
+  const t=$('#dynamicView .view-content');if(t)t.innerHTML=html;
+  const root=$('#dynamicView');
+  root.querySelector('.famous-replay')?.addEventListener('click',()=>{leaveLesson({restore:false});renderStudy('famous',lesson.title,lesson.moves,`${lesson.white} vs ${lesson.black} · ${lesson.year} · ${lesson.result}`)});
+  root.querySelector('.lesson-again')?.addEventListener('click',()=>startFamousLesson(lesson.id));
+  root.querySelector('.lesson-course-link')?.addEventListener('click',renderFamous);
+}
+function renderFamous(){
+  if(lessonSession)leaveLesson({restore:false});
+  const progress=loadLessonProgress();
+  const card=g=>{const done=progress[`famous/${g.id}`];return `<article class="famous-card"><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.white)} vs ${escapeHtml(g.black)} · ${escapeHtml(g.event||'')} ${escapeHtml(String(g.year))} · ${escapeHtml(g.result)}</small></div><p>${escapeHtml(g.theme)}</p><div class="famous-card-foot">${done?stars(done.stars):`<em>${g.moments.length} moments</em>`}<button class="library-action" data-famous-lesson="${escapeHtml(g.id)}">${done?'Play again':'What would you play?'}</button><button class="library-action ghost" data-famous-replay="${escapeHtml(g.id)}">Replay</button></div></article>`};
+  setDynamicView('famous','Famous Games',`<p class="famous-intro">Step into the great games. At each turning point, find the move the master played; then see why it worked.</p>${FAMOUS_ERAS.map(era=>{const games=FAMOUS_LESSONS.filter(g=>g.era===era.id);return games.length?`<section class="famous-era"><h4>${escapeHtml(era.label)} <small>${escapeHtml(era.years)}</small></h4><p>${escapeHtml(era.blurb)}</p><div class="library-list famous-list">${games.map(card).join('')}</div></section>`:''}).join('')}`);
+  $$('#dynamicView [data-famous-lesson]').forEach(b=>b.onclick=()=>startFamousLesson(b.dataset.famousLesson));
+  $$('#dynamicView [data-famous-replay]').forEach(b=>b.onclick=()=>{const g=famousLessonById(b.dataset.famousReplay);renderStudy('famous',g.title,g.moves,`${g.white} vs ${g.black} · ${g.year} · ${g.result}`)});
 }
 function renderLearn(){
-  setDynamicView('learn','Practice & Learn',`<button class="plan-open"><span><small>TODAY'S TRAINING</small><b>${escapeHtml(planHeadline())}</b></span><em class="plan-streak" aria-label="Streak">${currentStreak(loadStreak())}</em></button><div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
-  $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
+  if(lessonSession)leaveLesson({restore:false});
+  const progress=loadLessonProgress(),famousDone=FAMOUS_LESSONS.filter(g=>progress[`famous/${g.id}`]).length;
+  const courseCard=c=>{const d=courseProgress(c,progress);return `<button type="button" class="course-card level-${escapeHtml(c.level.toLowerCase())}" data-course="${escapeHtml(c.id)}"><small>${escapeHtml(c.level)} · ${c.minutes} min</small><b>${escapeHtml(c.title)}</b><span>${escapeHtml(c.summary)}</span><div class="course-meter"><i style="width:${Math.round(100*d.done/d.total)}%"></i></div><em>${d.done?`${d.done} of ${d.total} lessons`:`${d.total} lessons`}</em></button>`};
+  setDynamicView('learn','Practice & Learn',`<button class="plan-open"><span><small>TODAY'S TRAINING</small><b>${escapeHtml(planHeadline())}</b></span><em class="plan-streak" aria-label="Streak">${currentStreak(loadStreak())}</em></button>
+<h4 class="learn-head">Course library</h4><p class="learn-sub">Interactive lessons: read, then play the move on the board. Built from classic chess books and the FIDE Laws.</p>
+${COURSE_LEVELS.map(level=>{const list=COURSES.filter(c=>c.level===level);return list.length?`<div class="course-level"><small>${escapeHtml(level.toUpperCase())}</small><div class="course-grid">${list.map(courseCard).join('')}</div></div>`:''}).join('')}
+<button type="button" class="famous-entry"><span><small>FAMOUS GAMES</small><b>What would you play?</b><em>${FAMOUS_LESSONS.length} classic games · ${famousDone} done</em></span></button>
+<button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
+  $$('#dynamicView [data-course]').forEach(b=>b.onclick=()=>renderCourse(b.dataset.course));
+  $('#dynamicView .famous-entry').onclick=renderFamous;
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
   $('#dynamicView .open-studies')?.addEventListener('click',()=>void renderStudies());
   $('#dynamicView .open-endgames')?.addEventListener('click',renderEndgames);
@@ -4029,13 +4324,23 @@ function brandLoading(label){
   return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
 }
 let puzzleRetries=0;
+// The card beside a run puzzle: mode, count and best, the clock, the token purse, Skip, End.
+function runCard(side){
+  const run=streakSession,survival=run.mode==='survival',purse=loadSkips();
+  if(purse.daily)setTimeout(()=>toast('Daily skip token added',{duration:1400}),400);
+  const tokens=Array.from({length:SKIP_MAX},(_,i)=>`<i class="${i<purse.tokens?'on':''}">${SKIP_TOKEN_SVG}</i>`).join('');
+  return `<article class="puzzle-info streak-info run-${run.mode}"><div class="run-head"><div class="streak-count"><small>${survival?'SURVIVAL':'STREAK'}</small><b>${run.count}</b><span>Best ${run.best}</span></div><div class="run-clock${survival?' countdown':''}"><small>${survival?`${survivalSeconds(run.count)}s per puzzle`:'This puzzle'}</small><b>${survival?runClock(survivalSeconds(run.count)*1000):'0:00'}</b><span class="run-total">Run 0:00</span></div></div>
+<h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(run.count))} · ${survival?'a wrong move or the clock running out ends the run':'one wrong move ends the run'}</p>
+<div class="skip-purse" title="Skip tokens: one more each day you visit, one for every 10 solved in a run, up to ${SKIP_MAX}."><span class="skip-tokens" aria-label="${purse.tokens} skip tokens">${tokens}</span><button class="skip-puzzle"${purse.tokens?'':' disabled'}>${SKIP_TOKEN_SVG}<span>Skip puzzle</span></button></div>
+<div class="streak-actions"><button class="end-streak">End run</button></div></article>`;
+}
 async function showBackendView(kind){
   if(kind==='puzzle-stats')return void renderPuzzleStats();
   if(kind==='puzzle'||kind==='streak'||kind==='daily'){
     if(onlineGameBusy())return;
     cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
     const streak=kind==='streak',daily=kind==='daily';if(!streak)streakSession=null;if(streak||daily)puzzleAngle=null;
-    setDynamicView('puzzles',streak?'Puzzle Streak':daily?'Daily Puzzle':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:daily?"Loading today's puzzle…":'Loading a real tactical position…'));
+    setDynamicView('puzzles',streak?(streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'):daily?'Daily Puzzle':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:daily?"Loading today's puzzle…":'Loading a real tactical position…'));
     try{
       const data=daily?await api.puzzleDaily():await api.puzzleNext(streak?streakDifficulty(streakSession.count):difficultyForRating(puzzleRatingNow()),puzzleRatingNow(),streak?null:puzzleAngle),puzzle=data.puzzle||data;
       if(streak&&!streakSession)return;
@@ -4048,8 +4353,8 @@ async function showBackendView(kind){
       syncPlayerBars();render();
       const side=game.turn()==='w'?'White':'Black';
       $('#dynamicView .view-content').innerHTML=streak
-        ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
-        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button><button class="start-battle">Puzzle Battle · race a friend</button></article>`;
+        ?runCard(side)
+        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><div class="run-modes"><button class="start-streak run-mode" title="No time limit. One wrong move ends the run; the clock shows how long each puzzle takes."><b>Puzzle Streak</b><small>No time limit · best ${bestStreakShown()}</small></button><button class="start-survival run-mode" title="Every puzzle has a countdown that shortens as they get harder. A wrong move or running out of time ends the run."><b>Puzzle Survival</b><small>Beat the countdown · best ${loadBestSurvival()}</small></button></div><button class="start-battle">Puzzle Battle · race a friend</button></article>`;
       $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
       $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
       $('#dynamicView .start-battle')?.addEventListener('click',()=>void renderBattle());
@@ -4057,7 +4362,9 @@ async function showBackendView(kind){
       $('#dynamicView .puzzle-stats')?.addEventListener('click',()=>showBackendView('puzzle-stats'));
       $('#dynamicView .learn-mistakes')?.addEventListener('click',renderMistakes);
       $('#dynamicView .clear-theme')?.addEventListener('click',()=>{puzzleAngle=null;showBackendView('puzzle')});
-      $('#dynamicView .skip-puzzle')?.addEventListener('click',()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;showBackendView('streak')});
+      $('#dynamicView .skip-puzzle')?.addEventListener('click',skipRunPuzzle);
+      $('#dynamicView .start-survival')?.addEventListener('click',startSurvival);
+      if(streak)startRunTimer();
       $('#dynamicView .end-streak')?.addEventListener('click',()=>endStreak(null));
     }catch(error){toast(error.message);showMovesView()}
     return;
@@ -5377,10 +5684,11 @@ $('#searchInput').oninput=e=>{
   const results=[
     ...OPENINGS.filter(x=>(x.name+' '+x.eco+' '+x.idea).toLowerCase().includes(q)).map(x=>({type:'Opening',title:x.name,sub:x.idea,action:'openings'})),
     ...FAMOUS_GAMES.filter(x=>(x.title+' '+x.players+' '+x.opening).toLowerCase().includes(q)).map(x=>({type:'Famous game',title:x.title,sub:x.players,action:'famous'})),
-    ...LESSONS.filter(x=>(x.title+' '+x.body).toLowerCase().includes(q)).map(x=>({type:'Lesson',title:x.title,sub:x.level,action:'learn'}))
+    ...COURSES.flatMap(c=>c.lessons.map(l=>({c,l}))).filter(({c,l})=>(l.title+' '+l.goal+' '+c.title).toLowerCase().includes(q)).map(({c,l})=>({type:'Lesson',title:l.title,sub:c.title,action:'learn',lesson:l.id})),
+    ...FAMOUS_LESSONS.filter(x=>(x.title+' '+x.white+' '+x.black+' '+x.opening).toLowerCase().includes(q)).map(x=>({type:'Famous lesson',title:x.title,sub:`${x.white} vs ${x.black} · ${x.year}`,action:'famous',famous:x.id}))
   ].slice(0,8);
   target.innerHTML=results.map((r,i)=>`<button data-result="${i}"><small>${r.type}</small><b>${escapeHtml(r.title)}</b><span>${escapeHtml(r.sub)}</span></button>`).join('')||'<p>No results yet.</p>';
-  [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{menus.close('search');activateNav(results[i].action)});
+  [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{menus.close('search');const r=results[i];activateNav(r.action);if(r.lesson)startCourseLesson(r.lesson);else if(r.famous)startFamousLesson(r.famous)});
 };
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.add('ready')});
 $('#installBtn').onclick=async()=>{if(installPrompt){installPrompt['prompt']();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};

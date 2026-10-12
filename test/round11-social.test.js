@@ -20,7 +20,7 @@ test('round 11 translations: screens, toasts and patterns', async () => {
 test('rivals and the moment are wired: community tab, watch card, menu card, admin pick', () => {
   assert.match(main, /\['rivals','Rivals'\]/);
   assert.match(main, /if\(k==='rivals'\)void renderRivals\(\)/);
-  assert.match(main, /target\.innerHTML=momentHtml\(moment\)\+/);
+  assert.match(main, /target\.innerHTML=watchTabs\(\)\+momentHtml\(moment\)\+/);
   assert.match(main, /id="menuMoment" class="menu-moment hidden"/);
   assert.match(main, /const admin=isAdmin\(\)/, 'only admins see the pick form (the server checks the role too)');
   assert.match(api, /momentOfWeek\(\) \{ return this\.request\('moment_of_week'\); \}/);

@@ -679,6 +679,7 @@ export function ladderStep(strikes) {
 
 // What happens after a message with this severity, given the strikes already in force.
 // -> { strikes, added, blocked, warning, permanent, mutedUntil, ms, label, next }
+/** @param {{strikes?: number, severity?: string|null, now?: Date|number|string}} [options] */
 export function nextSanction({ strikes = 0, severity = null, now } = {}) {
   const at = timeOf(now), before = count(strikes), added = strikeWeight(severity);
   if (!added) return { strikes: before, added: 0, blocked: false, warning: false, permanent: false, mutedUntil: null, ms: 0, label: null, next: null };
@@ -724,6 +725,7 @@ export function activeStrikes(strikeDates, now) {
 
 // The same rule for the two-column model (a strike counter plus the last strike time): the count
 // stands until STRIKE_DECAY_DAYS have passed since the later of the last strike and the mute end.
+/** @param {{strikes?: number, lastStrikeAt?: Date|number|string|null, mutedUntil?: Date|number|string|null, now?: Date|number|string}} [options] */
 export function strikesInForce({ strikes = 0, lastStrikeAt = null, mutedUntil = null, now } = {}) {
   const n = count(strikes);
   if (!n || ladderStep(n).ms === null) return n;
