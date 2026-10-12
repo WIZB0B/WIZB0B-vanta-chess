@@ -78,6 +78,7 @@ const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
+let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
 let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
@@ -2975,7 +2976,7 @@ function gameFinished(){
   if(mode==='computer')return computerStarted&&(localGameOver||game.isGameOver());
   return !!serverGameId&&!!serverGame&&!['waiting','active','playing','in_progress'].includes(serverGame.status);
 }
-function setMView(view){if(view){mView=view;syncMobileShell();window.scrollTo(0,0)}}
+function setMView(view){if(view){mView=view;syncMobileShell();window.scrollTo(0,0);recordNav()}}
 function syncMoveStrip(records){
   const strip=$('#mMoves');if(!strip||!isMobileApp())return;
   // Online, the server list lags a move that is still on its way: add what's only on the board.
@@ -3382,6 +3383,7 @@ boardEl.addEventListener('pointerdown',event=>{
 // on touch) during a drag or with premoves queued cancels them.
 boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointerDrag?.started){event.stopImmediatePropagation();cancelPointerDrag();return}cancelPremove()});
 render();startClock();
+recordNav(); // the starting screen is the first entry Back returns to
 // ---- Interface language (src/i18n.js) ----
 let uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
 const i18nPending=new Set();let i18nFrame=0,moreTranslations=null;
@@ -4637,7 +4639,29 @@ function activateNav(kind){
   if(kind==='openings')renderOpenings();
   if(kind==='famous')renderFamous();
   if(kind==='review')void renderArchive();
+  recordNav(kind);
 }
+// ---- Back button (backlog 7): every screen change is a history entry, and Back returns to the
+// previous screen (top navigation on desktop; tab and view on phones) instead of leaving VCH.
+// Entries keep the page's own URL, so ?game= and ?analysis= links are untouched.
+function navSnapshot(){const phone=isMobileApp();return {nav:navLast,mView:phone?mView:null,mTab:phone?mTab:null}}
+const sameNav=(a,b)=>!!a&&!!b&&a.nav===b.nav&&a.mView===b.mView&&a.mTab===b.mTab;
+function recordNav(nav){
+  if(nav)navLast=nav;
+  if(navRestoring||navPending)return;
+  navPending=true;
+  queueMicrotask(()=>{ // one entry per user action, even when it changes both the screen and the view
+    navPending=false;const snap=navSnapshot();if(sameNav(snap,navCurrent))return;
+    const first=!navCurrent;navCurrent=snap;
+    try{if(first)history.replaceState({...(history.state||{}),vchNav:snap},'',location.href);else history.pushState({vchNav:snap},'',location.href)}catch{}
+  });
+}
+window.addEventListener('popstate',event=>{
+  const snap=event.state?.vchNav;if(!snap)return;
+  navRestoring=true;
+  try{if(snap.mTab)mTab=snap.mTab;activateNav(snap.nav);if(snap.mView&&isMobileApp())setMView(snap.mView)}
+  finally{navRestoring=false;navCurrent=navSnapshot()}
+});
 function setPrimaryScreen(screen,{remember=false}={}){
   const shell=$('.shell'),menu=$('#mainMenu'),workspace=$('#gameWorkspace'),showGame=screen==='game';
   shell?.classList.toggle('game-active',showGame);shell?.classList.toggle('intro-active',!showGame);
