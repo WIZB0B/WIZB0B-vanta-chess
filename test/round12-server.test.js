@@ -138,7 +138,8 @@ test('server: bughouse wiring (moves, pockets one piece at a time, match end, re
   assert.match(fn, /async function bughouseFinish[\s\S]{0,500}\.eq\("status","active"\)\.select\(\)\.maybeSingle\(\);\s*if\(!room\)return;/, 'only one request ends a match');
   assert.match(fn, /end_reason:"partner"/);
   assert.match(fn, /data\?\.bughouse_id\)EdgeRuntime\.waitUntil\(bughouseAbort\(data\)/);
-  assert.match(fn, /const patch=g\.variant!=="bughouse"&&!sideCanPossiblyMate\(c,winner\)/, 'a bughouse clock always loses');
+  assert.match(fn, /const patch=!DROP_VARIANTS\.includes\(g\.variant\)&&!sideCanPossiblyMate\(c,winner\)/, 'a drop-game clock always loses');
+  assert.match(fn, /const draw=b\.outcome==="draw"\|\|\(!DROP_VARIANTS\.includes\(g\.variant\)&&!sideCanPossiblyMate/, 'a claim in a drop game is a win, not a forced draw');
   assert.match(fn, /if\(g\.variant==="bughouse"\)throw fail\("There are no draw offers in Bughouse\.",409\)/);
   assert.match(fn, /if\(g\.variant==="bughouse"\|\|g\.variant==="crazyhouse"\)throw fail\("Takebacks aren't available in drop games\.",409\)/);
   // seats change only with the version the request saw
@@ -181,4 +182,17 @@ test('server: a player reloading their Bughouse board finds the table by the boa
   assert.match(fn, /if\(b\.gameId\)\{const g=await gameById\(String\(b\.gameId\)\);m=g\?\.bughouse_id\?await one\("chess_bughouse","id",g\.bughouse_id\):null\}/);
   // The view never carries player ids: seats are names and "me".
   assert.match(fn, /const seats=Object\.fromEntries\(BUGHOUSE_SEATS\.map\(s=>\[s,m\.seats\?\.\[s\]\?\{name:m\.seats\[s\]\.name,me:m\.seats\[s\]\.id===viewerId\}:null\]\)\);/);
+});
+test('server: review fixes (partner board writes are version-checked, leaving is confirmed, team calls are private)', () => {
+  const finish = fn.slice(fn.indexOf('async function bughouseFinish'), fn.indexOf('async function bughouseAbort'));
+  assert.match(finish, /\.eq\("status","active"\)\.eq\("version",Number\(other\.version\)\)/);
+  assert.match(finish, /for\(let tries=0;otherId&&tries<4;tries\+\+\)\{\n    const other=await gameById\(otherId\)/, 'the other board is read again on every try');
+  const abort = fn.slice(fn.indexOf('async function bughouseAbort'), fn.indexOf('// ---- Twin Fates'));
+  assert.match(abort, /version:Number\(other\.version\)\+1/, 'an aborted board gets a new version so clients take it');
+  const leave = fn.slice(fn.indexOf('async function bughouseLeave'), fn.indexOf('async function bughouseState'));
+  assert.match(leave, /if\(data\?\.length\)\{/); assert.match(leave, /throw fail\("The table is busy\. Try again\.",409\)/);
+  assert.match(fn, /teamKey=seat&&m\.secret\?\(await hash\(`\$\{m\.secret\}:\$\{teamOfSeat\(seat\)\}`\)\)\.slice\(0,24\):null/);
+  assert.match(fn, /insert\(\{code,secret:crypto\.randomUUID\(\),/);
+  assert.ok(!/secret:m\.secret|m\.secret,/.test(fn), 'the secret itself is never sent');
+  assert.match(sql, /secret text,/); assert.match(sql, /add column if not exists secret text;/);
 });

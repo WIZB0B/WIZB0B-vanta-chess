@@ -43,6 +43,7 @@ export class VantaScore {
     if (this.ctx || !this.AC) return this.ctx;
     const ctx = new this.AC(), master = ctx.createGain(), comp = ctx.createDynamicsCompressor();
     master.gain.value = this.volume * 0.6; master.connect(comp); comp.connect(ctx.destination);
+    const stings = ctx.createGain(); stings.gain.value = this.volume * 0.6; stings.connect(comp); this.stings = stings; // the end-of-game sting outlives the fade
     const pad = ctx.createBiquadFilter(); pad.type = 'lowpass'; pad.frequency.value = 700; pad.Q.value = 0.7; pad.connect(master);
     this.ctx = ctx; this.master = master; this.padFilter = pad;
     return ctx;
@@ -60,9 +61,10 @@ export class VantaScore {
   stop() {
     this.playing = false;
     if (this.timer) { this.timers.clearInterval(this.timer); this.timer = null; }
-    if (this.master && this.ctx) { const t = this.ctx.currentTime; this.master.gain.cancelScheduledValues?.(t); this.master.gain.setTargetAtTime(0, t, 0.4); this.timers.setTimeout(() => { if (!this.playing && this.master) this.master.gain.value = this.volume * 0.6; }, 2500); }
+    // Fade out and stay silent (notes already scheduled die away unheard); start() fades back in.
+    if (this.master && this.ctx) { const t = this.ctx.currentTime; this.master.gain.cancelScheduledValues?.(t); this.master.gain.setTargetAtTime(0, t, 0.4); }
   }
-  setVolume(v) { this.volume = Math.max(0, Math.min(1, Number(v) || 0)); if (this.master && this.playing) this.master.gain.setTargetAtTime(this.volume * 0.6, this.ctx.currentTime, 0.2); }
+  setVolume(v) { this.volume = Math.max(0, Math.min(1, Number(v) || 0)); if (this.master && this.playing) this.master.gain.setTargetAtTime(this.volume * 0.6, this.ctx.currentTime, 0.2); if (this.stings) this.stings.gain.value = this.volume * 0.6; }
   setTension(t) { this.tension = Math.max(0, Math.min(1, Number(t) || 0)); if (this.padFilter && this.ctx) this.padFilter.frequency.setTargetAtTime(600 + this.tension * 1100, this.ctx.currentTime, 1.5); }
   setStorm(s) { this.storm = Math.max(0, Math.min(1, Number(s) || 0)); }
   setKey(id) { this.key = MUSIC_KEYS[id] ? id : 'vanta'; }
@@ -101,6 +103,6 @@ export class VantaScore {
     if (!this.ensure()) return;
     const at = this.ctx.currentTime + 0.05, root = (MUSIC_KEYS[this.key] || MUSIC_KEYS.vanta).root;
     const seq = kind === 'win' ? [0, 4, 7, 12, 16] : kind === 'loss' ? [12, 8, 7, 3, 0, -12] : [0, 7, 12];
-    seq.forEach((iv, i) => this.tone(kind === 'loss' ? 'sine' : 'triangle', midiHz(root + iv), at + i * (kind === 'draw' ? 0 : 0.14), kind === 'draw' ? 2.4 : 1.4, kind === 'loss' ? 0.05 : 0.06));
+    seq.forEach((iv, i) => this.tone(kind === 'loss' ? 'sine' : 'triangle', midiHz(root + iv), at + i * (kind === 'draw' ? 0 : 0.14), kind === 'draw' ? 2.4 : 1.4, kind === 'loss' ? 0.05 : 0.06, this.stings));
   }
 }

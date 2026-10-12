@@ -50,7 +50,8 @@ test('round 12 social features are wired into the app', () => {
   assert.match(main, /if\(reason==='partner'\)return 'on the partner board';/);
   assert.match(main, /if\(entry\.variant==='bughouse'\)return toast/);
   assert.match(main, /\$\('#create'\)\.onclick=async\(\)=>\{if\(\$\('#variant'\)\.value==='bughouse'\)return void createBughouse\(\);if\(\$\('#variant'\)\.value==='twin'\)return renderFates\(\);/);
-  // Team calls go on a channel of their own, never the opponents' game channel.
-  assert.match(main, /channel\(`bughouse:\$\{b\.id\}:team\$\{teamOfSeat\(seat\)\}`/);
+  // Team calls go on a channel named by the server for that team only, never a guessable one.
+  assert.match(main, /channel\(`bughouse-team:\$\{out\.team_key\}`/);
+  assert.ok(!/bughouse:\$\{b\.id\}:team/.test(main));
   assert.ok(main.indexOf('bhSession=null') < main.indexOf('function renderBoard('));
 });

@@ -64,6 +64,9 @@ test('veterans: careers grow one game at a time and survive a reload', () => {
   let st = addGames(emptyCareers(), [{ id: 'g1', sans: OPERA, myColor: 'w' }]);
   st = addGames(st, [{ id: 'g1', sans: OPERA, myColor: 'w' }, { id: 'g2', sans: OPERA, myColor: 'w' }]);
   assert.deepEqual(st.ids, ['g1', 'g2']); assert.equal(st.totals['w-r-h1'].mates, 2);
+  const full = { ids: Array.from({ length: 600 }, (_, i) => `old${i}`), totals: {} };
+  const more = addGames(full, [{ id: 'new', sans: OPERA, myColor: 'w' }]);
+  assert.equal(more.ids.length, 600); assert.equal(more.ids.at(-1), 'new', 'a full list still takes new games (the app counts what was added)');
   saveVeterans(st, store);
   const back = loadVeterans(store);
   assert.deepEqual(back.ids, ['g1', 'g2']); assert.equal(totalsMap(back.totals).get('w-r-h1').mates, 2);
@@ -191,7 +194,9 @@ test('music: the score schedules ahead, grows with tension and ends with a sting
   score.setTension(1); score.setStorm(1); score.ctx.currentTime += 2; score.schedule();
   assert.ok(score.ctx.started > calm, 'arpeggio and drums join in'); assert.equal(score.bpm, 102);
   score.stop(); assert.equal(score.playing, false);
+  assert.equal(score.master.gain.value, 0, 'stopped music stays silent');
   const before = score.ctx.started; score.sting('win'); assert.equal(score.ctx.started - before, 5);
+  assert.ok(score.stings && score.stings !== score.master, 'the sting has its own bus, so the fade does not cut it');
   assert.equal(new VantaScore({ AudioContextClass: null }).start(), false, 'no Web Audio, no music');
 });
 

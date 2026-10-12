@@ -132,6 +132,9 @@ test('Living atmosphere and music: settings stick, the layer sits behind the app
   await expect(page.locator('#musicToggle')).toHaveText('Music: off');
   await page.reload();
   expect(await page.evaluate(() => [JSON.parse(localStorage.getItem('vch.r12')).atmosphere, JSON.parse(localStorage.getItem('vch.music')).on])).toEqual(['off', false]);
+  // ...and are read back after the reload (the first render must not fall back to defaults).
+  await expect(layer).toBeHidden();
+  expect(await page.locator('#atmosphereSetting').inputValue()).toBe('off');
   expect(errors).toEqual([]);
 });
 

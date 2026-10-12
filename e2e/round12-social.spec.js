@@ -28,7 +28,7 @@ test('Vanta Bughouse: a table fills, the match starts on your board, your partne
   await expect(page.locator('[data-bh-seat]')).toHaveCount(3);
   expect(page.url()).toContain('?bughouse=BHTEST01');
   // The fourth player sits down: the server starts both boards.
-  table = { ...table, bughouse: { ...table.bughouse, status: 'active', seats: { aw: { name: 'Me', me: true }, ab: { name: 'Rook Rider' }, bw: { name: 'Queen Bee' }, bb: { name: 'Partner Pat' } } }, games: { a: boardA, b: boardB } };
+  table = { ...table, team_key: 'teamkey0123456789abcdef0', bughouse: { ...table.bughouse, status: 'active', seats: { aw: { name: 'Me', me: true }, ab: { name: 'Rook Rider' }, bw: { name: 'Queen Bee' }, bb: { name: 'Partner Pat' } } }, games: { a: boardA, b: boardB } };
   await expect(page.locator('#topPlayerName')).toHaveText('Rook Rider', { timeout: 12000 });
   await expect(page.locator('#bottomCaptured .zh-piece[data-drop="n"]')).toHaveCount(1);
   const strip = page.locator('#bhPartner');

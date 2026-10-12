@@ -4345,13 +4345,13 @@ function drawRelics(){
 // (src/veterans.js, oaths.js, atmosphere.js, music.js, campaign.js). All of it lives on this device.
 // The state variables are declared near the top of this file (round 12 block) so the board can
 // call in here while the page is still starting.
-const R12_KEY='vch.r12';
+// No module-level constants here: the first render reads these before this part of the file has run.
 function r12Prefs(){
-  if(!r12PrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem(R12_KEY)||'')}catch{}
+  if(!r12PrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem('vch.r12')||'')}catch{}
     r12PrefsCache={veterans:v?.veterans==='off'?'off':'on',atmosphere:['full','subtle','off'].includes(v?.atmosphere)?v.atmosphere:'full'}}
   return r12PrefsCache;
 }
-function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStorage.setItem(R12_KEY,JSON.stringify(r12PrefsCache))}catch{}}
+function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStorage.setItem('vch.r12',JSON.stringify(r12PrefsCache))}catch{}}
 // Messages after a game come one after another instead of replacing each other.
 function queueToast(text,{sound=null,delay=1200}={}){
   r12ToastQueue.push({text,sound});if(r12ToastTimer)return;
@@ -4413,12 +4413,12 @@ async function refreshVeterans(force=false){
     const done=r=>['1-0','0-1','1/2-1/2'].includes(r),me=currentProfile?.id||currentPlayerId,entries=[];
     for(const e of loadLocalArchive()){if(done(e.result)&&['w','b'].includes(e.myColor)&&!String(e.pgn||'').includes('[FEN '))entries.push({id:e.id,pgn:e.pgn,myColor:e.myColor,variant:e.variant||'standard'})}
     if(signedIn())try{for(const g of (await api.archive(100)).games||[]){const color=g.white_player_id===me?'w':g.black_player_id===me?'b':null;if(color&&done(g.result))entries.push({id:g.id,sans:Array.isArray(g.sans)?g.sans:[],myColor:color,startFen:g.start_fen||null,variant:g.variant||'standard'})}}catch{}
-    let state=loadVeterans(),t=performance.now();const known=new Set(state.ids),fresh=entries.filter(e=>e.id&&!known.has(e.id));
+    let state=loadVeterans(),t=performance.now(),added=0;const known=new Set(state.ids),fresh=entries.filter(e=>e.id&&!known.has(e.id));
     for(const e of fresh){
-      if(!e.sans)e.sans=sansFromPgn(e.pgn);state=addGames(state,[e]);
+      if(!e.sans)e.sans=sansFromPgn(e.pgn);state=addGames(state,[e]);if(state.ids.at(-1)===e.id)added++;
       if(performance.now()-t>20){await new Promise(resolve=>setTimeout(resolve,0));t=performance.now()} // keep the page responsive
     }
-    if(state.ids.length!==loadVeterans().ids.length){saveVeterans(state);veteranState=state;vetCache=null;if(boardDom)render();if(currentRightView==='army')drawArmy()}
+    if(added){saveVeterans(state);veteranState=state;vetCache=null;if(boardDom)render();if(currentRightView==='army')drawArmy()}
   })().finally(()=>{veteranRefreshing=null});
   return veteranRefreshing;
 }
@@ -4657,8 +4657,9 @@ function applyBughouse(out){
       d.games[key]={...cur,...Object.fromEntries(BH_PUBLIC.map(k=>[k,g[k]??null]))};drawPartnerStrip();if(currentRightView==='bughouse')drawBughouse();
     }).subscribe();
   }
-  if(seat&&b.status==='active'&&!bhSession.teamChannel)
-    bhSession.teamChannel=realtimeClient.channel(`bughouse:${b.id}:team${teamOfSeat(seat)}`,{config:{broadcast:{self:false}}}).on('broadcast',{event:'call'},message=>receiveCall(message?.payload)).subscribe();
+  // Team calls: the channel's name comes from the server, only to that team's two players.
+  if(seat&&b.status==='active'&&out.team_key&&!bhSession.teamChannel)
+    bhSession.teamChannel=realtimeClient.channel(`bughouse-team:${out.team_key}`,{config:{broadcast:{self:false}}}).on('broadcast',{event:'call'},message=>receiveCall(message?.payload)).subscribe();
   if(seat&&b.status==='active'){
     const mine=out.games?.[seat[0]];
     if(mine?.invite_code&&serverGameId!==mine.id&&bhSession.entered!==mine.id){bhSession.entered=mine.id;toast('The match starts · your board is ready');void enterBughouseBoard(mine.invite_code)}
@@ -4708,7 +4709,7 @@ function drawPartnerStrip(){
       <div class="bh-row mine"><b>${name(pc)}</b><time data-bh-clock="${pc}"></time><span class="bh-pocket" aria-label="Partner pocket">${bhPocketHtml(g.zh_pockets?.[pc],pc,style)}</span></div>
       <div class="bh-row"><b>${name(oc)}</b><time data-bh-clock="${oc}"></time><span class="bh-pocket">${bhPocketHtml(g.zh_pockets?.[oc],oc,style)}</span></div>
       ${bhSession.call?`<em class="bh-call">Partner · ${escapeHtml(bhSession.call.label)}</em>`:''}
-      ${d.bughouse.status==='active'?`<div class="bh-calls" aria-label="Call to your partner">${BH_CALLS.map(([k,l])=>`<button type="button" data-bh-call="${k}" title="${escapeHtml(l)}" aria-label="${escapeHtml(l)}">${'nbrqp'.includes(k)?`<img src="${pieceAssetFor(style,pc+k)}" alt="">`:escapeHtml({sit:'Wait',go:'Fast',trade:'Trade',hold:'Hold'}[k])}</button>`).join('')}<button type="button" class="bh-table">Table</button></div>`:'<div class="bh-calls"><button type="button" class="bh-table">Table</button></div>'}
+      ${d.bughouse.status==='active'&&bhSession.teamChannel?`<div class="bh-calls" aria-label="Call to your partner">${BH_CALLS.map(([k,l])=>`<button type="button" data-bh-call="${k}" title="${escapeHtml(l)}" aria-label="${escapeHtml(l)}">${'nbrqp'.includes(k)?`<img src="${pieceAssetFor(style,pc+k)}" alt="">`:escapeHtml({sit:'Wait',go:'Fast',trade:'Trade',hold:'Hold'}[k])}</button>`).join('')}<button type="button" class="bh-table">Table</button></div>`:'<div class="bh-calls"><button type="button" class="bh-table">Table</button></div>'}
     </div>`;
   el.querySelectorAll('[data-bh-call]').forEach(b=>b.onclick=()=>sendCall(b.dataset.bhCall));
   el.querySelector('.bh-table')?.addEventListener('click',showBughouseTable);
@@ -4724,7 +4725,7 @@ function drawBughouse(){
     <div class="gauntlet-head"><div><small>TABLE</small><b>${escapeHtml(b.code)}</b></div><div><small>CLOCK</small><b>${formatTimeControl(b.time_control_seconds,b.increment_seconds)}</b></div><div><small>STATUS</small><b>${status}</b></div></div>
     <div class="bh-teams"><section class="bh-team team1"><h4>Team 1</h4>${seatHtml('aw')}${seatHtml('bb')}</section><section class="bh-team team2"><h4>Team 2</h4>${seatHtml('ab')}${seatHtml('bw')}</section></div>
     ${waiting?`<div class="bh-share"><input readonly value="${escapeHtml(link)}" aria-label="Table link"><button type="button" class="bh-copy">Copy link</button></div><p class="computer-note">The match starts the moment the fourth seat is taken. Casual: Bughouse has no rating.</p>`:''}
-    ${b.status==='active'&&seat?`<h4>Calls to your partner</h4><div class="bh-calls wide">${BH_CALLS.map(([k,l])=>`<button type="button" data-bh-call="${k}">${l}</button>`).join('')}</div>`:''}
+    ${b.status==='active'&&seat&&bhSession.teamChannel?`<h4>Calls to your partner</h4><div class="bh-calls wide">${BH_CALLS.map(([k,l])=>`<button type="button" data-bh-call="${k}">${l}</button>`).join('')}</div>`:''}
     <div class="streak-actions">${waiting&&seat?'<button type="button" class="bh-leave">Leave table</button>':''}${!waiting&&seat&&serverGame?.bughouse_id!==b.id&&b.status==='active'?'<button type="button" class="gold bh-board-go">Go to your board</button>':''}${['finished','aborted'].includes(b.status)?'<button type="button" class="gold bh-new">New table</button>':''}</div></article>`;
   target.querySelectorAll('[data-bh-seat]').forEach(btn=>btn.onclick=async()=>{try{applyBughouse(await api.bughouseJoin(b.code,btn.dataset.bhSeat,currentProfile?.username||guestName))}catch(error){toast(error.message)}});
   target.querySelector('.bh-copy')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(link);toast('Table link copied')}catch{toast(link)}});

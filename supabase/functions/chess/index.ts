@@ -7,7 +7,7 @@ import { BATTLE_QUEUE_MS, LADDER_POINTS, PREP_PLIES, isoWeek, previousWeek } fro
 import { MOMENT_DAYS, MOMENT_MIN_PLIES, momentCaption, momentScore } from "./rules.js";
 import { boardEndReason, gamePgn, isFullPgn, positionKey, repetitionCount } from "./rules.js";
 import { FATES, cleanCrest, fateById, pickFate, twinScore } from "./rules.js";
-import { BUGHOUSE_DEFAULT_SECONDS, BUGHOUSE_SEATS, boardResultFor, bughouseStatus, bughouseTransfer, isSeat, matchWinner, otherBoard } from "./bughouse.js";
+import { BUGHOUSE_DEFAULT_SECONDS, BUGHOUSE_SEATS, boardResultFor, bughouseStatus, bughouseTransfer, isSeat, matchWinner, otherBoard, teamOfSeat } from "./bughouse.js";
 import { BATTLE_COUNTDOWN_MS, BATTLE_MAX_MISSES, BATTLE_MS, BATTLE_PUZZLES, SIMUL_MAX_PLAYERS, VACATION_DAYS, battleOver, battleSet, battleWinner, cleanRepertoire, onVacation, vacationLeft, vacationOverlapMs, CLUB_LEAGUE_TOP, EXPLORER_PLIES, SANDBAG_FLAG, abortDue, clubLeagueTable, explorerKey, firstMovesPending, nextSandbagScore, sandbagAdjust, sandbagDelta, swissPairs } from "./rules.js";
 import { CONDITIONAL_MAX_LINES, CONDITIONAL_MAX_PLIES, DIVISIONS, LEAGUE_MIN_GAMES, arenaScore, berserkAfter, berserkClock, dailyIndex, dailyMoveMs, freestyleFen, kMultiplier, leagueMoves, leaguePoints, matchConditional, newAchievements, previousSeason, puzzleRatingUpdate, seasonEnds, seasonOf, verifyJwt, zoneSizes } from "./rules.js";
 
@@ -256,6 +256,8 @@ async function settleRatings(g:any){
   ]).catch(e=>console.error("achievements",e));
   return settled
 }
+// In drop games a pocket piece (or one a Bughouse partner sends) can still mate.
+const DROP_VARIANTS=["crazyhouse","bughouse"];
 function sideCanPossiblyMate(c:Chess,color:"w"|"b"){
   const own:any[]=[];const opp:any[]=[];
   for(const row of c.board())for(const p of row)if(p&&p.type!=="k")(p.color===color?own:opp).push(p);
@@ -282,7 +284,7 @@ async function resolveTimeout(g:any){
   }const c=new Chess(g.fen),side=c.turn(),elapsed=Math.max(0,Date.now()-Date.parse(g.last_move_at)),remain=side==="w"?Number(g.white_time_ms):Number(g.black_time_ms);if(elapsed<remain)return g;
   if(g.daily_days){const pid=side==="w"?g.white_player_id:g.black_player_id,away=pid?await playerById(pid):null;if(away&&elapsed-vacationOverlapMs(away,Date.parse(g.last_move_at))<remain)return g}
   const winner=(side==="w"?"b":"w") as "w"|"b";
-  const patch=g.variant!=="bughouse"&&!sideCanPossiblyMate(c,winner)
+  const patch=!DROP_VARIANTS.includes(g.variant)&&!sideCanPossiblyMate(c,winner)
     ?{status:"draw",result:"1/2-1/2",...(side==="w"?{white_time_ms:0}:{black_time_ms:0})}
     :(side==="w"?{status:"black_won",result:"0-1",white_time_ms:0}:{status:"white_won",result:"1-0",black_time_ms:0});
   const {data}=await admin.from("chess_games").update({...patch,...endRecord(g,patch.result,"timeout"),end_reason:"timeout",version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").select().maybeSingle();
@@ -408,7 +410,7 @@ async function claimWin(req:Request,b:any){
   const seat=g.white_player_id===p.id?"w":"b";
   const seen=Date.parse((seat==="w"?g.black_last_seen_at:g.white_last_seen_at)||"")||0;
   if(Date.now()-seen<CLAIM_AFTER_MS)throw fail("Your opponent is still connected.",409);
-  const draw=b.outcome==="draw"||!sideCanPossiblyMate(new Chess(g.fen),seat as "w"|"b");
+  const draw=b.outcome==="draw"||(!DROP_VARIANTS.includes(g.variant)&&!sideCanPossiblyMate(new Chess(g.fen),seat as "w"|"b"));
   const patch=draw?{status:"draw",result:"1/2-1/2"}:seat==="w"?{status:"white_won",result:"1-0"}:{status:"black_won",result:"0-1"};
   const {data,error}=await admin.from("chess_games").update({...patch,...endRecord(g,patch.result,"abandoned"),end_reason:"abandoned",draw_offer_by:null,version:Number(g.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",g.id).eq("status","active").eq("version",Number(g.version)).select().maybeSingle();
   if(error)throw error;if(!data)throw fail("The game changed. Sync the game.",409);
@@ -1520,8 +1522,9 @@ async function bughouseView(m:any,viewerId:string|null){
   const [a,bb]=await Promise.all([m.game_a?freshGame(m.game_a):null,m.game_b?freshGame(m.game_b):null]);
   if(m.status==="active")m=(await one("chess_bughouse","id",m.id))||m; // a clock may just have ended it
   const seats=Object.fromEntries(BUGHOUSE_SEATS.map(s=>[s,m.seats?.[s]?{name:m.seats[s].name,me:m.seats[s].id===viewerId}:null]));
-  return {bughouse:{id:m.id,code:m.code,status:m.status,seats,winner:m.winner||null,end_reason:m.end_reason||null,time_control_seconds:m.time_control_seconds,increment_seconds:m.increment_seconds,started_at:m.started_at,ended_at:m.ended_at},
-    games:{a:bughousePublicGame(a),b:bughousePublicGame(bb)},seat:bughouseSeatOf(m,viewerId)}
+  const seat=bughouseSeatOf(m,viewerId),teamKey=seat&&m.secret?(await hash(`${m.secret}:${teamOfSeat(seat)}`)).slice(0,24):null;
+  return {team_key:teamKey,bughouse:{id:m.id,code:m.code,status:m.status,seats,winner:m.winner||null,end_reason:m.end_reason||null,time_control_seconds:m.time_control_seconds,increment_seconds:m.increment_seconds,started_at:m.started_at,ended_at:m.ended_at},
+    games:{a:bughousePublicGame(a),b:bughousePublicGame(bb)},seat}
 }
 async function bughouseCreate(req:Request,b:any){
   const p=await playerFor(req,b);assertAllowed(p);
@@ -1530,7 +1533,7 @@ async function bughouseCreate(req:Request,b:any){
   const seconds=Math.max(60,Math.min(900,Math.round(Number(b.seconds||BUGHOUSE_DEFAULT_SECONDS)))),inc=Math.max(0,Math.min(15,Math.round(Number(b.increment||0))));
   const seat=isSeat(b.seat)?b.seat:"aw";
   let code=code8();while(await one("chess_bughouse","code",code))code=code8();
-  const {data,error}=await admin.from("chess_bughouse").insert({code,seats:{[seat]:{id:p.id,name:p.username||p.display_name}},time_control_seconds:seconds,increment_seconds:inc,created_by:p.id}).select().single();if(error)throw error;
+  const {data,error}=await admin.from("chess_bughouse").insert({code,secret:crypto.randomUUID(),seats:{[seat]:{id:p.id,name:p.username||p.display_name}},time_control_seconds:seconds,increment_seconds:inc,created_by:p.id}).select().single();if(error)throw error;
   return bughouseView(data,p.id)
 }
 // Takes (or switches to) a seat while the table fills; the fourth player starts both boards.
@@ -1569,12 +1572,17 @@ async function bughouseStart(m:any){
 async function bughouseLeave(req:Request,b:any){
   const p=await playerFor(req,b);const m=await bughouseByCode(b.code);if(!m)return {left:true};
   const mine=bughouseSeatOf(m,p.id);if(!mine)return {left:true};
-  if(m.status!=="waiting")throw fail("The match has started: resign on your board instead.",409);
-  const seats={...m.seats};delete seats[mine];
-  if(!Object.keys(seats).length){await admin.from("chess_bughouse").delete().eq("id",m.id).eq("status","waiting");return {left:true}}
-  await admin.from("chess_bughouse").update({seats,seat_version:Number(m.seat_version||0)+1}).eq("id",m.id).eq("status","waiting").eq("seat_version",Number(m.seat_version||0));
-  EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"seats"}));
-  return {left:true}
+  let room:any=m;
+  for(let tries=0;tries<4;tries++){
+    const seat=bughouseSeatOf(room,p.id);if(!seat)return {left:true};
+    if(room.status!=="waiting")throw fail("The match has started: resign on your board instead.",409);
+    const seats={...room.seats};delete seats[seat];
+    const q=!Object.keys(seats).length?admin.from("chess_bughouse").delete():admin.from("chess_bughouse").update({seats,seat_version:Number(room.seat_version||0)+1});
+    const {data}=await q.eq("id",room.id).eq("status","waiting").eq("seat_version",Number(room.seat_version||0)).select();
+    if(data?.length){EdgeRuntime.waitUntil(broadcastTo(`bughouse:${room.id}`,"bughouse",{status:"seats"}));return {left:true}}
+    room=await one("chess_bughouse","id",room.id);if(!room)return {left:true}; // the seats changed: look again
+  }
+  throw fail("The table is busy. Try again.",409)
 }
 async function bughouseState(req:Request,b:any){
   let p:any=null;try{p=await playerFor(req,b,false,{touch:false})}catch{}
@@ -1598,11 +1606,13 @@ async function bughouseFinish(g:any){
   const winner=matchWinner(g.bughouse_board,g.result);if(!winner)return;
   const {data:room}=await admin.from("chess_bughouse").update({status:"finished",winner,end_reason:String(g.end_reason||"").slice(0,40)||null,ended_at:nowIso()}).eq("id",m.id).eq("status","active").select().maybeSingle();
   if(!room)return;
-  const otherId=g.bughouse_board==="a"?m.game_b:m.game_a,other=otherId?await gameById(otherId):null;
-  if(other&&other.status==="active"){
+  const otherId=g.bughouse_board==="a"?m.game_b:m.game_a;
+  // A move may land on the other board meanwhile: write against the version just read, retry.
+  for(let tries=0;otherId&&tries<4;tries++){
+    const other=await gameById(otherId);if(!other||other.status!=="active")break;
     const r=boardResultFor(otherBoard(g.bughouse_board),winner);
-    const {data:o}=await admin.from("chess_games").update({...r,end_reason:"partner",...endRecord(other,r.result,"partner"),version:Number(other.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",other.id).eq("status","active").select().maybeSingle();
-    if(o)EdgeRuntime.waitUntil(broadcastGameState(o));
+    const {data:o}=await admin.from("chess_games").update({...r,end_reason:"partner",...endRecord(other,r.result,"partner"),version:Number(other.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",other.id).eq("status","active").eq("version",Number(other.version)).select().maybeSingle();
+    if(o){EdgeRuntime.waitUntil(broadcastGameState(o));break}
   }
   EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"finished",winner}));
 }
@@ -1610,7 +1620,11 @@ async function bughouseAbort(g:any){
   const m=await one("chess_bughouse","id",g.bughouse_id);if(!m||m.status!=="active")return;
   const {data:room}=await admin.from("chess_bughouse").update({status:"aborted",end_reason:"aborted",ended_at:nowIso()}).eq("id",m.id).eq("status","active").select().maybeSingle();if(!room)return;
   const otherId=g.bughouse_board==="a"?m.game_b:m.game_a;
-  if(otherId){const {data:o}=await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"aborted",ended_at:nowIso(),updated_at:nowIso()}).eq("id",otherId).eq("status","active").select().maybeSingle();if(o)EdgeRuntime.waitUntil(broadcastGameState(o))}
+  for(let tries=0;otherId&&tries<4;tries++){
+    const other=await gameById(otherId);if(!other||other.status!=="active")break;
+    const {data:o}=await admin.from("chess_games").update({status:"aborted",result:"*",end_reason:"aborted",version:Number(other.version)+1,ended_at:nowIso(),updated_at:nowIso()}).eq("id",other.id).eq("status","active").eq("version",Number(other.version)).select().maybeSingle();
+    if(o){EdgeRuntime.waitUntil(broadcastGameState(o));break}
+  }
   EdgeRuntime.waitUntil(broadcastTo(`bughouse:${m.id}`,"bughouse",{status:"aborted"}));
 }
 // ---- Twin Fates: one famous position, played twice, once with each colour ----

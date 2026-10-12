@@ -9,6 +9,7 @@ create table if not exists public.chess_bughouse (
   status text not null default 'waiting' check (status in ('waiting','active','finished','aborted')),
   seats jsonb not null default '{}'::jsonb check (jsonb_typeof(seats) = 'object' and octet_length(seats::text) <= 1200),
   seat_version integer not null default 0, -- every seat change bumps it, so two joins can't take the same seat
+  secret text, -- names each team's private call channel; never sent to players as is
   game_a uuid references public.chess_games(id) on delete set null,
   game_b uuid references public.chess_games(id) on delete set null,
   time_control_seconds integer not null default 180 check (time_control_seconds between 60 and 900),
@@ -20,6 +21,7 @@ create table if not exists public.chess_bughouse (
   started_at timestamptz,
   ended_at timestamptz
 );
+alter table public.chess_bughouse add column if not exists secret text;
 create index if not exists chess_bughouse_created_by_idx on public.chess_bughouse (created_by);
 create index if not exists chess_bughouse_game_a_idx on public.chess_bughouse (game_a);
 create index if not exists chess_bughouse_game_b_idx on public.chess_bughouse (game_b);
