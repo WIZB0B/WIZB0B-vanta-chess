@@ -64,6 +64,11 @@ test('left panel switches between three distinct play-mode views',async({page})=
   await expect(page.locator('#botGrid .bot-card').first()).toContainText('Beginner');
   await expect(page.locator('#botGrid .bot-card').last()).toContainText('Maximum');
   await expect(page.locator('#botGrid')).not.toContainText(/Stockfish|Lozza/);
+  // Strength shown the way chess sites do it: tiers by rating, a level number, FIDE titles; no pieces.
+  await expect(page.locator('#botGrid .bot-tier')).toHaveText(['Beginner400–900', 'Intermediate1200–1500', 'Advanced1800–2000', 'Masters2200–2800', 'Full strength3200']);
+  await expect(page.locator('#botGrid .bot-level span')).toHaveText(Array.from({ length: 12 }, (_, i) => String(i + 1)));
+  await expect(page.locator('#botGrid .bot-title')).toHaveText(['CM', 'IM', 'GM', 'GM']);
+  await expect(page.locator('#botGrid img')).toHaveCount(0);
   await expect(page.locator('[data-computer-side]')).toHaveCount(3);
   await expect(page.locator('#computerStart')).toBeVisible();
 

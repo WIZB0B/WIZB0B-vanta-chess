@@ -43,7 +43,7 @@ import { playablePuzzleFen } from './puzzle-start.js';
 import { VARIANT_WORKER_URL, zhRecordsFromSans, zhReviewPositions } from './variant-engine.js';
 import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-review.js';
 import { ENGINES, engineFor, lozzaBudget } from './engine-roster.js';
-import { COMPUTER_LEVELS, DEFAULT_LEVEL, OLD_BOT_NAMES, beginnerMove, levelBot } from './computer-levels.js';
+import { COMPUTER_LEVELS, DEFAULT_LEVEL, LEVEL_TIERS, OLD_BOT_NAMES, beginnerMove, levelBot } from './computer-levels.js';
 import { guideFor } from './hover-guide.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
@@ -191,6 +191,7 @@ ${splashMarkup(splash)}
 <div class="shell ${startsInGame?'game-active':'intro-active'}">
   <header class="topbar">
     <a class="brand vch-brand" href="#" aria-label="VCH home">
+      <span class="vch-v vch-v-top" aria-hidden="true"></span>
       <img class="vch-wordmark vch-wordmark-top" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
     </a>
     <nav class="main-nav" aria-label="Primary">
@@ -234,6 +235,7 @@ ${splashMarkup(splash)}
     <div class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</div>
     <div class="main-menu-hero">
       <div class="main-menu-copy">
+        <span class="vch-v vch-v-chrome vch-v-menu" aria-hidden="true"></span>
         <img class="main-menu-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
         <h1 id="mainMenuTitle">Play Better<br>Chess</h1>
         <p class="main-menu-subtext">Competitive games. Real progress. A community that thinks ahead.</p>
@@ -392,7 +394,7 @@ ${splashMarkup(splash)}
 
 <dialog id="accountDialog" class="account-dialog">
   <form method="dialog"><button class="account-close" aria-label="Close">×</button></form>
-  <div class="account-head"><img class="account-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h2>Save your rating and record</h2><p>Guest games stay instant. Sign in only when you want rated play, tournaments, and a persistent profile.</p></div>
+  <div class="account-head"><span class="vch-lockup"><span class="vch-v" aria-hidden="true"></span><img class="account-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"></span><h2>Save your rating and record</h2><p>Guest games stay instant. Sign in only when you want rated play, tournaments, and a persistent profile.</p></div>
   <div id="accountGuest">
     <div class="auth-tabs"><button type="button" class="on" data-auth="signin">Sign in</button><button type="button" data-auth="signup">Create account</button></div>
     <label id="usernameField" class="hidden">Username<input id="authUsername" autocomplete="username" maxlength="20" placeholder="3–20 letters, numbers or _"></label>
@@ -415,7 +417,7 @@ ${splashMarkup(splash)}
   </div>
 </dialog>
 
-<dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><div class="search-title"><img class="search-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h2>Search</h2></div><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
+<dialog id="searchDialog" class="search-dialog"><form method="dialog"><button class="close-search">×</button></form><div class="search-title"><span class="vch-v" aria-hidden="true"></span><img class="search-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h2>Search</h2></div><input id="searchInput" autocomplete="off" placeholder="Search openings, lessons, famous games…"><div id="searchResults"></div></dialog>
 `
 
 dismissSplash($('#brandSplash'),splash);
@@ -976,7 +978,10 @@ function syncSpecialOpponent(bot){
 function renderComputerBots(){
   const grid=$('#botGrid');if(!grid)return;
   if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=DEFAULT_LEVEL;
-  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" data-about="${escapeHtml(bot.about||'')}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Computer')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
+  // Strength the way chess sites show it: tiers by rating, a level number on a strength gauge,
+  // the rating, and the FIDE title a player that strong would hold. No chess pieces.
+  const card=bot=>{const level=Number(bot.level)||0,share=Math.max(0,Math.min(1,level/12)),tier=String(bot.tier||'').toLowerCase().replace(/[^a-z]+/g,'-');return `<button class="bot-card${tier?` tier-${tier}`:''}${bot.slug===selectedComputerBotSlug?' on':''}" data-bot-slug="${escapeHtml(bot.slug)}" data-about="${escapeHtml(bot.about||'')}" type="button"><span class="bot-level" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/><circle class="bot-level-fill" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(share*100).toFixed(1)} 100"/></svg><span>${level||''}</span></span><span class="bot-text"><b>${escapeHtml(bot.display_name||bot.name||'Computer')}</b><span class="bot-meta"><small>${Number(bot.elo)||1200} Elo</small>${bot.title?`<i class="bot-title">${escapeHtml(bot.title)}</i>`:''}</span></span></button>`};
+  grid.innerHTML=LEVEL_TIERS.map(tier=>{const bots=computerBots.filter(bot=>bot.tier===tier.name);return bots.length?`<p class="bot-tier"><span>${escapeHtml(tier.name)}</span><small>${escapeHtml(tier.range)}</small></p>${bots.map(card).join('')}`:''}).join('')+computerBots.filter(bot=>!LEVEL_TIERS.some(tier=>tier.name===bot.tier)).map(card).join('');
   $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;syncSpecialOpponent(null);renderComputerBots()});
 }
 // The ladder lives in the app (src/computer-levels.js); the server's bots only stand in for an
@@ -4437,7 +4442,7 @@ function renderReview(){
   const replay=$('#dynamicView .replay-review');if(replay)replay.onclick=()=>renderStudy('review','Game Replay',sans,opening?opening.name:'Current game');
 }
 function brandLoading(label){
-  return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
+  return `<div class="loading-card brand-loading"><span class="vch-lockup"><span class="vch-v vch-v-chrome vch-v-shine" aria-hidden="true"></span><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"></span><span>${escapeHtml(label)}</span></div>`;
 }
 let puzzleRetries=0;
 // The card beside a run puzzle: mode, count and best, the clock, the token purse, Skip, End.
