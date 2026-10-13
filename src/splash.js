@@ -32,7 +32,7 @@ export function splashPlan({standalone,storage}){
 export function splashMarkup(plan){
   if(!plan)return '';
   return `<div id="brandSplash" class="brand-splash" aria-hidden="true" style="--splash-fade:${plan.fadeMs}ms">
-  <div class="brand-splash-wordmark"><img src="/assets/vch/brand/vch-metal.svg" alt=""></div>
+  <div class="brand-splash-lockup"><span class="vch-v vch-v-chrome vch-v-shine vch-v-splash"></span><div class="brand-splash-wordmark"><img src="/assets/vch/brand/vch-metal.svg" alt=""></div></div>
 </div>`;
 }
 

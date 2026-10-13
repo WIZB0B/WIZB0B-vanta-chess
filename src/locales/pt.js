@@ -1914,6 +1914,8 @@ export const ROWS = [
   ["Maximum", "Máximo"],
   ["Full strength, no handicap. The strongest opponent on VCH.", "Força total, sem handicap. O adversário mais forte do VCH."],
   ["The computer is unavailable in this browser.", "O computador não está disponível neste navegador."],
+  ["Masters", "Mestres"],
+  ["Full strength", "Força máxima"],
 ];
 
 export const PATTERNS = [
