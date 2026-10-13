@@ -6,7 +6,8 @@ import { RANKS, addGames, armyList, careers, countsForCareer, deeds, emptyCareer
 import { HONOR_RELICS, OATHS, dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from '../src/oaths.js';
 import { atmosphereFor, materialFromFen, tensionFor } from '../src/atmosphere.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, starsFor, totalStars } from '../src/campaign.js';
-import { KEY_FOR_THEME, MUSIC_KEYS, VantaScore, chordFor, loadMusic, midiHz, saveMusic } from '../src/music.js';
+import { KEY_FOR_THEME, MOTIFS, MUSIC_KEYS, PARTS, PLACES, VantaScore, chordFor, loadMusic, midiHz, noteIn, partFor, saveMusic } from '../src/music.js';
+import { playMoveSound, soundPlace } from '../src/move-sound.js';
 import { RELICS, relicById } from '../src/relics.js';
 
 const memory = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
@@ -180,24 +181,74 @@ test('music: each theme has its key, chords are triads in that key', () => {
   const store = memory(); assert.deepEqual(loadMusic(store), { on: false, volume: 0.5 }, 'off unless you turn it on');
   saveMusic({ on: true, volume: 2 }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 1 });
 });
-class FakeParam { constructor() { this.value = 0; this.events = []; } setValueAtTime(v, t) { this.events.push(['set', v, t]); } setTargetAtTime(v, t) { this.events.push(['target', v, t]); this.value = v; } exponentialRampToValueAtTime(v, t) { this.events.push(['ramp', v, t]); } cancelScheduledValues() {} }
-class FakeNode { constructor(ctx) { this.ctx = ctx; this.gain = new FakeParam(); this.frequency = new FakeParam(); this.Q = new FakeParam(); } connect() {} start() { this.ctx.started++; } stop() {} }
-class FakeContext { constructor() { this.currentTime = 1; this.state = 'running'; this.sampleRate = 8000; this.started = 0; this.destination = {}; }
-  createGain() { return new FakeNode(this); } createOscillator() { return new FakeNode(this); } createBiquadFilter() { return new FakeNode(this); } createDynamicsCompressor() { return new FakeNode(this); }
-  createBufferSource() { return new FakeNode(this); } createBuffer(_c, len) { return { getChannelData: () => new Float32Array(len) }; } resume() {} }
+class FakeParam { constructor() { this.value = 0; this.events = []; } setValueAtTime(v, t) { this.events.push(['set', v, t]); } linearRampToValueAtTime(v, t) { this.events.push(['linear', v, t]); } setTargetAtTime(v, t) { this.events.push(['target', v, t]); this.value = v; } exponentialRampToValueAtTime(v, t) { this.events.push(['ramp', v, t]); } cancelScheduledValues() {} }
+class FakeNode { constructor(ctx, kind = 'node') { this.ctx = ctx; this.kind = kind; this.gain = new FakeParam(); this.frequency = new FakeParam(); this.Q = new FakeParam(); this.detune = new FakeParam(); this.outputs = []; } connect(n) { this.outputs.push(n); return n; } start() { this.ctx.started++; } stop() {} }
+class FakeContext { constructor() { this.currentTime = 1; this.state = 'running'; this.sampleRate = 8000; this.started = 0; this.destination = {}; this.panners = []; }
+  createGain() { return new FakeNode(this, 'gain'); } createOscillator() { return new FakeNode(this, 'osc'); } createBiquadFilter() { return new FakeNode(this, 'filter'); } createDynamicsCompressor() { return new FakeNode(this, 'comp'); }
+  createBufferSource() { return new FakeNode(this, 'source'); } createBuffer(_c, len) { return { getChannelData: () => new Float32Array(len) }; } resume() {} }
+// A browser's context: a hall (convolver), places around you (HRTF panners) and a listening tap.
+class RoomContext extends FakeContext {
+  createConvolver() { return new FakeNode(this, 'convolver'); }
+  createPanner() { const p = new FakeNode(this, 'panner'); for (const k of ['positionX', 'positionY', 'positionZ']) p[k] = new FakeParam(); this.panners.push(p); return p; }
+  createAnalyser() { const a = new FakeNode(this, 'analyser'); a.frequencyBinCount = 256; a.getByteFrequencyData = d => d.fill(90); return a; }
+}
 test('music: the score schedules ahead, grows with tension and ends with a sting', () => {
   const timers = { setInterval: () => 1, clearInterval() {}, setTimeout: fn => fn() };
   const score = new VantaScore({ AudioContextClass: FakeContext, timers });
   assert.equal(score.start(), true); assert.ok(score.playing);
   const calm = score.ctx.started;
-  assert.ok(calm > 0, 'the pad starts at once');
+  assert.ok(calm > 0, 'the strings start at once');
   score.setTension(1); score.setStorm(1); score.ctx.currentTime += 2; score.schedule();
-  assert.ok(score.ctx.started > calm, 'arpeggio and drums join in'); assert.equal(score.bpm, 102);
+  assert.ok(score.ctx.started > calm, 'cellos and drums join in'); assert.equal(score.bpm, 104);
   score.stop(); assert.equal(score.playing, false);
   assert.equal(score.master.gain.value, 0, 'stopped music stays silent');
-  const before = score.ctx.started; score.sting('win'); assert.equal(score.ctx.started - before, 5);
+  const before = score.ctx.started; score.sting('win'); assert.equal(score.ctx.started - before, 11, 'a fanfare: five horn notes and their octaves, and a timpani stroke');
   assert.ok(score.stings && score.stings !== score.master, 'the sting has its own bus, so the fade does not cut it');
   assert.equal(new VantaScore({ AudioContextClass: null }).start(), false, 'no Web Audio, no music');
+});
+test('music: a cinematic score in 3D: sections placed round you, a hall, three parts and the lobby', () => {
+  const timers = { setInterval: () => 1, clearInterval() {} };
+  const score = new VantaScore({ AudioContextClass: RoomContext, timers, random: () => 0.5 });
+  const notes = []; score.onNote(ev => notes.push(ev));
+  score.setLobby(true); assert.equal(score.bpm, 68, 'between games: slower');
+  score.start();
+  const ctx = score.ctx;
+  assert.equal(ctx.panners.length, Object.keys(PLACES).length, 'every section has its place');
+  assert.ok(ctx.panners.every(p => p.panningModel === 'HRTF'));
+  assert.deepEqual([ctx.panners[0].positionX.value, ctx.panners[1].positionX.value], [-2.6, 2.6], 'the strings wide left and right');
+  assert.ok(score.hall && score.sends, 'a hall, fed by the sections');
+  assert.equal(notes[0].kind, 'chord'); assert.ok(notes[0].at > ctx.currentTime, 'announced before it sounds');
+  assert.deepEqual(notes[0].notes, chordFor('vanta', 0)); assert.equal(score.part, 'calm');
+  assert.deepEqual(score.chord, chordFor('vanta', 0));
+  // A whole phrase: four chords, a motif on the flute (every other phrase), beats on the quarters.
+  for (let k = 0; k < 400; k++) { ctx.currentTime += 0.05; score.schedule(); }
+  const kinds = new Set(notes.map(n => n.kind));
+  assert.ok(kinds.has('motif') && kinds.has('beat') && !kinds.has('drum'), [...kinds].join());
+  // A tense game: the part changes only where a phrase ends.
+  score.setLobby(false); score.setTension(0.9);
+  const at = score.eighth;
+  for (let k = 0; k < 600 && score.eighth < at + 70; k++) { ctx.currentTime += 0.05; score.schedule(); }
+  assert.equal(score.part, 'tense');
+  assert.ok(notes.some(n => n.kind === 'drum'), 'timpani and war drums');
+  assert.deepEqual(PARTS.tense, [0, 3, 5, 4]); assert.equal(partFor(0.2, 0.5), 'storm'); assert.equal(partFor(0.6, 0), 'tense'); assert.equal(partFor(0, 0), 'calm');
+  assert.deepEqual(chordFor('vanta', 1, 'tense'), [55, 58, 62], 'iv in D minor: G minor');
+  assert.equal(noteIn('vanta', -1), 48, 'below the root: C');
+  assert.ok(Object.keys(MOTIFS).every(k => MUSIC_KEYS[k] && MOTIFS[k].reduce((n, [, len]) => n + len, 0) === 16), 'every motif fills its chord');
+  // The sting: the music steps back under it, and the room hears it.
+  score.duck(2); assert.ok(score.master.gain.events.some(([kind, v]) => kind === 'target' && v < score.level));
+  score.sting('loss'); assert.equal(notes.at(-1).kind, 'sting'); assert.equal(notes.at(-1).result, 'loss');
+  assert.ok(score.readSpectrum().length === 256, 'the listening tap');
+});
+test('music: moves are heard where they land', () => {
+  const ctx = new RoomContext();
+  assert.deepEqual(soundPlace(-1, -1), [-1.4, -0.5, -0.9], 'the near left corner: left, close');
+  assert.deepEqual(soundPlace(1, 1), [1.4, -0.5, -2.7], 'the far right corner: right, further away');
+  const placed = playMoveSound(ctx, { place: soundPlace(0.5, 0.2) });
+  assert.equal(placed.kind, 'panner'); assert.equal(placed.panningModel, 'HRTF'); assert.equal(placed.positionX.value, 0.7);
+  const plain = ctx.started; playMoveSound(ctx, {}); const one = ctx.started - plain;
+  const before = ctx.started; playMoveSound(ctx, { capture: true, check: true });
+  assert.ok(ctx.started - before > one * 2, 'a capture knocks twice, a check rings');
+  assert.equal(playMoveSound(new FakeContext(), { place: [1, 0, -2] }).kind, 'gain', 'no panner: straight out');
 });
 
 // ---- Wiring in the app ----

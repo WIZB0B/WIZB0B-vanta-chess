@@ -66,7 +66,7 @@ function stage() {
   let now = 0, frames = [];
   const view = { performance: { now: () => now }, requestAnimationFrame: f => { frames.push(f); return frames.length; }, cancelAnimationFrame: () => { frames = []; } };
   const run = ms => { now += ms; const due = frames; frames = []; for (const f of due) f(now); };
-  return { canvas: { width: 0, height: 0, getContext: () => ctx }, view, calls, run, pending: () => frames.length };
+  return { canvas: { width: 0, height: 0, getContext: () => ctx }, view, calls, run, pending: () => frames.length, advance: ms => { now += ms; } };
 }
 
 test('one canvas: about 15 drawings a second, none while a piece moves, one still picture for reduced motion', () => {
@@ -102,4 +102,35 @@ test('each light flickers in its own range; the pointer leans the flames near it
   assert.equal(wl.stir(flame.x + 10, flame.y), 1 + wl.lights.filter(l => l !== flame && l.kind !== 'l' && Math.hypot(l.x - flame.x - 10, l.y - flame.y) <= 60 + l.size * 0.5).length);
   assert.equal(flame.lean, -1, 'leans away from the pointer');
   assert.equal(wl.stir(-5000, -5000), 0);
+});
+
+test('the flames leap with the music and settle; a loss makes them gutter; a pluck catches a few', () => {
+  const st = stage(), wl = new WallLights(st.canvas, { view: st.view, random: (() => { let i = 0; return () => (i++ % 10) / 10; })() });
+  wl.setLights(placeLights('classic', 1440, 900), 1440, 900);
+  const l = wl.lights[0], t0 = wl.now();
+  assert.equal(wl.flareOf(l, t0), 0);
+  wl.pulse(0.4, 400);
+  assert.ok(Math.abs(wl.flareOf(l, wl.now()) - 0.4) < 1e-9, 'leaps at once');
+  st.advance(200); assert.ok(wl.flareOf(l, wl.now()) > 0 && wl.flareOf(l, wl.now()) < 0.4, 'settling');
+  st.advance(250); assert.equal(wl.flareOf(l, wl.now()), 0, 'settled');
+  wl.pulse(-0.45, 500); assert.ok(wl.flareOf(l, wl.now()) < 0, 'a loss: the flames gutter');
+  st.advance(600);
+  wl.pulse(0.2, 300, 0.3);
+  const caught = wl.lights.filter(x => wl.flareOf(x, wl.now()) > 0).length;
+  assert.ok(caught > 0 && caught < wl.lights.length, `${caught} of ${wl.lights.length} caught by a pluck`);
+  // A weaker note does not cut a stronger one short.
+  wl.pulse(0.6, 1000); wl.pulse(0.1, 100); assert.ok(wl.flareOf(l, wl.now()) > 0.5);
+});
+
+test('wired: the score plays everywhere when Music is on, and every note reaches the room', () => {
+  assert.match(main, /function ensureScore\(\)\{if\(!vantaScore\)\{vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\)\}/);
+  assert.match(main, /score\.setLobby\(!live\);/, 'the calm part between games');
+  assert.match(main, /const wait=\(ev\.at-ctx\.currentTime\+\(ctx\.outputLatency\|\|ctx\.baseLatency\|\|0\)\)\*1000;/, 'in time with the sound');
+  assert.match(main, /if\(!ctx\|\|prefersReducedMotion\(\)\|\|document\.visibilityState!=='visible'\)return;/);
+  assert.match(main, /if\(boardIsMoving\(\)\)return;/, 'the board gets every frame while a piece travels');
+  assert.match(main, /vantaScore\.duck\(2\.6\);vantaScore\.sting\(/, 'the sting plays over the music, which carries on');
+  assert.match(main, /playMoveSound\(audioContext\(\),\{place:hidden\?null:moveSoundPlace\(move\?\.to\)/, 'moves heard where they land, never in the dark');
+  assert.match(css, /\.board-aura\{grid-column:2;grid-row:1;/);
+  assert.match(css, /\.board-shell\.with-aura>\.board\{position:relative;z-index:1\}/);
+  assert.match(css, /\.player time::after\{content:'';position:absolute;/);
 });

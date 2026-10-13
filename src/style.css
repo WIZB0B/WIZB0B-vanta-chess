@@ -1811,6 +1811,15 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 
 
 /* Urgent clock mapping fix: clocks follow the color assigned to each player bar. */
+/* The room follows the music (src/main.js roomPulse): a glow breathes round the board with each
+   chord and drum, red with the storm's heartbeat, gold for a win; the running clock keeps the
+   beat. Opacity only, played by the compositor. */
+.board-aura{grid-column:2;grid-row:1;align-self:stretch;justify-self:stretch;border-radius:12px;pointer-events:none;opacity:0;box-shadow:0 0 34px 8px rgb(229 193 124 / .5),0 0 80px 18px rgb(229 193 124 / .18)}
+.board-aura[data-tone="heartbeat"],.board-aura[data-tone="loss"]{box-shadow:0 0 30px 8px rgb(255 96 80 / .45),0 0 70px 16px rgb(255 70 60 / .16)}
+.board-shell.with-aura>.board{position:relative;z-index:1} /* only once the music has made the glow */
+.player time{position:relative}
+.player time::after{content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;opacity:0;box-shadow:0 0 12px 2px rgb(229 193 124 / .6)}
+.player time[data-pulse="heartbeat"]::after{box-shadow:0 0 16px 3px rgb(255 110 90 / .65)}
 .player time.running{
   border-color:#7bd8aa;
   color:#f4fff9;

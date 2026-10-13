@@ -68,6 +68,7 @@ import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfS
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
 import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
+import { playMoveSound, soundPlace } from './move-sound.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
@@ -1228,10 +1229,23 @@ async function findEngineMove(){
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
 function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
+// A move is heard where it lands (src/move-sound.js): a wooden knock placed around you by its
+// square, a heavier double knock for a capture, a ring for a check. In the dark the hidden
+// opponent's moves (and any you step back to) are heard straight ahead, as plain knocks.
+function moveHiddenInDark(){
+  const color=premovePlayerColor(),mine=!color||game.turn()!==color;
+  return (darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
+}
+function moveSoundPlace(sq){
+  const board=document.getElementById('board')?.getBoundingClientRect(),el=sq?document.querySelector(`#board .square[data-sq="${sq}"]`)?.getBoundingClientRect():null;
+  if(!board?.width||!el?.width)return null;
+  return soundPlace((el.left+el.width/2-board.left)/board.width*2-1,1-(el.top+el.height/2-board.top)/board.height*2);
+}
 function playTone(){
   if($('#sound').dataset.off)return;
   try{
-    const a=audioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
+    const move=boardLastMove(),hidden=moveHiddenInDark(),san=String(move?.san||'');
+    playMoveSound(audioContext(),{place:hidden?null:moveSoundPlace(move?.to),capture:!hidden&&(!!move?.captured||san.includes('x')),check:!hidden&&/[+#]/.test(san)});
   }catch{}
 }
 // An illegal try: a low double knock (and a short buzz on phones). When the king is the
@@ -5077,19 +5091,65 @@ addEventListener('pointermove',e=>{
   const scroll=el.classList.contains('scroll'),n=glow.stir(scroll?e.pageX:e.clientX,scroll?e.pageY:e.clientY);
   if(n)el.dataset.stirred=String((Number(el.dataset.stirred)||0)+n);
 },{passive:true});
-document.addEventListener('visibilitychange',()=>{if(wallLights.el)queueAtmosphere()});
+document.addEventListener('visibilitychange',()=>{if(wallLights.el||musicPrefsGet().on)queueAtmosphere()}); // the candles and the music pause in a hidden tab and come back
 addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.resizeTimer=setTimeout(queueAtmosphere,200)},{passive:true});
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
 function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
+// The score (src/music.js): with Music on it plays everywhere, the calm part between games (the
+// lobby) and the game's own part during one, and every note it plays reaches the room.
+function ensureScore(){if(!vantaScore){vantaScore=new VantaScore();vantaScore.onNote(musicPulse)}return vantaScore.available?vantaScore:null}
 function syncMusic(mood){
-  const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&liveGameOn()&&document.visibilityState==='visible';
+  const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&document.visibilityState==='visible';
   if(!want){if(vantaScore?.playing)vantaScore.stop();return}
   if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
-  if(!vantaScore)vantaScore=new VantaScore();if(!vantaScore.available)return;
-  const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
-  vantaScore.setVolume(p.volume);vantaScore.setKey(musicKeyNow());vantaScore.setStorm(storm);
-  vantaScore.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
-  if(!vantaScore.playing)vantaScore.start();
+  const score=ensureScore();if(!score)return;
+  const live=liveGameOn();
+  score.setVolume(p.volume);score.setKey(musicKeyNow());score.setLobby(!live);
+  if(live){
+    const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
+    score.setStorm(storm);score.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
+  }else{score.setStorm(0);score.setTension(0)}
+  if(!score.playing)score.start();
+}
+// ---- The room follows the music (owner, 2026-10-13: "each wallpaper and everything is supposed
+// to react to music") ----
+// The score announces each note a moment before it sounds, with its time on the audio clock; at
+// that time the candles in the wallpaper leap, a glow breathes round the board, the running clock
+// keeps the beat and the captured pieces nod with each chord. A win flares the room, a loss makes
+// it gutter. Nothing moves with reduced motion or in a hidden tab, and only the candles while a
+// piece travels (the board gets every frame).
+let boardAura=null;
+function musicPulse(ev){
+  const ctx=vantaScore?.ctx;if(!ctx||prefersReducedMotion()||document.visibilityState!=='visible')return;
+  const wait=(ev.at-ctx.currentTime+(ctx.outputLatency||ctx.baseLatency||0))*1000;
+  if(wait<-150)return; // too late to be in time: let it go
+  setTimeout(()=>roomPulse(ev),Math.max(0,wait));
+}
+function ensureBoardAura(){
+  if(boardAura?.isConnected)return boardAura;
+  const shell=document.querySelector('.board-shell');if(!shell)return null;
+  boardAura=document.createElement('div');boardAura.className='board-aura';boardAura.setAttribute('aria-hidden','true');shell.prepend(boardAura);shell.classList.add('with-aura');
+  return boardAura;
+}
+function roomPulse(ev){
+  const k=ev.kind,s=Math.max(0,Math.min(1,Number(ev.strength??.6))),glow=wallLights.glow;
+  if(glow&&glow.running&&!glow.held){
+    if(k==='chord')glow.pulse(.22+.2*s,1500);
+    else if(k==='beat')glow.pulse(.1+.12*s,260,.3);
+    else if(k==='drum')glow.pulse(.18+.24*s,380);
+    else if(k==='heartbeat')glow.pulse(.28+.25*s,320);
+    else if(k==='motif')glow.pulse(.25,1200,.6);
+    else if(k==='sting')glow.pulse(ev.result==='win'?.7:ev.result==='loss'?-.45:.3,2400);
+  }
+  if(boardIsMoving())return;
+  const aura=ensureBoardAura(),tone=k==='heartbeat'?'heartbeat':k==='sting'?String(ev.result||''):'';
+  const frames=k==='chord'?[{opacity:0},{opacity:.3+.35*s,offset:.3},{opacity:0}]:k==='drum'||k==='heartbeat'?[{opacity:0},{opacity:.25+.4*s,offset:.12},{opacity:0}]:k==='sting'?[{opacity:0},{opacity:.9,offset:.2},{opacity:0}]:null;
+  if(aura&&frames){if(aura.dataset.tone!==tone)aura.dataset.tone=tone;aura.getAnimations?.().forEach(a=>a.cancel());aura.animate?.(frames,{duration:k==='chord'?1800:k==='sting'?2600:420,easing:'ease-out'})}
+  if(k==='beat'||k==='heartbeat'){
+    const clock=document.querySelector('.player time.running:not(.low-time)');
+    if(clock){clock.dataset.pulse=k;clock.animate?.([{opacity:0},{opacity:.35+.5*s,offset:.15},{opacity:0}],{duration:k==='heartbeat'?380:300,easing:'ease-out',pseudoElement:'::after'})}
+  }
+  if(k==='chord')document.querySelectorAll('.captured-tray img:not(.arriving),.captured-tray .zh-piece').forEach((el,i)=>el.animate?.([{translate:'0 0'},{translate:'0 -3px',offset:.35},{translate:'0 0'}],{duration:520,delay:i*45,easing:'ease-out'}));
 }
 function syncMusicUi(){
   const on=musicPrefsGet().on,t=$('#musicToggle'),s=$('#musicSetting');
@@ -5098,7 +5158,6 @@ function syncMusicUi(){
 }
 function setMusicOn(on){
   musicPrefs=saveMusic({...musicPrefsGet(),on});syncMusicUi();
-  if(on&&!liveGameOn())toast('Music plays during your games');
   if(!on)vantaScore?.stop();else syncAtmosphere();
 }
 
@@ -5158,7 +5217,7 @@ function campaignGameOver(info,score,oath){
 function roundTwelveGameOver(info){
   const score=scoreOf(info.result,info.myColor);
   atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};queueAtmosphere();
-  if(vantaScore?.playing){vantaScore.sting(score===1?'win':score===0?'loss':'draw');vantaScore.stop()}
+  if(vantaScore?.playing){vantaScore.duck(2.6);vantaScore.sting(score===1?'win':score===0?'loss':'draw');vantaScore.setLobby(true)} // the music carries on, calmer, under the sting
   const oath=settleOath(info,score);
   campaignGameOver(info,score,oath);
   void twinGameOver(info);
@@ -5186,7 +5245,7 @@ function initRoundTwelve(){
   $('.computer-campaign')?.addEventListener('click',()=>{renderCampaign();showSidePanel()});
   ensureAtmosphere();setInterval(syncAtmosphere,1000);
   document.addEventListener('visibilitychange',syncAtmosphere);
-  document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
+  document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(musicPrefsGet().on&&!vantaScore?.playing)queueAtmosphere();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
   document.addEventListener('pointerover',e=>{
     if(e.pointerType!=='mouse')return;const el=e.target.closest?.('.board-piece[data-veteran]');if(!el)return;
     clearTimeout(vetHoverTimer);vetHoverTimer=setTimeout(()=>showVeteranCard(el),420);
