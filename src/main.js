@@ -5886,12 +5886,21 @@ initRoundTwelve();
     if(event.pointerType!=='mouse')return;
     const info=guideFor(event.target);
     if(info&&info.el===shown)return;
-    hide();if(info)timer=setTimeout(()=>{if(info.el.isConnected)show(info)},350);
+    hide();if(info)timer=setTimeout(()=>{timer=null;if(info.el.isConnected)show(info)},350);
   });
   document.addEventListener('pointerout',event=>{if(event.pointerType==='mouse'&&!event.relatedTarget)hide()});
+  // A pointer that comes to rest over an element without a fresh pointerover (the page scrolled
+  // under it, say) still gets its card.
+  document.addEventListener('pointermove',event=>{
+    if(event.pointerType!=='mouse'||shown||timer)return;
+    const info=guideFor(event.target);if(info)timer=setTimeout(()=>{timer=null;if(info.el.isConnected)show(info)},350);
+  },{passive:true});
   document.addEventListener('focusin',event=>{let info=null;try{if(event.target.matches(':focus-visible'))info=guideFor(event.target)}catch{}hide();if(info)show(info)});
   document.addEventListener('focusout',hide);
-  for(const type of ['pointerdown','scroll','resize'])window.addEventListener(type,hide,{capture:true,passive:true});
+  // A click hides it; scrolling or resizing hides a card that is showing (it would be out of
+  // place) but lets one that is about to show come up where it belongs.
+  window.addEventListener('pointerdown',hide,{capture:true,passive:true});
+  for(const type of ['scroll','resize'])window.addEventListener(type,()=>{if(shown)hide()},{capture:true,passive:true});
   document.addEventListener('keydown',event=>{if(event.key==='Escape')hide()});
 })();
 // ---- Resonance (src/resonance.js): Chladni figures in sand on the board, rung by the music and the moves ----
