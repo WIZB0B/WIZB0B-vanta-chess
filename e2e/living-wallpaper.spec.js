@@ -13,24 +13,22 @@ test('the candles in the wallpaper flicker, answer a move, and go out with the l
   page.on('pageerror', e => errors.push(e.message));
   await setup(page);
   await page.goto('/');
-  const layer = page.locator('#wallLights');
+  const layer = page.locator('canvas#wallLights');
   await expect(layer).toHaveCount(1);
-  expect(await layer.evaluate(el => ({ n: el.children.length, pe: getComputedStyle(el).pointerEvents, under: el.nextElementSibling?.id, running: [...el.querySelectorAll('b')].filter(b => b.getAnimations().length).length })))
-    .toEqual(expect.objectContaining({ pe: 'none', under: 'atmosphere' }));
-  expect(await layer.evaluate(el => el.children.length)).toBeGreaterThan(20);
-  expect(await layer.evaluate(el => [...el.querySelectorAll('b')].every(b => b.getAnimations().length > 0))).toBe(true);
-  // Every light sits on the screen (the picture covers the window).
-  expect(await layer.evaluate(el => [...el.children].every(i => { const r = i.getBoundingClientRect(), c = [r.x + r.width / 2, r.y + r.height / 2]; return c[0] > -r.width && c[0] < innerWidth + r.width && c[1] > -r.height && c[1] < innerHeight + r.height; }))).toBe(true);
-  // A move in a live game: the room breathes.
+  expect(await layer.evaluate(el => ({ pe: getComputedStyle(el).pointerEvents, under: el.nextElementSibling?.id, half: el.width === Math.ceil(innerWidth / 2) })))
+    .toEqual({ pe: 'none', under: 'atmosphere', half: true });
+  expect(Number(await layer.getAttribute('data-lights'))).toBeGreaterThan(20);
+  // The glows are drawn, and they flicker: the picture changes from one moment to the next.
+  const snap = () => layer.evaluate(el => { const d = el.getContext('2d').getImageData(0, 0, el.width, el.height).data; let lit = 0, sum = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) { lit++; sum += d[i]; } return { lit, sum }; });
+  const a = await snap(); await page.waitForTimeout(400); const b = await snap();
+  expect(a.lit).toBeGreaterThan(2000);
+  expect(b.sum).not.toBe(a.sum);
+  // A move in a live game: the room answers as the piece lands.
   await page.locator('[data-mode="computer"]').click();
   await page.locator('#computerStart').click();
-  const tap = async sq => { const b = await page.locator(`[data-sq="${sq}"]`).boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2) };
+  const tap = async sq => { const r = await page.locator(`[data-sq="${sq}"]`).boundingBox(); await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2) };
   await tap('e2'); await tap('e4');
   await expect(layer).toHaveAttribute('data-react', /breath|gutter|flare/, { timeout: 5000 });
-  // The pointer stirs the flames it passes.
-  const lit = await layer.evaluate(el => { const i = el.children[0].getBoundingClientRect(); return [i.x + i.width / 2, i.y + i.height / 2]; });
-  await page.mouse.move(lit[0] - 30, lit[1]); await page.mouse.move(lit[0] + 5, lit[1] + 2, { steps: 4 });
-  await expect(page.locator('#wallLights i.stir').first()).toBeAttached({ timeout: 2000 });
   // Living atmosphere Off: no candles.
   await page.locator('#theme').click();
   await page.locator('#atmosphereSetting').selectOption('off');
@@ -69,5 +67,5 @@ test('on a phone the candles follow the picture: fixed with it, or scrolling wit
   const got = await layer.evaluate(el => ({ fixedPicture: /fixed/.test(getComputedStyle(document.body).backgroundAttachment), pos: getComputedStyle(el).position, wide: Math.abs(el.offsetWidth - (el.classList.contains('scroll') ? document.body.clientWidth : innerWidth)) <= 1 }));
   expect(got.pos).toBe(got.fixedPicture ? 'fixed' : 'absolute');
   expect(got.wide).toBe(true);
-  expect(await layer.evaluate(el => el.children.length)).toBeGreaterThan(5);
+  expect(Number(await layer.getAttribute('data-lights'))).toBeGreaterThan(5);
 });

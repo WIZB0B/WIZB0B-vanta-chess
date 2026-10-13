@@ -63,7 +63,7 @@ import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } fr
 import { addGames, armyList, identitiesAfter, loadVeterans, rankOf, saveVeterans, totalsMap } from './veterans.js';
 import { dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from './oaths.js';
 import { atmosphereFor, tensionFor } from './atmosphere.js';
-import { lightReaction, placeLights, wallpaperKey } from './wallpaper-lights.js';
+import { WallLights, lightReaction, placeLights, wallpaperKey } from './wallpaper-lights.js';
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
@@ -5021,49 +5021,58 @@ function syncAtmosphere(){
 // wallpaper, flickering on its own. With the living atmosphere on Full, the room answers the
 // game: a breath on each move, the flames gutter on a capture and flare on a check, tremble in
 // time trouble and rise or fall with the game; the pointer stirs the flames it passes.
-let wallLights={el:null,moveKey:null,lights:[],stirAt:0};
+let wallLights={el:null,glow:null,moveKey:null,stirAt:0};
 function wallLightsLayer(){
   const level=r12Prefs().atmosphere,body=document.body;
   let el=document.getElementById('wallLights');
-  if(level==='off'){el?.remove();wallLights.el=null;return null}
+  const drop=()=>{wallLights.glow?.stop();wallLights.glow=null;el?.remove();wallLights.el=null;return null};
+  if(level==='off')return drop();
   const cs=getComputedStyle(body),key=wallpaperKey(cs.backgroundImage);
-  if(!key){el?.remove();wallLights.el=null;return null}
+  if(!key)return drop();
   const scroll=!/fixed/.test(cs.backgroundAttachment),w=scroll?body.clientWidth:innerWidth,h=scroll?Math.max(body.scrollHeight,innerHeight):innerHeight;
-  if(!el){el=document.createElement('div');el.id='wallLights';el.setAttribute('aria-hidden','true');const atmo=document.getElementById('atmosphere');if(atmo)body.insertBefore(el,atmo);else body.prepend(el)}
-  if(el.dataset.level!==level)el.dataset.level=level;
+  if(!el){el=document.createElement('canvas');el.id='wallLights';el.setAttribute('aria-hidden','true');const atmo=document.getElementById('atmosphere');if(atmo)body.insertBefore(el,atmo);else body.prepend(el)}
+  if(!wallLights.glow||wallLights.glow.canvas!==el)wallLights.glow=new WallLights(el);
+  if(el.dataset.level!==level){el.dataset.level=level;wallLights.glow.fps=level==='full'?15:8}
   el.classList.toggle('scroll',scroll);
   const size=scroll?[`${w}px`,`${h}px`]:['',''];if(el.style.width!==size[0]){el.style.width=size[0];el.style.height=size[1]}
   const sig=`${key}:${w}x${h}`;
-  if(el.dataset.sig!==sig){el.dataset.sig=sig;wallLights.lights=placeLights(key,w,h);el.innerHTML=wallLights.lights.map(l=>`<i class="wl-${l.kind}" style="left:${l.x}px;top:${l.y}px;--s:${l.size}px;--c:${l.color};--d:${l.d}s;--o:${l.o}s"><b></b></i>`).join('')}
+  if(el.dataset.sig!==sig){el.dataset.sig=sig;const lights=placeLights(key,w,h);wallLights.glow.setLights(lights,w,h);el.dataset.lights=String(lights.length)}
+  const still=matchMedia('(prefers-reduced-motion: reduce)').matches||document.visibilityState!=='visible';
+  if(still){if(wallLights.glow.running||!wallLights.glow.still)wallLights.glow.stop({still:true})}else wallLights.glow.start();
   wallLights.el=el;return el;
 }
 function syncWallLights(mood){
   const el=wallLightsLayer();if(!el)return;
-  if(el.dataset.mood!==mood.mood)el.dataset.mood=mood.mood;
+  if(el.dataset.mood!==mood.mood){el.dataset.mood=mood.mood;wallLights.glow.speed={check:.45,storm:.6}[mood.mood]||1}
   const move=boardLastMove(),color=premovePlayerColor(),key=move?.to?`${move.from||''}${move.to}${move.san||''}:${moveRecords().length}`:'';
   if(key===wallLights.moveKey)return;
   const first=wallLights.moveKey===null;wallLights.moveKey=key;
   if(first||!key)return;
-  // The flames hold still while a piece travels (the board gets every frame); in a live game
-  // the room answers as it lands.
-  el.classList.add('hold');clearTimeout(wallLights.holdTimer);
+  // The flames hold still while a piece travels and any answer to the last move stops, so the
+  // board gets every frame; in a live game the room answers as the piece lands.
+  el.getAnimations?.().forEach(a=>a.cancel());
+  wallLights.glow.hold(340);clearTimeout(wallLights.holdTimer);
   const react=el.dataset.level==='full'&&liveGameOn()&&color&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
   const san=String(move.san||''),kind=react?lightReaction({captured:!!move.captured||san.includes('x'),check:/[+#]/.test(san),mine:game.turn()!==color,fog:darkActive()||fogOnline()||blackoutActive()}):null;
+  if(!kind)return;
   wallLights.holdTimer=setTimeout(()=>{
-    el.classList.remove('hold');if(!kind)return;
     const base=Number(getComputedStyle(el).opacity)||.9;
-    const frames={breath:[{opacity:base},{opacity:Math.min(1,base*1.3),offset:.3},{opacity:base}],gutter:[{opacity:base},{opacity:base*.3,offset:.22},{opacity:base*.55,offset:.5},{opacity:base}],flare:[{opacity:base,filter:'none'},{opacity:1,filter:'brightness(1.45) saturate(1.3)',offset:.25},{opacity:base,filter:'none'}]}[kind];
+    // Opacity only: the compositor plays it on the one layer.
+    const frames={breath:[{opacity:base},{opacity:Math.min(1,base*1.3),offset:.3},{opacity:base}],gutter:[{opacity:base},{opacity:base*.3,offset:.22},{opacity:base*.55,offset:.5},{opacity:base}],flare:[{opacity:base},{opacity:1,offset:.12},{opacity:base*.7,offset:.3},{opacity:1,offset:.5},{opacity:base}]}[kind];
     el.getAnimations?.().forEach(a=>a.cancel());el.animate?.(frames,{duration:kind==='breath'?700:kind==='gutter'?1700:1100,easing:'ease-out'});
     el.dataset.react=kind; // for tests and styles
-  },320);
+  },340);
 }
-// The pointer stirs the flames it passes, like air moving through the room.
+// The pointer stirs the flames it passes, like air moving through the room (only where the
+// room shows, never during a move).
 addEventListener('pointermove',e=>{
-  const el=wallLights.el;if(!el||el.dataset.level!=='full'||e.pointerType!=='mouse')return;
+  const el=wallLights.el,glow=wallLights.glow;if(!el||!glow||el.dataset.level!=='full'||e.pointerType!=='mouse'||e.buttons||glow.held||!glow.running)return;
+  if(e.target?.closest?.('.panel,.game,.topbar,.board,dialog,.main-menu'))return;
   const now=performance.now();if(now-wallLights.stirAt<90)return;wallLights.stirAt=now;
-  const scroll=el.classList.contains('scroll'),px=scroll?e.pageX:e.clientX,py=scroll?e.pageY:e.clientY,kids=el.children;
-  wallLights.lights.forEach((l,i)=>{const dx=l.x-px,dy=l.y-py,reach=60+l.size*.5;if(dx*dx+dy*dy>reach*reach)return;const k=kids[i];if(!k||k.classList.contains('stir'))return;k.style.setProperty('--lean',dx>0?'4deg':'-4deg');k.classList.add('stir');setTimeout(()=>k.classList.remove('stir'),850)});
+  const scroll=el.classList.contains('scroll'),n=glow.stir(scroll?e.pageX:e.clientX,scroll?e.pageY:e.clientY);
+  if(n)el.dataset.stirred=String((Number(el.dataset.stirred)||0)+n);
 },{passive:true});
+document.addEventListener('visibilitychange',()=>{if(wallLights.el)queueAtmosphere()});
 addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.resizeTimer=setTimeout(queueAtmosphere,200)},{passive:true});
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
 function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}

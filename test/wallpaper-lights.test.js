@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { WALLPAPER_LIGHTS, WALLPAPER_SIZE, coverPlacement, lightReaction, placeLights, wallpaperKey } from '../src/wallpaper-lights.js';
+import { WALLPAPER_LIGHTS, WALLPAPER_SIZE, WallLights, coverPlacement, lightReaction, placeLights, wallpaperKey } from '../src/wallpaper-lights.js';
 
 const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
@@ -50,10 +50,56 @@ test('the room answers a move without giving away what fog hides', () => {
 
 test('wired: a layer under the atmosphere, set by the Living atmosphere setting, and glass that clears', () => {
   assert.match(main, /syncWallLights\(mood\);syncMusic\(mood\);syncOathLine\(\);/);
-  assert.match(main, /if\(level==='off'\)\{el\?\.remove\(\);wallLights\.el=null;return null\}/);
+  assert.match(main, /if\(level==='off'\)return drop\(\);/);
   assert.match(main, /fog:darkActive\(\)\|\|fogOnline\(\)\|\|blackoutActive\(\)/);
   assert.match(main, /type="range" min="15" max="100" value="94"/);
-  assert.match(css, /#wallLights\{position:fixed;inset:0;z-index:-1;pointer-events:none;/);
-  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{#wallLights b\{animation:none\}/);
+  assert.match(css, /#wallLights\{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;/);
+  assert.match(main, /if\(still\)\{if\(wallLights\.glow\.running\|\|!wallLights\.glow\.still\)wallLights\.glow\.stop\(\{still:true\}\)\}else wallLights\.glow\.start\(\);/, 'reduced motion: one still picture');
+  assert.match(main, /wallLights\.glow\.hold\(340\)/, 'still while a piece moves');
   assert.match(css, /:root\[data-glass="clear"\] \.panel,:root\[data-glass="clear"\] \.game,:root\[data-glass="clear"\] \.topbar\{\s*backdrop-filter:blur\(var\(--glass-blur\)\)/);
+});
+
+// A canvas, a context that counts what it draws, and frames driven by hand.
+function stage() {
+  const calls = { fill: 0, clear: 0 };
+  const ctx = { createRadialGradient: () => ({ addColorStop() {} }), setTransform() {}, clearRect() { calls.clear++; }, fillRect() { calls.fill++; }, set fillStyle(v) {}, set globalAlpha(v) {} };
+  let now = 0, frames = [];
+  const view = { performance: { now: () => now }, requestAnimationFrame: f => { frames.push(f); return frames.length; }, cancelAnimationFrame: () => { frames = []; } };
+  const run = ms => { now += ms; const due = frames; frames = []; for (const f of due) f(now); };
+  return { canvas: { width: 0, height: 0, getContext: () => ctx }, view, calls, run, pending: () => frames.length };
+}
+
+test('one canvas: about 15 drawings a second, none while a piece moves, one still picture for reduced motion', () => {
+  const st = stage(), wl = new WallLights(st.canvas, { view: st.view });
+  const lights = placeLights('classic', 1440, 900);
+  wl.setLights(lights, 1440, 900);
+  assert.deepEqual([st.canvas.width, st.canvas.height], [720, 450], 'half resolution');
+  assert.equal(st.calls.fill, lights.length, 'every light drawn once on setup');
+  wl.start();
+  const before = st.calls.clear;
+  for (let i = 0; i < 60; i++) st.run(1000 / 60); // one second at 60 Hz
+  const drawn = st.calls.clear - before;
+  assert.ok(drawn >= 13 && drawn <= 16, `${drawn} drawings in a second`);
+  // Held for a move: nothing is drawn until it lands.
+  wl.hold(340);
+  const held = st.calls.clear;
+  for (let i = 0; i < 18; i++) st.run(1000 / 60);
+  assert.equal(st.calls.clear, held);
+  for (let i = 0; i < 12; i++) st.run(1000 / 60);
+  assert.ok(st.calls.clear > held, 'flickers again after the move');
+  // Reduced motion: one calm picture and no more frames.
+  wl.stop({ still: true });
+  assert.equal(st.pending(), 0); assert.equal(wl.still, true);
+});
+
+test('each light flickers in its own range; the pointer leans the flames near it', () => {
+  const st = stage(), wl = new WallLights(st.canvas, { view: st.view });
+  wl.setLights(placeLights('burgundy', 1440, 900), 1440, 900);
+  for (const l of wl.lights) for (let t = 0; t < 20000; t += 137) { const v = wl.level(l, t); assert.ok(v >= 0.3 && v <= 1, `${v}`); }
+  const flame = wl.lights.find(l => l.kind === 'f'), lamp = wl.lights.find(l => l.kind === 'l');
+  const spread = l => { let lo = 1, hi = 0; for (let t = 0; t < 20000; t += 50) { const v = wl.level(l, t); lo = Math.min(lo, v); hi = Math.max(hi, v); } return hi - lo; };
+  assert.ok(spread(flame) > spread(lamp), 'flames flicker more than lamps breathe');
+  assert.equal(wl.stir(flame.x + 10, flame.y), 1 + wl.lights.filter(l => l !== flame && l.kind !== 'l' && Math.hypot(l.x - flame.x - 10, l.y - flame.y) <= 60 + l.size * 0.5).length);
+  assert.equal(flame.lean, -1, 'leans away from the pointer');
+  assert.equal(wl.stir(-5000, -5000), 0);
 });

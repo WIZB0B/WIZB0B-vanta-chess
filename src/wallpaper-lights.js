@@ -125,3 +125,72 @@ export function lightReaction({ captured = false, check = false, mine = true, fo
   if (captured) return 'gutter';
   return 'breath';
 }
+
+// The glows, drawn on one canvas: a single layer however many lights there are, redrawn about
+// 15 times a second (a candle needs no more), at half resolution (the glows are soft), and not
+// at all while held (a piece is moving) or when nothing flickers (reduced motion). Each light
+// flickers by its own sum of three waves; lamps breathe slowly; reflections follow softer.
+// stir(x, y) leans the flames near a point for a moment. options: {view, scale, fps}
+const hexRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+export class WallLights {
+  constructor(canvas, { view = globalThis, scale = 0.5, fps = 15 } = {}) {
+    Object.assign(this, { canvas, view, scale, fps });
+    this.ctx = canvas.getContext('2d');
+    this.lights = []; this.speed = 1; this.raf = 0; this.last = 0; this.heldUntil = 0; this.still = false;
+  }
+  setLights(lights, w, h) {
+    const c = this.canvas, s = this.scale;
+    c.width = Math.max(1, Math.ceil(w * s)); c.height = Math.max(1, Math.ceil(h * s));
+    this.lights = lights.map((l, i) => {
+      const [r, g, b] = hexRgb(l.color), grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      const warm = `${Math.min(255, r + 60)},${Math.min(255, g + 50)},${Math.min(255, b + 40)}`;
+      grad.addColorStop(0, `rgba(${warm},.95)`); grad.addColorStop(0.16, `rgba(${r},${g},${b},.6)`);
+      grad.addColorStop(0.42, `rgba(${r},${g},${b},.2)`); grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      return { ...l, grad, p: [i * 1.7 % 6.28, i * 2.9 % 6.28, i * 4.1 % 6.28], lean: 0, leanAt: 0 };
+    });
+    this.draw(this.now());
+  }
+  now() { return this.view.performance?.now?.() ?? Date.now(); }
+  // How bright a light is at time t (ms): 0.3 .. 1.
+  level(l, t) {
+    const k = t / 1000 / (l.d * this.speed), [a, b, c] = l.p;
+    if (l.kind === 'l') return 0.62 + 0.1 * Math.sin(k * 1.4 + a);
+    const v = 0.64 + 0.17 * Math.sin(k * 2.1 + a) + 0.11 * Math.sin(k * 5.3 + b) + 0.07 * Math.sin(k * 11.7 + c);
+    return Math.max(0.3, Math.min(1, l.kind === 'r' ? 0.45 + (v - 0.64) * 0.6 : v));
+  }
+  draw(t) {
+    const { ctx, canvas, scale } = this;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const l of this.lights) {
+      const v = this.still ? 0.62 : this.level(l, t), r = (l.size / 2) * scale * (0.9 + v * 0.18);
+      const lean = l.lean * Math.max(0, 1 - (t - l.leanAt) / 850);
+      ctx.globalAlpha = v;
+      ctx.setTransform(r * (1 - Math.abs(lean) * 0.12), 0, lean * r * 0.25, r * (1 + Math.abs(lean) * 0.08), l.x * scale, l.y * scale);
+      ctx.fillStyle = l.grad; ctx.fillRect(-1, -1, 2, 2);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  }
+  // Holds the picture still for `ms` (a piece is moving).
+  hold(ms = 320) { this.heldUntil = Math.max(this.heldUntil, this.now() + ms); }
+  get held() { return this.now() < this.heldUntil; }
+  // Leans the flames within reach of (x, y) away from it; returns how many moved.
+  stir(x, y) {
+    const t = this.now(); let n = 0;
+    for (const l of this.lights) {
+      if (l.kind === 'l') continue;
+      const dx = l.x - x, dy = l.y - y, reach = 60 + l.size * 0.5;
+      if (dx * dx + dy * dy > reach * reach) continue;
+      l.lean = dx > 0 ? 1 : -1; l.leanAt = t; n++;
+    }
+    return n;
+  }
+  tick(t) {
+    this.raf = 0;
+    if (!this.running) return;
+    if (!this.held && t - this.last >= 1000 / this.fps) { this.last = t; this.draw(t); }
+    this.raf = this.view.requestAnimationFrame?.(n => this.tick(n)) || 0;
+  }
+  start() { if (this.running) return; this.running = true; this.still = false; this.raf = this.view.requestAnimationFrame?.(n => this.tick(n)) || 0; }
+  // Still: one calm picture, no redraws (reduced motion, or the layer is hidden).
+  stop({ still = false } = {}) { this.running = false; if (this.raf) this.view.cancelAnimationFrame?.(this.raf); this.raf = 0; this.still = still; if (still) this.draw(this.now()); }
+}

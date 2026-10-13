@@ -3399,30 +3399,16 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 @media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
 
 /* ===== LIVING WALLPAPER: the candles and lamps in the wallpaper flicker and answer the game =====
-   (src/wallpaper-lights.js; main.js syncWallLights). A layer just above the wallpaper and
-   under the living atmosphere's glows. Each light is a soft radial glow: <i> places it (and
-   leans when the pointer stirs it), <b> flickers. Only opacity and transforms animate. */
-#wallLights{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;opacity:var(--wl-o,.9);transition:opacity 1.6s ease}
+   (src/wallpaper-lights.js; main.js syncWallLights). One canvas just above the wallpaper and
+   under the living atmosphere's glows, drawn at half resolution about 15 times a second and
+   held still while a piece moves. Reactions animate only its opacity. */
+#wallLights{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;opacity:var(--wl-o,.9);transition:opacity 1.6s ease}
 #wallLights.scroll{position:absolute;top:0;left:0;right:auto;bottom:auto}
-#wallLights i{position:absolute;width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2);transition:transform .45s cubic-bezier(.3,1.6,.5,1)}
-#wallLights b{position:absolute;inset:0;border-radius:50%;opacity:.5;
-  background:radial-gradient(circle,color-mix(in srgb,var(--c) 55%,#fff1d2) 0%,color-mix(in srgb,var(--c) 58%,transparent) 14%,color-mix(in srgb,var(--c) 22%,transparent) 36%,transparent 68%);
-  animation:wlFlame var(--d) ease-in-out var(--o) infinite alternate;will-change:opacity,transform}
-#wallLights .wl-r b{animation-name:wlReflect;border-radius:42%}
-#wallLights .wl-l b{animation-name:wlLamp}
-#wallLights i.stir{transform:rotate(var(--lean,4deg)) scale(.86,1.08)}
-#wallLights.hold b{animation-play-state:paused}
-@keyframes wlFlame{0%{opacity:.4;transform:scale(.92)}19%{opacity:.72;transform:scale(1.05)}37%{opacity:.5;transform:scale(.96) translateY(1%)}58%{opacity:.82;transform:scale(1.09) translateY(-2%)}81%{opacity:.56;transform:scale(.99)}100%{opacity:.7;transform:scale(1.03)}}
-@keyframes wlReflect{0%{opacity:.22;transform:scaleY(.9)}50%{opacity:.46;transform:scaleY(1.1)}100%{opacity:.28;transform:scaleY(.95)}}
-@keyframes wlLamp{0%{opacity:.46}100%{opacity:.64}}
 /* The room follows the living atmosphere's mood (src/atmosphere.js). */
 #wallLights[data-mood="lead"],#wallLights[data-mood="dawn"]{--wl-o:1}
 #wallLights[data-mood="fall"],#wallLights[data-mood="dusk"]{--wl-o:.55}
-#wallLights[data-mood="check"] b{animation-duration:calc(var(--d) * .45)}
-#wallLights[data-mood="storm"] b{animation-duration:calc(var(--d) * .6)}
 #wallLights[data-level="subtle"]{--wl-o:.6}
-#wallLights[data-level="subtle"] b{animation-duration:calc(var(--d) * 1.8)}
-@media (prefers-reduced-motion:reduce){#wallLights b{animation:none}#wallLights i{transition:none}}
+@media (prefers-reduced-motion:reduce){#wallLights{transition:none}}
 
 /* ===== GLASS THAT IS GLASS (owner, 2026-10-13: "I can't even see the wallpaper") =====
    Theme Studio's Glass opacity runs from 15% to 100%. Below 90% the panels let the room
