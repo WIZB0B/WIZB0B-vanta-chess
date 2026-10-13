@@ -427,6 +427,54 @@ deploy waits for round 11 and the owner's approval for that deployment.
 - Fix: on phones, Your Shadow, the Vanta Gauntlet and Relic sets opened off-screen. (PR #55)
 - Translations for every round 12 screen. (PR #55, social)
 
+## R13. Round 13 (owner requests 2026-10-12)
+Built in PR #58 (stacked on #57) and PR #59 (Resonance). Server changes are committed in
+`supabase/functions/chess`; migration `20261013090000_round13_profiles_chat_fog` and the
+function deploy wait for the owner's approval for that deployment.
+- R13.1 Vanta Dark and Blackout Blitz online and rated, each with its own pool. The server
+  keeps the real game and sends each seat only what it may see (`fog.js`); spectators see the
+  game when it is over; history, data export and the explorer reveal nothing while it is on.
+- R13.2 A fair blind computer in Vanta Dark and Blackout (plays from the board it believes in).
+- R13.3 Engines: multi-variant Stockfish 10 for Crazyhouse; Lozza 2.5 (MIT) as a second mind,
+  measured against Stockfish (`scripts/calibrate-lozza.mjs`), for Fruitwood, Ironbark and the
+  campaign guards from the Mirror Court on. Bosses stay on Stockfish 19.
+- R13.4 Review by mode: Crazyhouse with the variant engine (archived games replay drops);
+  Vanta Dark and Blackout reviewed on the board the player could see ("Ambushed" moves);
+  accuracy by the published Lichess formula.
+- R13.5 Learn library (8 courses) and 14 famous-game "what would you play?" lessons.
+- R13.6 Puzzles: Streak (count-up) and Survival (countdown per puzzle); skip tokens earned by
+  daily visits and every 10 solved.
+- R13.7 Profiles for everyone (portraits, name, About line); chat reactions and chess emoji;
+  moderate filter with the mute ladder (warning, 2 h, 1 day, 1 week, 1 month, 6 months,
+  1 year, permanent; slurs count double). Open question to the owner: permanent instead of
+  the year?
+- R13.8 Live streamers in Watch; rematches made by the server; the 50-move counter.
+- R13.9 Bigger board, centred Regal pieces, soft piece shadows lit per theme; languages switch
+  both ways; 11 languages; hover descriptions for every section, tab and mode; drawn icons
+  instead of unicode glyphs on the game controls.
+- R13.10 Resonance (PR #59): Chladni figures in sand on the board from the music and the
+  moves (Theme Studio: off / subtle / vivid), and the Resonance room, the music library drawn
+  in sand. Owner's idea, 2026-10-12.
+
+### Open from round 13 (next)
+- Redesign (owner concept 2026-10-12; direction in the "Vanta Chess Redesign Direction" design
+  canvas): home page, brand name always "Vanta Chess" or VCH (never "Vanta" alone; check the
+  trademark position of the "Vanta …" mode names before launch), modern type (Bricolage
+  Grotesque, Geist, Geist Mono, self-hosted), one ground / one metal / one signal colour, mode
+  marks drawn from each rule, no invented statistics. Higgsfield art only after the art
+  direction is agreed.
+- Full pages for every section (Community, Puzzles, Watch, Arena, Learn, Openings, Famous,
+  Review, Analysis) and a search page; the puzzle section's visual redesign. Design first.
+- The trailer ("The Film"): a slot on the home page; made later in the workflow.
+- Living Armies: the same game played by soldiers and warriors instead of pieces, a view you
+  switch on (see P3); captures as short duels.
+- Board skins (MLBB-style collectible boards) and interactive boards (squares that react,
+  realm boards with weather on the squares). With P.
+- Round 13 ideas: Bughouse tournaments, Rival's Shadow (a bot from your rival's games),
+  seasonal campaign chapters.
+- Security before launch: items M3–M5 and L2–L12 from the round 13 review; owner checks of RLS
+  on the base tables, `realtime.messages` policies and auth settings.
+
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
 - E1 Drag sway: the dragged piece hangs from the hand, swings against the motion, bobs. (prototype)
