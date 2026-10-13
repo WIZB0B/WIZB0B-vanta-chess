@@ -1814,6 +1814,14 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 /* The track playing now, under the Music setting in the Theme Studio. */
 .music-now{display:block;min-height:1em;margin:-4px 0 6px;color:var(--gold,#e5c17c);font-size:12px;letter-spacing:.2px}
 .music-now:empty{display:none}
+/* The Sound test (src/main.js drawSoundTest): every sound, a button each. */
+.sound-test h4{margin:14px 0 6px}
+.sound-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px}
+.sound-grid button{min-height:36px;padding:6px 8px;font-size:13px;text-transform:none;color:#ece6d6;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:9px}
+.sound-grid button:hover{background:rgba(229,193,124,.14);border-color:rgba(229,193,124,.45)}
+.sound-grid button:active{transform:scale(.97)}
+.sound-set{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 8px;font-size:13px}
+.sound-set select{padding:6px 8px;background:#0a1514;color:#ece6d6;border:1px solid #53605d;border-radius:6px}
 /* The room follows the music (src/main.js roomPulse): a glow breathes round the board with each
    phrase and drum, red with the storm's heartbeat, gold for a win; the running clock keeps the
    beat. Opacity only, played by the compositor. */
@@ -3016,6 +3024,9 @@ button.zh-piece[disabled]{opacity:.55;cursor:default}
 .relic-swatch{display:grid;grid-template-columns:repeat(2,14px);grid-template-rows:repeat(2,14px);border-radius:4px;overflow:hidden}
 .relic-swatch i{display:block}
 .theme-relics{margin-top:6px}
+/* Theme Studio's own pages (Sound test, Relic sets): quiet buttons that read on the dark glass. */
+#themeStudio>.theme-relics{color:#ece6d6;background:rgba(255,255,255,.06);border:1px solid rgba(229,193,124,.35)}
+#themeStudio>.theme-relics:hover{background:rgba(229,193,124,.14)}
 /* Rivals (Community) */
 .rival-list{display:grid;gap:8px;margin-top:10px}
 .rival{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:#0b1715;border:1px solid var(--line)}

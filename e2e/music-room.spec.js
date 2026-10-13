@@ -48,7 +48,7 @@ test('with Music on the music plays, the board glows with its beat, and a statio
   // The Theme Studio says what is playing; a station plays its own tracks.
   await page.locator('#theme').click();
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Beat');
-  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs']);
+  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Everything']);
   await page.locator('#musicSetting').selectOption('songs');
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Song');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.music')))).toMatchObject({ on: true, station: 'songs' });
@@ -58,6 +58,29 @@ test('with Music on the music plays, the board glows with its beat, and a statio
   await tap('e2'); await tap('e4');
   await expect(page.locator('.board-piece[data-square="e4"]')).toHaveCount(1);
   await page.waitForTimeout(400);
+  expect(errors).toEqual([]);
+});
+
+test('the music waits a moment to be sure you are staying, then turns to where you are', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Desktop: the Relic sets from Theme Studio');
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  // The test beat is 120 BPM (a kick every half second), its first downbeat at the start.
+  await setup(page, { library: { tracks: [{ ...LIBRARY.tracks[0], bpm: 120, beat: 0 }, LIBRARY.tracks[1], { id: 'test-relic', title: 'Test Relic', file: 'test-relic.mp3', station: 'cinematic', place: 'skin', bpm: 120, beat: 0 }] } });
+  await page.goto('/');
+  await page.locator('.hero h1').click();
+  const now = page.locator('#musicNow');
+  await expect(now).toHaveText('Now playing · Test Beat', { timeout: 8000 });
+  // Passing through the Relic sets and straight back: the music stays.
+  await page.locator('#theme').click(); await page.locator('#openRelics').click();
+  await page.locator('#dynamicView .back-view').click();
+  await page.waitForTimeout(2500);
+  await expect(now).toHaveText('Now playing · Test Beat');
+  // Staying: after a moment, the Relic sets' own music.
+  await page.locator('#theme').click(); await page.locator('#openRelics').click();
+  const t0 = Date.now();
+  await expect(now).toHaveText('Now playing · Test Relic', { timeout: 8000 });
+  expect(Date.now() - t0).toBeGreaterThan(900);
   expect(errors).toEqual([]);
 });
 

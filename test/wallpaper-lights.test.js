@@ -125,12 +125,14 @@ test('the flames leap with the music and settle; a loss makes them gutter; a plu
 test('wired: the music plays everywhere when Music is on, and every beat reaches the room', () => {
   assert.match(main, /vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\);vantaScore\.onNote\(ev=>\{if\(ev\.track\)syncNowPlaying\(\)\}\);/);
   assert.match(main, /void loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(tracks\);queueAtmosphere\(\);/, 'the library loads the first time Music is on');
-  assert.match(main, /score\.setVolume\(p\.volume\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setPlace\(musicPlace\(\)\);/, 'it follows you, or plays your station');
+  assert.match(main, /score\.setVolume\(p\.volume\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setDivision\(musicDivision\(\)\);/, 'it follows you, or plays your station');
+  assert.match(main, /score\.setPlace\(place,urgent\);/, 'into a game and out of it on the next bar line');
   assert.match(main, /const wait=\(ev\.at-ctx\.currentTime\+\(ctx\.outputLatency\|\|ctx\.baseLatency\|\|0\)\)\*1000;/, 'in time with the sound');
   assert.match(main, /if\(!ctx\|\|prefersReducedMotion\(\)\|\|document\.visibilityState!=='visible'\)return;/);
   assert.match(main, /if\(boardIsMoving\(\)\)return;/, 'the board gets every frame while a piece travels');
-  assert.match(main, /if\(vantaScore\?\.playing\)vantaScore\.sting\(score===1\?'win':score===0\?'loss':'draw'\);/, 'the sting plays over the music, which carries on');
-  assert.match(main, /playMoveSound\(audioContext\(\),\{place:hidden\?null:moveSoundPlace\(move\?\.to\)/, 'moves heard where they land, never in the dark');
+  assert.match(main, /const stung=!!vantaScore\?\.playing&&score!==null&&vantaScore\.sting\(result==='win'&&\/checkmate\/\.test\(String\(info\.reason\|\|''\)\)\?'checkmate':result\);/, 'the sting plays over the music, which carries on');
+  assert.match(main, /place=hidden\?null:moveSoundPlace\(move\?\.to\)/, 'moves heard where they land, never in the dark');
+  assert.match(main, /soundBankNow\(\)\.play\(set,hidden\?'pawn':moveSoundName\(move\),\{place,volume:\.6,vary:\.02\}\)/, 'each piece its own sound; in the dark a plain knock');
   assert.match(css, /\.board-aura\{grid-column:2;grid-row:1;/);
   assert.match(css, /\.board-shell\.with-aura>\.board\{position:relative;z-index:1\}/);
   assert.match(css, /\.player time::after\{content:'';position:absolute;/);

@@ -47,6 +47,6 @@ test('game start banner covers computer and online starts for about two seconds'
   assert.match(main,/gameStartBannerTimer=setTimeout\(\(\)=>banner\.classList\.remove\('show'\),2100\)/);
   assert.match(main,/showGameStartBanner\(computerSide,computerRules==='blackout'\?BLACKOUT_SECONDS:600,0,/);
   assert.match(main,/showGameStartBanner\(myColor,state\.time_control_seconds\|\|state\.base_seconds\|\|600,state\.increment_seconds\|\|0,/);
-  assert.match(main,/playUiSound\('start'\)/);
+  assert.match(main,/cue\('start','start'\)/,'the start sting over the music, or the start sound');
   assert.match(css,/\.game-start-banner\.show/);
 });

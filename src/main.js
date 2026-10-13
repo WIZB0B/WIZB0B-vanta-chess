@@ -62,14 +62,15 @@ import { rivalLine, rivalsFrom } from './rivals.js';
 import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } from './relics.js';
 import { addGames, armyList, identitiesAfter, loadVeterans, rankOf, saveVeterans, totalsMap } from './veterans.js';
 import { dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from './oaths.js';
-import { atmosphereFor, tensionFor } from './atmosphere.js';
+import { atmosphereFor, materialFromFen, tensionFor } from './atmosphere.js';
 import { WallLights, lightReaction, placeLights, wallpaperKey } from './wallpaper-lights.js';
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
-import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
-import { STATIONS, loadLibrary } from './music-library.js';
+import { KEY_FOR_THEME, VantaScore, loadMusic, moodFor, saveMusic } from './music.js';
+import { DIVISIONS, STATIONS, STINGS, loadLibrary } from './music-library.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
+import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
@@ -112,7 +113,7 @@ let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back 
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
 let uiLang='en'; // the interface language; set from the saved choice in the language section below
 let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
-let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
+let soundBank=null,sfxPrefsCache=null,uiVoiceFn=null,musicResult=null,musicMood='even',r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
 let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
 let runTimer=0; // ticks the run clock while a run puzzle is on the board
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
@@ -392,7 +393,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -656,6 +657,7 @@ function renderBoard({hint=null,instant=false}={}){
     const reaction=badgeKey&&expressionsEnabled()?REVIEW_REACTION[boardReview.classification]:null;
     const moved=reaction?dom.pieces.element(lastMove.to):null;
     if(moved)moved.dataset.react=reaction;
+    if(badgeKey&&boardReview.classification==='brilliant'&&reviewState.viewing)cue('brilliant','success'); // stepping onto a brilliant move
   }
   renderArrows(dom);
   dom.board.classList.toggle('mate',game.isCheckmate());
@@ -708,21 +710,54 @@ function formatTimeControl(seconds,increment=0){
   const base=Math.max(0,Number(seconds)||0),label=base%60===0?String(base/60):`${base}s`;
   return `${label}+${Math.max(0,Number(increment)||0)}`;
 }
-function playUiSound(kind){
-  if($('#sound')?.dataset.off)return;
-  const AudioEngine=window.AudioContext||window.webkitAudioContext;if(!AudioEngine)return;
-  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440],warning:[760,620]},notes=patterns[kind]||[420],audio=new AudioEngine(),gain=audio.createGain();
-  gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.055,audio.currentTime+.015);gain.connect(audio.destination);
-  notes.forEach((frequency,index)=>{const oscillator=audio.createOscillator(),at=audio.currentTime+index*.12;oscillator.frequency.value=frequency;oscillator.connect(gain);oscillator.start(at);oscillator.stop(at+.11)});
-  const end=audio.currentTime+notes.length*.12+.04;gain.gain.exponentialRampToValueAtTime(.0001,end);setTimeout(()=>audio.close().catch(()=>{}),Math.ceil((notes.length*.12+.15)*1000));
+// ---- Sound effects (src/sfx.js; owner, 2026-10-13: "When you go to a next menu page, a sound
+// must play. When you do anything, sound must play") ----
+// Recorded sounds: the interface (a tap, a page turning forward and back, a dialog opening and
+// closing, a switch, a message, a game's start and end) and each piece's own sound in the set you
+// choose in Theme Studio. One sound per action: a tap that opens a page is heard as the page.
+// Until a sound has loaded (or where it cannot be decoded) the game's own synthesized sounds play.
+// Interface sounds can be turned off on their own; the board's Sound button silences everything.
+function menuSound(kind){return ['tap','page','back','open','close','toggle-on','toggle-off','notify'].includes(kind)}
+function sfxPrefs(){
+  if(!sfxPrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem('vch.sfx')||'')}catch{}
+    sfxPrefsCache={pieces:[...PIECE_SETS,'relic','classic'].includes(v?.pieces)?v.pieces:'wood',ui:v?.ui!==false}}
+  return sfxPrefsCache;
 }
+function setSfxPref(key,value){sfxPrefsCache={...sfxPrefs(),[key]:value};try{localStorage.setItem('vch.sfx',JSON.stringify(sfxPrefsCache))}catch{}}
+function soundBankNow(){if(!soundBank){soundBank=new SoundBank({context:audioContext});void soundBank.load()}return soundBank}
+// The set your pieces sound like: your choice, or (Match my relic set) the equipped relic's.
+function pieceSoundSet(){const p=sfxPrefs().pieces;return p==='relic'?SET_FOR_RELIC[loadRelics().equipped]||'wood':p}
+function playUiSound(kind){
+  if($('#sound')?.dataset.off||(menuSound(kind)&&!sfxPrefs().ui))return;
+  uiVoiceFn??=uiGate(k=>{
+    if($('#sound')?.dataset.off)return;
+    try{if(soundBankNow().play('ui',k,{volume:.5}))return}catch{}
+    synthUiSound(k);
+  });
+  uiVoiceFn(kind);
+}
+// The game's own sounds, for the moments that had one before the recordings.
+function synthUiSound(kind){
+  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440],warning:[760,620],success:[659,784],error:[330,262]},notes=patterns[kind];if(!notes)return;
+  try{
+    const audio=audioContext(),gain=audio.createGain(),t=audio.currentTime;
+    gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.055,t+.015);gain.connect(audio.destination);
+    notes.forEach((frequency,index)=>{const oscillator=audio.createOscillator(),at=t+index*.12;oscillator.frequency.value=frequency;oscillator.connect(gain);oscillator.start(at);oscillator.stop(at+.11)});
+    gain.gain.exponentialRampToValueAtTime(.0001,t+notes.length*.12+.04);
+  }catch{}
+}
+function pieceSoundNames(){return {wood:'Wood',crystal:'Crystal',tidal:'Tidal',gilded:'Gilded',ember:'Ember',relic:'Match my relic set',classic:'Classic'}}
+function pieceSoundOptions(){const names=pieceSoundNames();return [...PIECE_SETS,'relic','classic'].map(id=>`<option value="${id}">${names[id]}</option>`).join('')}
+// A moment with its own sting (src/music-library.js STINGS) when the music is playing, over it;
+// otherwise the interface's sound for it.
+function cue(sting,sound){if(vantaScore?.playing&&vantaScore.sting(sting))return true;if(sound)playUiSound(sound);return false}
 function showGameStartBanner(color,seconds,increment,key){
   if(!color||!key||lastGameStartKey===key)return;
   lastGameStartKey=key;
   let banner=$('#gameStartBanner');
   if(!banner){banner=document.createElement('div');banner.id='gameStartBanner';banner.className='game-start-banner';banner.setAttribute('role','status');banner.setAttribute('aria-live','polite');document.body.append(banner)}
   banner.textContent=`Game started · You play ${color==='w'?'White':'Black'} · ${formatTimeControl(seconds,increment)}`;
-  banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');playUiSound('start');
+  banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');cue('start','start');queueAtmosphere(); // the music turns to the game on its next bar line, under the start sting
   clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>banner.classList.remove('show'),2100);
 }
 function normalizedEndReason(value=''){
@@ -828,15 +863,15 @@ function syncRematch(g){
   if(!g||!serverGameId||g.id!==serverGameId||['active','waiting'].includes(g.status))return;
   if(g.rematch_game_id)return void openRematchGame(g.rematch_game_id);
   const offer=g.rematch_offer_by&&g.rematch_offer_by!==currentPlayerId?`${g.id}:${g.rematch_offer_by}`:null;
-  if(offer&&offer!==rematchOfferSeen){rematchOfferSeen=offer;toast('Rematch offered',{duration:10000,actionLabel:'Accept',onAction:()=>acceptRematchOffer()})}
+  if(offer&&offer!==rematchOfferSeen){rematchOfferSeen=offer;toast('Rematch offered',{duration:10000,actionLabel:'Accept',onAction:()=>acceptRematchOffer(),sound:'match'})}
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
-  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);roundTwelveGameOver(info);
+  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);const stung=roundTwelveGameOver(info);
   if(!info.online&&mode==='computer'){
     lastLocalArchiveId=`local-${Date.now()}`;
     saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason,variant:computerRules||'standard'});
-  }playUiSound(title==='Draw'?'draw':won?'win':'lose');
+  }if(!stung)playUiSound(title==='Draw'?'draw':won?'win':'lose'); // with the music on, its sting instead
   await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
   const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
@@ -1230,9 +1265,11 @@ async function findEngineMove(){
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
 function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
-// A move is heard where it lands (src/move-sound.js): a wooden knock placed around you by its
-// square, a heavier double knock for a capture, a ring for a check. In the dark the hidden
-// opponent's moves (and any you step back to) are heard straight ahead, as plain knocks.
+// A move is heard where it lands: placed around you by its square (HRTF, src/move-sound.js
+// soundPlace), in your piece set's sound for that piece (src/sfx.js): each piece its own, a
+// capture, castling, a promotion, a check, a mate. Classic (or before the sounds load): the
+// synthesized wooden knock, a heavier double knock for a capture, a ring for a check. In the dark
+// the hidden opponent's moves (and any you step back to) are heard straight ahead, as plain knocks.
 function moveHiddenInDark(){
   const color=premovePlayerColor(),mine=!color||game.turn()!==color;
   return (darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
@@ -1245,14 +1282,17 @@ function moveSoundPlace(sq){
 function playTone(){
   if($('#sound').dataset.off)return;
   try{
-    const move=boardLastMove(),hidden=moveHiddenInDark(),san=String(move?.san||'');
-    playMoveSound(audioContext(),{place:hidden?null:moveSoundPlace(move?.to),capture:!hidden&&(!!move?.captured||san.includes('x')),check:!hidden&&/[+#]/.test(san)});
+    const move=boardLastMove(),hidden=moveHiddenInDark(),san=String(move?.san||''),place=hidden?null:moveSoundPlace(move?.to),set=pieceSoundSet();
+    if(set!=='classic'&&soundBankNow().play(set,hidden?'pawn':moveSoundName(move),{place,volume:.6,vary:.02}))return;
+    playMoveSound(audioContext(),{place,capture:!hidden&&(!!move?.captured||san.includes('x')),check:!hidden&&/[+#]/.test(san)});
   }catch{}
 }
 // An illegal try: a low double knock (and a short buzz on phones). When the king is the
 // reason (check, a pin, an attacked square) its square flashes red, like a warning light.
 function playIllegalTone(){
   if($('#sound').dataset.off)return;
+  const set=pieceSoundSet();
+  if(set!=='classic')try{if(soundBankNow().play(set,'illegal',{volume:.5}))return}catch{}
   try{
     const a=audioContext(),t=a.currentTime;
     for(const at of [0,.11]){
@@ -1328,6 +1368,7 @@ function syncLowTimeWarning(values,active){
 let lastTickSecond=null;
 function playTick(){
   if($('#sound')?.dataset.off)return;
+  try{if(soundBankNow().play('ui','tick',{volume:.4}))return}catch{}
   try{
     const a=audioContext(),t=a.currentTime,o=a.createOscillator(),g=a.createGain();
     o.type='square';o.frequency.setValueAtTime(1650,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.035,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+.035);
@@ -1341,8 +1382,9 @@ function checkLocalTimeout(){
 }
 // Clock text is left alone while a piece slides, so the slide's frames carry no other paint.
 function startClock(){clearInterval(ticking);ticking=setInterval(()=>{if(!boardIsMoving())syncClockBars();checkLocalTimeout()},250)}
-function toast(s,{duration=1800,onClick=null,actionLabel='',onAction=null}={}){
-  const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.replaceChildren();el.className='show';
+// A message: a soft chime with it (sound: another interface sound, or false for none).
+function toast(s,{duration=1800,onClick=null,actionLabel='',onAction=null,sound='notify'}={}){
+  const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.replaceChildren();el.className='show';if(sound)playUiSound(sound);
   const text=document.createElement('span');text.className='toast-text';text.textContent=String(s);el.append(text);
   if(actionLabel&&onAction){const action=document.createElement('button');action.type='button';action.className='toast-action';action.textContent=actionLabel;action.onclick=event=>{event.stopPropagation();el.className='';onAction()};el.append(action)}
   if(onClick){el.classList.add('actionable');el.onclick=()=>{el.className='';onClick()}}else el.onclick=null;
@@ -1927,7 +1969,7 @@ async function recordPuzzle(success,move=null){
 }
 function puzzleMiss(move){
   playIllegalTone();buzz(HAPTICS.illegal);
-  if(!puzzleSession.failed){puzzleSession.failed=true;void recordPuzzle(false,move);toast('Not the move · this one counts as missed. Keep trying.')}
+  if(!puzzleSession.failed){puzzleSession.failed=true;void recordPuzzle(false,move);if(vantaScore?.playing)vantaScore.sting('failed');toast('Not the move · this one counts as missed. Keep trying.',{sound:false})}
   else toast('Try another move');
 }
 async function renderPuzzleStats(){
@@ -1975,7 +2017,8 @@ function skipRunPuzzle(){
 function puzzleSolved(){
   const session=puzzleSession;puzzleSession=null;markPlan('puzzles');
   renderStatus();syncPlayerBars(); // "Puzzle complete", not the solving labels
-  if(!streakSession){toast('Puzzle solved');return}
+  if(!streakSession){const stung=cue('solved','success');toast('Puzzle solved',{sound:stung?false:'success'});return}
+  playUiSound('success'); // a run: the short chime (a sting for every puzzle would be too much)
   stopRunTimer();
   streakSession.count++;streakSession.best=streakSession.mode==='survival'?saveBestSurvival(streakSession.count):saveBestStreak(streakSession.count);
   if(earnMilestone(streakSession.count))setTimeout(()=>toast(`${streakSession?.count||''} solved · a skip token earned`,{duration:1600}),700);
@@ -1986,6 +2029,7 @@ function endStreak(move,{timeout=false}={}){
   const session=streakSession;if(!session)return;streakSession=null;stopRunTimer();
   const survival=session.mode==='survival',runName=survival?'Survival':'Streak';
   if(move){playIllegalTone();buzz(HAPTICS.illegal)}
+  if(vantaScore?.playing)vantaScore.sting('failed');
   const solution=puzzleSession?.solution?.[puzzleSession.index];
   if(puzzleSession&&move)void recordPuzzle(false,move);
   if(session.count>0&&!survival)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
@@ -3369,7 +3413,7 @@ $$('[data-m-tab]').forEach(button=>button.onclick=()=>{
   if(tab==='play'){mTab='play';activateNav('play');setMView(viewForTab('play',{gameLive:liveGameOn()}));return}
   openSection(tab);
 });
-$('#mBack').onclick=()=>{if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
+$('#mBack').onclick=()=>{playUiSound('back');if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
 $('#mReturnGame').onclick=()=>setMView('game');
 $$('#mSheet [data-m-close]').forEach(el=>el.onclick=closeSheet);
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheet()});
@@ -4211,7 +4255,7 @@ function showMovesView(){
   currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
   if(reviewState.viewing){reviewState.viewing=false;renderReviewDashboard();render()}
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
-  updateMoves();scheduleAnalysis({force:true});
+  updateMoves();scheduleAnalysis({force:true});queueAtmosphere();
 }
 function setDynamicView(kind,title,html){
   if(kind!=='study'&&studySession)endStudy();
@@ -4224,8 +4268,9 @@ function setDynamicView(kind,title,html){
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view" aria-label="Back"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
-  target.querySelector('.back-view').onclick=showMovesView;
+  target.querySelector('.back-view').onclick=()=>{playUiSound('back');showMovesView()};
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
+  queueAtmosphere(); // the music follows you here (src/music.js waits a moment, in case you are only passing through)
 }
 function studyBoardHtml(fen){
   const position=new Chess(fen),pieces=position.board().flat();
@@ -4803,7 +4848,7 @@ function shadowMove(){
 const scoreOf=(result,color)=>result==='1/2-1/2'?.5:!['1-0','0-1'].includes(result)?null:(result==='1-0')===(color==='w')?1:0;
 function earnRelic(id){
   const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;
-  saveRelics(out.state);setTimeout(()=>{toast(`Relic earned: ${out.unlocked.name}`,{duration:2600});playUiSound('win')},900);
+  saveRelics(out.state);setTimeout(()=>{const stung=cue('relic','win');toast(`Relic earned: ${out.unlocked.name}`,{duration:2600,sound:stung?false:'notify'})},900);
 }
 function roundElevenGameOver(info){
   if(info.online){void rivalRelicCheck(info);return}
@@ -4895,12 +4940,12 @@ function r12Prefs(){
 }
 function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStorage.setItem('vch.r12',JSON.stringify(r12PrefsCache))}catch{}}
 // Messages after a game come one after another instead of replacing each other.
-function queueToast(text,{sound=null,delay=1200}={}){
-  r12ToastQueue.push({text,sound});if(r12ToastTimer)return;
-  const next=()=>{const item=r12ToastQueue.shift();if(!item){r12ToastTimer=null;return}toast(item.text,{duration:2500});if(item.sound)playUiSound(item.sound);r12ToastTimer=setTimeout(next,2700)};
+function queueToast(text,{sound=null,sting=null,delay=1200}={}){
+  r12ToastQueue.push({text,sound,sting});if(r12ToastTimer)return;
+  const next=()=>{const item=r12ToastQueue.shift();if(!item){r12ToastTimer=null;return}const stung=item.sting&&cue(item.sting,null);toast(item.text,{duration:2500,sound:stung?false:item.sound||'notify'});r12ToastTimer=setTimeout(next,2700)};
   r12ToastTimer=setTimeout(next,delay);
 }
-function earnRelicQueued(id){const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;saveRelics(out.state);queueToast(`Relic earned: ${out.unlocked.name}`,{sound:'win'})}
+function earnRelicQueued(id){const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;saveRelics(out.state);queueToast(`Relic earned: ${out.unlocked.name}`,{sound:'win',sting:'relic'})}
 
 // Veteran pieces: your own pieces wear the ranks their careers have earned.
 function veteranTotals(){if(!veteranState)veteranState=loadVeterans();return veteranState.totals}
@@ -5035,7 +5080,7 @@ function syncAtmosphere(){
   if(el.dataset.mood!==mood.mood)el.dataset.mood=mood.mood;
   const realm=atmosphereRealm||'';if((el.dataset.realm||'')!==realm){if(realm)el.dataset.realm=realm;else delete el.dataset.realm}
   const strength=String(mood.strength);if(el.style.getPropertyValue('--atmo')!==strength)el.style.setProperty('--atmo',strength);
-  syncWallLights(mood);syncMusic(mood);syncOathLine();
+  syncWallLights(mood);syncMusic(mood);syncOathLine();noticeDivision();
 }
 // Living wallpaper (src/wallpaper-lights.js): a soft glow over every candle and lamp in the
 // wallpaper, flickering on its own. With the living atmosphere on Full, the room answers the
@@ -5109,7 +5154,8 @@ function ensureScore(){
 }
 // Where you are, for the music that follows the game: a Campaign boss, a fast game (three
 // minutes or less, Blackout Blitz), any other game (yours, or one you watch), puzzles, lessons,
-// study and analysis, or the menus.
+// study and analysis, the Relic sets (each set's own theme), the moments after a game (until you
+// go somewhere else, or for two and a half minutes), or the menus.
 const FOCUS_MODES=new Set(['puzzle','survival','lesson','study','analysis','endgame','explore','prep','repertoire','archive']);
 function musicPlace(){
   if(liveGameOn()){
@@ -5119,20 +5165,47 @@ function musicPlace(){
     return seconds<=180?'blitz':'game';
   }
   if(mode==='watch')return 'game';
-  return FOCUS_MODES.has(mode)||reviewState.viewing||!!analysis||currentRightView==='review'?'focus':'lobby';
+  if(FOCUS_MODES.has(mode)||reviewState.viewing||!!analysis||currentRightView==='review')return 'focus';
+  if(currentRightView==='relics')return 'skin';
+  if(musicResult&&Date.now()-musicResult.at<150000)return 'result';
+  return 'lobby';
 }
+// Your league division, for the menus' music (Bronze until you have one).
+function musicDivision(){return currentProfile?.account?DIVISIONS[Math.max(0,Math.min(DIVISIONS.length-1,Number(currentProfile.league_division)||0))]:null}
+// The relic set whose theme plays in the Relic sets (the one you wear).
+const SKIN_FOR_RELIC={ember:'ember',ashen:'ember',rivalry:'ember',tidal:'tidal',umbra:'shadow',mirror:'crystal',court:'crystal',gilded:'gilded',crown:'gilded',paladin:'gilded',obsidian:'shadow',eclipse:'shadow',oathbound:'celestial'};
+let musicPlaceWas=null;
 function syncMusic(mood){
   const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&document.visibilityState==='visible';
   if(!want){if(vantaScore?.playing)vantaScore.stop();return syncNowPlaying()}
   if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
   const score=ensureScore();if(!score)return syncNowPlaying();
-  score.setVolume(p.volume);score.setStation(p.station);score.setKey(musicKeyNow());score.setPlace(musicPlace());
+  const place=musicPlace(),games=['game','boss','blitz','result'];
+  // Into a game and out of it the music turns on its next bar line; anywhere else it waits a
+  // moment first, in case you are only passing through.
+  const urgent=musicPlaceWas!==null&&place!==musicPlaceWas&&(games.includes(place)||games.includes(musicPlaceWas));musicPlaceWas=place;
+  score.setVolume(p.volume);score.setStation(p.station);score.setKey(musicKeyNow());score.setDivision(musicDivision());
+  score.setSkin(SKIN_FOR_RELIC[loadRelics().equipped]||null);if(musicResult)score.setResult(musicResult.result);
+  score.setPlace(place,urgent);
   if(liveGameOn()){
     const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
-    score.setStorm(storm);score.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
-  }else{score.setStorm(0);score.setTension(0)}
+    // How the game is going: ahead or behind on material (hidden in the dark, where you cannot see it).
+    const color=premovePlayerColor(),hidden=blackoutActive()||darkActive()||fogOnline(),m=hidden||!color?null:materialFromFen(game.fen());
+    musicMood=m?moodFor(color==='b'?m.b-m.w:m.w-m.b,musicMood):'even';
+    score.setStorm(storm);score.setMood(musicMood);score.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
+  }else{musicMood='even';score.setStorm(0);score.setMood('even');score.setTension(0)}
   if(!score.playing)score.start();
   syncNowPlaying();
+}
+// A new league division (signed-in players): a sting up or down, and a message.
+function noticeDivision(){
+  const div=musicDivision(),id=currentProfile?.id;if(!div||!id)return;
+  const key=`vch.division.${id}`;let was=null;try{was=localStorage.getItem(key)}catch{}
+  if(was===div)return;try{localStorage.setItem(key,div)}catch{}
+  if(!was||!DIVISIONS.includes(was))return; // the first time: nothing to compare with
+  const up=DIVISIONS.indexOf(div)>DIVISIONS.indexOf(was),name=div[0].toUpperCase()+div.slice(1);
+  const stung=cue(up?'rank-up':'rank-down',null);
+  toast(`${up?'Up a division':'Down a division'} · ${name}`,{duration:3200,sound:stung?false:up?'success':'notify'});
 }
 // The track playing now, under the Music setting.
 function syncNowPlaying(){
@@ -5169,7 +5242,7 @@ function roomPulse(ev){
     else if(k==='drum')glow.pulse(.18+.24*s,380);
     else if(k==='heartbeat')glow.pulse(.28+.25*s,320);
     else if(k==='motif')glow.pulse(.25,1200,.6);
-    else if(k==='sting')glow.pulse(ev.result==='win'?.7:ev.result==='loss'?-.45:.3,2400);
+    else if(k==='sting')glow.pulse(['win','checkmate','rank-up','relic','realm','solved','brilliant'].includes(ev.result)?.7:['loss','rank-down','failed'].includes(ev.result)?-.45:.3,2400);
   }
   if(boardIsMoving())return;
   const aura=ensureBoardAura(),tone=k==='heartbeat'?'heartbeat':k==='sting'?String(ev.result||''):'';
@@ -5242,18 +5315,23 @@ function campaignGameOver(info,score,oath){
   const st=loadCampaign();if(score===null){saveCampaign({...st,pending:null});return}
   const out=recordBattle(st,c.realm,c.i,{score,plies:game.history().length,oath});saveCampaign(out.state);
   if(out.stars)queueToast(`Victory · ${out.stars} of 3 stars`,{delay:600});else queueToast('Defeat · try the battle again',{delay:600});
-  if(out.freed){queueToast(`${out.freed.name} is free`,{sound:'win'});earnRelicQueued(out.freed.relic)}
+  if(out.freed){queueToast(`${out.freed.name} is free`,{sound:'win',sting:'realm'});earnRelicQueued(out.freed.relic)}
   if(currentRightView==='campaign')drawCampaign();
 }
 
+// A game ended: with the music on, its sting plays over it (a checkmate you gave has its own),
+// the music steps back for it, then turns to the win or loss music while you stay at the board.
+// Returns whether a sting played (the interface's own end sound plays otherwise).
 function roundTwelveGameOver(info){
-  const score=scoreOf(info.result,info.myColor);
-  atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};queueAtmosphere();
-  if(vantaScore?.playing)vantaScore.sting(score===1?'win':score===0?'loss':'draw'); // over the music, which steps back for it and then follows you back to the menus
+  const score=scoreOf(info.result,info.myColor),result=score===1?'win':score===0?'loss':'draw';
+  atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};
+  musicResult=score===null?null:{at:Date.now(),result};queueAtmosphere();
+  const stung=!!vantaScore?.playing&&score!==null&&vantaScore.sting(result==='win'&&/checkmate/.test(String(info.reason||''))?'checkmate':result);
   const oath=settleOath(info,score);
   campaignGameOver(info,score,oath);
   void twinGameOver(info);
   setTimeout(()=>void refreshVeterans(true),info.online?2500:400);
+  return stung;
 }
 function initRoundTwelve(){
   const prefs=r12Prefs(),vs=$('#veteranSetting'),as=$('#atmosphereSetting'),ms=$('#musicSetting'),mv=$('#musicVolume');
@@ -5619,7 +5697,7 @@ function nextBattlePuzzle(){
   setPrimaryScreen('game');render();
   const st=$('#dynamicView .battle-status');if(st)st.textContent=`Puzzle ${l.index+1} · ${game.turn()==='w'?'White':'Black'} to move`;
 }
-function battleSolved(){if(!battle)return;battle.local.score++;battle.local.index++;playUiSound('start');reportBattle();nextBattlePuzzle()}
+function battleSolved(){if(!battle)return;battle.local.score++;battle.local.index++;playUiSound('success');reportBattle();nextBattlePuzzle()}
 function battleMiss(move){if(!battle)return;battle.local.misses++;battle.local.index++;rejectMove(move.from,move.to,{quietRule:true});reportBattle();setTimeout(nextBattlePuzzle,350)}
 function reportBattle(){if(!battle)return;drawBattleScore();void api.battleProgress(battle.id,battle.local.score,battle.local.misses).then(out=>{if(battle){battle={...out.battle,local:battle.local};drawBattleScore()}}).catch(()=>{})}
 function drawBattleScore(){
@@ -5851,11 +5929,12 @@ function recordNav(nav){
     navPending=false;const snap=navSnapshot();if(sameNav(snap,navCurrent))return;
     const first=!navCurrent;navCurrent=snap;
     try{if(first)history.replaceState({...(history.state||{}),vchNav:snap},'',location.href);else history.pushState({vchNav:snap},'',location.href)}catch{}
+    if(!first){playUiSound('page');musicResult=null;queueAtmosphere()} // a new screen: a page turns, and the music follows you there
   });
 }
 window.addEventListener('popstate',event=>{
   const snap=event.state?.vchNav;if(!snap)return;
-  navRestoring=true;
+  navRestoring=true;playUiSound('back');musicResult=null;queueAtmosphere();
   try{if(snap.mTab)mTab=snap.mTab;activateNav(snap.nav);if(snap.mView&&isMobileApp())setMView(snap.mView)}
   finally{navRestoring=false;navCurrent=navSnapshot()}
 });
@@ -5890,6 +5969,16 @@ registerModal('theme',$('#themeStudio'));
 registerModal('account',$('#accountDialog'));
 registerModal('search',$('#searchDialog'));
 registerModal('promotion',$('#promotion'));
+// The interface is heard (src/sfx.js): a press is a tap, a switch clicks, a dialog or menu opens
+// and closes; behind a settings dialog the music is muffled, as if behind a door. The board has
+// its own sounds (moves), and a [data-quiet] area (the Sound test) plays only what it plays.
+menus.onChange((name,open)=>{if(name!=='promotion')playUiSound(open?'open':'close');if(['theme','account','search'].includes(name))vantaScore?.muffle(open?1:0)});
+document.addEventListener('vch-dialog',e=>playUiSound(e.detail?.open?'open':'close'));
+document.addEventListener('click',e=>{const el=e.target.closest?.('button,[role="button"],a[href],summary,.feature-card');if(el&&!el.disabled&&!el.closest('#board,[data-quiet]'))playUiSound('tap')},{capture:true,passive:true});
+document.addEventListener('change',e=>{const t=e.target;if(!t||t.closest?.('[data-quiet]'))return;if(t.type==='checkbox')playUiSound(t.checked?'toggle-on':'toggle-off');else if(t.tagName==='SELECT')playUiSound('tap')},{capture:true,passive:true});
+const warmSounds=()=>{const later=window.requestIdleCallback||(fn=>setTimeout(fn,300));later(()=>{const bank=soundBankNow();void bank.warm('ui').then(()=>{const set=pieceSoundSet();if(set!=='classic')return bank.warm(set)})})};
+document.addEventListener('pointerdown',warmSounds,{once:true,capture:true,passive:true});
+document.addEventListener('keydown',warmSounds,{once:true,capture:true,passive:true});
 document.addEventListener('pointerdown',event=>{menus.handleOutside(event.target)},true);
 $('#closeProfileMenu').onclick=()=>menus.close('profile');
 $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
@@ -6005,6 +6094,43 @@ $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.val
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
+// Theme Studio: the piece sounds (a set, your relic set's, or the classic synthesized ones), the
+// interface sounds on or off, and the Sound test.
+$('#pieceSoundSetting').value=sfxPrefs().pieces;
+$('#pieceSoundSetting').onchange=e=>{setSfxPref('pieces',e.target.value);const set=pieceSoundSet();if(set!=='classic')void soundBankNow().warm(set,['knight']).then(()=>soundBankNow().play(set,'knight',{volume:.6}))};
+$('#uiSoundSetting').checked=sfxPrefs().ui;
+$('#uiSoundSetting').onchange=e=>setSfxPref('ui',e.target.checked);
+$('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderSoundTest();showSidePanel()};
+// The Sound test (owner, 2026-10-13): every sound in VCH, to hear and to judge. The interface,
+// each piece set, and the stings over the music.
+const SOUND_LABEL={tap:'Tap',page:'Page',back:'Back',open:'Open',close:'Close','toggle-on':'Switch on','toggle-off':'Switch off',notify:'Message',error:'Error',success:'Success',match:'Match found',warning:'Warning',start:'Game start',win:'Win',lose:'Loss',draw:'Draw',tick:'Clock tick',pawn:'Pawn',knight:'Knight',bishop:'Bishop',rook:'Rook',queen:'Queen',king:'King',capture:'Capture',castle:'Castle',promote:'Promotion',check:'Check',mate:'Checkmate',illegal:'Illegal move'};
+const STING_LABEL={win:'Victory',loss:'Defeat',draw:'Draw',checkmate:'Checkmate',start:'Game start','rank-up':'Up a division','rank-down':'Down a division',relic:'Relic earned',realm:'Realm freed',solved:'Puzzle solved',failed:'Puzzle failed',brilliant:'Brilliant move'};
+function renderSoundTest(){setDynamicView('sounds','Sound test','');drawSoundTest()}
+function drawSoundTest(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='sounds')return;
+  const mine=pieceSoundSet(),set=PIECE_SETS.includes(mine)?mine:'wood',names=pieceSoundNames();
+  const grid=(items,attr)=>`<div class="sound-grid">${items.map(([k,l])=>`<button type="button" ${attr}="${k}">${escapeHtml(l)}</button>`).join('')}</div>`;
+  target.innerHTML=`<article class="sound-test" data-quiet><p class="trainer-intro">Every sound in VCH. Tap one to hear it.</p>
+    <h4>Interface</h4>${grid(UI_SOUNDS.map(k=>[k,SOUND_LABEL[k]||k]),'data-ui-sound')}
+    <h4>Pieces</h4><label class="sound-set">Piece sounds <select data-sound-set>${PIECE_SETS.map(id=>`<option value="${id}"${id===set?' selected':''}>${names[id]}</option>`).join('')}</select></label>${grid(PIECE_SOUNDS.map(k=>[k,SOUND_LABEL[k]||k]),'data-piece-sound')}
+    <h4>Stings</h4>${grid(STINGS.map(k=>[k,STING_LABEL[k]||k]),'data-sting')}</article>`;
+  const pick=()=>target.querySelector('[data-sound-set]')?.value||'wood';
+  target.querySelectorAll('[data-ui-sound]').forEach(b=>b.onclick=()=>void auditionSound('ui',b.dataset.uiSound));
+  target.querySelectorAll('[data-piece-sound]').forEach(b=>b.onclick=()=>void auditionSound(pick(),b.dataset.pieceSound));
+  target.querySelectorAll('[data-sting]').forEach(b=>b.onclick=()=>void auditionSting(b.dataset.sting));
+}
+async function auditionSound(set,name){
+  if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
+  const bank=soundBankNow();await bank.load();await bank.buffer(set,name);
+  if(bank.play(set,name,{volume:set==='ui'?.5:.6}))return;
+  if(set==='ui')synthUiSound(name);else playMoveSound(audioContext(),{capture:name==='capture',check:name==='check'||name==='mate'});
+}
+async function auditionSting(kind){
+  if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
+  ensureScore();if(!musicLibrary)musicLibrary=await loadLibrary();
+  if(vantaScore&&!vantaScore.tracks.length)vantaScore.setTracks(musicLibrary);
+  if(!vantaScore?.sting(kind))toast('The music library is on its way',{sound:false});
+}
 initRoundTwelve();
 // ---- Hover guide (src/hover-guide.js): what each section, tab and mode is, on hover or focus ----
 (function hoverGuide(){

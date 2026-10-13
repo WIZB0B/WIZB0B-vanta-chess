@@ -1,18 +1,30 @@
-// The music library (owner, 2026-10-13: real music, made with Lyria 3.5, instead of music
-// synthesized in the browser). The tracks are data: public/assets/vch/music/library.json lists
-// them and their files sit beside it, so new music needs no new code. The page loads the list the
-// first time Music is on. Each track:
-//   {id, title, file, station, place, part?, theme?, seconds?}
-//   id       unique, lower-case letters, digits and dashes;
-//   title    its name, shown under the Music setting while it plays;
-//   file     its file's name in public/assets/vch/music/ (.mp3, which every browser plays);
-//   station  the station that plays it: cinematic, focus, opera, electric or songs;
-//   place    where "Follows the game" plays it (one place or a list): lobby (the menus), game,
-//            focus (puzzles, lessons, study, analysis), boss (Campaign bosses), blitz (games of
-//            three minutes or less, Blackout Blitz), or sting (the end of a game, no station);
-//   part     in a game: calm, tense or storm (your clock running out); a sting's: win, loss, draw;
-//   theme    the relic set or realm it was made for (none: it suits every theme);
-//   seconds  a sting's length: how long the music steps back for it.
+// The music library (owner, 2026-10-13: real music, made with Lyria 3.5 in Google Flow Music,
+// instead of music synthesized in the browser). The tracks are data: public/assets/vch/music/
+// library.json lists them and their files sit beside it, so new music needs no new code. The page
+// loads the list the first time Music is on. Each track:
+//   {id, title, file, station, place, part?, theme?, division?, kind?, skin?,
+//    seconds?, start?, end?, gain?, bpm?, beat?}
+//   id        unique, lower-case letters, digits and dashes;
+//   title     its name, shown under the Music setting while it plays;
+//   file      its file's name in public/assets/vch/music/ (.m4a or .mp3);
+//   station   the station that plays it: cinematic, focus, opera, electric or songs;
+//   place     where "Follows the game" plays it (one place or a list): lobby (the menus), game,
+//             focus (puzzles, lessons, study, analysis), boss (Campaign bosses), blitz (games of
+//             three minutes or less, Blackout Blitz, the Arena), result (the screen after a
+//             game), skin (a piece set being shown), or sting (a short cue over the music);
+//   part      in a game: calm (the opening), tense (the middlegame), storm (your clock running
+//             out), ahead or behind (the game going your way, or not); after a game: win, loss
+//             or draw; a sting's moment: win, loss, draw, checkmate, start, rank-up, rank-down,
+//             relic, realm, solved, failed, brilliant;
+//   theme     the relic set or realm whose music it is (a game's three parts share one key and
+//             one tempo, so one can hand over to the next on the beat);
+//   division  the league division whose menus it plays in (bronze ... diamond; none: everyone);
+//   kind      'song' for a song with vocals (the menus play one now and then, between themes);
+//   skin      the piece set it was made for;
+//   seconds   its length; start/end: where its sound begins and ends (silence trimmed);
+//   gain      decibels that bring it to the library's loudness (-16 LUFS);
+//   bpm/beat  its tempo and the time of its first downbeat: the player changes tracks on a bar
+//             line, so the music never stumbles.
 export const STATIONS = [
   { id: 'on', name: 'Follows the game' },
   { id: 'cinematic', name: 'Dark cinematic' },
@@ -20,16 +32,20 @@ export const STATIONS = [
   { id: 'opera', name: 'Opera' },
   { id: 'electric', name: 'Electric' },
   { id: 'songs', name: 'Songs' },
+  { id: 'mix', name: 'Everything' },
 ];
 export const MUSIC_BASE = '/assets/vch/music/';
 export const LIBRARY_URL = `${MUSIC_BASE}library.json`;
-export const PLACES = ['lobby', 'game', 'focus', 'boss', 'blitz', 'sting'];
-export const PARTS = ['calm', 'tense', 'storm'];
+export const PLACES = ['lobby', 'game', 'focus', 'boss', 'blitz', 'result', 'skin', 'sting'];
+export const PARTS = ['calm', 'tense', 'storm', 'ahead', 'behind'];
 export const RESULTS = ['win', 'loss', 'draw'];
-const STATION_IDS = new Set(STATIONS.map(s => s.id).filter(id => id !== 'on'));
+export const STINGS = ['win', 'loss', 'draw', 'checkmate', 'start', 'rank-up', 'rank-down', 'relic', 'realm', 'solved', 'failed', 'brilliant'];
+export const DIVISIONS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+const STATION_IDS = new Set(STATIONS.map(s => s.id).filter(id => id !== 'on' && id !== 'mix'));
 
 export const placesOf = t => (Array.isArray(t?.place) ? t.place : [t?.place]).filter(p => typeof p === 'string');
 export const isSting = t => placesOf(t).includes('sting');
+const num = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : undefined);
 
 // The track as the player may use it, or null. A file name never leaves the music folder.
 export function checkTrack(t) {
@@ -37,20 +53,27 @@ export function checkTrack(t) {
   const places = placesOf(t);
   if (typeof t.id !== 'string' || !/^[a-z0-9-]{1,60}$/.test(t.id)) return null;
   if (typeof t.title !== 'string' || !t.title.trim() || t.title.length > 80) return null;
-  if (typeof t.file !== 'string' || !/^[a-z0-9-]{1,80}\.mp3$/.test(t.file)) return null;
+  if (typeof t.file !== 'string' || !/^[a-z0-9-]{1,80}\.(m4a|mp3)$/.test(t.file)) return null;
   if (!places.length || places.some(p => !PLACES.includes(p))) return null;
   if (isSting(t)) {
-    if (places.length !== 1 || !RESULTS.includes(t.part)) return null;
+    if (places.length !== 1 || !STINGS.includes(t.part)) return null;
   } else {
     if (!STATION_IDS.has(t.station)) return null;
-    if (t.part != null && !PARTS.includes(t.part)) return null;
+    if (t.part != null && !(places.includes('result') ? RESULTS : PARTS).includes(t.part)) return null;
   }
   if (t.theme != null && (typeof t.theme !== 'string' || !/^[a-z]{1,20}$/.test(t.theme))) return null;
+  if (t.division != null && !DIVISIONS.includes(t.division)) return null;
+  if (t.kind != null && t.kind !== 'song') return null;
+  if (t.skin != null && (typeof t.skin !== 'string' || !/^[a-z]{1,20}$/.test(t.skin))) return null;
   const out = { id: t.id, title: t.title.trim(), file: t.file, place: Array.isArray(t.place) ? places : places[0] };
-  if (t.station) out.station = t.station;
-  if (t.part) out.part = t.part;
-  if (t.theme) out.theme = t.theme;
-  if (Number.isFinite(t.seconds) && t.seconds > 0 && t.seconds < 60) out.seconds = t.seconds;
+  for (const k of ['station', 'part', 'theme', 'division', 'kind', 'skin']) if (t[k] != null) out[k] = t[k];
+  const seconds = num(t.seconds, 0.5, 900), start = num(t.start, 0, 60), end = num(t.end, 0.5, 900);
+  if (seconds !== undefined) out.seconds = seconds;
+  if (start !== undefined) out.start = start;
+  if (end !== undefined && end > (start || 0) + 0.5) out.end = end;
+  const gain = num(t.gain, -24, 12), bpm = num(t.bpm, 40, 220), beat = num(t.beat, 0, 60);
+  if (gain !== undefined) out.gain = gain;
+  if (bpm !== undefined) { out.bpm = bpm; if (beat !== undefined) out.beat = beat; }
   return out;
 }
 export function readLibrary(json) {

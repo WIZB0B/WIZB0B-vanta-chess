@@ -21,7 +21,9 @@ the server region.
   - last-move highlight;
   - legal-move dots and capture rings;
   - check glow on the king.
-- **Sounds:** move, capture, check, castle, promote, game start, game end, low time.
+- **Sounds:** move, capture, check, castle, promote, game start, game end, low time. (Done in
+  R12.5: recorded sounds for each piece and moment in five sets, interface sounds on every
+  press and screen, stings over the music.)
 - **Game over modal:**
   - every result reason, including "abandoned by opponent";
   - a mini analysis summary (accuracy for both sides, best/blunder counts);
@@ -45,7 +47,8 @@ the server region.
   - always play as White/Black/random, and show the rating range when matching;
   - magnify piece while dragging.
 - **Notifications:** messages, friend requests, game invites, your turn (correspondence).
-- **Sound:** on/off and volume.
+- **Sound:** on/off and volume. (Piece sounds, Interface sounds and a Sound test are in Theme
+  Studio since R12.5; a sound-effects volume of its own is still to do.)
 - All settings are saved per account (and in the browser for guests).
 
 ## Phase D: Accounts and social

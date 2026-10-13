@@ -1,19 +1,32 @@
 // VCH's music: real tracks (owner, 2026-10-13: music made with Lyria 3.5, not synthesized in the
 // browser; the library is public/assets/vch/music/library.json, read by src/music-library.js).
-// With Music on it plays everywhere and follows you: the menus' music in the lobby, focus music
-// for puzzles, lessons and analysis, opera for Campaign bosses, electric music for fast games,
-// and in your games a dark cinematic score whose part follows the game (calm, tense, and the
-// storm when your clock runs low). A station (Dark cinematic, Focus, Opera, Electric, Songs) plays
-// its own tracks in turn instead. Tracks crossfade (two decks); the next one loads before the
-// last ends and comes in under it, so the music never stops; the end of a game plays its sting
-// over the music, which steps back for it. The player listens to itself (an analyser): every beat
-// it hears reaches the room (onNote), so the candles, the board's glow, the clocks and the sand
-// follow the real music. Off unless you turn it on; silent while VCH's sound is off.
+// With Music on it plays everywhere and follows you: your division's theme in the menus, focus
+// music for puzzles, lessons and analysis, opera for Campaign bosses, electric music for fast
+// games, and in your games a dark cinematic score in your theme's key whose part follows the
+// game (calm in the opening, tense in the middlegame, triumphant or defiant when it tilts, the
+// storm when your clock runs low). A station plays its own tracks instead.
+//
+// Transitions (owner, 2026-10-13: "the most important part ... how do you naturally flow into
+// that music without distracting or cutting the attention of the player"):
+// - nothing ever stops dead: two decks crossfade with equal-power curves (no dip in the middle);
+// - changes land on the music's own bar line: the incoming track starts silently so that its
+//   first downbeat meets the outgoing track's next bar line, then fades in over two bars (a
+//   game's parts share one key and one tempo, so they hand over like one piece);
+// - leaving somewhere, the old track also sinks into the distance (a low-pass sweep);
+// - passing through a menu does not change the music: a change waits a moment to be sure;
+// - the game's part turns at most every ten seconds, and holds a little (no flickering); the
+//   storm comes in on the next beat;
+// - a dialog muffles the music (as if behind a door) instead of stopping it;
+// - stings (a win, a checkmate, a promotion to a higher league) play over the music, which
+//   steps back for them.
+// The player listens to itself (an analyser): every beat it hears reaches the room (onNote), so
+// the candles, the board's glow, the clocks and the sand follow the real music.
 import { MUSIC_BASE, isSting, placesOf } from './music-library.js';
 
 export const MUSIC_KEY = 'vch.music';
 const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10], harmonic: [0, 2, 3, 5, 7, 8, 11] };
-// Each theme's key (relic sets, campaign realms): Resonance draws its figures from them.
+// Each theme's key (relic sets, campaign realms): its tracks are written in it, and Resonance
+// draws its figures from it.
 export const MUSIC_KEYS = {
   vanta: { root: 50, scale: 'aeolian' }, // D minor
   ember: { root: 52, scale: 'phrygian' }, // E phrygian
@@ -33,11 +46,21 @@ export function chordFor(keyId, step) {
   const note = i => key.root + scale[i % 7] + 12 * Math.floor(i / 7);
   return [note(d), note(d + 2), note(d + 4)];
 }
-// The part of a game's music: the storm when your clock runs low, tense as the game deepens.
-// `was` (the part playing) holds it a little longer, so the music does not flicker between two.
-export function partFor(tension = 0, storm = 0, was = 'calm') {
+// The part of a game's music: the storm when your clock runs low; tense as the game deepens,
+// ahead or behind when it tilts (mood). `was` (the part playing) holds it a little longer, so
+// the music does not flicker between two.
+export function partFor(tension = 0, storm = 0, was = 'calm', mood = 'even') {
   if (storm > (was === 'storm' ? 0.2 : 0.3)) return 'storm';
-  return tension > (was === 'calm' ? 0.45 : 0.35) ? 'tense' : 'calm';
+  if (!(tension > (was === 'calm' ? 0.45 : 0.35))) return 'calm';
+  return mood === 'ahead' || mood === 'behind' ? mood : 'tense';
+}
+// How the game is going for you, from the material (your pieces' value less your opponent's):
+// ahead from three points up, behind from three down, held until it comes back within one.
+export function moodFor(diff = 0, was = 'even') {
+  const d = Number(diff) || 0;
+  if (d >= 3 || (was === 'ahead' && d >= 2)) return 'ahead';
+  if (d <= -3 || (was === 'behind' && d <= -2)) return 'behind';
+  return 'even';
 }
 export function loadMusic(storage = globalThis.localStorage) {
   try { const v = JSON.parse(storage?.getItem(MUSIC_KEY) || ''); return { on: !!v?.on, volume: Number.isFinite(v?.volume) ? Math.max(0, Math.min(1, v.volume)) : 0.5, station: typeof v?.station === 'string' && v.station ? v.station : 'on' }; }
@@ -45,88 +68,179 @@ export function loadMusic(storage = globalThis.localStorage) {
 }
 export function saveMusic(v, storage = globalThis.localStorage) { try { storage?.setItem(MUSIC_KEY, JSON.stringify({ on: !!v.on, volume: v.volume, station: v.station || 'on' })); } catch {} return v; }
 
-// The tracks that suit a moment: a station's own tracks, or ("on": follows the game) the
-// place's (and in a game the part's). A boss or a fast game with no music of its own borrows the
-// game's; focus borrows the lobby's; anything borrows the lobby's last of all. Tracks made for
-// another theme are left out; the theme's own come first.
-export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'calm', theme = 'vanta' } = {}) {
+// ---- The library: what suits a moment ----
+const GAME_PARTS = { calm: ['calm', 'tense'], tense: ['tense', 'calm'], storm: ['storm', 'tense'], ahead: ['ahead', 'tense'], behind: ['behind', 'tense'] };
+// The tracks that suit a moment. A station plays its own tracks (Everything: all of them). Following
+// the game: the menus play your division's hall and the open themes and songs; a game plays its
+// theme's part (the theme's nearest part when it has not that one, then Vanta's); a boss its
+// realm's opera; after a game the win or loss music; a relic set its own theme; the rest their
+// own place's music, falling back to the menus'.
+export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'calm', theme = 'vanta', division = null, skin = null } = {}) {
   const music = tracks.filter(t => !isSting(t)), at = p => music.filter(t => placesOf(t).includes(p));
-  const game = () => { const all = at('game'), mine = all.filter(t => (t.part || 'calm') === part); return mine.length ? mine : all; };
+  if (station && station !== 'on') return station === 'mix' ? music.filter(t => !placesOf(t).includes('skin')) : music.filter(t => t.station === station);
+  const game = () => {
+    const all = at('game');
+    for (const th of [theme, 'vanta']) {
+      const mine = all.filter(t => (t.theme || 'vanta') === th);
+      for (const p of GAME_PARTS[part] || [part]) { const pool = mine.filter(t => (t.part || 'calm') === p); if (pool.length) return pool; }
+    }
+    return all;
+  };
+  // The menus: your division's hall (Bronze before you have one) and the open themes and songs.
+  const lobby = () => {
+    const all = at('lobby'), open = all.filter(t => !t.division), mine = all.filter(t => t.division === (division || 'bronze'));
+    return mine.length || open.length ? [...mine, ...open] : all;
+  };
   let pool;
-  if (station && station !== 'on') pool = music.filter(t => t.station === station);
-  else {
-    pool = place === 'game' ? game() : at(place);
-    if (!pool.length && (place === 'boss' || place === 'blitz')) pool = game();
-    if (!pool.length) pool = at('lobby');
-  }
-  if (!pool.length) pool = music;
-  const mine = theme !== 'vanta' ? pool.filter(t => t.theme === theme) : [], neutral = pool.filter(t => !t.theme || t.theme === 'vanta');
-  const fit = [...mine, ...neutral];
-  return fit.length ? fit : pool;
+  if (place === 'game') pool = game();
+  else if (place === 'lobby') pool = lobby();
+  else if (place === 'boss') { const all = at('boss'), mine = all.filter(t => t.theme === theme); pool = mine.length ? mine : all.length ? all : game(); }
+  else if (place === 'blitz') pool = at('blitz').length ? at('blitz') : game();
+  else if (place === 'result') { const all = at('result'), of = p => all.filter(t => t.part === p); pool = of(part).length ? of(part) : part === 'draw' && of('loss').length ? of('loss') : all; }
+  else if (place === 'skin') { const all = at('skin'), mine = all.filter(t => t.skin === skin); pool = mine.length ? mine : all; }
+  else pool = at(place);
+  return pool.length ? pool : lobby().length ? lobby() : music;
 }
-// The next track: the one after `after` in turn (`after` again when it is the only one), else
-// one at random, the theme's own first.
-export function pickTrack(tracks, { after = null, random = Math.random, ...moment } = {}) {
-  const pool = tracksFor(tracks, moment);
+// The next track for a moment: not one of the last few again when there is another; in the menus
+// a song now and then (about one in three), never two songs in a row.
+export function pickTrack(tracks, { history = [], after = null, random = Math.random, ...moment } = {}) {
+  let pool = tracksFor(tracks, moment);
   if (!pool.length) return null;
-  const i = after ? pool.findIndex(t => t.id === after) : -1;
-  if (i >= 0) return pool[(i + 1) % pool.length];
-  const theme = moment.theme || 'vanta', mine = theme !== 'vanta' ? pool.filter(t => t.theme === theme) : [], from = mine.length ? mine : pool;
+  const past = after && !history.includes(after) ? [...history, after] : history;
+  if ((moment.station || 'on') === 'on') {
+    const songs = pool.filter(t => t.kind === 'song'), themes = pool.filter(t => t.kind !== 'song');
+    if (songs.length && themes.length) {
+      const last = tracks.find(t => t.id === past[past.length - 1]);
+      pool = last?.kind === 'song' || random() >= 0.35 ? themes : songs;
+    }
+  }
+  const recent = new Set(past.slice(-Math.min(3, pool.length - 1)));
+  const fresh = pool.filter(t => !recent.has(t.id)), from = fresh.length ? fresh : pool;
   return from[Math.floor(random() * from.length) % from.length];
 }
-// The end of a game: 'win' | 'loss' | 'draw' (a draw borrows the loss's when it has none).
-export function stingFor(tracks, result, theme = 'vanta') {
-  const of = r => tracks.filter(t => isSting(t) && t.part === r);
-  const pool = of(result).length ? of(result) : result === 'draw' ? of('loss') : [];
-  return pool.find(t => t.theme === theme) || pool.find(t => !t.theme || t.theme === 'vanta') || pool[0] || null;
+// A sting for a moment (win, loss, draw, checkmate, start, rank-up, ...): the theme's own if it
+// has one, otherwise one of the open ones (any one, when there are several). A moment without
+// a sting of its own borrows the nearest one (a draw the loss's, a checkmate the win's).
+const STING_FALLBACK = { draw: 'loss', checkmate: 'win', 'rank-up': 'win', 'rank-down': 'loss', relic: 'win', realm: 'win', solved: 'win', failed: 'loss', brilliant: 'solved' };
+export function stingFor(tracks, kind, theme = 'vanta', random = Math.random) {
+  for (let k = kind, n = 0; k && n < 3; k = STING_FALLBACK[k], n++) {
+    const pool = tracks.filter(t => isSting(t) && t.part === k), mine = pool.filter(t => t.theme === theme), open = pool.filter(t => !t.theme || t.theme === 'vanta');
+    const from = mine.length ? mine : open.length ? open : pool;
+    if (from.length) return from[Math.floor(random() * from.length) % from.length];
+  }
+  return null;
 }
 
+// ---- Musical time ----
+export const barSeconds = t => (t?.bpm ? 240 / t.bpm : 0); // 4/4
+// Where a track enters: its first downbeat at or after the start of its sound.
+export function entryOf(t) {
+  const start = t?.start || 0, bar = barSeconds(t);
+  if (!bar) return start;
+  const beat = t.beat || 0, line = beat + Math.ceil((start - beat - 0.02) / bar) * bar;
+  return line >= start && line - start < bar ? line : start;
+}
+// The next line (a bar, or a beat) of a track playing at `at` seconds, at least `lead` ahead.
+export function nextLine(t, at, unit, lead = 0) {
+  if (!unit) return null;
+  const beat = t?.beat || 0;
+  return beat + Math.ceil((at + lead - beat) / unit) * unit;
+}
+// An equal-power fade: in (rising as a sine) or out (falling as a cosine), so two tracks
+// crossing keep the same loudness all the way through.
+export function equalPower(level, direction, steps = 33) {
+  const c = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) { const x = i / (steps - 1); c[i] = level * (direction > 0 ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2)); }
+  return c;
+}
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const dbToGain = db => 10 ** ((Number(db) || 0) / 20);
+const OPEN = 20000; // a filter that lets everything through
+
 const SETTLE_MS = 10000; // in a game, the music follows its part at most this often (the storm at once)
+const DEBOUNCE_MS = 1200; // going somewhere: how long the music waits to be sure you are staying
 export class VantaScore {
   constructor({ AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext, AudioElement = globalThis.Audio, timers = globalThis, tracks = [], base = MUSIC_BASE, random = Math.random, clock = () => globalThis.performance?.now?.() ?? Date.now() } = {}) {
-    Object.assign(this, { AC: AudioContextClass, Audio: AudioElement, timers, tracks, base, random, clock });
+    Object.assign(this, { AC: AudioContextClass, Audio: AudioElement, timers, base, random, clock });
+    this.tracks = []; this.setTracks(tracks);
     this.ctx = null; this.timer = null; this.playing = false;
-    this.key = 'vanta'; this.tension = 0; this.storm = 0; this.partNow = 'calm'; this.volume = 0.5; this.place = 'lobby'; this.station = 'on';
+    this.key = 'vanta'; this.tension = 0; this.storm = 0; this.mood = 'even'; this.partNow = 'calm';
+    this.volume = 0.5; this.place = 'lobby'; this.station = 'on'; this.division = null; this.result = 'win'; this.skin = null;
     this.decks = []; this.active = null; this.next = null; this.switchedAt = -1e9; this.pending = false; this.failures = 0; this.gaveUpAt = -1e9;
+    this.debounce = null; this.history = []; this.muffled = 0; this.crossing = null;
     this.listeners = new Set(); this.beats = 0; this.bands = { low: { avg: 0, dev: 0 }, mid: { avg: 0, dev: 0 } }; this.lastBeat = -1;
   }
   get available() { return !!(this.AC && this.Audio && this.tracks.some(t => !isSting(t))); }
   get part() { return this.partNow; }
-  get moment() { return { station: this.station, place: this.place, part: this.part, theme: this.key }; }
+  get moment() { return { station: this.station, place: this.place, part: this.place === 'result' ? this.result : this.part, theme: this.key, division: this.division, skin: this.skin }; }
   get level() { return this.volume; }
+  levelOf(t) { return dbToGain(t?.gain); }
+  // A browser that cannot play a file's format never tries it (AAC in .m4a, MP3).
+  playable(t) {
+    let el = this.probe;
+    if (el === undefined) { try { el = this.Audio ? new this.Audio() : null; } catch { el = null; } this.probe = el; }
+    if (!el?.canPlayType) return true;
+    return el.canPlayType(t.file.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4; codecs="mp4a.40.2"') !== '';
+  }
   // The library arrived (src/music-library.js loadLibrary).
-  setTracks(tracks) { this.tracks = Array.isArray(tracks) ? tracks : []; if (this.playing && !(this.active?.track && this.suits(this.active.track))) this.update(); }
+  setTracks(tracks) {
+    this.tracks = (Array.isArray(tracks) ? tracks : []).filter(t => this.playable(t));
+    if (this.playing && !(this.active?.track && this.suits(this.active.track))) this.update('now');
+  }
   // Every beat the player hears, and each new track or phrase: fn({kind: 'beat' | 'drum' |
   // 'heartbeat' | 'chord' | 'sting', at (audio clock, s), strength 0..1, track?}). Returns a
   // function to stop listening.
   onNote(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit(ev) { for (const fn of this.listeners) { try { fn(ev); } catch {} } }
+  later(fn, ms) { return this.timers.setTimeout(fn, Math.max(0, ms)); }
   ensure() {
     if (this.ctx || !this.available) return this.ctx;
-    const ctx = new this.AC(), master = ctx.createGain();
-    master.gain.value = 0; master.connect(ctx.destination);
-    this.ctx = ctx; this.master = master;
+    const ctx = new this.AC();
+    // master (the volume) → muffle (a dialog's door) → out; the analyser listens before the door.
+    const master = ctx.createGain(), muffle = ctx.createBiquadFilter(), muffleGain = ctx.createGain();
+    master.gain.value = 0; muffle.type = 'lowpass'; muffle.frequency.value = OPEN; muffle.Q.value = 0.5;
+    master.connect(muffle); muffle.connect(muffleGain); muffleGain.connect(ctx.destination);
+    Object.assign(this, { ctx, master, muffleFilter: muffle, muffleGain });
     if (ctx.createAnalyser) { const a = ctx.createAnalyser(); a.fftSize = 1024; a.smoothingTimeConstant = 0.5; master.connect(a); this.analyser = a; this.spectrum = new Uint8Array(a.frequencyBinCount); this.previous = new Uint8Array(a.frequencyBinCount); }
-    this.decks = [this.deck(master), this.deck(master)];
-    // The stings play beside the music, not through it, so the music can step back for them.
-    const stings = ctx.createGain(); stings.gain.value = this.level; stings.connect(ctx.destination); this.stings = stings; this.stingDeck = this.deck(stings, 1);
+    this.decks = [this.deck(master), this.deck(master), this.deck(master)];
+    // The stings play beside the music (still behind the door), so the music can step back for them.
+    const stings = ctx.createGain(); stings.gain.value = this.level; stings.connect(muffle); this.stings = stings; this.stingDeck = this.deck(stings, 1);
     return ctx;
   }
   deck(dest, level = 0) {
     const el = new this.Audio(); el.preload = 'auto';
-    const gain = this.ctx.createGain(), deck = { el, gain, track: null };
-    gain.gain.value = level; this.ctx.createMediaElementSource(el).connect(gain); gain.connect(dest);
+    // track: what the deck plays (or is about to); file: what its element has loaded.
+    const filter = this.ctx.createBiquadFilter(), gain = this.ctx.createGain(), deck = { el, filter, gain, track: null, file: null, usedAt: -Infinity, until: 0 };
+    filter.type = 'lowpass'; filter.frequency.value = OPEN; filter.Q.value = 0.5;
+    gain.gain.value = level; this.ctx.createMediaElementSource(el).connect(filter); filter.connect(gain); gain.connect(dest);
     // A track that will not load is skipped; when none will (offline), the music stops trying.
     el.addEventListener?.('error', () => {
       if (deck !== this.active || !this.playing) return;
       if (++this.failures > 3) { this.gaveUpAt = this.now(); this.stop(); return; }
-      this.play(pickTrack(this.tracks, { ...this.moment, after: deck.track?.id, random: this.random }), 1);
+      this.transition(this.pick({ after: deck.track?.id }), 'start');
     });
     el.addEventListener?.('playing', () => { if (deck === this.active) this.failures = 0; });
     return deck;
   }
   now() { return this.clock(); }
-  ramp(param, to, seconds) { const t = this.ctx.currentTime; param.cancelScheduledValues?.(t); param.setValueAtTime(param.value, t); param.linearRampToValueAtTime(to, t + Math.max(0.01, seconds)); }
+  // Holds a gain where it is now, dropping whatever was scheduled after (cancelling a fade in
+  // progress would otherwise jump back to where it began). Returns that value.
+  hold(param) {
+    const t = this.ctx.currentTime, v = param.value;
+    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t); else { param.cancelScheduledValues?.(t); param.setValueAtTime(v, t); }
+    return v;
+  }
+  ramp(param, to, seconds) { this.hold(param); param.linearRampToValueAtTime(to, this.ctx.currentTime + Math.max(0.01, seconds)); }
+  // An equal-power fade from `from` to `to`, from `start` (audio clock) over `len` seconds.
+  curveTo(param, from, to, start, len) {
+    try {
+      if (!param.setValueCurveAtTime) throw new Error('no curves');
+      param.setValueCurveAtTime(to > from ? equalPower(to, 1) : equalPower(from, -1), start, len);
+    } catch { param.setValueAtTime(from, start); param.linearRampToValueAtTime(to, start + len); }
+  }
+  // The deck to bring the next track in on: of the ones not playing now, the one that stopped
+  // longest ago (three decks, so a second change soon after the first never cuts a fading track).
+  spare() { return this.decks.filter(d => d !== this.active).sort((a, b) => (a.usedAt - b.usedAt) || 0)[0] || this.decks[0]; }
   start() {
     if (this.now() - this.gaveUpAt < 60000 || !this.ensure()) return false;
     if (this.ctx.state === 'suspended') this.ctx.resume?.();
@@ -135,55 +249,126 @@ export class VantaScore {
     this.ramp(this.master.gain, this.level, 0.8);
     // Back from a pause: the same track carries on where it was, if it still suits the moment.
     if (this.active?.track && this.suits(this.active.track)) this.active.el.play?.()?.catch?.(() => {});
-    else this.play(pickTrack(this.tracks, { ...this.moment, random: this.random }), 1.2);
+    else this.transition(this.pick(), 'start');
     this.timer = this.timers.setInterval(() => this.tick(), 40);
     return true;
   }
   stop() {
     this.playing = false;
     if (this.timer) { this.timers.clearInterval(this.timer); this.timer = null; }
+    this.clearDebounce();
     if (!this.ctx) return;
     this.ramp(this.master.gain, 0, 0.5);
-    this.timers.setTimeout(() => { if (!this.playing) for (const d of [...this.decks, this.stingDeck]) d?.el.pause?.(); }, 650);
+    this.later(() => { if (!this.playing) for (const d of [...this.decks, this.stingDeck]) d?.el.pause?.(); }, 650);
   }
-  // Crossfades to a track on the other deck over `seconds`.
-  play(track, seconds = 3) {
+  pick(extra = {}) { return pickTrack(this.tracks, { ...this.moment, history: this.history, random: this.random, ...extra }); }
+  // Brings `track` in on the other deck. style: 'start' (from silence), 'next' (the last one is
+  // ending), 'switch' (you went somewhere else), 'part' (the game's part turned), 'storm' (your
+  // clock running out: on the next beat).
+  transition(track, style = 'switch') {
     if (!track || !this.ctx) return false;
-    const from = this.active, to = this.decks.find(d => d !== from) || this.decks[0];
-    if (to.track !== track || to.el.error) { to.track = track; to.el.src = this.base + track.file; }
-    else { try { to.el.currentTime = 0; } catch {} } // loaded already (or played before): from the top
-    to.el.play?.()?.catch?.(() => {});
-    this.ramp(to.gain.gain, 1, seconds);
-    if (from && from !== to) { this.ramp(from.gain.gain, 0, seconds); const el = from.el; this.timers.setTimeout(() => { if (this.active !== from) el.pause?.(); }, seconds * 1000 + 120); }
-    this.active = to; this.next = null; this.switchedAt = this.now(); this.pending = false;
-    this.emit({ kind: 'chord', at: this.ctx.currentTime, track: track.id, strength: 0.8 });
+    const from = this.active?.track && !this.active.el.paused ? this.active : null, to = this.spare();
+    const now = this.ctx.currentTime;
+    // When: the outgoing track's next bar line (its next beat, into the storm), at least a moment
+    // ahead so the incoming one can get ready; a beat line when the bar line is far off (a slow
+    // track); at once from silence or without a beat grid.
+    let wait = 0;
+    if (from && style !== 'start') {
+      const ft = from.track, beat = ft.bpm ? 60 / ft.bpm : 0, t = from.el.currentTime || 0;
+      let line = nextLine(ft, t, style === 'storm' ? beat : barSeconds(ft), 0.35);
+      if (line !== null && line - t > 4.5) line = nextLine(ft, t, beat, 0.35);
+      wait = line === null ? 0.05 : clamp(line - t, 0.05, 4.5);
+      this.crossing = { from, line: t + wait };
+    } else this.crossing = null;
+    const bar = barSeconds(from?.track) || barSeconds(track) || 2.5;
+    const len = style === 'start' ? (from ? 1.5 : 1.2) : style === 'storm' ? clamp(bar, 1, 2.5) : clamp(2 * bar, style === 'switch' ? 2.5 : 3, style === 'switch' ? 6 : 8);
+    const at = now + wait, entry = entryOf(track);
+    // A deck still fading out from an earlier change steps back first (a tenth of a second); a
+    // silent one starts from nothing.
+    const busy = to.track && !to.el.paused && to.until > now ? 0.09 : 0, g = to.gain.gain;
+    if (busy) this.ramp(g, 0, 0.08); else { g.cancelScheduledValues?.(now); g.setValueAtTime(0, now); }
+    // Where: the incoming track starts so that its first downbeat lands on that line; it plays
+    // silently until then.
+    const launch = () => {
+      if (this.active !== to) return;
+      const ahead = Math.max(0, at - this.ctx.currentTime), lead = Math.min(entry, ahead), delay = ahead - lead;
+      if (to.file !== track.file || to.el.error) { to.file = track.file; to.el.src = this.base + track.file; }
+      to.filter.frequency.cancelScheduledValues?.(this.ctx.currentTime); to.filter.frequency.setValueAtTime(OPEN, this.ctx.currentTime);
+      try { to.el.currentTime = entry - lead; } catch {}
+      const go = () => { if (this.active === to) to.el.play?.()?.catch?.(() => {}); };
+      if (delay > 0.02) this.later(go, delay * 1000); else go();
+    };
+    this.active = to; to.track = track; to.usedAt = now; to.until = Infinity;
+    if (busy) this.later(launch, busy * 1000); else launch();
+    this.curveTo(g, 0, this.levelOf(track), Math.max(at, now + 0.005 + busy), len);
+    if (from && from !== to) {
+      const v = this.hold(from.gain.gain); this.curveTo(from.gain.gain, v, 0, Math.max(at, now + 0.005), len);
+      from.until = at + len;
+      // Somewhere else: the old music also sinks into the distance as it fades.
+      if (style === 'switch') { from.filter.frequency.setValueAtTime(OPEN, at); from.filter.frequency.exponentialRampToValueAtTime?.(600, at + len); }
+      const el = from.el; this.later(() => { if (this.active !== from) el.pause?.(); }, (wait + len) * 1000 + 150);
+      // Once the incoming plays, line it up again with the outgoing (it is still silent).
+      if (track.bpm && from.track?.bpm && wait > 0.3) this.later(() => this.align(to, entry), Math.min(600, wait * 1000 - 200));
+    }
+    this.next = null; this.switchedAt = this.now(); this.pending = false;
+    this.history.push(track.id); if (this.history.length > 8) this.history.shift();
+    this.emit({ kind: 'chord', at, track: track.id, strength: 0.8 });
     return true;
   }
-  // Loads the next track on the other deck, ready to come in.
+  // Keeps the incoming track's downbeat on the outgoing track's bar line (media elements start
+  // a little late); only while the incoming is still silent.
+  align(to, entry) {
+    const c = this.crossing; if (!c || this.active !== to) return;
+    const remaining = c.line - (c.from.el.currentTime || 0);
+    if (remaining < 0.08) return;
+    const want = entry - remaining;
+    if (want >= 0 && Math.abs((to.el.currentTime || 0) - want) > 0.04) { try { to.el.currentTime = want; } catch {} }
+  }
+  // Loads the next track on the deck it will come in on.
   prepare(track) {
-    const deck = this.decks.find(d => d !== this.active);
-    if (!track || !deck) return;
+    const deck = this.spare();
+    if (!track || !deck || (deck.track && !deck.el.paused)) return; // that deck is still fading out: load it when the change comes
     this.next = track;
-    if (deck.track !== track || deck.el.error) { deck.track = track; deck.el.src = this.base + track.file; deck.el.load?.(); }
+    if (deck.file !== track.file || deck.el.error) { deck.file = track.file; deck.el.src = this.base + track.file; deck.el.load?.(); }
   }
   suits(track) { return tracksFor(this.tracks, this.moment).some(t => t.id === track.id); }
-  // The moment changed (a game began or ended, a station was chosen, the game's part turned): a
-  // track that no longer suits gives way, at once, or (`settle`, a turn of the game's part) once
-  // the music has played ten seconds.
-  update(settle = false) {
+  clearDebounce() { if (this.debounce) { this.timers.clearTimeout?.(this.debounce); this.debounce = null; } }
+  // The moment changed. A track that still suits it stays. Otherwise: 'storm' changes on the next
+  // beat; 'part' (the game's part turned) once the music has played ten seconds; 'now' (a game
+  // began or ended) on the next bar line; anything else waits a moment in case you are only
+  // passing through, then changes on the next bar line.
+  update(reason = 'switch') {
     if (!this.playing || !this.ctx) return;
-    if (this.active?.track && this.suits(this.active.track)) { this.pending = false; return; }
-    if (settle && this.now() - this.switchedAt < SETTLE_MS) { this.pending = true; return; }
-    this.play(pickTrack(this.tracks, { ...this.moment, random: this.random }), this.part === 'storm' ? 1.5 : 3);
+    if (this.active?.track && this.suits(this.active.track)) { this.pending = false; this.clearDebounce(); return; }
+    if (reason === 'storm') { this.clearDebounce(); this.transition(this.pick(), 'storm'); return; }
+    if (reason === 'part') { if (this.now() - this.switchedAt < SETTLE_MS) { this.pending = true; return; } this.transition(this.pick(), 'part'); return; }
+    this.clearDebounce();
+    if (reason === 'now') { this.transition(this.pick(), 'switch'); return; }
+    this.debounce = this.later(() => { this.debounce = null; if (this.playing && !(this.active?.track && this.suits(this.active.track))) this.transition(this.pick(), 'switch'); }, DEBOUNCE_MS);
   }
-  retune() { const part = partFor(this.tension, this.storm, this.partNow); if (part !== this.partNow) { this.partNow = part; this.update(part !== 'storm'); } }
-  setVolume(v) { this.volume = Math.max(0, Math.min(1, Number(v) || 0)); if (this.master && this.playing) this.ramp(this.master.gain, this.level, 0.2); if (this.stings) this.stings.gain.value = this.level; }
+  retune() { const part = partFor(this.tension, this.storm, this.partNow, this.mood); if (part !== this.partNow) { this.partNow = part; this.update(part === 'storm' ? 'storm' : 'part'); } }
+  setVolume(v) {
+    const volume = Math.max(0, Math.min(1, Number(v) || 0)); if (volume === this.volume) return; // unchanged: a sting's step back carries on
+    this.volume = volume; if (this.master && this.playing) this.ramp(this.master.gain, this.level, 0.2); if (this.stings) this.stings.gain.value = this.level;
+  }
   setTension(t) { this.tension = Math.max(0, Math.min(1, Number(t) || 0)); this.retune(); }
   setStorm(s) { this.storm = Math.max(0, Math.min(1, Number(s) || 0)); this.retune(); }
-  setKey(id) { const key = MUSIC_KEYS[id] ? id : 'vanta'; if (key !== this.key) { this.key = key; this.update(); } }
-  setPlace(place) { if (place !== this.place) { this.place = place; this.update(); } }
-  setLobby(on) { this.setPlace(on ? 'lobby' : 'game'); }
-  setStation(id) { const station = id || 'on'; if (station !== this.station) { this.station = station; this.update(); } }
+  setMood(m) { this.mood = m === 'ahead' || m === 'behind' ? m : 'even'; this.retune(); }
+  setKey(id, urgent = false) { const key = MUSIC_KEYS[id] ? id : 'vanta'; if (key !== this.key) { this.key = key; this.update(urgent ? 'now' : 'switch'); } }
+  setPlace(place, urgent = false) { if (place !== this.place) { this.place = place; if (place !== 'game') { this.partNow = 'calm'; } this.update(urgent ? 'now' : 'switch'); } }
+  setLobby(on) { this.setPlace(on ? 'lobby' : 'game', true); }
+  setResult(result) { const r = result === 'loss' || result === 'draw' ? result : 'win'; if (r !== this.result) { this.result = r; if (this.place === 'result') this.update('now'); } }
+  setDivision(d) { const division = d || null; if (division !== this.division) { this.division = division; this.update('switch'); } }
+  setSkin(s) { const skin = s || null; if (skin !== this.skin) { this.skin = skin; if (this.place === 'skin') this.update('switch'); } }
+  setStation(id) { const station = id || 'on'; if (station !== this.station) { this.station = station; this.update('now'); } }
+  // A dialog in front of the board: the music as if behind a door (0 open .. 1 shut).
+  muffle(amount = 1) {
+    const a = clamp(Number(amount) || 0, 0, 1); this.muffled = a;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, f = this.muffleFilter.frequency, g = this.muffleGain.gain;
+    this.hold(f); f.setTargetAtTime(a ? OPEN * (900 / OPEN) ** a : OPEN, t, a ? 0.12 : 0.25);
+    this.hold(g); g.setTargetAtTime(1 - 0.3 * a, t, 0.15);
+  }
   get nowPlaying() { return this.playing ? this.active?.track || null : null; }
   // For Resonance: a chord of the theme's progression that moves on every sixteen beats, and a
   // count that moves on like the eighth notes of a score.
@@ -191,16 +376,16 @@ export class VantaScore {
   get eighth() { return this.beats * 2 + 1; }
   readSpectrum() { if (!this.analyser || !this.playing) return null; this.analyser.getByteFrequencyData(this.spectrum); return this.spectrum; }
   tick() {
-    if (!this.playing || !this.active) return;
-    const el = this.active.el, d = el.duration, left = d - el.currentTime;
-    if (Number.isFinite(d) && d > 10) {
-      const after = () => pickTrack(this.tracks, { ...this.moment, after: this.active.track?.id, random: this.random });
+    if (!this.playing || !this.active?.track) return;
+    const el = this.active.el, t = this.active.track, d = el.duration, end = Math.min(t.end || Infinity, Number.isFinite(d) ? d : Infinity), left = end - (el.currentTime || 0);
+    if (Number.isFinite(left) && end > 10) {
+      const bar = barSeconds(t) || 2.5, need = clamp(2 * bar, 3, 8) + bar + 0.5;
       // The next track (or the same one again) loads twenty seconds before this one ends...
-      if (left < 20 && !this.next && this.now() - this.switchedAt > 6000) this.prepare(after());
-      // ...and comes in under its last four.
-      if (left < 4) { this.play(this.next && this.suits(this.next) ? this.next : after(), 3.5); return; }
+      if (left < 20 && !this.next && this.now() - this.switchedAt > 6000) this.prepare(this.pick({ after: t.id }));
+      // ...and comes in on a bar line before its last chord fades.
+      if (left < need && this.now() - this.switchedAt > 4000) { this.transition(this.next && this.suits(this.next) ? this.next : this.pick({ after: t.id }), 'next'); return; }
     }
-    if (this.pending && this.now() - this.switchedAt >= SETTLE_MS) this.update();
+    if (this.pending && this.now() - this.switchedAt >= SETTLE_MS) this.update('part');
     this.listen();
   }
   // Hears the beats. Each frame it measures how much the spectrum rose (its flux, in decibels,
@@ -230,21 +415,25 @@ export class VantaScore {
     band.avg = avg * 0.92 + rise * 0.08; band.dev = dev * 0.92 + Math.abs(rise - avg) * 0.08;
     return loud && over > 0 ? Math.min(1, Math.max(0.05, (rise - avg) / (6 * dev + 30))) : 0;
   }
-  // Steps back for a moment (the sting plays over it), then comes back up.
+  // Steps back for a moment (a sting plays over it), then comes back up.
   duck(seconds = 2.5) {
     if (!this.master || !this.playing) return;
     const t = this.ctx.currentTime, g = this.master.gain;
-    g.cancelScheduledValues?.(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(this.level * 0.25, t + 0.3);
-    g.setValueAtTime(this.level * 0.25, t + seconds); g.linearRampToValueAtTime(this.level, t + seconds + 1.5);
+    this.hold(g); g.linearRampToValueAtTime(this.level * 0.35, t + 0.25);
+    g.setValueAtTime(this.level * 0.35, t + seconds); g.linearRampToValueAtTime(this.level, t + seconds + 1.5);
   }
-  // The end of a game: 'win' | 'loss' | 'draw'.
-  sting(result) {
-    const track = stingFor(this.tracks, result, this.key);
+  // A short cue over the music: 'win' | 'loss' | 'draw' | 'checkmate' | 'start' | 'rank-up' | ...
+  sting(kind) {
+    const track = stingFor(this.tracks, kind, this.key, this.random);
     if (!track || !this.ensure()) return false;
     if (this.ctx.state === 'suspended') this.ctx.resume?.();
-    const d = this.stingDeck; d.track = track; d.el.src = this.base + track.file; d.el.play?.()?.catch?.(() => {});
-    this.duck(track.seconds || 6);
-    this.emit({ kind: 'sting', at: this.ctx.currentTime, result, strength: 1 });
+    const d = this.stingDeck;
+    if (d.file !== track.file || d.el.error) { d.track = track; d.file = track.file; d.el.src = this.base + track.file; }
+    try { d.el.currentTime = track.start || 0; } catch {}
+    d.gain.gain.cancelScheduledValues?.(this.ctx.currentTime); d.gain.gain.setValueAtTime(this.levelOf(track), this.ctx.currentTime);
+    d.el.play?.()?.catch?.(() => {});
+    this.duck(Math.max(1, (track.end || track.seconds || 6) - (track.start || 0) - 1));
+    this.emit({ kind: 'sting', at: this.ctx.currentTime, result: kind, strength: 1 });
     return true;
   }
 }
