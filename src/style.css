@@ -1216,6 +1216,30 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .account-head{position:relative;z-index:1}
 @media(max-width:800px){.vch-wordmark-top{height:20px;max-width:none}.main-menu-wordmark{height:27px}}
 @media(prefers-reduced-motion:reduce){.brand-splash-wordmark::after{animation:none}}
+/* The VCH mark (owner, 2026-10-13: "the V is our main logo"): the V with the knight from the
+   owner's logo (vch-logo-light.svg), cropped to the V by the mask's size and position. A mask
+   of the vector file, so it is sharp at any size (4K included) and takes any finish. */
+.vch-v{display:inline-block;flex:none;width:30px;aspect-ratio:182/150;background:#f1ead8;
+  -webkit-mask:url('/assets/vch/brand/vch-logo-light.svg') 50% 12.1%/108.24% auto no-repeat;
+  mask:url('/assets/vch/brand/vch-logo-light.svg') 50% 12.1%/108.24% auto no-repeat}
+.vch-v-chrome{background:linear-gradient(180deg,#fff 0%,#ecebe6 18%,#a7a39a 40%,#3d3a35 47%,#5e5a52 52%,#b9ad93 70%,#e9dcbc 88%,#9c8d6c 100%)}
+.vch-brand{gap:10px}
+.vch-v-top{width:34px}
+.vch-lockup{display:flex;align-items:center;gap:10px}
+.vch-v-menu{display:block;width:72px;margin:0 0 16px}
+.search-title .vch-v{width:26px}
+.account-head .vch-lockup{margin:0 0 10px}.account-head .account-wordmark{margin:0}
+.brand-loading .vch-v{width:28px}
+.brand-splash-lockup{display:grid;justify-items:center;gap:4px}
+.vch-v-splash{width:clamp(128px,13vw,196px)}
+/* Light crossing the V: once on the splash, again and again while something loads. */
+.vch-v-shine{position:relative;overflow:hidden}
+.vch-v-shine::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.8) 49%,transparent 63%);background-size:320% 100%;background-position:120% 0;animation:vchWordmarkShine 2s ease-in-out .05s 1}
+.brand-loading .vch-v-shine::after{animation:vchWordmarkShine 1.8s ease-in-out infinite}
+@media(min-width:1181px){.vch-brand{flex:0 0 168px!important;width:168px!important}}
+@media(min-width:1181px) and (max-width:1499px){.vch-brand{flex:0 0 124px!important;width:124px!important}.vch-v-top{width:30px}.vch-brand .vch-wordmark-top{height:20px}}
+@media(max-width:800px){.vch-brand{flex:0 0 auto!important;width:auto!important;gap:8px}.vch-v-top{width:30px}.vch-v-menu{width:60px}}
+@media(prefers-reduced-motion:reduce){.vch-v-shine::after{animation:none}}
 
 
 /* === CHESSBOARD ONLY: board palette, external coordinates, piece scale, last move === */
@@ -1402,11 +1426,24 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   border:1px solid #293d38;border-radius:9px;background:#091512;text-align:left;
 }
 .bot-card.on{border-color:#6dcf9c;background:#163229;box-shadow:inset 0 0 0 1px #6dcf9c22}
-.bot-portrait{
-  width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;overflow:hidden;
-  border-radius:8px;background:radial-gradient(circle,#3b5148,#0b1614);
-}
-.bot-portrait img{width:100%;height:100%;object-fit:contain}
+/* Computer levels: tiers by rating, a level number on a strength gauge, FIDE titles. */
+.bot-card{position:relative;--tier:#7fe0b0}
+.bot-card.tier-intermediate{--tier:#8cc6e6}
+.bot-card.tier-advanced{--tier:#d8b26a}
+.bot-card.tier-masters{--tier:#e8916a}
+.bot-card.tier-full-strength{--tier:#f1e6c9}
+.bot-tier{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:7px 2px -1px;color:#d8b26a;font-size:8px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.bot-tier:first-child{margin-top:0}
+.bot-tier small{color:#6f7f78;font-size:8px;font-weight:600;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.bot-level{position:relative;width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center}
+.bot-level svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.bot-level circle{fill:none;stroke:#ffffff14;stroke-width:3}
+.bot-level .bot-level-fill{stroke:var(--tier);stroke-linecap:round}
+.bot-level span{color:#eef1e9;font:700 13px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bot-text{min-width:0}
+.bot-card .bot-text b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2}
+.bot-meta{display:flex;align-items:center;gap:5px;margin-top:3px}.bot-meta small{margin:0}
+.bot-title{padding:1px 4px;border-radius:3px;background:var(--tier);color:#120d05;font:800 7px/1.35 ui-sans-serif,system-ui,sans-serif;font-style:normal;letter-spacing:.06em}
 .bot-card b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eef1e9;font-size:10px}
 .bot-card small{display:block;margin-top:3px;color:#83938e;font-size:8px}
 .computer-side{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
@@ -3397,3 +3434,27 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .tools #sound[data-off="1"] .sound-wave{opacity:.2}
 .view-title .back-view{display:inline-grid;place-items:center;color:inherit}
 @media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
+
+/* ===== LIVING WALLPAPER: the candles and lamps in the wallpaper flicker and answer the game =====
+   (src/wallpaper-lights.js; main.js syncWallLights). One canvas just above the wallpaper and
+   under the living atmosphere's glows, drawn at half resolution about 15 times a second and
+   held still while a piece moves. Reactions animate only its opacity. */
+#wallLights{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;opacity:var(--wl-o,.9);transition:opacity 1.6s ease}
+#wallLights.scroll{position:absolute;top:0;left:0;right:auto;bottom:auto}
+/* The room follows the living atmosphere's mood (src/atmosphere.js). */
+#wallLights[data-mood="lead"],#wallLights[data-mood="dawn"]{--wl-o:1}
+#wallLights[data-mood="fall"],#wallLights[data-mood="dusk"]{--wl-o:.55}
+#wallLights[data-level="subtle"]{--wl-o:.6}
+@media (prefers-reduced-motion:reduce){#wallLights{transition:none}}
+
+/* ===== GLASS THAT IS GLASS (owner, 2026-10-13: "I can't even see the wallpaper") =====
+   Theme Studio's Glass opacity runs from 15% to 100%. Below 90% the panels let the room
+   through: the blur thins as the glass clears (3px at 15%, about 15px near 90%), and the
+   cards inside the panels clear with it instead of staying solid. Text keeps a faint shadow so
+   it reads over the room. At the default (94%) nothing changes: no blur, no cost. */
+:root{--glass-blur:calc(max(0px, (var(--glass) - .15) * 16px) + 3px);--glass-inner:calc(var(--glass) * .5)}
+:root[data-glass="clear"] .panel,:root[data-glass="clear"] .game,:root[data-glass="clear"] .topbar{
+  backdrop-filter:blur(var(--glass-blur)) saturate(125%)!important;-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(125%)!important}
+:root[data-glass="clear"] :is(.analysis,#moves,.private-card,.modes,.tabs,.variant-field,.settings label,.oath-row,.oath-row select,.join input,.tools button,.computer-view .bot-card,.computer-side button,.computer-variant button,.room-created,.match-view button:not(.gold),.rated-switch button){
+  background:rgb(6 15 16 / var(--glass-inner))!important}
+:root[data-glass="clear"] :is(.panel,.game,.topbar) :is(h1,h2,h3,h4,p,b,strong,small,label,span,time){text-shadow:0 1px 3px rgb(0 0 0 / .6)}
