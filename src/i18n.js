@@ -66,11 +66,18 @@ export function loadLanguage(lang) {
 }
 export const loadedLanguages = () => [...LOADING.keys()];
 
+// &1 puts back a comma-separated list ("queen, rook, pawn") with each item translated when it
+// can be, joined the way the language writes lists.
+const LIST_SEPARATOR = { ar: '، ', zh: '、', ja: '、' };
+const listOf = (v, lang) => v.split(', ').map(item => translateText(item, lang) || item).join(LIST_SEPARATOR[lang] || ', ');
+// A pattern that gives back the text unchanged ("%1 $2" on a name and a number) has translated
+// nothing, so the next pattern gets its turn and, failing that, the text counts as untranslated.
 function fromPattern(text, lang) {
   for (const p of PATTERNS[lang]) {
     const m = p.re.exec(text);
     if (!m) continue;
-    return p.out.replace(/([$%])(\d)/g, (_, kind, i) => { const v = m[Number(i)] ?? ''; return kind === '%' ? translateText(v, lang) || v : v; });
+    const out = p.out.replace(/([$%&])(\d)/g, (_, kind, i) => { const v = m[Number(i)] ?? ''; return kind === '%' ? translateText(v, lang) || v : kind === '&' ? listOf(v, lang) : v; });
+    if (out !== text) return out;
   }
   return null;
 }
