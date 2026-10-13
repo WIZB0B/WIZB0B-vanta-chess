@@ -92,6 +92,9 @@ const code8=()=>crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase();
 const poolFor=(base:number,inc=0)=>{const e=Number(base)+(Number(inc)*40);return e<180?"bullet":e<600?"blitz":e<1800?"rapid":"classical"};
 // Vanta Dark and Blackout Blitz are rated in pools of their own, whatever the clock.
 const fogVariant=(v:any)=>v==="dark"||v==="blackout"?String(v):null;
+// A Vanta Dark / Blackout game not yet decided: its moves leave the server only through viewFor
+// (game history and data export list it without them until it is over).
+const fogSealed=(g:any)=>FOG_VARIANTS.has(g?.variant)&&!["1-0","0-1","1/2-1/2"].includes(g?.result);
 const ratingOf=(p:any,pool:string)=>Number(p?.ratings?.[pool]??p?.rating??1200);
 const gamesOf=(p:any,pool:string)=>Number(p?.provisional_games?.[pool]??0);
 const effectiveRating=(p:any,pool:string)=>{const base=ratingOf(p,pool)+sandbagAdjust(p?.sandbag_score),n=gamesOf(p,pool),sm=Number(p?.smurf_score||0);return n<10?Math.round(base+Math.min(450,sm*90)):base};
@@ -1169,7 +1172,7 @@ async function accountExport(req:Request,b:any){
     admin.from("chess_push_subscriptions").select("created_at").eq("player_id",p.id)
   ]);
   const followIds=(follows.data||[]).map((f:any)=>f.followee_id),{data:fnames}=followIds.length?await admin.from("chess_players").select("id,username").in("id",followIds):{data:[]};
-  return {exported_at:nowIso(),profile,games:(games.data||[]).map((g:any)=>({...g,moves:Array.isArray(g.move_history)?g.move_history.map((m:any)=>m.san):[],move_history:undefined})),puzzle_attempts:attempts.data||[],following:(fnames||[]).map((x:any)=>x.username),followers:followers.count||0,club:club.data||[],club_messages:messages.data||[],reports_filed:reports.data||[],studies:studies.data||[],league:league.data||[],push_devices:(subs.data||[]).length}
+  return {exported_at:nowIso(),profile,games:(games.data||[]).map((g:any)=>({...g,moves:!fogSealed(g)&&Array.isArray(g.move_history)?g.move_history.map((m:any)=>m.san):[],move_history:undefined})),puzzle_attempts:attempts.data||[],following:(fnames||[]).map((x:any)=>x.username),followers:followers.count||0,club:club.data||[],club_messages:messages.data||[],reports_filed:reports.data||[],studies:studies.data||[],league:league.data||[],push_devices:(subs.data||[]).length}
 }
 async function accountDelete(req:Request,b:any){
   const p=await playerFor(req,b,true,{touch:false});
@@ -1243,7 +1246,9 @@ async function openingExplorer(req:Request,b:any){
   // Fair play: no explorer for a position in your own live game.
   try{
     const p=await playerFor(req,b,false,{touch:false});
-    const {data:live}=await admin.from("chess_games").select("fen").eq("status","active").is("daily_days",null).or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).limit(5);
+    const {data:live}=await admin.from("chess_games").select("fen,variant").eq("status","active").is("daily_days",null).or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).limit(5);
+    // In a hidden-information game, a refusal for one position would say "this is the real board".
+    if((live||[]).some((g:any)=>FOG_VARIANTS.has(g.variant)))throw fail("The explorer is off while you play Vanta Dark or Blackout Blitz.",409);
     if((live||[]).some((g:any)=>explorerKey(g.fen)===key))throw fail("The explorer is off for positions in your live games.",409);
   }catch(e:any){if(e?.status===409)throw e}
   if(b.mine){
@@ -1858,7 +1863,7 @@ async function gameHistory(req:Request,b:any){
   const p=await playerFor(req,b),limit=Math.max(1,Math.min(100,Number(b.limit||30)));
   const {data,error}=await admin.from("chess_games").select("id,invite_code,white_player_id,black_player_id,white_name,black_name,status,result,rated,pool,source,time_control_seconds,increment_seconds,pgn,move_count,started_at,ended_at,created_at,white_rating_before,black_rating_before,white_rating_delta,black_rating_delta,daily_days,white_berserk,black_berserk,variant,start_fen,move_history,bot_player_id,end_reason").or(`white_player_id.eq.${p.id},black_player_id.eq.${p.id}`).order("created_at",{ascending:false}).limit(limit);
   if(error)throw error;
-  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=g;const finished=["1-0","0-1","1/2-1/2"].includes(g.result);return {...rest,...(finished&&!isFullPgn(g.pgn)?{pgn:fullPgn(g,Array.isArray(move_history)?move_history:[],g.result,g.end_reason||null)}:{}),sans:Array.isArray(move_history)?move_history.map((m:any)=>m.san||"").filter(Boolean):[]}})}
+  return {games:(data||[]).map((g:any)=>{const {move_history,...rest}=g;const finished=["1-0","0-1","1/2-1/2"].includes(g.result);if(fogSealed(g))return {...rest,pgn:null,sans:[]};return {...rest,...(finished&&!isFullPgn(g.pgn)?{pgn:fullPgn(g,Array.isArray(move_history)?move_history:[],g.result,g.end_reason||null)}:{}),sans:Array.isArray(move_history)?move_history.map((m:any)=>m.san||"").filter(Boolean):[]}})}
 }
 
 const cleanChat=(v:any)=>String(v||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\s+/g," ").trim().slice(0,280);

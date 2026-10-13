@@ -23,7 +23,8 @@ test('all required review classifications are represented',()=>{
 });
 
 test('Batch 6 drives Stockfish depth 16 across every review position with progress',()=>{
-  assert.match(main,/reviewWorker\.postMessage\(\{mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id\}\)/);
+  assert.match(main,/const worker=variant\?variantReviewWorker:reviewWorker;/);
+  assert.match(main,/worker\.postMessage\(\{mode:'analysis',fen:engineFen\|\|fen,depth:variant\?Math\.min\(REVIEW_DEPTH,14\):REVIEW_DEPTH,requestId:id,/);
   assert.match(main,/for\(let index=0;index<built\.positions\.length;index\+\+\)/);
   assert.match(main,/id="reviewProgress"/);
   assert.match(main,/id="reviewProgressFill"/);

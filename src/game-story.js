@@ -115,19 +115,20 @@ export function chapterAccuracy(results = [], moves = [], chapter, color) {
   const slice = results.slice(chapter.from - 1, chapter.to), mine = moves.slice(chapter.from - 1, chapter.to);
   if (!mine.some(m => m?.color === color)) return null;
   if (slice.length && slice.every(r => Number.isFinite(r?.beforeCp) && Number.isFinite(r?.afterCp))) {
-    return gameAccuracy([slice[0].beforeCp, ...slice.map(r => r.afterCp)], mine[0]?.color === 'b' ? 'b' : 'w')[color];
+    return gameAccuracy([slice[0].beforeCp, ...slice.map(r => r.afterCp)], mine[0]?.color === 'b' ? 'b' : 'w', { losses: slice.map(r => r.fogLoss ?? null) })[color];
   }
   const losses = [];
   for (let ply = chapter.from; ply <= chapter.to; ply++) if (moves[ply - 1]?.color === color) losses.push(results[ply - 1]?.loss ?? 0);
   return losses.length ? accuracyFromLosses(losses) : null;
 }
-const LABEL = { blunder: 'Blunder', mistake: 'Mistake', miss: 'Missed chance', inaccuracy: 'Inaccuracy' };
-// The moments that decided the game: the biggest win-chance swings, best first.
+const LABEL = { blunder: 'Blunder', mistake: 'Mistake', miss: 'Missed chance', inaccuracy: 'Inaccuracy', ambushed: 'Ambushed' };
+// The moments that decided the game: the biggest win-chance swings, best first. (An Ambushed
+// move swung the game even though its player could not have known: realLoss is that swing.)
 export function keyMoments(results = [], moves = [], limit = 3) {
   return results.map((r, i) => {
     const flipped = Math.sign(r.beforeCp || 0) !== Math.sign(r.afterCp || 0) && Math.abs(r.afterCp || 0) >= 150 && Math.abs(r.beforeCp || 0) >= 50;
-    return { ply: i + 1, loss: Number(r.loss || 0), color: moves[i]?.color, san: moves[i]?.san || '', classification: r.classification, bestMove: r.bestMove || '',
-      label: flipped ? 'Turning point' : LABEL[r.classification] || 'Key move' };
+    return { ply: i + 1, loss: Number(r.realLoss ?? r.loss ?? 0), color: moves[i]?.color, san: moves[i]?.san || '', classification: r.classification, bestMove: r.bestMove || '',
+      label: r.classification === 'ambushed' ? 'Ambushed' : flipped ? 'Turning point' : LABEL[r.classification] || 'Key move' };
   }).filter(m => m.loss >= 10).sort((a, b) => b.loss - a.loss).slice(0, limit).sort((a, b) => a.ply - b.ply);
 }
 // Your costliest move, to replay from the position before it.

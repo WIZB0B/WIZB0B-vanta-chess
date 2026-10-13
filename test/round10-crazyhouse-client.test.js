@@ -11,6 +11,7 @@ test('crazyhouse client: shared rules, drops instead of moves, mate that counts 
   assert.match(main, /function boardOver\(\)\{return isZhGame\(\)\?zhGameStatus\(\)\.over:game\.isGameOver\(\)\}/);
   assert.match(main, /function zhGameStatus\(\)\{const st=zhClientState\(\);return \(watchSession\?\.state\|\|serverGame\)\?\.variant==='bughouse'\?bughouseStatus\(Chess,game,st\):zhStatus\(Chess,game,st\)\}/);
   assert.match(main, /reviewState\.viewing\|\|localGameOver\|\|boardOver\(\)\|\|/, 'a check you can block by a drop is not the end');
-  assert.match(main, /if\(entry\.variant==='crazyhouse'\)return toast/);
+  // Round 13: archived Crazyhouse games replay with their drops and are reviewed by the variant engine.
+  assert.match(main, /const zh=entry\.variant==='crazyhouse'\?zhRecordsFromSans\(Chess,entry\.sans,entry\.startFen\):null;/);
   assert.doesNotMatch(main, /data-computer-variant="crazyhouse"/, 'Stockfish does not play Crazyhouse here');
 });

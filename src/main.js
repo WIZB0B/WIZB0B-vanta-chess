@@ -40,6 +40,8 @@ import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { playablePuzzleFen } from './puzzle-start.js';
+import { VARIANT_WORKER_URL, zhRecordsFromSans, zhReviewPositions } from './variant-engine.js';
+import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-review.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
@@ -138,6 +140,8 @@ let reviewPending=null;
 const stockfish=lazyWorker('/stockfish.worker.js');
 const analysisWorker=lazyWorker('/stockfish.worker.js');
 const reviewWorker=lazyWorker('/stockfish.worker.js');
+// Crazyhouse games are reviewed by the multi-variant engine (public/variant.worker.js).
+const variantReviewWorker=lazyWorker(VARIANT_WORKER_URL);
 // Bot moves, live analysis and game review each own a separate Stockfish worker, so the
 // bot and analysis never share one engine.
 let engineRequestSeq=0,analysisRequest=null;
@@ -151,7 +155,7 @@ analysisWorker.onmessage=({data})=>{
   if(!analysisRequest||data.requestId!==analysisRequest.id)return;
   if(data.type==='uci'&&String(data.line||'').startsWith('info '))updateAnalysisFromUci(String(data.line),analysisRequest);
 };
-reviewWorker.onmessage=({data})=>{
+reviewWorker.onmessage=variantReviewWorker.onmessage=({data})=>{
   if(!reviewPending||data.requestId!==reviewPending.id)return;
   const line=String(data.line||'');
   if(data.type==='uci'&&line.startsWith('info ')){
@@ -655,6 +659,7 @@ function renderBoard({hint=null,instant=false}={}){
 // What the board is showing when it isn't a live game, for the card beside it (sweep fix: a
 // puzzle used to read "Live Game · Real time · Casual game"). null means a live game.
 function boardContext(){
+  if(lessonSession&&mode==='lesson')return lessonSession.kind==='famous'?{kicker:'Famous game',line:lessonSession.lesson.title}:{kicker:'Lesson',line:lessonSession.lesson.title};
   if(watchSession)return {kicker:'Watching',line:'Live game · Spectating'};
   if(archiveSession)return {kicker:'Game review',line:'A finished game'};
   if(mode==='puzzle'){
@@ -826,7 +831,7 @@ async function maybeShowGameOver(){
   lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);roundTwelveGameOver(info);
   if(!info.online&&mode==='computer'){
     lastLocalArchiveId=`local-${Date.now()}`;
-    saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason});
+    saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason,variant:computerRules||'standard'});
   }playUiSound(title==='Draw'?'draw':won?'win':'lose');
   await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
@@ -1160,7 +1165,7 @@ function moveCell(record,index,records,signature){
   const current=(reviewState.viewing&&reviewState.currentPly===index+1)||(!reviewState.viewing&&browse?.ply===index+1)?' current':'';
   return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
-function moveRecords(){return watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
+function moveRecords(){return archiveSession?.records?archiveSession.records:watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
 function updateMoves(){
   const records=maskedRecords(moveRecords());syncBlackout();
   syncMoveStrip(records);
@@ -1340,7 +1345,7 @@ function setPlayerFlag(element,code){
   element.toggleAttribute('aria-hidden',!flagSrc);
   if(flagSrc){
     element.innerHTML=`<img src="${flagSrc}" alt="">`;
-    element.setAttribute('aria-label',`${countryName(normalized)} flag`);element.title=countryName(normalized);
+    element.setAttribute('aria-label',`${countryName(normalized,uiLang)} flag`);element.title=countryName(normalized,uiLang);
   }else{
     element.replaceChildren();
     element.removeAttribute('aria-label');
@@ -1573,7 +1578,7 @@ function showFlagPrompt(){
     const choice=event.target.closest('[data-flag]')?.dataset.flag;if(!choice)return;
     if(choice==='no'){done();return}
     if(choice==='choose'){done();void openProfileEditor();return}
-    try{const code=await detectCountry();await saveProfileChanges({country_code:code});done();toast(`Flag set: ${countryName(code)}`)}
+    try{const code=await detectCountry();await saveProfileChanges({country_code:code});done();toast(`Flag set: ${countryName(code,uiLang)}`)}
     catch(error){done();toast(error.message);void openProfileEditor()}
   });
   document.body.append(card);
@@ -1590,7 +1595,7 @@ async function openProfileEditor(){
   let avatar=currentProfile?.avatar_data||null,preset=ownPreset(),country=currentProfile?.country_code||'';
   const startName=account?(currentProfile.username||''):guestName,startBio=currentProfile?.bio||'';
   const body=document.createElement('div');body.className='profile-editor';
-  const options=['<option value="">No flag</option>',...countryList().map(([code,name])=>`<option value="${code}">${escapeHtml(name)}</option>`)].join('');
+  const options=['<option value="">No flag</option>',...countryList(uiLang).map(([code,name])=>`<option value="${code}" data-no-i18n>${escapeHtml(name)}</option>`)].join('');
   body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div class="pe-who">
     <label class="pe-field"><span>${account?'Username':'Display name'}</span><input class="pe-name" maxlength="20" autocomplete="${account?'username':'nickname'}" value="${escapeHtml(startName)}" placeholder="${account?'3–20 letters, numbers or _':'3–20 characters'}"></label>
     <small class="pe-name-note">${account?'Your username is unique and shown everywhere.':'Guests: your name is kept on this device. Sign in to keep it everywhere and add a picture.'}</small></div></div>
@@ -2014,21 +2019,24 @@ function drawArchive(){
 async function openArchivedGame(entry){
   if(onlineGameBusy())return;
   if(!entry)return;
-  if(entry.variant==='crazyhouse')return toast("Crazyhouse games can't be replayed here yet");
   if(entry.variant==='bughouse')return toast("Bughouse games can't be replayed here yet");
-  const freestyle=entry.variant==='freestyle'&&entry.startFen&&Array.isArray(entry.sans);
+  if(entry.variant==='crazyhouse'&&!Array.isArray(entry.sans))return toast("This Crazyhouse game can't be replayed here");
+  // Crazyhouse: the moves are replayed with the pieces in hand, so drops land where they did.
+  const zh=entry.variant==='crazyhouse'?zhRecordsFromSans(Chess,entry.sans,entry.startFen):null;
+  if(zh&&!zh.records.length)return toast('This game has no moves to review');
+  const freestyle=!zh&&entry.variant==='freestyle'&&entry.startFen&&Array.isArray(entry.sans);
   const replayed=freestyle?replay960(Chess,entry.startFen,entry.sans):null;
-  const loaded=new Chess();if(!freestyle){try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}}
-  if(freestyle?!replayed.moves.length:!loaded.history().length)return toast('This game has no moves to review');
+  const loaded=new Chess();if(!freestyle&&!zh){try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}}
+  if(!zh&&(freestyle?!replayed.moves.length:!loaded.history().length))return toast('This game has no moves to review');
   if(searching)await cancelMatchSearch({announce:false});
   if(watchSession)stopWatching({reset:false});
   stopOnlineSync();stopStory();retrySession=null;
   const prevMode=archiveSession?.prevMode||(['match','room','computer'].includes(mode)?mode:'room');
   serverGameId=null;serverGame=null;currentBot=null;puzzleSession=null;computerStarted=false;localGameOver=false;localClockState=null;clockSnapshot=null;premoves.cancel();selected=null;browse=null;
   resetReviewState();
-  game.reset();if(freestyle)game.load(replayed.positions.at(-1));else game.loadPgn(entry.pgn);lastMoveCache={fen:'',move:null};
+  game.reset();if(zh)game.load(zh.fen,{skipValidation:true});else if(freestyle)game.load(replayed.positions.at(-1));else game.loadPgn(entry.pgn);lastMoveCache={fen:'',move:null};
   mode='archive';myColor=entry.myColor;flipped=entry.myColor==='b';orientationSet=true;
-  archiveSession={entry,prevMode,records:freestyle?replayed.moves:null};document.body.dataset.archive='1';
+  archiveSession={entry,prevMode,records:zh?zh.records:freestyle?replayed.moves:null};document.body.dataset.archive='1';
   syncPlayerBars();render({instant:true});updateMoves();
   await startGameReview();
   if(archiveSession?.entry===entry&&!isMobileApp())$('#storyCard')?.scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -2069,7 +2077,7 @@ function renderStoryCard(){
     <ol class="story-chapters">${chapters.map(c=>`<li class="${inChapter(c)?'on':''}"><button type="button" data-story-ply="${c.from}"><b>${c.title}</b><small>moves ${Math.ceil(c.from/2)}–${Math.ceil(c.to/2)}</small><span><em>You ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,mine))}</em><em>Them ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,them))}</em></span></button></li>`).join('')}</ol>
     ${moments.length?`<div class="story-moments"><small>Moments that decided it</small>${moments.map(m=>`<button type="button" data-story-ply="${m.ply}" class="moment ${m.color===mine?'mine':'theirs'}${ply===m.ply?' on':''}"><b>${escapeHtml(m.label)}</b><span>${Math.ceil(m.ply/2)}${m.color==='w'?'.':'…'} ${escapeHtml(m.san)}</span><em>${m.color===mine?'you':'them'} · −${Math.round(m.loss)}%</em></button>`).join('')}</div>`:'<p class="story-quiet">A clean game: no single move swung it.</p>'}
     <div class="story-share"><button type="button" data-story="share-card">Share image</button><button type="button" data-story="share-clip">Share clip</button></div>
-    ${worst?`<button type="button" class="story-retry" data-story="retry">${retrySession?'Replaying your moment…':`Replay your toughest moment (move ${Math.ceil(worst.ply/2)})`}</button>`:''}`;
+    ${worst&&!reviewState.variant?`<button type="button" class="story-retry" data-story="retry">${retrySession?'Replaying your moment…':`Replay your toughest moment (move ${Math.ceil(worst.ply/2)})`}</button>`:''}`;
   card.querySelectorAll('[data-story-ply]').forEach(b=>b.onclick=()=>{stopStory();setReviewPly(Number(b.dataset.storyPly))});
   card.querySelector('[data-story="play"]')?.addEventListener('click',playStory);
   card.querySelector('[data-story="stop"]')?.addEventListener('click',()=>{stopStory();renderReviewDashboard()});
@@ -2230,6 +2238,7 @@ function stopStory(){if(storyTimer){clearTimeout(storyTimer);storyTimer=null}}
 // you try to find the engine's choice. Two tries, then it is shown.
 function startRetry(worst){
   stopStory();if(!worst)return;
+  if(reviewState.variant)return toast('Replaying a moment works in standard chess games for now');
   const fen=reviewState.positions[worst.ply-1];if(!fen)return;
   // Put the real game back afterwards: its moves (local and archived games) or its position (online).
   retrySession={...worst,fen,tries:0,returnPly:reviewState.currentPly,restorePgn:serverGameId?null:game.pgn(),restoreFen:game.fen()};
@@ -3838,17 +3847,19 @@ function parseReviewInfo(line,fen){
   const depth=Number(line.match(/\bdepth (\d+)/)?.[1]||0),pv=line.match(/\bpv (.+)$/)?.[1]||'';
   return {cp,depth,pv,bestMove:pv.split(/\s+/)[0]||''};
 }
-function analyzeReviewFen(fen,index,token){
+function analyzeReviewFen(fen,index,token,{engineFen=null,variant=null,searchmoves=null}={}){
+  const worker=variant?variantReviewWorker:reviewWorker;
   return new Promise((resolve,reject)=>{
     const id=`review-${token}-${index}`;
-    const timer=setTimeout(()=>{if(reviewPending?.id===id){reviewPending=null;reviewWorker.postMessage({action:'stop'});reject(new Error('Game review timed out'))}},30000);
+    const timer=setTimeout(()=>{if(reviewPending?.id===id){reviewPending=null;worker.postMessage({action:'stop'});reject(new Error('Game review timed out'))}},30000);
     reviewPending={id,fen,latest:{cp:0,depth:0,pv:'',bestMove:''},resolve,reject,timer};
-    reviewWorker.postMessage({mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id});
+    worker.postMessage({mode:'analysis',fen:engineFen||fen,depth:variant?Math.min(REVIEW_DEPTH,14):REVIEW_DEPTH,requestId:id,...(variant?{variant}:{}),...(searchmoves?.length?{searchmoves}:{})});
   });
 }
 // Where the game began: Freestyle games (and archived ones) start from their own position.
 function reviewStartFen(){
-  if(archiveSession?.entry?.startFen)return archiveSession.entry.startFen;
+  // (A replayed archive's board was loaded at its last position, so its FEN header is the end, not the start.)
+  if(archiveSession)return archiveSession.entry?.startFen||(archiveSession.records?null:game.getHeaders?.().FEN)||null;
   if(watchSession)return watchSession.state?.start_fen||null;
   if(serverGameId)return serverGame?.start_fen||null;
   return game.getHeaders?.().FEN||null;
@@ -3863,7 +3874,7 @@ function buildReviewGame(records=currentReviewRecords(),startFen=reviewStartFen(
     let made=null;
     try{made=record?.from&&record?.to?position.move({from:record.from,to:record.to,promotion:record.promotion||undefined}):position.move(record.san||record.lan||'')}catch{}
     if(!made)break;
-    moves.push({...record,from:made.from,to:made.to,san:made.san,lan:made.lan,color:made.color,piece:made.piece,captured:made.captured||record.captured||null,promotion:made.promotion||record.promotion||null});
+    moves.push({...record,from:made.from,to:made.to,san:made.san,lan:made.lan,color:made.color,piece:made.piece,captured:made.captured||record.captured||null,promotion:made.promotion||record.promotion||null,flags:made.flags});
     positions.push(position.fen());
   }
   return {records:moves,positions,signature:moveRecordSignature(moves)};
@@ -3927,6 +3938,7 @@ function reviewExplanation(index){
   const result=reviewState.results[index],move=reviewState.moves[index];if(!result||!move)return 'Start position — use Next to step through the review.';
   const label=CLASSIFICATION_META[result.classification]?.label||'Move',best=reviewBestSan(index);
   if(result.classification==='book')return `Book move ${move.san} — follows established opening theory.`;
+  if(result.classification==='ambushed')return `Ambushed: ${move.san} cost ${Math.round(result.realLoss||0)} points of winning chances, but on the board you could see it was ${result.beliefBest&&String(result.beliefBest).toLowerCase()===`${move.from}${move.to}${move.promotion||''}`.toLowerCase()?'the best move':'a sound move'}. Your accuracy counts it as you could judge it.${best&&normalizedSan(best)!==normalizedSan(move.san)?` With the whole board in view, ${best} was best.`:''}`;
   if(result.classification==='brilliant')return `Brilliant ${move.san} — a strong sacrifice that keeps the engine's best continuation.`;
   if(result.classification==='best')return `Best move ${move.san} — matches Stockfish's first choice.`;
   if(result.classification==='great')return `Great move ${move.san} — keeps nearly all of the position's winning chances.`;
@@ -3938,14 +3950,14 @@ function reviewAccuracyFor(color){
   const results=reviewState.results;
   if(!results.length)return 100;
   if(results.every(r=>Number.isFinite(r?.beforeCp)&&Number.isFinite(r?.afterCp))){
-    const acc=gameAccuracy([results[0].beforeCp,...results.map(r=>r.afterCp)],reviewState.moves[0]?.color==='b'?'b':'w')[color];
+    const acc=gameAccuracy([results[0].beforeCp,...results.map(r=>r.afterCp)],reviewState.moves[0]?.color==='b'?'b':'w',{losses:results.map(r=>r.fogLoss??null)})[color];
     return acc??100;
   }
   return accuracyFromLosses(results.filter((result,index)=>reviewState.moves[index]?.color===color).map(result=>result.loss));
 }
 function renderReviewCounts(){
   const target=$('#reviewCounts');if(!target)return;
-  const order=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder'];
+  const order=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder',...(reviewState.fog?['ambushed']:[])];
   target.innerHTML=order.map(key=>{
     const count=reviewState.results.filter(result=>result.classification===key).length,meta=CLASSIFICATION_META[key];
     return `<span title="${escapeHtml(meta.label)}"><img src="${classificationAsset(key)}" alt=""><b>${count}</b><small>${escapeHtml(meta.label)}</small></span>`;
@@ -3982,9 +3994,51 @@ function setReviewPly(ply){
   const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
   render();updateMoves();renderReviewDashboard();
 }
+// Which rules the reviewed game was played under.
+function reviewVariant(){
+  if(archiveSession)return archiveSession.entry?.variant||'standard';
+  if(watchSession)return watchSession.state?.variant||'standard';
+  if(serverGameId)return serverGame?.variant||'standard';
+  return mode==='computer'?computerRules||'standard':'standard';
+}
+// A Crazyhouse game: positions with pockets (src/variant-engine.js) and its moves, drops included.
+function buildZhReviewGame(records=currentReviewRecords(),startFen=reviewStartFen()){
+  const list=zhReviewPositions(Chess,records,startFen);
+  const moves=list.slice(1).map(p=>({...p.move,lan:p.move.uci,piece:p.move.drop||null,captured:null,promotion:null}));
+  return {records:moves,positions:list.map(p=>p.fen),engineFens:list.map(p=>p.engineFen),signature:moveRecordSignature(moves),variant:'crazyhouse'};
+}
+// Vanta Dark / Blackout Blitz (src/fog-review.js): every costly move gets a second look on the
+// board its player could know. Sound there → Ambushed, and it counts as they could judge it.
+async function fogReviewPass(built,token){
+  const beliefs=fogBeliefs(Chess,built.positions,built.records,reviewState.fog);
+  for(let i=0;i<reviewState.results.length;i++){
+    const result=reviewState.results[i],move=built.records[i],belief=beliefs[i];
+    if(!belief||!move||!(result.loss>=15))continue;
+    const before=await analyzeReviewFen(belief.fen,`fog-${i}`,token,{searchmoves:belief.searchmoves});
+    if(reviewState.token!==token)return;
+    const played=`${move.from}${move.to}${move.promotion||''}`.toLowerCase(),beliefBest=String(before.bestMove||'').toLowerCase();
+    let beliefLoss=null;
+    if(played===beliefBest)beliefLoss=0;
+    else{
+      const afterFen=beliefAfter(Chess,belief.fen,move);
+      if(!afterFen)continue; // it only worked because of something they couldn't see: no excuse
+      const after=await analyzeReviewFen(afterFen,`fog-${i}-after`,token);
+      if(reviewState.token!==token)return;
+      beliefLoss=winPercentageLoss(before.cp,after.cp,move.color);
+    }
+    if(!isAmbush({realLoss:result.loss,beliefLoss,played,beliefBest}))continue;
+    reviewState.results[i]={...result,classification:'ambushed',realLoss:result.loss,loss:beliefLoss,fogLoss:beliefLoss,beliefBest};
+  }
+}
+// Crazyhouse evaluations run several times larger than chess ones (material in hand counts
+// double), so they are scaled before winning chances are worked out; otherwise every move
+// would look like a blunder. VCH's own approximation.
+const ZH_CP_SCALE=0.35;
 async function startGameReview(){
   cancelPremove(false);
-  const built=buildReviewGame();
+  const variant=reviewVariant();
+  if(variant==='bughouse')return toast("Bughouse boards can't be reviewed move by move: pieces arrive from the other board");
+  const built=variant==='crazyhouse'?buildZhReviewGame():buildReviewGame();
   if(!built.records.length)return toast('Play at least one move before starting review');
   showMovesView();
   $$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.tab==='analysis'));
@@ -3993,27 +4047,33 @@ async function startGameReview(){
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');setReviewPly(reviewState.moves.length);return;
   }
   const token=reviewState.token+1;
-  reviewState={running:true,viewing:false,currentPly:0,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[]};
+  reviewState={running:true,viewing:false,currentPly:0,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[],variant:built.variant||null,fog:FOG_REVIEW_VARIANTS.has(variant)?variant:null};
   setReviewProgress(0,built.positions.length,'Analyzing every position');
   try{
     for(let index=0;index<built.positions.length;index++){
-      const evaluation=await analyzeReviewFen(built.positions[index],index,token);
+      const raw=await analyzeReviewFen(built.positions[index],index,token,built.variant?{engineFen:built.engineFens[index],variant:built.variant}:{});
+      const evaluation=built.variant?{...raw,cp:Math.round(Number(raw.cp||0)*ZH_CP_SCALE)}:raw;
       if(reviewState.token!==token){reviewState.running=false;return}
       reviewState.evaluations[index]=evaluation;
       setReviewProgress(index+1,built.positions.length,'Analyzing every position');
     }
     reviewState.results=built.records.map((move,index)=>{
       const before=reviewState.evaluations[index]||{cp:0,bestMove:''},after=reviewState.evaluations[index+1]||before;
-      const actual=`${move.from}${move.to}${move.promotion||''}`.toLowerCase(),best=String(before.bestMove||'').toLowerCase();
-      const isBest=!!best&&actual===best,isBook=isBookMove(built.records,index),isSacrifice=isReviewSacrifice(move,built.positions[index]);
+      const actual=(move.drop?`${String(move.drop).toUpperCase()}@${move.to}`:`${move.from}${move.to}${move.promotion||''}`).toLowerCase(),best=String(before.bestMove||'').toLowerCase();
+      const isBest=!!best&&actual===best,isBook=!built.variant&&isBookMove(built.records,index),isSacrifice=!built.variant&&isReviewSacrifice(move,built.positions[index]);
       const classification=classifyMove({beforeCp:before.cp,afterCp:after.cp,color:move.color,isBook,isBest,isSacrifice});
       return {classification,from:move.from,to:move.to,beforeCp:before.cp,afterCp:after.cp,loss:winPercentageLoss(before.cp,after.cp,move.color),bestMove:before.bestMove||''};
     });
+    if(reviewState.fog){
+      setReviewProgress(built.positions.length,built.positions.length,'Checking what each side could see');
+      await fogReviewPass(built,token);
+      if(reviewState.token!==token){reviewState.running=false;return}
+    }
     reviewState.running=false;
     moveEvalByPly=reviewState.results.map(result=>result.afterCp/100);
     const archiveId=archiveSession?.entry.id||serverGameId||lastLocalArchiveId;
     if(archiveId)saveReviewSummary(archiveId,{accuracy:{w:reviewAccuracyFor('w'),b:reviewAccuracyFor('b')}});
-    try{rememberMistakes()}catch(error){console.warn('mistakes',error)}
+    if(!built.variant&&!reviewState.fog)try{rememberMistakes()}catch(error){console.warn('mistakes',error)}
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');
     if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
     setReviewPly(reviewState.moves.length);
@@ -4230,10 +4290,10 @@ function drawLesson(){
   const dots=lesson.steps.map((st,i)=>`<i class="${i<run.step||(i===run.step&&run.stepDone)?'done':''}${i===run.step?' now':''} kind-${st.type}"></i>`).join('');
   const last=run.step===lesson.steps.length-1;
   let body='';
-  if(step.type==='read')body=`<p class="lesson-text">${escapeHtml(step.text)}</p>`;
-  if(step.type==='move')body=`<p class="lesson-prompt">${escapeHtml(step.prompt)}</p>${s.showHint&&!run.stepDone?`<p class="lesson-hint">${escapeHtml(step.hint||'')}</p>`:''}${s.feedback?`<p class="lesson-feedback ${s.feedback.ok?'ok':'no'}">${escapeHtml(s.feedback.text)}</p>`:''}${run.stepDone?`<p class="lesson-explain">${escapeHtml(step.explain||'')}</p>`:''}`;
-  if(step.type==='quiz')body=`<p class="lesson-prompt">${escapeHtml(step.question)}</p><div class="lesson-options">${step.options.map((o,i)=>`<button type="button" data-quiz="${i}" class="${run.stepDone&&i===step.answer?'right':s.wrong?.includes(i)?'wrong':''}"${run.stepDone?' disabled':''}>${escapeHtml(o)}</button>`).join('')}</div>${run.stepDone?`<p class="lesson-explain">${escapeHtml(step.explain||'')}</p>`:s.feedback&&!s.feedback.ok?`<p class="lesson-feedback no">${escapeHtml(s.feedback.text)}</p>`:''}`;
-  const html=`<article class="lesson-player"><small>${escapeHtml(course.title.toUpperCase())} · LESSON ${index+1} OF ${course.lessons.length}</small><h4>${escapeHtml(lesson.title)}</h4>${run.step===0?`<p class="lesson-goal">${escapeHtml(lesson.goal)}</p>`:''}<div class="lesson-dots" aria-label="Step ${run.step+1} of ${lesson.steps.length}">${dots}</div>
+  if(step.type==='read')body=`<p class="lesson-text" dir="auto">${escapeHtml(step.text)}</p>`;
+  if(step.type==='move')body=`<p class="lesson-prompt" dir="auto">${escapeHtml(step.prompt)}</p>${s.showHint&&!run.stepDone?`<p class="lesson-hint" dir="auto">${escapeHtml(step.hint||'')}</p>`:''}${s.feedback?`<p class="lesson-feedback ${s.feedback.ok?'ok':'no'}">${escapeHtml(s.feedback.text)}</p>`:''}${run.stepDone?`<p class="lesson-explain" dir="auto">${escapeHtml(step.explain||'')}</p>`:''}`;
+  if(step.type==='quiz')body=`<p class="lesson-prompt" dir="auto">${escapeHtml(step.question)}</p><div class="lesson-options">${step.options.map((o,i)=>`<button type="button" data-quiz="${i}" class="${run.stepDone&&i===step.answer?'right':s.wrong?.includes(i)?'wrong':''}"${run.stepDone?' disabled':''}>${escapeHtml(o)}</button>`).join('')}</div>${run.stepDone?`<p class="lesson-explain" dir="auto">${escapeHtml(step.explain||'')}</p>`:s.feedback&&!s.feedback.ok?`<p class="lesson-feedback no">${escapeHtml(s.feedback.text)}</p>`:''}`;
+  const html=`<article class="lesson-player"><small>${escapeHtml(course.title.toUpperCase())} · LESSON ${index+1} OF ${course.lessons.length}</small><h4>${escapeHtml(lesson.title)}</h4>${run.step===0?`<p class="lesson-goal" dir="auto">${escapeHtml(lesson.goal)}</p>`:''}<div class="lesson-dots" aria-label="Step ${run.step+1} of ${lesson.steps.length}">${dots}</div>
 <div class="lesson-step kind-${step.type}">${body}</div>
 <div class="lesson-actions">${step.type==='move'&&!run.stepDone?'<button type="button" class="lesson-hint-btn">Hint</button>':''}${run.step>0?'<button type="button" class="lesson-back">Back</button>':''}<button type="button" class="primary-action lesson-next"${run.stepDone?'':' disabled'}>${last?'Finish lesson':'Next'}</button></div>
 <button type="button" class="lesson-course-link">${escapeHtml(course.title)} · all lessons</button></article>`;
@@ -4296,11 +4356,11 @@ function drawFamous(){
   const s=lessonSession;if(!s||s.kind!=='famous')return;const {lesson,run}=s,m=lesson.moments[run.moment],n=lesson.moments.length;
   const side=momentSide(m)==='w'?lesson.white:lesson.black,v=s.verdict;
   const dots=lesson.moments.map((_,i)=>{const r=run.results[i];return `<i class="${r?(r.correct?'done':'miss'):''}${i===run.moment?' now':''}"></i>`}).join('');
-  const html=`<article class="lesson-player famous-player"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))} · MOMENT ${run.moment+1} OF ${n}</small><h4>${escapeHtml(lesson.title)}</h4>${run.moment===0&&!run.answered?`<p class="lesson-goal">${escapeHtml(lesson.intro)}</p>`:''}<div class="lesson-dots">${dots}</div>
-<div class="lesson-step"><p class="lesson-prompt">${escapeHtml(m.prompt)}</p><p class="famous-side">${escapeHtml(side)} to move · play it on the board${s.showChoices?' or pick one':''}</p>
+  const html=`<article class="lesson-player famous-player"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))} · MOMENT ${run.moment+1} OF ${n}</small><h4>${escapeHtml(lesson.title)}</h4>${run.moment===0&&!run.answered?`<p class="lesson-goal" dir="auto">${escapeHtml(lesson.intro)}</p>`:''}<div class="lesson-dots">${dots}</div>
+<div class="lesson-step"><p class="lesson-prompt" dir="auto">${escapeHtml(m.prompt)}</p><p class="famous-side">${escapeHtml(side)} to move · play it on the board${s.showChoices?' or pick one':''}</p>
 ${s.showChoices&&!run.answered?`<div class="lesson-options famous-choices">${m.choices.map(c=>`<button type="button" data-choice="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div>`:''}
-${run.hinted&&!run.answered?`<p class="lesson-hint">${escapeHtml(m.hint||'')}</p>`:''}
-${v?`<p class="lesson-feedback ${v.correct?'ok':'no'}">${v.correct?(v.accepted?`Good move! The engine likes it too. ${escapeHtml(side)} played ${escapeHtml(v.best)}.`:`Yes! ${escapeHtml(v.best)} is what ${escapeHtml(side)} played.`):`${escapeHtml(side)} played ${escapeHtml(v.best)}.`}</p><p class="lesson-explain">${escapeHtml(m.explain||'')}</p>`:''}</div>
+${run.hinted&&!run.answered?`<p class="lesson-hint" dir="auto">${escapeHtml(m.hint||'')}</p>`:''}
+${v?`<p class="lesson-feedback ${v.correct?'ok':'no'}">${v.correct?(v.accepted?`Good move! The engine likes it too. ${escapeHtml(side)} played ${escapeHtml(v.best)}.`:`Yes! ${escapeHtml(v.best)} is what ${escapeHtml(side)} played.`):`${escapeHtml(side)} played ${escapeHtml(v.best)}.`}</p><p class="lesson-explain" dir="auto">${escapeHtml(m.explain||'')}</p>`:''}</div>
 <div class="lesson-actions">${run.answered?`<button type="button" class="primary-action famous-next">${run.moment+1<n?'Next moment':'See your score'}</button>`:`${s.showChoices?'':'<button type="button" class="famous-choices-btn">Show choices</button>'}<button type="button" class="lesson-hint-btn">Hint</button><button type="button" class="famous-reveal">Show me</button>`}</div>
 <button type="button" class="lesson-course-link">Famous games</button></article>`;
   if(currentRightView!=='lesson')setDynamicView('lesson','Famous Games',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
@@ -4333,7 +4393,7 @@ function finishFamous(){
   const s=lessonSession;if(!s)return;const {lesson,run}=s,score=lessonScore(run.results);
   if(score.stars)saveLessonResult(`famous/${lesson.id}`,score.stars);
   const right=run.results.filter(r=>r.correct).length;
-  const html=`<article class="lesson-player lesson-done"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))}</small><h4>${escapeHtml(lesson.title)}</h4>${stars(score.stars)}<p>You found ${right} of ${run.results.length} moves · ${score.score} of ${score.max} points.</p><p class="lesson-explain">${escapeHtml(lesson.ending||lesson.theme||'')}</p><div class="lesson-actions"><button type="button" class="primary-action famous-replay">Replay the whole game</button><button type="button" class="lesson-again">Try again</button><button type="button" class="lesson-course-link">Famous games</button></div></article>`;
+  const html=`<article class="lesson-player lesson-done"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))}</small><h4>${escapeHtml(lesson.title)}</h4>${stars(score.stars)}<p>You found ${right} of ${run.results.length} moves · ${score.score} of ${score.max} points.</p><p class="lesson-explain" dir="auto">${escapeHtml(lesson.ending||lesson.theme||'')}</p><div class="lesson-actions"><button type="button" class="primary-action famous-replay">Replay the whole game</button><button type="button" class="lesson-again">Try again</button><button type="button" class="lesson-course-link">Famous games</button></div></article>`;
   const t=$('#dynamicView .view-content');if(t)t.innerHTML=html;
   const root=$('#dynamicView');
   root.querySelector('.famous-replay')?.addEventListener('click',()=>{leaveLesson({restore:false});renderStudy('famous',lesson.title,lesson.moves,`${lesson.white} vs ${lesson.black} · ${lesson.year} · ${lesson.result}`)});

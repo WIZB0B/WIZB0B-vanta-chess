@@ -1303,6 +1303,7 @@ export const ROWS = [
   ["Analyse together", "Analizza insieme"],
   ["Loading the lobby…", "Caricamento della sala…"],
   ["Tournament", "Torneo"],
+  ["Chess emoji", "Emoji degli scacchi"],
   ["Famous game", "Partita celebre"],
   ["Lesson", "Lezione"],
   ["Achievement", "Traguardo"],

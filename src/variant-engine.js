@@ -108,6 +108,28 @@ export function zhReviewPositions(Chess, records = [], startFen) {
   return positions;
 }
 
+// An archived Crazyhouse game keeps only its SAN list ("e4", "Nxd5", "N@f3+"). This turns it
+// back into records zhReviewPositions takes: {records, fen, state} with records
+// [{san, from, to, drop, color, …}], stopping at the first move that is not legal.
+export function zhRecordsFromSans(Chess, sans = [], startFen) {
+  let fen = startFen || new Chess().fen(), state = { pockets: emptyPockets(), promoted: [] };
+  const records = [];
+  for (const raw of Array.isArray(sans) ? sans : []) {
+    const san = String(raw || '').trim().replace(/[+#?!]+$/, '');
+    const drop = /^([PNBRQ])@([a-h][1-8])$/i.exec(san);
+    let move = null;
+    if (drop) move = { drop: drop[1].toLowerCase(), to: drop[2] };
+    else {
+      try { const m = new Chess(fen).move(san); move = m ? { from: m.from, to: m.to, promotion: m.promotion || undefined } : null; } catch { move = null; }
+    }
+    const next = move && zhPlay(Chess, fen, state, move);
+    if (!next) break;
+    fen = next.fen; state = next.state;
+    records.push(next.move);
+  }
+  return { records, fen, state };
+}
+
 // Crazyhouse computer levels: [elo, Skill Level 0-20, nodes]. The multi-variant engine has
 // Skill Level but no UCI_LimitStrength/UCI_Elo, so these Elo labels are VCH's estimate, not
 // calibrated ratings. /variant.worker.js keeps the same table for elo → Skill Level.

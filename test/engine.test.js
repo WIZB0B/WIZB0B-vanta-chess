@@ -76,7 +76,8 @@ test('bot, live analysis and review each use their own Stockfish worker',()=>{
   // Vanta Dark / Blackout send the board the computer believes in, with the moves it may choose.
   assert.match(main,/stockfish\.postMessage\(\{mode:'bot',fen:blind\?\.fen\|\|fen,elo:requestedElo,nodes:botSearchNodes\(requestedElo\),requestId:id,\.\.\.\(blind\?\{searchmoves:blind\.searchmoves\}:\{\}\)\}\)/);
   assert.match(main,/analysisWorker\.postMessage\(\{mode:'analysis',fen,depth:ANALYSIS_MAX_DEPTH,requestId:analysisRequest\.id\}\)/);
-  assert.match(main,/reviewWorker\.postMessage\(\{mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id\}\)/);
+  assert.match(main,/const worker=variant\?variantReviewWorker:reviewWorker;/);
+  assert.match(main,/worker\.postMessage\(\{mode:'analysis',fen:engineFen\|\|fen,depth:variant\?Math\.min\(REVIEW_DEPTH,14\):REVIEW_DEPTH,requestId:id,/);
   assert.doesNotMatch(main,/stockfish\.postMessage\(\{mode:'analysis'/);
   assert.doesNotMatch(main,/analysisWorker\.postMessage\(\{mode:'bot'/);
 });

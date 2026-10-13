@@ -301,7 +301,7 @@ export const EMOJI_SET = Object.freeze([
     ['\u{1F44D}', 'Thumbs up'], ['\u{1F44E}', 'Thumbs down'], ['\u{1F44F}', 'Clapping hands'], ['\u{1F64C}', 'Raised hands'],
     ['\u{1F91D}', 'Handshake'], ['\u{1F44B}', 'Waving hand'], ['\u{1F64F}', 'Folded hands'], ['\u{1F4AA}', 'Flexed biceps'],
   ]),
-  set('Chess', [
+  set('Chess emoji', [
     ['\u265f\ufe0f', 'Chess pawn'], ['\u{1F451}', 'Crown'], ['\u{1F3C6}', 'Trophy'], ['\u{1F434}', 'Horse face'],
     ['\u{1F3F0}', 'Castle'], ['\u{1F9E0}', 'Brain'], ['\u23f0', 'Alarm clock'], ['\u231b', 'Hourglass'],
   ]),

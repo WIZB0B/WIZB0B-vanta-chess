@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { Chess } from 'chess.js';
 import { zhPlay } from '../src/crazyhouse.js';
-import { zhFen, parseZhFen, parseUciMove, zhLine, zhReviewPositions, zhBotStrength, ZH_BOT_LEVELS } from '../src/variant-engine.js';
+import { zhFen, parseZhFen, parseUciMove, zhLine, zhRecordsFromSans, zhReviewPositions, zhBotStrength, ZH_BOT_LEVELS } from '../src/variant-engine.js';
+import { readFileSync } from 'node:fs';
 
 const workerSource = await readFile(new URL('../public/variant.worker.js', import.meta.url), 'utf8');
 const START = new Chess().fen();
@@ -287,4 +288,28 @@ test('vendored multi-variant Stockfish plays Crazyhouse: drops, holdings and pro
       assert.equal(strip(shown.find(l => l.startsWith('Fen: ')).slice(5)), strip(list[ply].engineFen), `ply ${ply}`);
     }
   } finally { engine.stop(); }
+});
+
+test('zhRecordsFromSans: an archived SAN list (drops, checks, promotions) replays to the same game', () => {
+  const game = play(GAME), sans = game.records.map(r => r.san);
+  assert.ok(sans.some(s => s.includes('@')), 'the fixture has drops');
+  const back = zhRecordsFromSans(Chess, sans);
+  assert.equal(back.records.length, GAME.length);
+  assert.equal(back.fen, game.fen);
+  assert.deepEqual(back.state, game.state);
+  assert.deepEqual(zhReviewPositions(Chess, back.records).map(p => p.engineFen), zhReviewPositions(Chess, game.records).map(p => p.engineFen));
+  const promo = play(PROMO, PROMO_START), promoBack = zhRecordsFromSans(Chess, promo.records.map(r => r.san), PROMO_START);
+  assert.equal(promoBack.fen, promo.fen, 'promotion and the promoted piece going back to a pawn in hand');
+  assert.equal(zhRecordsFromSans(Chess, ['e4', 'N@f3']).records.length, 1, 'stops at a drop with nothing in hand');
+  assert.equal(zhRecordsFromSans(Chess, ['e4', 'nonsense', 'e5']).records.length, 1);
+  assert.deepEqual(zhRecordsFromSans(Chess, null).records, []);
+});
+
+test('Crazyhouse review is wired: archived games replay with drops, review uses the variant engine', () => {
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(main, /const zh=entry\.variant==='crazyhouse'\?zhRecordsFromSans\(Chess,entry\.sans,entry\.startFen\):null;/);
+  assert.match(main, /archiveSession=\{entry,prevMode,records:zh\?zh\.records:/);
+  assert.match(main, /const built=variant==='crazyhouse'\?buildZhReviewGame\(\):buildReviewGame\(\);/);
+  assert.match(main, /const worker=variant\?variantReviewWorker:reviewWorker;/);
+  assert.match(main, /if\(variant==='bughouse'\)return toast\(/, 'bughouse boards are not reviewed move by move');
 });

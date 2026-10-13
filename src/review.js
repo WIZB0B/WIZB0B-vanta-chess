@@ -10,8 +10,14 @@ export const CLASSIFICATION_META=Object.freeze({
   inaccuracy:{label:'Inaccuracy',icon:'inaccuracy.svg'},
   mistake:{label:'Mistake',icon:'mistake.svg'},
   miss:{label:'Miss',icon:'miss.svg'},
-  blunder:{label:'Blunder',icon:'blunder.svg'}
+  blunder:{label:'Blunder',icon:'blunder.svg'},
+  // Vanta Dark / Blackout Blitz: costly on the real board, sound on the board you could know
+  // (src/fog-review.js).
+  ambushed:{label:'Ambushed',icon:null}
 });
+// The Ambushed mark is drawn here (same shape as the other review marks) rather than shipped as
+// a file.
+const AMBUSHED_MARK='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="2" y="2" width="28" height="28" rx="8" fill="#1d2b3b" stroke="#7fb2e0" stroke-width="2" stroke-dasharray="4 2.5"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="#7fb2e0" stroke-opacity=".25"/><text x="16" y="19.25" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="700" fill="#7fb2e0">Am</text></svg>');
 
 const finite=value=>Number.isFinite(Number(value))?Number(value):0;
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
@@ -76,7 +82,9 @@ export function accuracyFromLosses(losses=[]){
 // Both sides' accuracy from White-view evaluations: `cps` holds the centipawns before the first
 // move and after every move (length = moves + 1; mates as large numbers). `start` is the side
 // that made the first move. Returns {w, b}; a side with no moves gets null.
-export function gameAccuracy(cps=[],start='w'){
+// `losses` (optional, one per move): a winning-chance loss to use instead of the evaluations'
+// for that move (fog-aware review: an Ambushed move counts as its player could judge it).
+export function gameAccuracy(cps=[],start='w',{losses=null}={}){
   const wins=cps.map(cp=>lichessWinPercent(cp)),moves=wins.length-1;
   if(moves<1)return {w:null,b:null};
   const size=clamp(Math.floor(moves/10),2,8);
@@ -90,7 +98,8 @@ export function gameAccuracy(cps=[],start='w'){
     const color=(i%2===0)===(start==='w')?'w':'b';
     const before=color==='w'?wins[i]:100-wins[i],after=color==='w'?wins[i+1]:100-wins[i+1];
     const weight=clamp(standardDeviation(windows[Math.min(i,windows.length-1)]),0.5,12);
-    by[color].push({accuracy:moveAccuracy(before-after),weight});
+    const override=losses?.[i],loss=override!=null&&Number.isFinite(Number(override))?Math.max(0,Number(override)):before-after;
+    by[color].push({accuracy:moveAccuracy(loss),weight});
   }
   const side=list=>{
     if(!list.length)return null;
@@ -104,6 +113,7 @@ export function gameAccuracy(cps=[],start='w'){
 export function classificationAsset(key){
   const meta=CLASSIFICATION_META[key]||CLASSIFICATION_META.good;
   if(key==='book')return '/assets/vch/icons/book.svg';
+  if(key==='ambushed')return AMBUSHED_MARK;
   return `/assets/vch/icons/review/${meta.icon}`;
 }
 

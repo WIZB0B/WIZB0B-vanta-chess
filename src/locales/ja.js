@@ -1303,6 +1303,7 @@ export const ROWS = [
   ["Analyse together", "一緒に解析"],
   ["Loading the lobby…", "ロビーを読み込み中…"],
   ["Tournament", "トーナメント"],
+  ["Chess emoji", "チェスの絵文字"],
   ["Famous game", "名局"],
   ["Lesson", "レッスン"],
   ["Achievement", "実績"],

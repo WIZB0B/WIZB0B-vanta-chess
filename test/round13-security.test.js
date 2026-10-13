@@ -78,3 +78,12 @@ test('rematch is a server action; peer codes are never followed', () => {
   assert.ok(index.includes('case "rematch":out=await rematch(req,b);break;'));
   assert.ok(!main.includes("rematch_ready"), 'no game codes over the game channel');
 });
+test('an undecided Vanta Dark / Blackout game leaks no moves through history, export or the explorer', () => {
+  assert.ok(index.includes('const fogSealed=(g:any)=>FOG_VARIANTS.has(g?.variant)&&!["1-0","0-1","1/2-1/2"].includes(g?.result);'));
+  assert.ok(index.includes('if(fogSealed(g))return {...rest,pgn:null,sans:[]};'), 'game history');
+  assert.ok(index.includes('moves:!fogSealed(g)&&Array.isArray(g.move_history)'), 'data export');
+  // A refusal for "your live position" would confirm a guessed hidden board, so the explorer is
+  // off altogether during a fog game.
+  assert.ok(index.includes('if((live||[]).some((g:any)=>FOG_VARIANTS.has(g.variant)))throw fail('));
+  assert.ok(index.includes('select("fen,variant").eq("status","active")'));
+});

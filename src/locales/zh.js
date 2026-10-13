@@ -1303,6 +1303,7 @@ export const ROWS = [
   ["Analyse together", "一起分析"],
   ["Loading the lobby…", "正在加载大厅…"],
   ["Tournament", "锦标赛"],
+  ["Chess emoji", "国际象棋表情"],
   ["Famous game", "名局"],
   ["Lesson", "课程"],
   ["Achievement", "成就"],
