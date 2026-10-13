@@ -259,7 +259,7 @@ let buf='';process.stdin.on('data',d=>{buf+=d;let i;while((i=buf.indexOf('\\n'))
 test('vendored multi-variant Stockfish plays Crazyhouse: drops, holdings and promoted pieces', async () => {
   const files = await readdir(new URL('../public/engines/', import.meta.url));
   assert.ok(files.includes('stockfish-mv-10.js') && files.includes('stockfish-mv-10.wasm'));
-  assert.deepEqual(files.filter(f => /\.(js|wasm)$/.test(f)).sort(), ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-mv-10.js', 'stockfish-mv-10.wasm'], 'no asm.js fallback or other engine build is shipped');
+  assert.deepEqual(files.filter(f => /\.(js|wasm)$/.test(f)).sort(), ['lozza-2.5.js', 'stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-mv-10.js', 'stockfish-mv-10.wasm'], 'no asm.js fallback or other engine build is shipped (Lozza 2.5 is plain JavaScript, src/engine-roster.js)');
   const loader = await readFile(new URL('../public/engines/stockfish-mv-10.js', import.meta.url), 'utf8');
   assert.match(loader, /wasmBinaryFile="stockfish-mv-10\.wasm"/);
   assert.match(loader, /GNU General Public License v3/);

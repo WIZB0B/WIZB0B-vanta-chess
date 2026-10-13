@@ -3382,3 +3382,7 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .match-variants{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
 .match-variants button{padding:9px 6px;border-radius:10px;border:1px solid #2c3a38;background:#0f1918;font-size:11.5px;color:#cfd8d4}
 .match-variants button.on{border-color:var(--mint,#82edba);background:#13241f;color:#eef6f2;box-shadow:0 0 12px rgba(101,212,156,.25)}
+
+/* ===== ROUND 13 · ENGINES: which engine plays each computer opponent ===== */
+.bot-card .bot-engine{display:block;margin-top:2px;color:#9fc7b4;font-size:8px;font-style:normal;letter-spacing:.02em;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bot-card[data-bot-slug^="lozza-"] .bot-engine{color:#e1c75d}

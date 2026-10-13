@@ -44,3 +44,19 @@ both engines. The loader uses neither `eval` nor `new Function`, so it runs unde
 the site CSP with only `'wasm-unsafe-eval'`, and it needs no SharedArrayBuffer.
 
 Run `npm run prepare:variant-engine` to materialize these runtime files.
+
+# Lozza 2.5 (MIT)
+
+Lozza is a JavaScript chess engine by Colin Jenkins with a hand-tuned evaluation inspired by
+Fruit 2.1. VCH uses it as a second engine with its own judgement: the Fruitwood and Ironbark
+computer opponents and the campaign guards from the Mirror Court on (`src/engine-roster.js`).
+
+- Source: <https://github.com/op12no2/lozza>, tag `2.5`, commit
+  `0cf341d0965016adb93bbd6b3575b4a693828deb` (10 February 2023)
+- License: MIT (`vendor/lozza/LICENSE`, shipped as `/engines/LICENSE-lozza.txt`)
+
+`vendor/lozza/lozza-2.5.js` is the upstream `lozza.js`, unchanged.
+`scripts/prepare-lozza.mjs` checks it and the license against pinned SHA-256 digests and copies
+them to `public/engines` (gitignored, like the Stockfish files). `/lozza.worker.js` runs it.
+Lozza has no Elo setting; VCH plays it at fixed node budgets whose strength was measured against
+Stockfish 19 at VCH's bot settings (`LOZZA_LEVELS` in `src/engine-roster.js`).

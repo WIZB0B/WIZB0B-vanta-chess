@@ -59,7 +59,9 @@ test('left panel switches between three distinct play-mode views',async({page})=
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  await expect(page.locator('#botGrid .bot-card')).toHaveCount(6);
+  // Six Stockfish 19 levels and two Lozza 2.5 opponents (src/engine-roster.js).
+  await expect(page.locator('#botGrid .bot-card')).toHaveCount(8);
+  await expect(page.locator('#botGrid .bot-card .bot-engine', { hasText: 'Lozza 2.5' })).toHaveCount(2);
   await expect(page.locator('[data-computer-side]')).toHaveCount(3);
   await expect(page.locator('#computerStart')).toBeVisible();
 

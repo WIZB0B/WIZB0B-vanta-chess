@@ -42,6 +42,7 @@ import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { playablePuzzleFen } from './puzzle-start.js';
 import { VARIANT_WORKER_URL, zhRecordsFromSans, zhReviewPositions } from './variant-engine.js';
 import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-review.js';
+import { ENGINES, LOZZA_BOTS, engineFor, engineName, lozzaBudget } from './engine-roster.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
@@ -131,7 +132,7 @@ const DEFAULT_COMPUTER_BOTS=[
   {slug:'oracle',display_name:'Oracle',elo:2200,portrait:'bk'},
   {slug:'legend',display_name:'Legend',elo:2700,portrait:'bp'}
 ];
-let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
+let computerBots=[...DEFAULT_COMPUTER_BOTS,...LOZZA_BOTS].map(bot=>({...bot}));
 let moveEvalByPly=[],moveTimeByPly=[];
 let reviewState={running:false,viewing:false,currentPly:0,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
 let reviewPending=null;
@@ -142,10 +143,12 @@ const analysisWorker=lazyWorker('/stockfish.worker.js');
 const reviewWorker=lazyWorker('/stockfish.worker.js');
 // Crazyhouse games are reviewed by the multi-variant engine (public/variant.worker.js).
 const variantReviewWorker=lazyWorker(VARIANT_WORKER_URL);
+// Lozza 2.5 plays the opponents src/engine-roster.js gives it (public/lozza.worker.js).
+const lozzaEngine=lazyWorker(ENGINES.lozza.worker);
 // Bot moves, live analysis and game review each own a separate Stockfish worker, so the
 // bot and analysis never share one engine.
 let engineRequestSeq=0,analysisRequest=null;
-stockfish.onmessage=({data})=>{
+stockfish.onmessage=lozzaEngine.onmessage=({data})=>{
   if(!enginePending||data.requestId!==enginePending.id)return;
   if(data.type==='uci'&&String(data.line||'').startsWith('bestmove ')){const u=String(data.line).split(' ')[1];enginePending.resolve(u);enginePending=null}
   if(data.type==='unavailable'){enginePending.resolve(null);enginePending=null}
@@ -977,7 +980,7 @@ function syncSpecialOpponent(bot){
 function renderComputerBots(){
   const grid=$('#botGrid');if(!grid)return;
   if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=computerBots.find(bot=>Number(bot.elo)===1500)?.slug||computerBots[0]?.slug||'';
-  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
+  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small><em class="bot-engine" title="${escapeHtml(ENGINES[bot.engine==='lozza'?'lozza':'stockfish19'].about)}">${escapeHtml(engineName(bot.engine==='lozza'?'lozza':'stockfish19'))}</em></span></button>`).join('');
   $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;syncSpecialOpponent(null);renderComputerBots()});
 }
 async function loadComputerBots(){
@@ -986,10 +989,10 @@ async function loadComputerBots(){
     const data=await api.bots(),remote=(data.bots||[]).filter(bot=>Number(bot.elo)>=900&&Number(bot.elo)<=2700).sort((a,b)=>Number(a.elo)-Number(b.elo));
     if(remote.length){
       const portraits=['bn','bb','br','bq','bk','bp'];
-      computerBots=DEFAULT_COMPUTER_BOTS.map((fallback,index)=>{
+      computerBots=[...DEFAULT_COMPUTER_BOTS.map((fallback,index)=>{
         const bot=remote[index]||fallback;
-        return {...fallback,...bot,slug:bot.slug||fallback.slug,portrait:portraits[index]};
-      });
+        return {...fallback,...bot,slug:bot.slug||fallback.slug,portrait:portraits[index],engine:'stockfish19'};
+      }),...LOZZA_BOTS.map(bot=>({...bot}))];
     }
   }catch{}
   renderComputerBots();
@@ -1205,11 +1208,14 @@ function blindSearch(){
 async function findEngineMove(){
   const moves=game.moves({verbose:true});if(!moves.length)return null;
   const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`,blind=blindSearch();
+  // Lozza or Stockfish 19 (src/engine-roster.js); the blind computer is always Stockfish.
+  const lozza=!blind&&engineFor(currentBot,computerRules)==='lozza',worker=lozza?lozzaEngine:stockfish;
   if(enginePending)enginePending.resolve(null);
   const uci=await new Promise(resolve=>{
     enginePending={id,resolve};
-    stockfish.postMessage({mode:'bot',fen:blind?.fen||fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id,...(blind?{searchmoves:blind.searchmoves}:{})});
-    setTimeout(()=>{if(enginePending?.id===id){enginePending=null;stockfish.postMessage({action:'stop'});resolve(null)}},BOT_MOVE_TIMEOUT_MS);
+    if(lozza)worker.postMessage({mode:'bot',fen,nodes:lozzaBudget(requestedElo),requestId:id});
+    else worker.postMessage({mode:'bot',fen:blind?.fen||fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id,...(blind?{searchmoves:blind.searchmoves}:{})});
+    setTimeout(()=>{if(enginePending?.id===id){enginePending=null;worker.postMessage({action:'stop'});resolve(null)}},BOT_MOVE_TIMEOUT_MS);
   });
   if(game.fen()!==fen)return undefined; // position changed while searching (new game, takeback): drop the result
   const chosen=uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
@@ -5064,7 +5070,7 @@ function drawCampaign(){
         <header><span class="camp-sigil" aria-hidden="true"></span><div><h4>${escapeHtml(r.name)}</h4><small>${freed?'Freed':open?'Unlocked':'Locked'} · Relic: ${escapeHtml(relic.name)}</small></div></header>
         <p>${escapeHtml(r.story)}</p>
         <ol class="camp-battles">${r.battles.map((b,i)=>{const won=st.won[battleKey(r.id,i)],can=battleOpen(st,ri,i);
-          return `<li class="${b.boss?'boss ':''}${won?'won':can?'next':'locked'}"><span><b>${escapeHtml(b.name)}</b><small>${b.rules==='shadow'?'Your strength':`${b.elo} Elo`} · ${b.side==='w'?'you play White':'you play Black'}</small>${b.twist?`<em>${escapeHtml(b.twist)}</em>`:''}</span>${campaignStars(won?.stars||0)}${can?`<button type="button" class="${won?'':'gold '}camp-fight" data-realm-index="${ri}" data-battle="${i}">${won?'Replay':'Fight'}</button>`:''}</li>`}).join('')}</ol></li>`}).join('')}</ol></article>`;
+          return `<li class="${b.boss?'boss ':''}${won?'won':can?'next':'locked'}"><span><b>${escapeHtml(b.name)}</b><small>${b.rules==='shadow'?'Your strength':`${b.elo} Elo`} · ${b.side==='w'?'you play White':'you play Black'} · ${escapeHtml(engineName(b.engine==='lozza'?'lozza':'stockfish19'))}</small>${b.twist?`<em>${escapeHtml(b.twist)}</em>`:''}</span>${campaignStars(won?.stars||0)}${can?`<button type="button" class="${won?'':'gold '}camp-fight" data-realm-index="${ri}" data-battle="${i}">${won?'Replay':'Fight'}</button>`:''}</li>`}).join('')}</ol></li>`}).join('')}</ol></article>`;
   target.querySelectorAll('.camp-fight').forEach(b=>b.onclick=()=>void startCampaignBattle(Number(b.dataset.realmIndex),Number(b.dataset.battle)));
 }
 async function startCampaignBattle(ri,i){
@@ -5077,7 +5083,7 @@ async function startCampaignBattle(ri,i){
   }
   saveCampaign({...st,pending:{realm:realm.id,i}});
   const variant={blackout:'blackout',dark:'dark',freestyle:'freestyle'}[b.rules]||'standard';
-  await playComputer({bot:{slug:`campaign-${realm.id}-${i}`,display_name:b.name,elo,portrait:b.boss?'bk':i?'br':'bn',campaign:{realm:realm.id,i},...(shadowTree?{shadowTree}:{})},side:b.side,variant});
+  await playComputer({bot:{slug:`campaign-${realm.id}-${i}`,display_name:b.name,elo,portrait:b.boss?'bk':i?'br':'bn',campaign:{realm:realm.id,i},engine:b.engine||'stockfish19',...(shadowTree?{shadowTree}:{})},side:b.side,variant});
   if(currentBot?.campaign?.realm===realm.id&&currentBot.campaign.i===i)toast(b.twist?`${b.name} · ${b.twist}`:`${realm.name} · ${b.name}`,{duration:2600});
 }
 function campaignGameOver(info,score,oath){

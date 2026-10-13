@@ -13,3 +13,5 @@ public/engines/.prepared
 public/engines/stockfish-mv-10.js
 public/engines/stockfish-mv-10.wasm
 public/engines/README-stockfish-mv-10.md
+public/engines/lozza-2.5.js
+public/engines/LICENSE-lozza.txt
