@@ -45,7 +45,7 @@ import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-re
 import { ENGINES, engineFor, lozzaBudget } from './engine-roster.js';
 import { COMPUTER_LEVELS, DEFAULT_LEVEL, OLD_BOT_NAMES, beginnerMove, levelBot } from './computer-levels.js';
 import { guideFor } from './hover-guide.js';
-import { MODES, ResonancePlate, modeForChord, modeForMove, spectrumEnergy } from './resonance.js';
+import { MODES, ResonancePlate, SandBackdrop, modeForChord, modeForMoment, spectrumEnergy } from './resonance.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
@@ -67,7 +67,7 @@ import { atmosphereFor, tensionFor } from './atmosphere.js';
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
-import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
+import { KEY_FOR_THEME, VantaScore, chordFor, loadMusic, saveMusic } from './music.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
@@ -110,7 +110,7 @@ let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back 
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
 let uiLang='en'; // the interface language; set from the saved choice in the language section below
 let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
-let resonance=null,resonanceLevel='off',resonanceMoveKey='',resonanceRoom=null; // Resonance (src/resonance.js), read by render()
+let resonance=null,resonanceLevel='off',resonanceRoom=null; // Resonance (src/resonance.js): the page background and the room
 let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
 let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
 let runTimer=0; // ticks the run clock while a run puzzle is on the board
@@ -389,7 +389,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Resonance <select id="resonanceSetting"><option value="off">Off</option><option value="subtle">Subtle</option><option value="vivid">Vivid</option></select></label><button id="openResonance" type="button" class="theme-relics">Resonance room</button><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Resonance background <select id="resonanceSetting"><option value="off">Off</option><option value="on">On</option></select></label><button id="openResonance" type="button" class="theme-relics">Resonance room</button><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -699,7 +699,6 @@ function render(options){
   renderBoard(options);
   if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
   if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove();if(analysis){const key=JSON.stringify([analysis.sans,boardShapes]);if(key!==analysis.sentKey){analysis.seq++;analysisSend()}}})}
-  if(resonanceLevel!=='off')afterBoardPaint(resonanceTick); // the sand moves after the piece has landed
 }
 function endText(){if(isZhGame()){const st=zhGameStatus();if(st.over)return st.result==='1/2-1/2'?'Draw · Stalemate':`Checkmate · ${st.result==='1-0'?'White':'Black'} wins`}if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
@@ -5900,47 +5899,51 @@ initRoundTwelve();
   for(const type of ['scroll','resize'])window.addEventListener(type,()=>{if(shown)hide()},{capture:true,passive:true});
   document.addEventListener('keydown',event=>{if(event.key==='Escape')hide()});
 })();
-// ---- Resonance (src/resonance.js): Chladni figures in sand on the board, rung by the music and the moves ----
+// ---- Resonance (src/resonance.js): Chladni figures in sand behind the page, drawn by the music ----
+// A dim, still background (owner request 2026-10-13: never on the board, never in the way). It
+// shows the figure of the theme you play under; while the music plays, the sand drifts to a new
+// figure every other chord (finer as the game gets tenser) and its brightness breathes with the
+// music's loudness. Between figures nothing is redrawn. With reduced motion it never moves.
 const RESONANCE_KEY='vch.resonance';
 const prefersStill=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
-function resonanceCount(level){return Math.round((level==='vivid'?8000:4000)*(matchMedia('(max-width: 800px)').matches?0.55:1))}
+const resonanceThemeMode=key=>modeForMoment(chordFor(key,0),0);
+let resonanceBeat={step:-1,at:0,key:'',glow:''};
 function syncResonance(){
-  const dom=boardDom;if(!dom)return;
-  let canvas=dom.fxLayer.querySelector('canvas.resonance-layer');
-  if(resonanceLevel==='off'){resonance?.stop();resonance=null;canvas?.remove();delete dom.board.dataset.resonance;return}
-  if(!canvas){canvas=document.createElement('canvas');canvas.className='resonance-layer';canvas.setAttribute('aria-hidden','true');dom.fxLayer.prepend(canvas)}
-  dom.board.dataset.resonance=resonanceLevel;
-  if(!resonance||resonance.canvas!==canvas||resonance.level!==resonanceLevel){resonance?.stop();resonance=new ResonancePlate(canvas,{count:resonanceCount(resonanceLevel),color:'#f1e6c9',size:1.15});resonance.level=resonanceLevel;resonance.ctx.globalCompositeOperation='lighter'}
-  if(prefersStill()||document.visibilityState!=='visible'){resonance.stop();resonance.resize();resonance.settle(90);return}
-  resonance.start();
+  let layer=document.getElementById('resonanceBg');
+  if(resonanceLevel==='off'){resonance?.stop();resonance=null;layer?.remove();return}
+  if(!layer){layer=document.createElement('div');layer.id='resonanceBg';layer.setAttribute('aria-hidden','true');layer.append(document.createElement('canvas'));document.body.prepend(layer)}
+  const canvas=layer.querySelector('canvas');
+  if(resonance?.canvas!==canvas){resonance?.stop();resonance=new SandBackdrop(canvas,{spread:matchMedia('(max-width: 800px)').matches?2.2:3,onReady:()=>{layer.dataset.ready='1'}});resonanceBeat={step:-1,at:0,key:'',glow:''}}
+  if(!resonance.mode){resonanceBeat.key=musicKeyNow();resonance.show(resonanceThemeMode(resonanceBeat.key),{flow:false})}
 }
-// Each move rings the plate: where it lands and what moved choose the figure (the music's chord
-// does when the score is playing). In Vanta Dark and Blackout only your own moves ring it, so
-// the sand never tells you about a move you can't see.
-function resonanceTick(){
-  syncResonance();if(!resonance)return;
-  const move=boardLastMove(),key=move?.to?`${move.from||''}${move.to}${move.san||''}:${moveRecords().length}:${reviewState.currentPly}`:'';
-  if(key===resonanceMoveKey)return;resonanceMoveKey=key;if(!key)return;
-  const fog=darkActive()||fogOnline()||(mode==='computer'&&computerRules==='blackout');
-  if(fog&&move.color!==myColor)return;
-  if(!vantaScore?.playing)resonance.setMode(modeForMove({to:move.to,piece:move.piece||'p',captured:move.captured,check:/[+#]/.test(move.san||'')}));
-  resonance.ring(move.captured?1.2:0.8);
-  if(!resonance.running){resonance.resize();resonance.settle(90)}
-}
-// Driven by the music while it plays: the pad's chord picks the figure, its loudness the energy.
+// The music drives both: the room's big plate follows every chord live; the background takes
+// every other chord (at most one figure per nine seconds) and rests on the theme's figure when
+// the music stops.
 (function resonanceMusicLoop(){
+  let ticks=0;
   setInterval(()=>{
-    const plates=[resonance,resonanceRoom?.plate].filter(Boolean);if(!plates.length||!vantaScore?.playing)return;
-    const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());
-    for(const plate of plates){plate.setMode(mode);plate.setTarget(0.25+energy*0.75)}
-    if(resonanceRoom)resonanceRoom.show?.(mode,energy);
+    ticks++;
+    const playing=!!vantaScore?.playing;
+    if(resonanceRoom&&playing){const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());resonanceRoom.plate.setMode(mode);resonanceRoom.plate.setTarget(0.25+energy*0.75);resonanceRoom.show?.(mode,energy)}
+    if(!resonance)return;
+    const still=prefersStill(),beat=resonanceBeat,glow=g=>{if(g!==beat.glow){beat.glow=g;resonance.canvas.parentElement?.style.setProperty('--resonance-glow',g)}};
+    if(playing&&!still){
+      const step=Math.floor(Math.max(0,vantaScore.eighth-1)/16),now=Date.now();
+      if(step!==beat.step){beat.step=step;if(now-beat.at>=9000){beat.at=now;resonance.show(modeForMoment(vantaScore.chord,vantaScore.tension))}}
+      glow((0.8+0.4*spectrumEnergy(vantaScore.readSpectrum())).toFixed(2));
+      return;
+    }
+    glow('1');
+    if(ticks%8)return;
+    const key=musicKeyNow();
+    if(key!==beat.key||beat.step!==-1){beat.key=key;beat.step=-1;beat.at=0;resonance.show(resonanceThemeMode(key),{flow:!still})}
   },120);
 })();
 function setResonanceLevel(level){
-  resonanceLevel=['subtle','vivid'].includes(level)?level:'off';
+  resonanceLevel=level==='off'?'off':'on';
   try{localStorage.setItem(RESONANCE_KEY,resonanceLevel)}catch{}
   const select=$('#resonanceSetting');if(select)select.value=resonanceLevel;
-  resonanceMoveKey='';syncResonance();if(resonance&&!resonance.running)resonance.settle(90);
+  syncResonance();
 }
 // The Resonance room: the music library seen as sand. Pick a theme, play its score, push the
 // tension and the storm, and watch the figures change.
@@ -5951,7 +5954,7 @@ function renderResonanceRoom(){
     <div class="resonance-stage"><canvas class="resonance-big" aria-label="Chladni figure drawn by the music" role="img"></canvas><div class="resonance-readout" aria-live="polite"><b>—</b><span>Press play</span></div></div>
     <div class="resonance-themes" role="group" aria-label="Themes">${RESONANCE_THEMES.map(([id,name,scale])=>`<button type="button" data-resonance-theme="${id}"><b>${name}</b><small>${scale}</small></button>`).join('')}</div>
     <div class="resonance-controls"><button type="button" class="gold resonance-play">Play</button><label>Tension <input type="range" class="resonance-tension" min="0" max="100" value="35"></label><label>Storm <input type="range" class="resonance-storm" min="0" max="100" value="0"></label></div>
-    <p class="computer-note">Turn on Resonance in the Theme Studio to see the sand on your board during games.</p>
+    <p class="computer-note">Turn on the Resonance background in the Theme Studio to keep the music's figures behind your games, dim and slow.</p>
   </article>`);
   const root=$('#dynamicView .resonance-room');if(!root)return;
   const canvas=root.querySelector('.resonance-big'),plate=new ResonancePlate(canvas,{count:matchMedia('(max-width: 800px)').matches?7000:14000,color:'#f1e6c9',size:1.2});
@@ -5976,10 +5979,10 @@ function renderResonanceRoom(){
   watch.observe($('#dynamicView'),{childList:true});
 }
 (function initResonance(){
-  try{resonanceLevel=localStorage.getItem(RESONANCE_KEY)||'off'}catch{}
-  if(!['subtle','vivid'].includes(resonanceLevel))resonanceLevel='off';
+  let saved=null;try{saved=localStorage.getItem(RESONANCE_KEY)}catch{}
+  resonanceLevel=['on','subtle','vivid'].includes(saved)?'on':'off'; // subtle and vivid: the board layer of an earlier build
   const select=$('#resonanceSetting');if(select){select.value=resonanceLevel;select.onchange=e=>setResonanceLevel(e.target.value)}
   $('#openResonance')?.addEventListener('click',()=>{menus.close('theme');setPrimaryScreen('game');renderResonanceRoom();showSidePanel()});
-  document.addEventListener('visibilitychange',()=>{if(resonanceLevel!=='off')syncResonance()});
-  if(resonanceLevel!=='off')render();
+  let resizeTimer=0;window.addEventListener('resize',()=>{if(!resonance)return;clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>resonance?.layout(),180)},{passive:true});
+  if(resonanceLevel==='on')syncResonance();
 })();

@@ -436,8 +436,8 @@ function deploy wait for the owner's approval for that deployment.
   game when it is over; history, data export and the explorer reveal nothing while it is on.
 - R13.2 A fair blind computer in Vanta Dark and Blackout (plays from the board it believes in).
 - R13.3 Engines: multi-variant Stockfish 10 for Crazyhouse; Lozza 2.5 (MIT) as a second mind,
-  measured against Stockfish (`scripts/calibrate-lozza.mjs`), for Fruitwood, Ironbark and the
-  campaign guards from the Mirror Court on. Bosses stay on Stockfish 19.
+  measured against Stockfish (`scripts/calibrate-lozza.mjs`), for the campaign guards from the
+  Mirror Court on. Bosses stay on Stockfish 19. No opponent screen names an engine.
 - R13.4 Review by mode: Crazyhouse with the variant engine (archived games replay drops);
   Vanta Dark and Blackout reviewed on the board the player could see ("Ambushed" moves);
   accuracy by the published Lichess formula.
@@ -446,15 +446,20 @@ function deploy wait for the owner's approval for that deployment.
   daily visits and every 10 solved.
 - R13.7 Profiles for everyone (portraits, name, About line); chat reactions and chess emoji;
   moderate filter with the mute ladder (warning, 2 h, 1 day, 1 week, 1 month, 6 months,
-  1 year, permanent; slurs count double). Open question to the owner: permanent instead of
-  the year?
+  1 year, then permanent; slurs count double). Owner confirmed 2026-10-13: permanent after
+  the year.
 - R13.8 Live streamers in Watch; rematches made by the server; the 50-move counter.
 - R13.9 Bigger board, centred Regal pieces, soft piece shadows lit per theme; languages switch
   both ways; 11 languages; hover descriptions for every section, tab and mode; drawn icons
   instead of unicode glyphs on the game controls.
-- R13.10 Resonance (PR #59): Chladni figures in sand on the board from the music and the
-  moves (Theme Studio: off / subtle / vivid), and the Resonance room, the music library drawn
-  in sand. Owner's idea, 2026-10-12.
+- R13.10 Resonance (PR #59): Chladni figures in sand behind the page (Theme Studio: Resonance
+  background, off / on): dim and still, the theme's figure; while the music plays the sand
+  drifts to a new figure every other chord, finer as the game gets tenser. Nothing on the
+  board (owner feedback 2026-10-13: the first version, on the board, was distracting). And
+  the Resonance room, the music library drawn in sand. Owner's idea, 2026-10-12.
+- R13.11 The computer ladder (owner feedback 2026-10-13): twelve levels named in chess terms,
+  Beginner (400) to Maximum, each describing how it plays; the lowest three make a
+  beginner's mistakes on purpose. Hover descriptions rewritten in chess language.
 
 ### Open from round 13 (next)
 - Redesign (owner concept 2026-10-12; direction in the "Vanta Chess Redesign Direction" design
