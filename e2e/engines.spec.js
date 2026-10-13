@@ -23,7 +23,9 @@ test('Lozza 2.5 plays a computer opponent in its own worker', async ({ page }) =
   await expect.poll(async () => page.locator('#moves .move-pair-row').count(), { timeout: 20000 }).toBeGreaterThan(0);
   await expect(page.locator('#turn')).toContainText('Black to move');
   expect(loaded).toContain('/lozza.worker.js');
-  expect(loaded).toContain('/engines/lozza-2.5.js');
+  // The engine itself loads inside that worker (newer Chromium doesn't report a nested worker's
+  // request to the page), so check that it is served.
+  expect(await page.evaluate(async () => (await fetch('/engines/lozza-2.5.js', { method: 'HEAD' })).status)).toBe(200);
   // And it answers a move.
   const tap = async sq => { const b = await page.locator(`[data-sq="${sq}"]`).boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2) };
   const from = await page.locator('.board-piece[data-square="e7"]').count() ? 'e7' : 'd7';
