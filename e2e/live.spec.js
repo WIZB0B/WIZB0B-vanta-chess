@@ -42,6 +42,17 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await expect(a.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
   await expect(a.locator('.board-piece[data-square="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
 
+  // A live game can't be swapped for a puzzle ("Finish your game first", round 13), so it ends
+  // here: A resigns, and the server's answer is the end of the game.
+  const resigned=a.waitForResponse(response=>{
+    if(!response.url().includes('/functions/v1/chess')||response.request().method()!=='POST')return false;
+    try{return response.request().postDataJSON()?.action==='resign'}catch{return false}
+  });
+  await a.locator('#resign').click();
+  await a.locator('.vch-dialog-action.primary').click();
+  expect((await resigned).ok()).toBe(true);
+  await a.waitForTimeout(600);
+
   const puzzleResponse=a.waitForResponse(async response=>{
     if(!response.url().includes('/functions/v1/chess')||response.request().method()!=='POST')return false;
     try{return response.request().postDataJSON()?.action==='puzzle_next'}catch{return false}
