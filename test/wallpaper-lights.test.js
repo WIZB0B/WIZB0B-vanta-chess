@@ -49,7 +49,7 @@ test('the room answers a move without giving away what fog hides', () => {
 });
 
 test('wired: a layer under the atmosphere, set by the Living atmosphere setting, and glass that clears', () => {
-  assert.match(main, /syncWallLights\(mood\);syncMusic\(mood\);syncOathLine\(\);/);
+  assert.match(main, /syncWallLights\(mood\);syncResonanceGame\(mood\);syncMusic\(mood\);syncOathLine\(\);/);
   assert.match(main, /if\(level==='off'\)return drop\(\);/);
   assert.match(main, /fog:darkActive\(\)\|\|fogOnline\(\)\|\|blackoutActive\(\)/);
   assert.match(main, /type="range" min="15" max="100" value="94"/);

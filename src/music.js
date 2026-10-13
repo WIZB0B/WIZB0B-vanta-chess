@@ -45,6 +45,8 @@ export class VantaScore {
     master.gain.value = this.volume * 0.6; master.connect(comp); comp.connect(ctx.destination);
     const stings = ctx.createGain(); stings.gain.value = this.volume * 0.6; stings.connect(comp); this.stings = stings; // the end-of-game sting outlives the fade
     const pad = ctx.createBiquadFilter(); pad.type = 'lowpass'; pad.frequency.value = 700; pad.Q.value = 0.7; pad.connect(master);
+    // A listening tap for Resonance (src/resonance.js): how loud the score is right now.
+    if (ctx.createAnalyser) { const analyser = ctx.createAnalyser(); analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.7; comp.connect(analyser); this.analyser = analyser; this.spectrum = new Uint8Array(analyser.frequencyBinCount); }
     this.ctx = ctx; this.master = master; this.padFilter = pad;
     return ctx;
   }
@@ -69,6 +71,9 @@ export class VantaScore {
   setStorm(s) { this.storm = Math.max(0, Math.min(1, Number(s) || 0)); }
   setKey(id) { this.key = MUSIC_KEYS[id] ? id : 'vanta'; }
   get bpm() { return 84 + Math.round(this.storm * 18); }
+  // The chord the pad is holding now (MIDI notes), and the score's byte spectrum (or null).
+  get chord() { return chordFor(this.key, Math.floor(Math.max(0, this.eighth - 1) / 16)); }
+  readSpectrum() { if (!this.analyser || !this.playing) return null; this.analyser.getByteFrequencyData(this.spectrum); return this.spectrum; }
   // Lookahead scheduler: plays every eighth note that falls in the next 150ms.
   schedule() {
     if (!this.playing || !this.ctx) return;

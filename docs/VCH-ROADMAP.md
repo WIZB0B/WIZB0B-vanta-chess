@@ -99,3 +99,15 @@ the server region.
 - Each one is checked on a real board before shipping, then delivered as optimized
   WebP/sprites.
 - Splash screen and home page hero art get redesigned in the same pass.
+
+## Phase R: Redesign and launch polish (owner concept 2026-10-12)
+- Home page and brand: "Vanta Chess" / VCH, the direction in the design canvas, then
+  Higgsfield art for realms and the trailer once the art direction is agreed.
+- Full-page sections and search; the puzzle section redesign; mode marks with hover
+  descriptions everywhere (hover descriptions done in round 13).
+- Resonance (cymatics) as VCH's signature visual: a living background behind the page that
+  answers every move, the pointer and the music (never on the board), the music library, and
+  the home page hero (PR #59).
+- Living Armies view and the trailer.
+- Security items before go-live (backlog R13, open list).
+
