@@ -37,7 +37,7 @@ export async function releaseBotMove(page,uci,n){
 export async function startComputerGame(page){
   await page.goto('/');
   await page.locator('[data-mode="computer"]').click();
-  await page.locator('[data-bot-slug="gambit"]').click();
+  await page.locator('[data-bot-slug="tournament"]').click();
   await page.locator('#computerStart').click();
   await expect(page.locator('.board-piece')).toHaveCount(32);
 }

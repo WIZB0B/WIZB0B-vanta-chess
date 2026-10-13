@@ -10,10 +10,12 @@ const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'
 test('online games use one Realtime channel and a 5s heartbeat fallback',()=>{
   assert.equal(pkg.dependencies['@supabase/supabase-js'],'2.109.0');
   assert.match(main,/createClient\(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY/);
-  assert.match(main,/\.channel\(\`game:\$\{gameId\}\`,\{config:\{broadcast:\{self:true\}\}\}\)/);
+  // The topic is private to the two players: the server names it (game_channel, round 13).
+  assert.match(main,/const out=await api\.request\('game_channel',\{gameId\}\)/);
+  assert.match(main,/\.channel\(topic,\{config:\{broadcast:\{self:true\}\}\}\)/);
   assert.match(main,/\.on\('broadcast',\{event:'state'\},message=>\{handleRealtimeMessage\(message\)\}\)/);
   assert.match(main,/\.on\('broadcast',\{event:'moved'\},message=>\{handleRealtimeMessage\(message\)\}\)/);
-  assert.match(main,/realtimeChannel\.send\(\{type:'broadcast',event:'moved',payload:\{gameId,version:Number\(version\),from,to,promotion:promotion\|\|null,fenBefore\}\}\)/);
+  assert.match(main,/realtimeChannel\.send\(\{type:'broadcast',event:'moved',payload:\{gameId,version:Number\(version\),from,to,promotion:promotion\|\|null,fenBefore,\.\.\.\(early\?\{provisional:true\}:\{\}\)\}\}\)/);
   assert.match(main,/const authoritative=await api\.heartbeat\(requestedGameId\)/);
   assert.match(main,/if\(authoritativeVersion>serverVersion\)\{applyServerState\(authoritative\);playTone\(\)\}/);
   assert.doesNotMatch(main,/\.on\('broadcast',\{event:'state'\},message=>\{[\s\S]{0,400}applyServerState\(/);

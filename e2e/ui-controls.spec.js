@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-async function enterGameOnFirstVisit(page){await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'))}
+async function enterGameOnFirstVisit(page){await page.addInitScript(()=>{localStorage.setItem('vch.intro-seen','1');localStorage.setItem('vanta.flagPrompt','1')})}
 
 async function mockProfile(page){
   await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', async route=>{
@@ -11,6 +11,7 @@ async function mockProfile(page){
 }
 
 test('primary menus and study controls are not dead buttons',async({page})=>{
+  test.skip(test.info().project.name==='mobile','Desktop layout; phones are covered by e2e/mobile-shell.spec.js');
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await expect(page.locator('.square')).toHaveCount(64);
 
@@ -22,19 +23,21 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
   await expect(page.locator('#studyCount')).toContainText('1 /');
 
   await page.locator('[data-nav="famous"]').click();
-  await expect(page.locator('[data-famous="0"]')).toBeVisible();
-  await page.locator('[data-famous="0"]').click();
+  await expect(page.locator('[data-famous-replay="opera-game"]')).toBeVisible();
+  await page.locator('[data-famous-replay="opera-game"]').click();
   await expect(page.locator('.study-board .study-square')).toHaveCount(64);
   await page.locator('#studyLast').click();
   await expect(page.locator('#studyCount')).not.toContainText('0 /');
 
   await page.locator('[data-nav="learn"]').click();
-  await page.locator('[data-lesson="0"]').click();
-  await expect(page.locator('.lesson-detail')).toContainText('Training focus');
+  await page.locator('[data-course="tactics"]').click();
+  await page.locator('[data-lesson="tactics/forks"]').click();
+  await expect(page.locator('.lesson-player h4')).toHaveText('Forks');
+  await page.locator('[data-nav="learn"]').click();
   await expect(page.locator('.start-puzzle')).toBeVisible();
 
   await page.locator('[data-nav="review"]').click();
-  await expect(page.locator('#dynamicView')).toContainText('Post-Game Review');
+  await expect(page.locator('#dynamicView')).toContainText('My games');
 
   await page.locator('#searchBtn').click();
   await page.locator('#searchInput').fill('Ruy Lopez');
@@ -56,7 +59,11 @@ test('left panel switches between three distinct play-mode views',async({page})=
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  await expect(page.locator('#botGrid .bot-card')).toHaveCount(6);
+  // Twelve levels from Beginner to Maximum (src/computer-levels.js); no engine names on screen.
+  await expect(page.locator('#botGrid .bot-card')).toHaveCount(12);
+  await expect(page.locator('#botGrid .bot-card').first()).toContainText('Beginner');
+  await expect(page.locator('#botGrid .bot-card').last()).toContainText('Maximum');
+  await expect(page.locator('#botGrid')).not.toContainText(/Stockfish|Lozza/);
   await expect(page.locator('[data-computer-side]')).toHaveCount(3);
   await expect(page.locator('#computerStart')).toBeVisible();
 
@@ -65,6 +72,7 @@ test('left panel switches between three distinct play-mode views',async({page})=
 });
 
 test('board controls, theme studio, and local Stockfish computer game work',async({page})=>{
+  test.skip(test.info().project.name==='mobile','Desktop layout; phones are covered by e2e/mobile-shell.spec.js');
   test.setTimeout(45000);
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
 
@@ -86,7 +94,7 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  await page.locator('[data-bot-slug="gambit"]').click();
+  await page.locator('[data-bot-slug="tournament"]').click();
   await page.locator('#computerStart').click();
   await page.locator('.board-piece[data-square="e2"]').dragTo(page.locator('[data-sq="e4"]'));
   await expect(page.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible();
@@ -115,19 +123,26 @@ test('preview CSP runs Stockfish WebAssembly and Black-side clocks follow player
   await expect(page.locator('.player.bottom')).toHaveAttribute('data-color','b');
   await expect(page.locator('#topClock')).toHaveAttribute('data-color','w');
   await expect(page.locator('#bottomClock')).toHaveAttribute('data-color','b');
-  await expect(page.locator('#bottomClock')).toHaveClass(/running/);
+  // Round 7: each side's first move is untimed, so neither clock runs yet.
+  await expect(page.locator('#bottomClock')).not.toHaveClass(/running/);
   await expect(page.locator('#topClock')).not.toHaveClass(/running/);
-
-  const topBefore=await page.locator('#topClock').textContent();
+  const bottomStill=await page.locator('#bottomClock').textContent();
+  await page.waitForTimeout(1300);
+  expect(await page.locator('#bottomClock').textContent()).toBe(bottomStill);
+  // After both first moves the clocks run: once the engine replies, Black's clock ticks.
+  const tap=async sq=>{const b=await page.locator(`[data-sq="${sq}"]`).boundingBox();if(test.info().project.name==='mobile')await page.touchscreen.tap(b.x+b.width/2,b.y+b.height/2);else await page.mouse.click(b.x+b.width/2,b.y+b.height/2)};
+  const piece=await page.locator('.board-piece[data-square="e7"]').count()?'e7':'d7';
+  await tap(piece);await tap(piece[0]+'5');
+  await expect(page.locator('#turn')).toContainText('Black to move',{timeout:15000});
+  await expect(page.locator('#bottomClock')).toHaveClass(/running/,{timeout:15000});
+  await expect(page.locator('#topClock')).not.toHaveClass(/running/);
   const bottomBefore=await page.locator('#bottomClock').textContent();
   await page.waitForTimeout(1300);
-  const topAfter=await page.locator('#topClock').textContent();
-  const bottomAfter=await page.locator('#bottomClock').textContent();
-  expect(topAfter).toBe(topBefore);
-  expect(bottomAfter).not.toBe(bottomBefore);
+  expect(await page.locator('#bottomClock').textContent()).not.toBe(bottomBefore);
 });
 
 test('right-panel feature cards open their real destinations',async({page})=>{
+  test.skip(test.info().project.name==='mobile','Desktop layout; phones are covered by e2e/mobile-shell.spec.js');
   await mockProfile(page);await enterGameOnFirstVisit(page);await page.goto('/');
   await page.locator('.feature-card.opening').click();await expect(page.locator('#dynamicView')).toContainText('Opening Explorer');
   await page.locator('[data-nav="play"]').click();
@@ -135,7 +150,7 @@ test('right-panel feature cards open their real destinations',async({page})=>{
   await page.locator('[data-nav="play"]').click();
   await page.locator('.feature-card.practice').click();await expect(page.locator('#dynamicView')).toContainText('Practice & Learn');
   await page.locator('[data-nav="play"]').click();
-  await page.locator('.feature-card.review').click();await expect(page.locator('#dynamicView')).toContainText('Post-Game Review');
+  await page.locator('.feature-card.review').click();await expect(page.locator('#dynamicView')).toContainText('My games');
 });
 
 

@@ -29,6 +29,6 @@ test('Computer view exposes bot cards, side choice, and a start action',()=>{
   assert.match(main,/id="botGrid"/);
   assert.match(main,/id="computerStart"/);
   for(const side of ['w','b','random'])assert.match(main,new RegExp(`data-computer-side="${side}"`));
-  assert.match(main,/function startComputerGame\(\)/);
+  assert.match(main,/function startComputerGame\(opts=\{\}\)/);
   assert.match(main,/if\(game\.turn\(\)!==computerSide\)setTimeout\(engineMove,280\)/);
 });

@@ -18,6 +18,6 @@ test('visible clocks are position-neutral and mapped to each player color',()=>{
 
 test('running clock highlight follows the active chess color',()=>{
   assert.match(main,/element\.classList\.toggle\('running',active===color\)/);
-  assert.match(main,/return computerStarted\?game\.turn\(\):null/);
+  assert.match(main,/return computerStarted&&localClockState\?\.running\?game\.turn\(\):null/,'computer clocks run after both first moves');
   assert.match(css,/\.player time\.running\{/);
 });

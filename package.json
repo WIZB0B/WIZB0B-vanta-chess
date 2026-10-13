@@ -12,16 +12,20 @@
     "security": "node scripts/security-check.mjs",
     "e2e": "playwright test",
     "prepare:stockfish": "node scripts/prepare-stockfish.mjs",
+    "prepare:variant-engine": "node scripts/prepare-variant-engine.mjs",
+    "prepare:lozza": "node scripts/prepare-lozza.mjs",
     "predev": "npm run prepare:runtime",
     "prebuild": "npm run prepare:runtime",
     "presecurity": "npm run prepare:runtime",
     "pretest": "npm run prepare:runtime",
-    "prepare:runtime": "npm run prepare:stockfish"
+    "prepare:runtime": "npm run prepare:stockfish && npm run prepare:variant-engine && npm run prepare:lozza"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.109.0",
     "chess.js": "^1.4.0",
-    "stockfish": "19.0.0"
+    "flag-icons": "^7.5.0",
+    "stockfish": "19.0.0",
+    "stockfish.js": "10.0.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

@@ -22,3 +22,7 @@ port = 54323
 enabled = true
 site_url = "http://localhost:5173"
 additional_redirect_urls = ["https://vanta-chess-play.netlify.app"]
+
+# The chess function checks sign-ins itself (guests play too), so the gateway JWT check is off.
+[functions.chess]
+verify_jwt = false

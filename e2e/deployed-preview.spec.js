@@ -23,6 +23,7 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
   const runtimeAssets=[
     '/manifest.webmanifest','/sw.js','/icon.svg','/icon-192.png','/icon-512.png','/assets/vch/brand/vch-metal.svg','/assets/vch/brand/vch-logo-light.svg','/assets/vch/brand/brand-atmosphere.png','/stockfish.worker.js',
     '/engines/stockfish-19-lite-single.js','/engines/stockfish-19-lite-single.wasm','/engines/Copying.txt',
+    '/variant.worker.js','/engines/stockfish-mv-10.js','/engines/stockfish-mv-10.wasm',
     '/assets/vch/pieces/wk.webp','/assets/vch/pieces/bq.webp','/assets/vch/ui/hero-knight.webp',
     '/assets/vch/ui/opening-card.webp','/assets/vch/ui/famous-card.webp','/assets/vch/ui/review-card.webp',
     '/assets/vch/ui/practice-card.webp','/assets/vch/ui/live-banner.webp','/assets/vch/wallpapers/wallpaper-emerald.webp'
@@ -31,6 +32,8 @@ test('Netlify preview serves hardened VCH runtime and local assets', async ({ pa
     const r=await request.get(asset);
     expect(r.ok(),asset+' should be served').toBeTruthy();
     expect(Number(r.headers()['content-length']||1)).toBeGreaterThan(0);
+    // A missing file would come back as index.html (SPA fallback), so check the engines' types.
+    if(asset.endsWith('.wasm'))expect(r.headers()['content-type']||'',asset).toContain('application/wasm');
   }
   for(const name of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']){
     const legacy=await request.get('/assets/vch/pieces/'+name+'.png');

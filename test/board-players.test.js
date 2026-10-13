@@ -18,8 +18,8 @@ test('player bars expose avatar, flag, rating, live state, clock, and online-onl
   assert.match(main,/setPresence\(\$\('#topPresence'\),currentBot\?'ENGINE'/);
 });
 
-test('player flags use a real SVG and disappear when no supported country is set',()=>{
-  assert.match(main,/\/assets\/vch\/flags\/us\.svg/);
+test('player flags use a real SVG for any country and disappear when no supported country is set',()=>{
+  assert.match(main,/const flagSrc=normalized\?FLAG_URL\[normalized\]\|\|'':'';/);
   assert.match(main,/element\.classList\.toggle\('hidden',!flagSrc\)/);
   assert.doesNotMatch(main,/class="player-flag is-placeholder"/);
   assert.doesNotMatch(main,/element\.textContent=normalized\|\|'--'/);
@@ -34,6 +34,9 @@ test('board supports the persisted piece sets with baked-in sizing',()=>{
   assert.ok(main.includes("document.documentElement.dataset.pieceStyle='vanta';"));
   assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(migratePieceStyle\(savedTheme\)\)/);
   assert.ok(main.includes("savedTheme.pieceTint=0;"));
+  // The tint chosen since the sprite sets is restored (sweep fix), clamped to the slider's range.
+  assert.ok(main.includes("savedTheme.spriteTint=clamp(savedTheme.spriteTint,0,.7,0);"));
+  assert.ok(main.includes("$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);"));
   assert.match(main,/savedTheme\.pieceStyle=applyPieceStyle\(e\.target\.value\)/);
   assert.ok(css.includes(":root[data-piece-style=\"heritage\"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}"));
   assert.ok(css.includes('--piece-tint:0'));

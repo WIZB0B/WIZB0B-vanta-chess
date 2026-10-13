@@ -1,0 +1,71 @@
+/* Right-to-left layout (Arabic). The page mirrors; the board, its coordinates, the clocks, the
+   move list and move notation stay left-to-right (a1 bottom-left for White, files a→h left to
+   right). Loaded after style.css, and every rule here applies only under [dir="rtl"]. */
+
+/* Arabic letters join up, and any letter-spacing breaks the joins (the small capitals labels
+   came out as separate letters), so text sets none. Clocks, room and battle codes and the VCH
+   wordmark keep their spacing. */
+[dir="rtl"] body :not(time,.brand,.brand *,.wordmark,.room strong,.m-room b,.battle-code b,.battle-join input){letter-spacing:0!important}
+
+/* Left-panel hero: the knight art and its fade move to the left edge, the knight faces the
+   text, so the right-aligned title no longer sits on top of the art. */
+[dir="rtl"] .lpanel .hero-art{inset:0 auto 0 0!important}
+[dir="rtl"] .lpanel .hero-art img{transform:scaleX(-1)}
+[dir="rtl"] .lpanel .hero:after{
+  background:
+    linear-gradient(270deg,rgba(5,14,13,.99) 0 43%,rgba(5,14,13,.73) 61%,rgba(5,14,13,.10) 100%),
+    linear-gradient(0deg,rgba(5,14,13,.96),transparent 52%);
+}
+
+/* "Live Game" card: art on the left, text on the right over the dark side of the fade. */
+[dir="rtl"] .live-card{background:linear-gradient(270deg,rgba(9,21,21,.98) 0%,rgba(9,21,21,.86) 56%,rgba(9,21,21,.18) 100%)!important}
+[dir="rtl"] .live-art{right:auto;left:0}
+[dir="rtl"] .live-art img{transform:scaleX(-1)}
+[dir="rtl"] .live-actions{right:auto;left:9px}
+
+/* Feature cards (Opening Explorer, Famous Games…): icon and text on the right, arrow on the
+   left pointing forward, and the text uses the card's width instead of a narrow column. */
+[dir="rtl"] .feature-card{padding:60px 14px 12px 38px!important}
+[dir="rtl"] .feature-card .feature-icon-tile{left:auto;right:12px}
+[dir="rtl"] .feature-card .feature-arrow{right:auto;left:11px}
+[dir="rtl"] .feature-card .feature-arrow svg{transform:scaleX(-1)}
+[dir="rtl"] .feature-card .asset img{transform:scaleX(-1)}
+[dir="rtl"] .feature-card:after{
+  background:
+    linear-gradient(270deg,rgba(5,14,14,.96) 0 38%,rgba(5,14,14,.70) 61%,rgba(5,14,14,.30) 100%),
+    linear-gradient(0deg,rgba(5,14,14,.92),transparent 68%)!important;
+}
+
+/* Text that style.css aligns to the left reads from the right. */
+[dir="rtl"] :is(.feature-card,.search-dialog #searchResults button,.user,.game-more-menu button,.profile-menu-items button,
+  .m-sheet-items button,.watch-card,.archive-row,.story-chapters button,.moment,.theme-row,.archive-trainer,.trainer-row,
+  .archive-mistakes,.learn-mistakes,.pp-table td,.pp-table th,.friend-name,.mod-case,.arena-create,.explorer-open,.ex-row,
+  .inbox-row,.ex-engine .ex-eval,.lobby-list button,.rep-open,.rep-view,.simul-open,.eg-card,.plan-open,.computer-extras button,
+  .menu-moment){text-align:right}
+
+/* Header menus (account, notifications) open under their buttons at the left edge, and the
+   "more game actions" menu opens inwards from the left end of the tools row. */
+[dir="rtl"] .header-menu{right:auto;left:0}
+[dir="rtl"] .game-more-menu{right:auto;left:0}
+
+/* Move list header and the icon arrows that step through moves follow the move list, which
+   stays left-to-right: first |<  <  >  >| last. */
+[dir="rtl"] .moves-head,[dir="rtl"] .move-nav,[dir="rtl"] .m-movebar{direction:ltr}
+[dir="rtl"] .moves-head span{text-align:left}
+
+/* The empty move list's sentence ("Game ready — make a move.") is text, not notation: it reads
+   right to left even though the list around it is left-to-right. */
+[dir="rtl"] .moves>span{display:block;direction:rtl;text-align:right}
+[dir="rtl"] .m-moves-empty{direction:rtl}
+
+/* What style.css pushes to the far end with margin-left:auto (close buttons, the engine depth,
+   your own chat messages, header actions) goes to the far end on the left. */
+[dir="rtl"] :is(.signal,.analysis header small,.chat #messages p.mine,.header-actions,.chat-drawer header button,
+  .chat-drawer #messages p.mine,.vch-dialog-close,.menu-close,.standings-slot small,.twin-line strong),
+[dir="rtl"] body.m-app .topbar .header-actions{margin-left:0;margin-right:auto}
+
+/* Moves are typed in left-to-right notation (Nf3, O-O…). */
+[dir="rtl"] #typeMove{direction:ltr}
+
+/* Back and forward arrows point the reading way. */
+[dir="rtl"] #mBack svg,[dir="rtl"] .join-now svg{transform:scaleX(-1)}
