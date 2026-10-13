@@ -6,9 +6,10 @@ const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/style.css',import.meta.url),'utf8');
 
 test('Theme Studio glass opacity controls the visible panel and header gradients',()=>{
-  assert.match(main,/Glass opacity <input data-theme="--glass" type="range" min="35" max="100"/);
-  assert.match(main,/savedTheme\['--glass'\]=String\(clamp\(savedTheme\['--glass'\],\.35,1,\.94\)\)/);
-  assert.match(main,/input\.dataset\.theme==='--glass'\?String\(clamp\(Number\(input\.value\)\/100,\.35,1,\.94\)\)/);
+  // 15% to 100% (owner, 2026-10-13: the glass should let the wallpaper through).
+  assert.match(main,/Glass opacity <input data-theme="--glass" type="range" min="15" max="100"/);
+  assert.match(main,/savedTheme\['--glass'\]=String\(clamp\(savedTheme\['--glass'\],\.15,1,\.94\)\)/);
+  assert.match(main,/input\.dataset\.theme==='--glass'\?String\(clamp\(Number\(input\.value\)\/100,\.15,1,\.94\)\)/);
   const liveGlass=css.slice(css.lastIndexOf('/* Theme Studio: live glass opacity'));
   assert.match(liveGlass,/\.panel,\.game,\.topbar\{/);
   assert.match(liveGlass,/rgb\(8 19 21 \/ var\(--glass\)\)/);

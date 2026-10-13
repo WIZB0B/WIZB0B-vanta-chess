@@ -63,6 +63,7 @@ import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } fr
 import { addGames, armyList, identitiesAfter, loadVeterans, rankOf, saveVeterans, totalsMap } from './veterans.js';
 import { dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from './oaths.js';
 import { atmosphereFor, tensionFor } from './atmosphere.js';
+import { WallLights, lightReaction, placeLights, wallpaperKey } from './wallpaper-lights.js';
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
@@ -389,7 +390,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -5019,8 +5020,65 @@ function syncAtmosphere(){
   if(el.dataset.mood!==mood.mood)el.dataset.mood=mood.mood;
   const realm=atmosphereRealm||'';if((el.dataset.realm||'')!==realm){if(realm)el.dataset.realm=realm;else delete el.dataset.realm}
   const strength=String(mood.strength);if(el.style.getPropertyValue('--atmo')!==strength)el.style.setProperty('--atmo',strength);
-  syncMusic(mood);syncOathLine();
+  syncWallLights(mood);syncMusic(mood);syncOathLine();
 }
+// Living wallpaper (src/wallpaper-lights.js): a soft glow over every candle and lamp in the
+// wallpaper, flickering on its own. With the living atmosphere on Full, the room answers the
+// game: a breath on each move, the flames gutter on a capture and flare on a check, tremble in
+// time trouble and rise or fall with the game; the pointer stirs the flames it passes.
+let wallLights={el:null,glow:null,moveKey:null,stirAt:0};
+function wallLightsLayer(){
+  const level=r12Prefs().atmosphere,body=document.body;
+  let el=document.getElementById('wallLights');
+  const drop=()=>{wallLights.glow?.stop();wallLights.glow=null;el?.remove();wallLights.el=null;return null};
+  if(level==='off')return drop();
+  const cs=getComputedStyle(body),key=wallpaperKey(cs.backgroundImage);
+  if(!key)return drop();
+  const scroll=!/fixed/.test(cs.backgroundAttachment),w=scroll?body.clientWidth:innerWidth,h=scroll?Math.max(body.scrollHeight,innerHeight):innerHeight;
+  if(!el){el=document.createElement('canvas');el.id='wallLights';el.setAttribute('aria-hidden','true');const atmo=document.getElementById('atmosphere');if(atmo)body.insertBefore(el,atmo);else body.prepend(el)}
+  if(!wallLights.glow||wallLights.glow.canvas!==el)wallLights.glow=new WallLights(el);
+  if(el.dataset.level!==level){el.dataset.level=level;wallLights.glow.fps=level==='full'?15:8}
+  el.classList.toggle('scroll',scroll);
+  const size=scroll?[`${w}px`,`${h}px`]:['',''];if(el.style.width!==size[0]){el.style.width=size[0];el.style.height=size[1]}
+  const sig=`${key}:${w}x${h}`;
+  if(el.dataset.sig!==sig){el.dataset.sig=sig;const lights=placeLights(key,w,h);wallLights.glow.setLights(lights,w,h);el.dataset.lights=String(lights.length)}
+  const still=matchMedia('(prefers-reduced-motion: reduce)').matches||document.visibilityState!=='visible';
+  if(still){if(wallLights.glow.running||!wallLights.glow.still)wallLights.glow.stop({still:true})}else wallLights.glow.start();
+  wallLights.el=el;return el;
+}
+function syncWallLights(mood){
+  const el=wallLightsLayer();if(!el)return;
+  if(el.dataset.mood!==mood.mood){el.dataset.mood=mood.mood;wallLights.glow.speed={check:.45,storm:.6}[mood.mood]||1}
+  const move=boardLastMove(),color=premovePlayerColor(),key=move?.to?`${move.from||''}${move.to}${move.san||''}:${moveRecords().length}`:'';
+  if(key===wallLights.moveKey)return;
+  const first=wallLights.moveKey===null;wallLights.moveKey=key;
+  if(first||!key)return;
+  // The flames hold still while a piece travels and any answer to the last move stops, so the
+  // board gets every frame; in a live game the room answers as the piece lands.
+  el.getAnimations?.().forEach(a=>a.cancel());
+  wallLights.glow.hold(340);clearTimeout(wallLights.holdTimer);
+  const react=el.dataset.level==='full'&&liveGameOn()&&color&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const san=String(move.san||''),kind=react?lightReaction({captured:!!move.captured||san.includes('x'),check:/[+#]/.test(san),mine:game.turn()!==color,fog:darkActive()||fogOnline()||blackoutActive()}):null;
+  if(!kind)return;
+  wallLights.holdTimer=setTimeout(()=>{
+    const base=Number(getComputedStyle(el).opacity)||.9;
+    // Opacity only: the compositor plays it on the one layer.
+    const frames={breath:[{opacity:base},{opacity:Math.min(1,base*1.3),offset:.3},{opacity:base}],gutter:[{opacity:base},{opacity:base*.3,offset:.22},{opacity:base*.55,offset:.5},{opacity:base}],flare:[{opacity:base},{opacity:1,offset:.12},{opacity:base*.7,offset:.3},{opacity:1,offset:.5},{opacity:base}]}[kind];
+    el.getAnimations?.().forEach(a=>a.cancel());el.animate?.(frames,{duration:kind==='breath'?700:kind==='gutter'?1700:1100,easing:'ease-out'});
+    el.dataset.react=kind; // for tests and styles
+  },340);
+}
+// The pointer stirs the flames it passes, like air moving through the room (only where the
+// room shows, never during a move).
+addEventListener('pointermove',e=>{
+  const el=wallLights.el,glow=wallLights.glow;if(!el||!glow||el.dataset.level!=='full'||e.pointerType!=='mouse'||e.buttons||glow.held||!glow.running)return;
+  if(e.target?.closest?.('.panel,.game,.topbar,.board,dialog,.main-menu'))return;
+  const now=performance.now();if(now-wallLights.stirAt<90)return;wallLights.stirAt=now;
+  const scroll=el.classList.contains('scroll'),n=glow.stir(scroll?e.pageX:e.clientX,scroll?e.pageY:e.clientY);
+  if(n)el.dataset.stirred=String((Number(el.dataset.stirred)||0)+n);
+},{passive:true});
+document.addEventListener('visibilitychange',()=>{if(wallLights.el)queueAtmosphere()});
+addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.resizeTimer=setTimeout(queueAtmosphere,200)},{passive:true});
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
 function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
 function syncMusic(mood){
@@ -5827,7 +5885,7 @@ const normalizeMotionCss=value=>{
 savedTheme.pieceTint=0; // the pre-sprite tint (default .18) muddied the sprite sets; it no longer applies
 // The tint chosen since the sprite sets (0 by default) is kept across visits.
 savedTheme.spriteTint=clamp(savedTheme.spriteTint,0,.7,0);
-savedTheme['--glass']=String(clamp(savedTheme['--glass'],.35,1,.94));
+savedTheme['--glass']=String(clamp(savedTheme['--glass'],.15,1,.94));
 savedTheme['--motion']=normalizeMotionCss(savedTheme['--motion']);
 // Backdrop blur only where the glass is see-through. At the near-opaque default the blurred
 // wallpaper contributes almost nothing to the image, but the compositor redoes every panel's
@@ -5845,7 +5903,7 @@ const glassControl=$('[data-theme="--glass"]'),motionControl=$('[data-theme="--m
 if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'])*100));
 if(motionControl)motionControl.value=String(Math.round(parseFloat(savedTheme['--motion'])/4));
 $$('[data-theme]').forEach(input=>input.oninput=()=>{
-  const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.35,1,.94)):motionCssValue(input.value);
+  const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.15,1,.94)):motionCssValue(input.value);
   document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--motion')motionScaleCache=null;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 });
 savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
@@ -5853,7 +5911,7 @@ localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#expressionsSetting').value=expressionSetting;
 $('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
-$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
+$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
 initRoundTwelve();

@@ -3434,3 +3434,27 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .tools #sound[data-off="1"] .sound-wave{opacity:.2}
 .view-title .back-view{display:inline-grid;place-items:center;color:inherit}
 @media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
+
+/* ===== LIVING WALLPAPER: the candles and lamps in the wallpaper flicker and answer the game =====
+   (src/wallpaper-lights.js; main.js syncWallLights). One canvas just above the wallpaper and
+   under the living atmosphere's glows, drawn at half resolution about 15 times a second and
+   held still while a piece moves. Reactions animate only its opacity. */
+#wallLights{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;opacity:var(--wl-o,.9);transition:opacity 1.6s ease}
+#wallLights.scroll{position:absolute;top:0;left:0;right:auto;bottom:auto}
+/* The room follows the living atmosphere's mood (src/atmosphere.js). */
+#wallLights[data-mood="lead"],#wallLights[data-mood="dawn"]{--wl-o:1}
+#wallLights[data-mood="fall"],#wallLights[data-mood="dusk"]{--wl-o:.55}
+#wallLights[data-level="subtle"]{--wl-o:.6}
+@media (prefers-reduced-motion:reduce){#wallLights{transition:none}}
+
+/* ===== GLASS THAT IS GLASS (owner, 2026-10-13: "I can't even see the wallpaper") =====
+   Theme Studio's Glass opacity runs from 15% to 100%. Below 90% the panels let the room
+   through: the blur thins as the glass clears (3px at 15%, about 15px near 90%), and the
+   cards inside the panels clear with it instead of staying solid. Text keeps a faint shadow so
+   it reads over the room. At the default (94%) nothing changes: no blur, no cost. */
+:root{--glass-blur:calc(max(0px, (var(--glass) - .15) * 16px) + 3px);--glass-inner:calc(var(--glass) * .5)}
+:root[data-glass="clear"] .panel,:root[data-glass="clear"] .game,:root[data-glass="clear"] .topbar{
+  backdrop-filter:blur(var(--glass-blur)) saturate(125%)!important;-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(125%)!important}
+:root[data-glass="clear"] :is(.analysis,#moves,.private-card,.modes,.tabs,.variant-field,.settings label,.oath-row,.oath-row select,.join input,.tools button,.computer-view .bot-card,.computer-side button,.computer-variant button,.room-created,.match-view button:not(.gold),.rated-switch button){
+  background:rgb(6 15 16 / var(--glass-inner))!important}
+:root[data-glass="clear"] :is(.panel,.game,.topbar) :is(h1,h2,h3,h4,p,b,strong,small,label,span,time){text-shadow:0 1px 3px rgb(0 0 0 / .6)}
