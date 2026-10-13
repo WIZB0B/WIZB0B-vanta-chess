@@ -81,11 +81,12 @@ test('the score has a listening tap and reports its chord', () => {
   assert.deepEqual(score.chord, chordFor('vanta', 0));
 });
 
-// A canvas, a window and animation frames that the test drives by hand.
+// A canvas (and a glow canvas), a window and animation frames that the test drives by hand.
 function fakeStage({ width = 1280, height = 720, dpr = 2 } = {}) {
-  const puts = [];
-  const ctx = { createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData: img => puts.push(img) };
-  const canvas = { width: 0, height: 0, getContext: () => ctx };
+  const puts = [], glows = [];
+  const surface = list => ({ createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData: img => list.push(img) });
+  const ctx = surface(puts), gctx = surface(glows);
+  const canvas = { width: 0, height: 0, getContext: () => ctx }, glow = { width: 0, height: 0, getContext: () => gctx };
   let now = 0, frames = [];
   const view = {
     innerWidth: width, innerHeight: height, devicePixelRatio: dpr,
@@ -94,7 +95,19 @@ function fakeStage({ width = 1280, height = 720, dpr = 2 } = {}) {
     cancelAnimationFrame: () => { frames = []; },
   };
   const run = (ms = 16) => { now += ms; const due = frames; frames = []; for (const f of due) f(now); return due.length; };
-  return { canvas, view, puts, run, pending: () => frames.length, advance: ms => { now += ms; } };
+  // Runs frames until nothing is scheduled (or the guard runs out); returns how many were drawn.
+  const settle = (guard = 2000) => { const before = puts.length; for (let k = 0; k < guard && frames.length; k++) run(16); return puts.length - before; };
+  return { canvas, glow, view, puts, glows, run, settle, pending: () => frames.length, advance: ms => { now += ms; } };
+}
+const sameImage = (a, b) => a.data.length === b.data.length && a.data.every((v, i) => v === b.data[i]);
+const lightOf = img => { let s = 0; for (let i = 3; i < img.data.length; i += 4) s += img.data[i]; return s; };
+// A figure at rest, with its image (copied: the backdrop reuses its pixel buffer).
+function restingBackdrop(options = {}) {
+  const stage = fakeStage(options.stage);
+  const b = new SandBackdrop(stage.canvas, { glow: stage.glow, random: seeded(11), view: stage.view, ...options });
+  b.show(MODES[43], { flow: false }); stage.settle();
+  const copy = img => ({ data: Uint8ClampedArray.from(img.data) });
+  return { stage, b, rest: copy(stage.puts.at(-1)), glowRest: copy(stage.glows.at(-1)), copy };
 }
 const lit = img => { let n = 0; for (let i = 3; i < img.data.length; i += 4) if (img.data[i]) n++; return n; };
 
@@ -163,12 +176,141 @@ test('the background re-forms when the window changes shape, and stops cleanly',
 test('Resonance is wired: a background setting, nothing on the board, and the room', () => {
   assert.match(main, /<label>Resonance background <select id="resonanceSetting"><option value="off">Off<\/option><option value="on">On<\/option><\/select><\/label>/);
   assert.doesNotMatch(main, /resonance-layer|resonanceTick|afterBoardPaint\(resonance/, 'nothing of it on the board');
-  assert.match(main, /layer\.id='resonanceBg';layer\.setAttribute\('aria-hidden','true'\);layer\.append\(document\.createElement\('canvas'\)\);document\.body\.prepend\(layer\)/);
+  assert.match(main, /layer\.id='resonanceBg';layer\.setAttribute\('aria-hidden','true'\);layer\.innerHTML='<canvas class="resonance-glow"><\/canvas><canvas class="resonance-sand"><\/canvas>';document\.body\.prepend\(layer\)/);
   assert.match(main, /resonanceLevel=\['on','subtle','vivid'\]\.includes\(saved\)\?'on':'off';/, 'the old board settings turn the background on');
-  assert.match(main, /if\(now-beat\.at>=9000\)/, 'at most one figure per nine seconds');
+  assert.match(main, /if\(now-beat\.at>=9000&&!g\.endAt\)/, 'at most one figure per nine seconds');
+  // The game drives it: each move rings out as the piece lands, from where it landed, and in the
+  // dark the opponent's moves ring from the middle of the board and say nothing else.
+  assert.match(main, /syncWallLights\(mood\);syncResonanceGame\(mood\);syncMusic\(mood\);/);
+  assert.match(main, /hidden=\(darkActive\(\)\|\|fogOnline\(\)\|\|blackoutActive\(\)\)&&\(!mine\|\|!!browse\|\|reviewState\.viewing\)/);
+  assert.match(main, /const san=String\(move\.san\|\|''\),captured=!hidden&&/);
+  assert.match(main, /at=resonancePoint\(hidden\?null:move\.to\)/);
+  assert.match(main, /resonance\.pause\(travel\+40\)/, 'still while the piece travels');
+  // The pointer: never over the board, a dialog or a menu; over the panels only through clear glass.
+  assert.match(main, /const hidesSand=t=>!!t\?\.closest\?\.\('\.board,#board,dialog,\.main-menu'\)\|\|\(document\.documentElement\.dataset\.glass!=='clear'/);
+  assert.match(main, /resonance\.listen\(\(\)=>vantaScore\?\.playing\?vantaScore\.readSpectrum\(\):null\)/);
   assert.match(main, /if\(playing&&!still\)/, 'reduced motion keeps one still figure');
   assert.match(main, /if\(resonanceRoom\?\.playing\)return; \/\/ the Resonance room plays its own score/);
   assert.match(main, /function renderResonanceRoom\(\)/);
   assert.match(css, /#resonanceBg\{position:fixed;inset:0;z-index:-2;pointer-events:none;/);
+  assert.match(css, /#resonanceBg \.resonance-glow\{opacity:/);
   assert.doesNotMatch(css, /resonance-layer/);
+});
+
+test('the first figure gathers out of scattered sand; with reduced motion it is simply there', () => {
+  const stage = fakeStage();
+  let ready = 0;
+  const b = new SandBackdrop(stage.canvas, { glow: stage.glow, random: seeded(5), view: stage.view, flow: 2000, onReady: () => ready++ });
+  b.show(MODES[30]);
+  let guard = 0; while (b.job && guard++ < 100) stage.run(16);
+  assert.ok(b.drift, 'it drifts in from where the sand was sown');
+  stage.run(16); stage.run(16);
+  assert.equal(ready, 1, 'shown from the first frame, while it gathers');
+  let off = 0; for (let i = 0; i < b.count; i++) if (Math.abs(plate(MODES[30], b.x[i], b.y[i])) > 0.05) off++;
+  assert.ok(off > b.count * 0.5, 'still scattered');
+  stage.settle();
+  off = 0; for (let i = 0; i < b.count; i++) if (Math.abs(plate(MODES[30], b.x[i], b.y[i])) > 0.05) off++;
+  assert.ok(off < b.count * 0.01, `${off} grains off the lines`);
+  assert.ok(lightOf(stage.glows.at(-1)) > 0, 'the lines glow');
+  const still = fakeStage(), s = new SandBackdrop(still.canvas, { random: seeded(5), view: still.view, motion: false });
+  s.show(MODES[30]); still.settle();
+  assert.equal(s.drift, null); assert.equal(still.puts.length, 1, 'placed at once and drawn once');
+});
+
+test('a ring runs out from where a move lands, lights the lines it crosses, and the sand settles back exactly', () => {
+  const { stage, b, rest, glowRest } = restingBackdrop();
+  assert.equal(stage.pending(), 0);
+  assert.equal(b.ripple(Number.NaN, 0), false, 'no ring from nowhere');
+  assert.ok(b.ripple(640, 360, { amp: 12, light: 1.4 }));
+  for (let k = 0; k < 20; k++) stage.run(16);
+  assert.ok(!sameImage(stage.puts.at(-1), rest), 'the sand moves');
+  assert.ok(lightOf(stage.glows.at(-1)) > lightOf(glowRest) * 1.05, 'the ring and the lines it crosses light up');
+  // Drawn about 30 times a second while it runs.
+  const before = stage.puts.length; for (let k = 0; k < 62; k++) stage.run(16);
+  const drawn = stage.puts.length - before;
+  assert.ok(drawn >= 25 && drawn <= 33, `${drawn} frames in a second`);
+  stage.settle();
+  assert.equal(stage.pending(), 0, 'nothing runs once it has passed');
+  assert.equal(b.ripples.length, 0); assert.equal(b.dirty, false);
+  assert.ok(sameImage(stage.puts.at(-1), rest), 'the sand lies exactly where it lay');
+  assert.ok(sameImage(stage.glows.at(-1), glowRest));
+  // A ring that starts wide (from under the board) is gone sooner; six at most at once.
+  b.ripple(640, 360, { from: 300 }); const wide = b.ripples.at(-1).life; b.ripples = [];
+  b.ripple(640, 360); assert.ok(b.ripples.at(-1).life > wide); b.ripples = [];
+  for (let k = 0; k < 9; k++) b.ripple(10 * k, 10);
+  assert.equal(b.ripples.length, 6);
+  stage.settle(); assert.ok(sameImage(stage.puts.at(-1), rest));
+});
+
+test('the pointer parts the sand and it flows back behind it; a resting pointer lets it go', () => {
+  const { stage, b, rest } = restingBackdrop();
+  // Drag across the window.
+  for (let k = 0; k <= 30; k++) { b.touch(200 + k * 30, 120 + k * 16, 34); stage.run(16); }
+  assert.ok(b.pushed);
+  let near = 0, far = 0;
+  for (let i = 0; i < b.count; i++) {
+    const m = Math.abs(b.dx[i]) + Math.abs(b.dy[i]);
+    if (m > 1) { const sx = b.ox + b.x[i] * b.S + b.jx[i], sy = b.oy + b.y[i] * b.S + b.jy[i]; if (sy < 40 || sy > 680) far++; else near++; }
+  }
+  assert.ok(near > 50, `${near} grains pushed aside`); assert.equal(far, 0, 'none far from the path');
+  assert.ok(!sameImage(stage.puts.at(-1), rest));
+  b.lift(); stage.settle();
+  assert.equal(b.pushed, false); assert.ok(b.dx.every(v => v === 0) && b.dy.every(v => v === 0));
+  assert.ok(sameImage(stage.puts.at(-1), rest), 'flowed back exactly');
+  assert.equal(stage.pending(), 0);
+  // A pointer that stops moving lets the sand back on its own.
+  b.touch(640, 360); stage.run(16);
+  for (let k = 0; k < 120 && stage.pending(); k++) stage.run(16);
+  assert.equal(b.finger, null); stage.settle(); assert.ok(sameImage(stage.puts.at(-1), rest));
+});
+
+test('a shiver, the music and a pause', () => {
+  const { stage, b, rest } = restingBackdrop();
+  assert.ok(b.tremble(2.5, 400));
+  stage.run(40);
+  assert.ok(!sameImage(stage.puts.at(-1), rest), 'it shivers');
+  stage.settle(); assert.equal(b.shiver, null); assert.ok(sameImage(stage.puts.at(-1), rest));
+  // The music: the sand dances while the ear hears something, then settles exactly.
+  let loud = new Uint8Array(256).fill(170);
+  b.listen(() => loud);
+  b.wake(); assert.equal(stage.pending(), 1, 'woken by the music');
+  for (let k = 0; k < 30; k++) stage.run(16);
+  assert.ok(b.dance > 0.5 && b.bass > 0.5, `dance ${b.dance}, bass ${b.bass}`);
+  assert.ok(!sameImage(stage.puts.at(-1), rest));
+  // About 24 frames a second for the music alone.
+  const before = stage.puts.length; for (let k = 0; k < 62; k++) stage.run(16);
+  const drawn = stage.puts.length - before;
+  assert.ok(drawn >= 19 && drawn <= 26, `${drawn} frames in a second`);
+  loud = null; stage.settle();
+  assert.equal(b.hearing, false); assert.equal(b.dance, 0); assert.ok(sameImage(stage.puts.at(-1), rest));
+  b.listen(null); b.wake(); assert.equal(stage.pending(), 0, 'silence wakes nothing');
+  // A pause: no frames while a piece travels, then the ring.
+  b.pause(300); b.ripple(100, 100);
+  const held = stage.puts.length; for (let k = 0; k < 18; k++) stage.run(16);
+  assert.equal(stage.puts.length, held, 'still during the pause');
+  stage.run(16); stage.run(16); assert.ok(stage.puts.length > held);
+  stage.settle();
+});
+
+test('reduced motion stops every answer and lays the sand still; swells come now and then', () => {
+  const { stage, b, rest } = restingBackdrop();
+  b.ripple(640, 360); b.tremble(); b.touch(640, 360); stage.run(16); stage.run(16);
+  b.setMotion(false);
+  assert.equal(b.ripples.length, 0); assert.equal(b.shiver, null); assert.equal(b.finger, null);
+  assert.ok(sameImage(stage.puts.at(-1), rest), 'laid still at once');
+  assert.equal(b.ripple(1, 1), false); assert.equal(b.tremble(), false); assert.equal(b.touch(1, 1), false);
+  stage.settle(); assert.ok(sameImage(stage.puts.at(-1), rest));
+  // Swells: a timer brings a slow, faint ring in from an edge of the window.
+  let timer = null;
+  const view = { ...stage.view, setTimeout: (f, ms) => { timer = { f, ms }; return 7; }, clearTimeout: () => { timer = null; } };
+  const s = new SandBackdrop(fakeStage().canvas, { random: seeded(2), view, swell: [9000, 16000] });
+  assert.ok(timer && timer.ms >= 9000 && timer.ms <= 16000, 'armed');
+  s.show(MODES[20], { flow: false }); s.work();
+  timer.f();
+  assert.equal(s.ripples.length, 1);
+  const r = s.ripples[0];
+  assert.ok(r.slow && r.amp < 5 && (r.x < 0 || r.y < 0 || r.x > 1280 || r.y > 720), 'from just outside the window');
+  assert.ok(timer, 'and armed again');
+  s.setMotion(false); assert.equal(timer, null, 'no swells with reduced motion');
+  s.stop();
 });

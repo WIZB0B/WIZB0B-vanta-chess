@@ -1,14 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-// Resonance (src/resonance.js): Chladni figures in sand behind the page, never on the board, and
-// big in the Resonance room (the music library).
+// Resonance (src/resonance.js): Chladni figures in sand behind the page, never on the board, that
+// answer the game, the pointer and the music; and big in the Resonance room (the music library).
 const mockSupabase = page => page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', r => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ player: { id: 'me' } }) }));
-const sandPixels = page => page.evaluate(() => { const c = document.querySelector('#resonanceBg canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let lit = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) lit++; return lit; });
-const sandImage = page => page.evaluate(() => document.querySelector('#resonanceBg canvas').toDataURL());
+const sandPixels = page => page.evaluate(() => { const c = document.querySelector('#resonanceBg .resonance-sand'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let lit = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) lit++; return lit; });
+const sandImage = page => page.evaluate(() => document.querySelector('#resonanceBg .resonance-sand').toDataURL());
+// The sand at rest: nothing answering, and the same picture twice, 400ms apart (a slow swell
+// crosses it now and then on its own).
+const restingImage = async page => {
+  let last = null;
+  for (let k = 0; k < 90; k++) {
+    const s = await page.evaluate(() => ({ active: !!document.querySelector('#resonanceBg').dataset.active, url: document.querySelector('#resonanceBg .resonance-sand').toDataURL() }));
+    if (!s.active && s.url === last) return s.url;
+    last = s.active ? null : s.url;
+    await page.waitForTimeout(400);
+  }
+  throw new Error('the sand never came to rest');
+};
 
-test('Resonance: a still background behind the page, untouched by moves; the room plays the music library', async ({ page }) => {
+test('Resonance: a living background behind the page that rings with each move and parts under the pointer; the room plays the music library', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'Desktop layout; the same code runs on phones');
-  test.setTimeout(60000);
+  test.setTimeout(120000);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => { localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1') });
@@ -24,24 +36,32 @@ test('Resonance: a still background behind the page, untouched by moves; the roo
   // Behind everything, fixed to the window, never in the way of a click, and nothing on the board.
   expect(await layer.evaluate(el => { const s = getComputedStyle(el); return [s.position, s.zIndex, s.pointerEvents, el.parentElement === document.body]; })).toEqual(['fixed', '-2', 'none', true]);
   await expect(page.locator('#board canvas')).toHaveCount(0);
+  expect(await layer.evaluate(el => [...el.querySelectorAll('canvas')].map(c => c.className))).toEqual(['resonance-glow', 'resonance-sand']);
   expect(await sandPixels(page)).toBeGreaterThan(2000);
-  // A move does not move the sand (with the music off it rests on the theme's figure).
+  // A move rings out through the sand as the piece lands, then the sand lies exactly as it lay
+  // (with the music off and no capture, the figure stays the theme's).
   await page.locator('[data-mode="computer"]').click();
   await page.locator('#computerStart').click();
-  const before = await sandImage(page);
+  const before = await restingImage(page);
   const tap = async sq => { const b = await page.locator(`[data-sq="${sq}"]`).boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2) };
   await tap('e2'); await tap('e4');
   await expect(page.locator('.board-piece[data-square="e4"]')).toHaveCount(1);
+  await expect(layer).toHaveAttribute('data-react', 'move', { timeout: 5000 });
+  await expect(layer).toHaveAttribute('data-active', '1');
   await expect.poll(() => page.locator('#moves .move-pair-row').count(), { timeout: 20000 }).toBe(1);
-  await page.waitForTimeout(1500);
-  expect(await sandImage(page)).toBe(before);
+  await expect.poll(async () => Number(await layer.getAttribute('data-rings')), { timeout: 5000 }).toBe(2); // the reply rings too
+  expect(await restingImage(page)).toBe(before);
+  // The pointer parts the sand where it shows (the gap beside the panels), and it flows back.
+  await page.mouse.move(6, 200);
+  for (let y = 200; y <= 560; y += 24) await page.mouse.move(6 + (y % 48 ? 4 : 0), y);
+  await expect(layer).toHaveAttribute('data-active', '1');
+  expect(await sandImage(page)).not.toBe(before);
+  await page.mouse.move(640, 360); // over the board: nothing
+  expect(await restingImage(page)).toBe(before);
   // A new theme (a relic set) has its own figure: the sand drifts to it, then rests again.
   await page.evaluate(() => localStorage.setItem('vch.relics', JSON.stringify({ unlocked: { ember: '2026-10-13T00:00:00Z' }, equipped: 'ember' })));
   await expect.poll(async () => (await sandImage(page)) !== before, { timeout: 6000 }).toBe(true);
-  await page.waitForTimeout(4500);
-  const settled = await sandImage(page);
-  await page.waitForTimeout(800);
-  expect(await sandImage(page)).toBe(settled);
+  expect(await restingImage(page)).not.toBe(before);
   // The room: seven themes, one at a time, and a Play button for the score.
   await page.locator('#theme').click();
   await page.locator('#openResonance').click();
@@ -73,5 +93,25 @@ test('Resonance: the board setting of an earlier build becomes the background, o
   expect(await page.locator('#resonanceSetting').evaluate(s => s.value)).toBe('on');
   expect(await sandPixels(page)).toBeGreaterThan(1000);
   await expect(page.locator('#board canvas')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Resonance in the dark: your moves ring from where they land, the hidden opponent\'s from the middle of the board', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Desktop layout; the same code runs on phones');
+  test.setTimeout(60000);
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => { localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1'); localStorage.setItem('vch.resonance', 'on') });
+  await mockSupabase(page);
+  await page.goto('/');
+  const layer = page.locator('#resonanceBg');
+  await expect(layer).toHaveAttribute('data-ready', '1', { timeout: 8000 });
+  await page.locator('[data-mode="computer"]').click();
+  await page.locator('[data-computer-variant="dark"]').click();
+  await page.locator('#computerStart').click();
+  const tap = async sq => { const b = await page.locator(`[data-sq="${sq}"]`).boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2) };
+  await tap('e2'); await tap('e4');
+  await expect(layer).toHaveAttribute('data-react', 'move', { timeout: 5000 });
+  await expect(layer).toHaveAttribute('data-react', 'hidden', { timeout: 20000 });
   expect(errors).toEqual([]);
 });

@@ -453,10 +453,21 @@ function deploy wait for the owner's approval for that deployment.
   both ways; 11 languages; hover descriptions for every section, tab and mode; drawn icons
   instead of unicode glyphs on the game controls.
 - R13.10 Resonance (PR #59): Chladni figures in sand behind the page (Theme Studio: Resonance
-  background, off / on): dim and still, the theme's figure; while the music plays the sand
-  drifts to a new figure every other chord, finer as the game gets tenser. Nothing on the
-  board (owner feedback 2026-10-13: the first version, on the board, was distracting). And
-  the Resonance room, the music library drawn in sand. Owner's idea, 2026-10-12.
+  background, off / on). Nothing on the board (owner feedback 2026-10-13: the first version,
+  on the board, was distracting). Alive and reactive (owner, 2026-10-13: "make it come to life
+  ... more responsive and reactive"): the theme's figure gathers out of scattered sand; every
+  move sends a ring of light out from the square the piece lands on (a capture a stronger ring
+  and its echo; a check shivers the plate and rings from the king; in Vanta Dark and Blackout
+  the hidden opponent's moves ring from the middle of the board and say nothing else);
+  captures re-tune the plate to a new figure; a win brings an intricate figure and more light,
+  a loss a simple one and less; time trouble shivers it. The pointer parts the sand where it
+  shows (through the panels when the glass is clear), a tap rings it, a slow swell crosses it
+  now and then. With the music the lines brighten with every note, the figure swells with the
+  bass, every chord rings the plate, every other chord moves the sand to a new figure, and the
+  storm's heartbeat shakes it. A low-resolution glow layer carries the light, so it reads
+  through frosted glass. Still while a piece travels; nothing is drawn while it rests; reduced
+  motion keeps one still figure. And the Resonance room, the music library drawn in sand.
+  Owner's idea, 2026-10-12.
 - R13.11 The computer ladder (owner feedback 2026-10-13): twelve levels named in chess terms,
   Beginner (400) to Maximum, each describing how it plays; the lowest three make a
   beginner's mistakes on purpose. Hover descriptions rewritten in chess language.

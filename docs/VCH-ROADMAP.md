@@ -105,8 +105,9 @@ the server region.
   Higgsfield art for realms and the trailer once the art direction is agreed.
 - Full-page sections and search; the puzzle section redesign; mode marks with hover
   descriptions everywhere (hover descriptions done in round 13).
-- Resonance (cymatics) as VCH's signature visual: a dim, slow background behind the page
-  (never on the board), the music library, and the home page hero (PR #59).
+- Resonance (cymatics) as VCH's signature visual: a living background behind the page that
+  answers every move, the pointer and the music (never on the board), the music library, and
+  the home page hero (PR #59).
 - Living Armies view and the trailer.
 - Security items before go-live (backlog R13, open list).
 

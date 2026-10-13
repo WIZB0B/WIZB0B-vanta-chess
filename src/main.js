@@ -5022,7 +5022,7 @@ function syncAtmosphere(){
   if(el.dataset.mood!==mood.mood)el.dataset.mood=mood.mood;
   const realm=atmosphereRealm||'';if((el.dataset.realm||'')!==realm){if(realm)el.dataset.realm=realm;else delete el.dataset.realm}
   const strength=String(mood.strength);if(el.style.getPropertyValue('--atmo')!==strength)el.style.setProperty('--atmo',strength);
-  syncWallLights(mood);syncMusic(mood);syncOathLine();
+  syncWallLights(mood);syncResonanceGame(mood);syncMusic(mood);syncOathLine();
 }
 // Living wallpaper (src/wallpaper-lights.js): a soft glow over every candle and lamp in the
 // wallpaper, flickering on its own. With the living atmosphere on Full, the room answers the
@@ -5963,25 +5963,95 @@ initRoundTwelve();
   document.addEventListener('keydown',event=>{if(event.key==='Escape')hide()});
 })();
 // ---- Resonance (src/resonance.js): Chladni figures in sand behind the page, drawn by the music ----
-// A dim, still background (owner request 2026-10-13: never on the board, never in the way). It
-// shows the figure of the theme you play under; while the music plays, the sand drifts to a new
-// figure every other chord (finer as the game gets tenser) and its brightness breathes with the
-// music's loudness. Between figures nothing is redrawn. With reduced motion it never moves.
+// A background (owner request 2026-10-13: never on the board, never in the way) that answers the
+// game, the pointer and the music (owner, 2026-10-13: "make it come to life... more responsive and
+// reactive"). It shows the figure of the theme you play under, gathering out of scattered sand.
+// Every move sends a ring of light out from the square the piece lands on (a capture a stronger
+// ring and its echo; a check makes the plate shiver and rings from the king; in Vanta Dark and
+// Blackout the opponent's moves ring from the middle of the board and say nothing else). Captures
+// re-tune the plate to a new figure; the end of a game brings an intricate figure and more light
+// for a win, a simple one and less for a loss; time trouble shivers it. The pointer parts the sand
+// where it shows, a tap rings it, and a slow swell crosses it now and then. While the music plays,
+// the sand trembles with every note and swells with the bass, and drifts to a new figure every
+// other chord (finer as the game gets tenser). With reduced motion it never moves.
 const RESONANCE_KEY='vch.resonance';
 const prefersStill=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const resonanceThemeMode=key=>modeForMoment(chordFor(key,0),0);
 let resonanceBeat={step:-1,at:0,key:'',glow:''};
+let resonanceGame={key:null,timer:0,echo:0,mood:'calm',strength:0,captures:0,retunedAt:0,endAt:0,glow:1,shiverAt:0,rings:0};
 function syncResonance(){
   let layer=document.getElementById('resonanceBg');
   if(resonanceLevel==='off'){resonance?.stop();resonance=null;layer?.remove();return}
-  if(!layer){layer=document.createElement('div');layer.id='resonanceBg';layer.setAttribute('aria-hidden','true');layer.append(document.createElement('canvas'));document.body.prepend(layer)}
-  const canvas=layer.querySelector('canvas');
-  if(resonance?.canvas!==canvas){resonance?.stop();resonance=new SandBackdrop(canvas,{spread:matchMedia('(max-width: 800px)').matches?2.2:3,onReady:()=>{layer.dataset.ready='1'}});resonanceBeat={step:-1,at:0,key:'',glow:''}}
-  if(!resonance.mode){resonanceBeat.key=musicKeyNow();resonance.show(resonanceThemeMode(resonanceBeat.key),{flow:false})}
+  if(!layer){layer=document.createElement('div');layer.id='resonanceBg';layer.setAttribute('aria-hidden','true');layer.innerHTML='<canvas class="resonance-glow"></canvas><canvas class="resonance-sand"></canvas>';document.body.prepend(layer)}
+  const canvas=layer.querySelector('.resonance-sand'),still=prefersStill();
+  if(resonance?.canvas!==canvas){
+    resonance?.stop();
+    resonance=new SandBackdrop(canvas,{glow:layer.querySelector('.resonance-glow'),spread:matchMedia('(max-width: 800px)').matches?2.2:3,motion:!still,onReady:()=>{layer.dataset.ready='1'}});
+    resonance.listen(()=>vantaScore?.playing?vantaScore.readSpectrum():null); // the room's score too
+    resonanceBeat={step:-1,at:0,key:'',glow:''};
+  }
+  resonance.setMotion(!still);
+  if(!resonance.mode){resonanceBeat.key=musicKeyNow();resonance.show(resonanceThemeMode(resonanceBeat.key),{flow:!still})}
 }
+// Where on the window a square of the board is (its middle), or the board's middle, and how far
+// it is to the board's nearest edge (`under`: a ring that wide is still hidden by the board).
+function resonancePoint(sq){
+  const board=document.getElementById('board')?.getBoundingClientRect(),el=sq?document.querySelector(`#board .square[data-sq="${sq}"]`):null,r=el?.getBoundingClientRect()||board;
+  if(!r?.width)return sq?null:{x:innerWidth/2,y:innerHeight/2,under:0}; // no board on screen: the middle of the window
+  const x=r.left+r.width/2,y=r.top+r.height/2,under=board?.width?Math.max(0,Math.min(x-board.left,board.right-x,y-board.top,board.bottom-y)-30):0;
+  return {x,y,under};
+}
+// The game's answers, from the living-atmosphere pass (syncAtmosphere): each new move, the mood.
+function syncResonanceGame(mood){
+  const g=resonanceGame;
+  if(mood.mood!==g.mood){
+    const was=g.mood;g.mood=mood.mood;
+    if(resonance&&(mood.mood==='dawn'||mood.mood==='dusk'))resonanceEnding(mood.mood==='dawn');
+    else if(was==='dawn'||was==='dusk')resonanceAfterEnding();
+  }
+  g.strength=mood.strength;
+  const move=boardLastMove(),key=move?.to?`${move.from||''}${move.to}${move.san||''}:${moveRecords().length}`:'';
+  if(key===g.key)return;
+  const first=g.key===null;g.key=key;
+  if(!key){if(g.captures){g.captures=0;resonanceBeat.key=''}return} // a new game: the theme's figure comes back
+  if(first||!resonance)return;
+  // Still while the piece travels; the ring goes out as it lands.
+  const travel=Math.max(0,boardMotionUntil-performance.now());
+  resonance.pause(travel+40);clearTimeout(g.timer);clearTimeout(g.echo);
+  if(!resonance.motion)return;
+  // In the dark the opponent's moves (and any move you step back to) ring from the middle of the board.
+  const color=premovePlayerColor(),mine=!color||game.turn()!==color,hidden=(darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
+  const san=String(move.san||''),captured=!hidden&&(!!move.captured||san.includes('x')),check=!hidden&&/[+#]/.test(san),mate=!hidden&&san.includes('#');
+  g.timer=setTimeout(()=>{
+    const b=resonance,layer=b?.canvas.parentElement,at=resonancePoint(hidden?null:move.to);if(!b||!at)return;
+    if(hidden)b.ripple(at.x,at.y,{amp:7,light:.8,speed:520,from:at.under});
+    else if(captured){b.ripple(at.x,at.y,{amp:15,light:1.7,speed:620,width:30,from:at.under});g.echo=setTimeout(()=>{if(resonance===b)b.ripple(at.x,at.y,{amp:8,light:1,speed:480,from:at.under})},240)}
+    else b.ripple(at.x,at.y,{amp:9,light:1.05,speed:560,from:at.under});
+    if(check){const king=document.querySelector('#board .square.check'),k=king?resonancePoint(king.dataset.sq):null;b.tremble(mate?3.4:2.4,mate?1500:850);if(k)b.ripple(k.x,k.y,{amp:12,light:1.5,speed:760,width:22,from:k.under})}
+    if(captured){g.captures++;resonanceRetune()}
+    g.rings++;if(layer){layer.dataset.react=hidden?'hidden':mate?'mate':check?'check':captured?'capture':'move';layer.dataset.rings=String(g.rings)}
+  },travel+20);
+}
+// A capture re-tunes the plate (at most once in six seconds, and only while the music is off;
+// with music the chords choose the figures): finer as the game goes on.
+function resonanceRetune(){
+  if(!resonance||vantaScore?.playing||resonanceGame.endAt)return;
+  const now=Date.now();if(now-resonanceGame.retunedAt<6000)return;resonanceGame.retunedAt=now;
+  resonance.show(modeForMoment(chordFor(musicKeyNow(),resonanceGame.captures),tensionFor({plies:moveRecords().length})));
+}
+// The end of a game: a richer figure and more light for a win, a simpler one and less for a loss;
+// after fifteen seconds (or the next game) the theme's own figure comes back.
+function resonanceEnding(won){
+  const g=resonanceGame,base=MODES.indexOf(resonanceThemeMode(musicKeyNow()));
+  g.endAt=Date.now();g.glow=won?1.3:.72;
+  if(!resonance?.motion)return;
+  resonance.show(MODES[Math.max(0,Math.min(MODES.length-1,base+(won?14:-12)))]);
+  const at=resonancePoint(null);if(at)resonance.ripple(at.x,at.y,{amp:won?14:8,light:won?1.8:.7,speed:won?460:340,width:won?40:60,life:3600,from:at.under});
+}
+function resonanceAfterEnding(){const g=resonanceGame;if(!g.endAt)return;g.endAt=0;g.glow=1;resonanceBeat.key=''} // the loop below brings back the theme's figure
 // The music drives both: the room's big plate follows every chord live; the background takes
-// every other chord (at most one figure per nine seconds) and rests on the theme's figure when
-// the music stops.
+// every other chord (at most one figure per nine seconds), hears every note, and rests on the
+// theme's figure when the music stops. The same beat keeps the game's slow answers going.
 (function resonanceMusicLoop(){
   let ticks=0;
   setInterval(()=>{
@@ -5989,15 +6059,31 @@ function syncResonance(){
     const playing=!!vantaScore?.playing;
     if(resonanceRoom&&playing){const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());resonanceRoom.plate.setMode(mode);resonanceRoom.plate.setTarget(0.25+energy*0.75);resonanceRoom.show?.(mode,energy)}
     if(!resonance)return;
-    const still=prefersStill(),beat=resonanceBeat,glow=g=>{if(g!==beat.glow){beat.glow=g;resonance.canvas.parentElement?.style.setProperty('--resonance-glow',g)}};
+    const still=prefersStill(),beat=resonanceBeat,g=resonanceGame,layer=resonance.canvas.parentElement,now=Date.now();
+    const glow=v=>{if(v!==beat.glow){beat.glow=v;layer?.style.setProperty('--resonance-glow',v)}};
+    resonance.setMotion(!still);
+    if(g.endAt&&now-g.endAt>15000)resonanceAfterEnding();
+    // Time trouble: the plate shivers every couple of seconds, harder as the clock runs out (with
+    // the music, on its heartbeat instead: below).
+    if(!still&&!playing&&g.mood==='storm'&&now-g.shiverAt>2400){g.shiverAt=now;resonance.tremble(.8+1.6*g.strength,520)}
+    if(layer){const active=resonance.busy||resonance.lively()||resonance.dirty;if(active!==(layer.dataset.active==='1')){if(active)layer.dataset.active='1';else delete layer.dataset.active}}
     if(playing&&!still){
-      const step=Math.floor(Math.max(0,vantaScore.eighth-1)/16),now=Date.now();
-      if(step!==beat.step){beat.step=step;if(now-beat.at>=9000){beat.at=now;resonance.show(modeForMoment(vantaScore.chord,vantaScore.tension))}}
-      glow((0.8+0.4*spectrumEnergy(vantaScore.readSpectrum())).toFixed(2));
+      resonance.wake();
+      // Every chord rings the plate from the board, slow and wide; every other one (at most one
+      // in nine seconds) moves the sand to a new figure. The storm's heartbeat shakes it.
+      const step=Math.floor(Math.max(0,vantaScore.eighth-1)/16),e=vantaScore.eighth;
+      if(step!==beat.step){
+        beat.step=step;
+        const at=resonancePoint(null);if(at)resonance.ripple(at.x,at.y,{amp:5,light:.75,speed:300,width:70,from:at.under,life:4200,slow:true});
+        if(now-beat.at>=9000&&!g.endAt){beat.at=now;resonance.show(modeForMoment(vantaScore.chord,vantaScore.tension))}
+      }
+      if(vantaScore.storm>0&&e!==beat.eighth&&e%4===1){resonance.tremble(1+1.6*vantaScore.storm,320)}
+      beat.eighth=e;
+      glow((g.glow*(0.8+0.4*spectrumEnergy(vantaScore.readSpectrum()))).toFixed(2));
       return;
     }
-    glow('1');
-    if(ticks%8)return;
+    glow(String(g.glow));
+    if(ticks%8||g.endAt)return;
     const key=musicKeyNow();
     if(key!==beat.key||beat.step!==-1){beat.key=key;beat.step=-1;beat.at=0;resonance.show(resonanceThemeMode(key),{flow:!still})}
   },120);
@@ -6047,5 +6133,19 @@ function renderResonanceRoom(){
   const select=$('#resonanceSetting');if(select){select.value=resonanceLevel;select.onchange=e=>setResonanceLevel(e.target.value)}
   $('#openResonance')?.addEventListener('click',()=>{menus.close('theme');setPrimaryScreen('game');renderResonanceRoom();showSidePanel()});
   let resizeTimer=0;window.addEventListener('resize',()=>{if(!resonance)return;clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>resonance?.layout(),180)},{passive:true});
+  // The pointer parts the sand and a tap rings it, wherever the sand shows: around the panels,
+  // and through them when the glass is clear. Never over the board, a dialog or a menu.
+  const hidesSand=t=>!!t?.closest?.('.board,#board,dialog,.main-menu')||(document.documentElement.dataset.glass!=='clear'&&!!t?.closest?.('.panel,.game,.topbar,.rpanel'));
+  addEventListener('pointermove',e=>{
+    if(!resonance?.motion||(e.pointerType==='mouse'&&e.buttons))return;
+    if(hidesSand(e.target)){resonance.lift();return}
+    resonance.touch(e.clientX,e.clientY,e.pointerType==='mouse'?34:44);
+  },{passive:true});
+  addEventListener('pointerdown',e=>{
+    if(!resonance?.motion||hidesSand(e.target)||e.target?.closest?.('button,a,input,select,textarea,label,summary,[role="button"],[contenteditable]'))return;
+    resonance.ripple(e.clientX,e.clientY,{amp:6,light:.85,speed:520,width:22});
+  },{passive:true});
+  for(const type of ['pointerup','pointercancel'])addEventListener(type,e=>{if(e.pointerType!=='mouse')resonance?.lift()},{passive:true});
+  addEventListener('mouseout',e=>{if(!e.relatedTarget)resonance?.lift()},{passive:true});
   if(resonanceLevel==='on')syncResonance();
 })();

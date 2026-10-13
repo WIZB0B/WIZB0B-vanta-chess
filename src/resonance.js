@@ -182,29 +182,65 @@ export class ResonancePlate {
 }
 
 
-// The Resonance background: sand behind the whole page, dim and still. The plate is a square
-// that covers the window (centred, like background-size: cover), so its figures keep their
-// shape on any screen. show(mode) works out where every grain goes next a few thousand grains a
-// frame (so the page never stutters), lets the sand drift there over `flow` ms and then stops:
-// between figures nothing is redrawn. The first figure appears without drifting. Grains are
-// written straight into pixels (one putImageData a frame, a few ms even without a GPU), and
-// where they pile up they add up, so the lines glow at their cores like real sand.
-// Options: {color, density (CSS px² of window per grain), size and spread (CSS px: a grain, and
-// how far grains scatter around a line), flow (ms), random, view, onReady} where `view` supplies innerWidth/innerHeight/devicePixelRatio and the animation frame
-// calls, and onReady() runs once, when the first figure has been drawn.
+// The Resonance background: living sand behind the whole page. The plate is a square that
+// covers the window (centred, like background-size: cover), so its figures keep their shape on
+// any screen. show(mode) works out where every grain goes next a few thousand grains a frame (so
+// the page never stutters) and lets the sand drift there over `flow` ms; the first figure
+// gathers out of scattered sand. Then the sand rests and answers what happens around it:
+//   ripple(x, y)  a ring runs through it from a point of the window (a move lands, a tap);
+//   tremble()     it shivers (a check, the clock running out);
+//   touch(x, y)   it parts around the pointer and flows back behind it;
+//   listen(ear)   it dances with the music: a tremor with every note, a swell with the bass;
+// and now and then a slow swell crosses it on its own. Every answer ends exactly where it began,
+// and when nothing happens nothing is drawn. pause(ms) keeps it still while a piece travels.
+// Grains are written straight into pixels (one putImageData a frame, a few ms even without a
+// GPU); where they pile up they add up, so the lines glow at their cores like real sand. A
+// second, low-resolution canvas (`glow`, which the browser smooths up to the window) carries the
+// light of the lines and of each ring: it still reads through frosted glass, where single grains
+// blur away.
+// Options: {glow, color, glowColor, density (CSS px² of window per grain), size and spread (CSS
+// px: a grain, and how far grains scatter around a line), flow (ms), fps, motion (false: nothing
+// moves, for reduced motion), swell ([shortest, longest] ms between swells, or null), random,
+// view, onReady}, where `view` supplies innerWidth/innerHeight/devicePixelRatio, performance,
+// the animation frame and timer calls, and onReady() runs once, when the first figure is drawn.
 const easeInOut = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const TONES = [45, 70, 100]; // three shades of sand (alpha out of 255) that add up where grains pile
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+const packRgb = hex => {
+  const h = /^#?([0-9a-f]{6})$/i.exec(hex)?.[1] || 'e9dcb8', [r, g, b] = [0, 2, 4].map(k => parseInt(h.slice(k, k + 2), 16));
+  return LITTLE_ENDIAN ? (b << 16) | (g << 8) | r : (r << 24) | (g << 16) | (b << 8);
+};
+const GLOW = 4; // CSS px per pixel of the glow layer
+const GLOW_GAIN = 30; // glow alpha per grain on a glow pixel, after blurring
+const HALO = 3.2; // a ring's own light on the glow layer, in grains
+const RING = 2.3316; // 1 / max(u·e^(−u²)): a ring's `amp` is the farthest a grain is moved
+// A soft blur of the glow layer: a three-wide box across, then down.
+function blur3(a, tmp, w, h) {
+  for (let y = 0; y < h; y++) {
+    const o = y * w; let prev = 0, cur = a[o];
+    for (let x = 0; x < w; x++) { const next = x + 1 < w ? a[o + x + 1] : 0; tmp[o + x] = (prev + cur + next) / 3; prev = cur; cur = next; }
+  }
+  for (let x = 0; x < w; x++) {
+    let prev = 0, cur = tmp[x];
+    for (let y = 0, o = x; y < h; y++, o += w) { const next = y + 1 < h ? tmp[o + w] : 0; a[o] = (prev + cur + next) / 3; prev = cur; cur = next; }
+  }
+}
 export class SandBackdrop {
-  constructor(canvas, { color = '#e9dcb8', density = 60, size = 1.6, spread = 3, flow = 3200, random = Math.random, view = globalThis, onReady = null } = {}) {
-    Object.assign(this, { canvas, color, density, size, spread, flow, random, view, onReady });
-    this.ctx = canvas.getContext('2d'); this.image = null;
-    const hex = /^#?([0-9a-f]{6})$/i.exec(color)?.[1] || 'e9dcb8', rgb = [0, 2, 4].map(k => parseInt(hex.slice(k, k + 2), 16));
-    this.rgb = LITTLE_ENDIAN ? (rgb[2] << 16) | (rgb[1] << 8) | rgb[0] : (rgb[0] << 24) | (rgb[1] << 16) | (rgb[2] << 8);
+  constructor(canvas, { glow = null, color = '#e9dcb8', glowColor = '#e5c17c', density = 60, size = 1.6, spread = 3, flow = 3200, fps = 30, motion = true, swell = [9000, 16000], random = Math.random, view = globalThis, onReady = null } = {}) {
+    Object.assign(this, { canvas, glowCanvas: glow, density, size, spread, flow, fps, motion, swell, random, view, onReady });
+    this.ctx = canvas.getContext('2d'); this.gctx = glow?.getContext?.('2d') || null;
+    this.rgb = packRgb(color); this.grgb = packRgb(glowColor); this.image = null; this.gimage = null;
     this.mode = null; this.count = 0; this.raf = 0; this.job = null; this.drift = null; this.drawn = false;
+    this.ripples = []; this.rings = new Float64Array(6 * 8); this.nr = 0; this.shiver = null;
+    this.ear = null; this.hearing = false; this.dance = 0; this.bass = 0;
+    this.finger = null; this.pushed = false; this.pausedUntil = 0; this.lastDraw = -1e9; this.dirty = false;
+    this.swellTimer = 0; this.stopped = false;
     this.layout();
+    this.armSwell();
   }
   get busy() { return !!(this.job || this.drift); }
+  // Something is still answering (a ring, a shiver, the pointer, the music).
+  lively() { return this.ripples.length > 0 || !!this.shiver || this.pushed || !!this.finger || this.hearing || this.dance > 0 || this.bass > 0; }
   // The window, the covering square and the part of the plate in view. The sand is sown again
   // only when the window changes a lot (a phone turned on its side), and then simply re-forms.
   layout() {
@@ -216,6 +252,14 @@ export class SandBackdrop {
     const w = Math.round(W * this.dpr), h = Math.round(H * this.dpr);
     if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
     if (this.image?.width !== w || this.image?.height !== h) { this.image = this.ctx.createImageData(w, h); this.pixels = new Uint32Array(this.image.data.buffer); }
+    if (this.gctx) {
+      const gw = Math.ceil(W / GLOW), gh = Math.ceil(H / GLOW), c = this.glowCanvas;
+      if (c.width !== gw || c.height !== gh) { c.width = gw; c.height = gh; }
+      if (this.gimage?.width !== gw || this.gimage?.height !== gh) {
+        this.gimage = this.gctx.createImageData(gw, gh); this.gpix = new Uint32Array(this.gimage.data.buffer);
+        this.gbuf = new Float32Array(gw * gh); this.gtmp = new Float32Array(gw * gh);
+      }
+    }
     const count = Math.round(Math.min(32000, Math.max(2500, W * H / this.density)));
     const shifted = !this.sown || Math.abs(this.sown[0] - this.lo[0]) + Math.abs(this.sown[1] - this.lo[1]) > 0.05; // turned on its side
     if (!this.count || shifted || Math.abs(count - this.count) / this.count > 0.3) {
@@ -227,27 +271,30 @@ export class SandBackdrop {
   sow(count) {
     const r = this.random, [x0, y0] = this.lo, [x1, y1] = this.hi;
     this.count = count; this.sown = [x0, y0];
-    for (const k of ['x', 'y', 'fx', 'fy', 'tx', 'ty', 'jx', 'jy', 'wait']) this[k] = new Float32Array(count);
+    for (const k of ['x', 'y', 'fx', 'fy', 'tx', 'ty', 'jx', 'jy', 'wait', 'dx', 'dy', 'ux', 'uy', 'ph']) this[k] = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       this.x[i] = x0 + r() * (x1 - x0); this.y[i] = y0 + r() * (y1 - y0);
       // A fixed scatter around the line (Box–Muller, `spread` CSS px), drawn in screen space.
       const a = Math.sqrt(-2 * Math.log(1 - r() * 0.999)) * this.spread, b = 2 * Math.PI * r();
       this.jx[i] = a * Math.cos(b); this.jy[i] = a * Math.sin(b);
       this.wait[i] = r() * 0.3;
+      // Which way this grain hops when the plate shivers or the music plays, and its moment in the beat.
+      const c = 2 * Math.PI * r(); this.ux[i] = Math.cos(c); this.uy[i] = Math.sin(c); this.ph[i] = 2 * Math.PI * r();
     }
-    this.drawn = false;
+    this.drawn = false; this.pushed = false;
   }
   inView(x, y) { return x >= this.lo[0] && x <= this.hi[0] && y >= this.lo[1] && y <= this.hi[1]; }
-  // Sets the figure. flow: false places the sand at once (the first figure, reduced motion).
+  // Sets the figure. flow: false places the sand at once (reduced motion); otherwise it drifts
+  // there, and the very first figure gathers out of the scattered sand.
   show(mode, { flow = true } = {}) {
     if (!mode || (this.mode && mode.n === this.mode.n && mode.m === this.mode.m && mode.s === this.mode.s)) return;
-    if (this.drift) this.hold();
+    if (this.drift) this.freeze();
     this.mode = mode;
-    this.job = { mode, i: 0, flow: flow && this.drawn };
+    this.job = { mode, i: 0, flow: flow && this.motion };
     this.schedule();
   }
   // Freezes a drift where it is (a new figure arrived before the last one formed).
-  hold() {
+  freeze() {
     const t = this.drift ? this.progress(this.now()) : 1;
     for (let i = 0; i < this.count; i++) { const e = this.ease(i, t); this.x[i] = this.fx[i] + (this.tx[i] - this.fx[i]) * e; this.y[i] = this.fy[i] + (this.ty[i] - this.fy[i]) * e; }
     this.drift = null;
@@ -272,38 +319,223 @@ export class SandBackdrop {
     else { this.x.set(this.tx); this.y.set(this.ty); this.draw(1); }
     return true;
   }
-  schedule() { if (!this.raf && this.view.requestAnimationFrame) this.raf = this.view.requestAnimationFrame(t => this.tick(t)); }
-  // A drift is drawn about 30 times a second: slow sand needs no more, and the page behind the
-  // glass panels is redrawn half as often.
+  schedule() { if (!this.raf && !this.stopped && this.view.requestAnimationFrame) this.raf = this.view.requestAnimationFrame(t => this.tick(t)); }
+  // Drawn at `fps` while anything quick moves (30: sand needs no more, and the page behind the
+  // glass panels is redrawn half as often), 24 for the music alone, 12 for a slow swell alone.
+  // Nothing while resting.
+  interval() {
+    const quick = this.drift || this.shiver || this.finger || this.pushed || this.ripples.some(r => !r.slow);
+    return 1000 / Math.min(this.fps, quick ? this.fps : this.hearing || this.dance || this.bass ? 24 : 12);
+  }
   tick() {
     this.raf = 0;
-    if (this.job) { this.work(this.now() + 6); if (this.busy) this.schedule(); return; }
-    if (!this.drift) return;
-    const now = this.now(), t = this.progress(now);
-    if (t < 1 && now - (this.drift.drawn || 0) < 30) { this.schedule(); return; }
-    this.drift.drawn = now;
-    this.draw(t);
-    if (t >= 1) { this.x.set(this.tx); this.y.set(this.ty); this.drift = null; return; }
-    this.schedule();
+    if (this.stopped) return;
+    if (this.job) { this.work(this.now() + 6); if (this.busy || this.lively() || this.dirty) this.schedule(); return; }
+    const now = this.now(), moving = !!this.drift || this.lively();
+    if (!moving && !this.dirty) return;
+    if (now < this.pausedUntil || (moving && now - this.lastDraw < this.interval() - 2)) { this.schedule(); return; }
+    if (moving) this.hear();
+    const t = this.drift ? this.progress(now) : 1;
+    if (this.drift && t >= 1) { this.x.set(this.tx); this.y.set(this.ty); this.drift = null; } // arrived
+    this.draw(t, now); // the last of these, once everything has ended, lays the sand back exactly
+    if (this.drift || this.lively() || this.dirty) this.schedule();
   }
-  // Paints the sand: during a drift at its point along the way (t), otherwise where it rests.
-  draw(t = 1) {
-    const { count, S, ox, oy, dpr, x: X, y: Y, fx, fy, tx, ty, jx, jy, pixels, rgb } = this, drifting = !!this.drift;
-    const w = this.image.width, h = this.image.height, k = Math.max(1, Math.round(this.size * dpr)), half = k / 2, scale = S * dpr;
-    pixels.fill(0);
-    for (let i = 0; i < count; i++) {
-      let x = X[i], y = Y[i];
-      if (drifting) { const e = this.ease(i, t); x = fx[i] + (tx[i] - fx[i]) * e; y = fy[i] + (ty[i] - fy[i]) * e; }
-      const px = Math.round((ox + jx[i]) * dpr + x * scale - half), py = Math.round((oy + jy[i]) * dpr + y * scale - half);
-      if (px < 0 || py < 0 || px + k > w || py + k > h) continue;
-      const add = TONES[i % 3];
-      for (let r = 0; r < k; r++) for (let c = 0, p = (py + r) * w + px; c < k; c++, p++) {
-        const a = Math.min(255, (LITTLE_ENDIAN ? pixels[p] >>> 24 : pixels[p] & 255) + add);
-        pixels[p] = LITTLE_ENDIAN ? ((a << 24) | rgb) >>> 0 : (rgb | a) >>> 0;
-      }
+  // ---- Answers ----
+  // A ring from (x, y) in CSS px of the window: it runs out at `speed` px/s, gathers the sand on
+  // its front (`amp`: how far a grain moves, `width`: how wide the front is), lights the lines it
+  // crosses (`light`), and fades out over `life` ms or as it leaves the window. `from` (px) starts
+  // it already that wide, so a ring from under the board shows the moment the piece lands.
+  ripple(x, y, { amp = 9, speed = 560, width = 26, light = 1, life = 2600, from = 0, slow = false } = {}) {
+    if (!this.motion || !this.drawn || this.stopped || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const { W, H } = this, far = Math.max(Math.hypot(x, y), Math.hypot(W - x, y), Math.hypot(x, H - y), Math.hypot(W - x, H - y));
+    from = Math.max(0, Math.min(Number(from) || 0, far));
+    this.ripples.push({ x, y, at: this.now(), amp, speed, width, light, slow, from, life: Math.max(1, Math.min(life, (far - from + 2.5 * width) / speed * 1000)) });
+    if (this.ripples.length > 6) this.ripples.shift();
+    this.schedule();
+    return true;
+  }
+  // The whole plate shivers by up to `px` CSS px, dying away over `ms`.
+  tremble(px = 2.2, ms = 800) {
+    if (!this.motion || !this.drawn || this.stopped) return false;
+    const now = this.now(), left = this.shiverAt(now);
+    this.shiver = { a: Math.max(px, left), at: now, ms };
+    this.schedule();
+    return true;
+  }
+  shiverAt(now) { const s = this.shiver; if (!s) return 0; const k = 1 - (now - s.at) / s.ms; return k > 0 ? s.a * k * k : 0; }
+  // The pointer at (x, y): the sand parts around it (radius in CSS px) and flows back behind it.
+  touch(x, y, radius = 30) {
+    if (!this.motion || !this.drawn || this.stopped || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const f = this.finger, now = this.now();
+    if (f && now - f.at < 250) Object.assign(f, { x, y, at: now, radius }); else this.finger = { x, y, px: x, py: y, at: now, radius };
+    this.schedule();
+    return true;
+  }
+  lift() { this.finger = null; }
+  // The music: ear() returns the score's byte spectrum while it plays (else null). wake() starts
+  // the frames again when the music starts.
+  listen(ear) { this.ear = typeof ear === 'function' ? ear : null; }
+  wake() { if (this.motion && this.drawn && !this.stopped && this.ear?.()?.length) { this.hearing = true; this.schedule(); } }
+  hear() {
+    const bytes = this.motion && this.ear ? this.ear() : null;
+    this.hearing = !!bytes?.length;
+    let e = 0, b = 0;
+    if (this.hearing) {
+      const n = bytes.length, cut = Math.max(2, n >> 5); let sum = 0, low = 0;
+      for (let i = 0; i < n; i++) { const v = bytes[i]; sum += v * v; if (i < cut) low += v; }
+      e = Math.min(1, Math.sqrt(sum / n) / 140); b = Math.min(1, low / cut / 200);
     }
+    // Quick to rise with a note and slower to fall, like sand thrown up and settling.
+    this.dance += (e - this.dance) * (e > this.dance ? 0.6 : 0.25); if (this.dance < 0.004) this.dance = 0;
+    this.bass += (b - this.bass) * (b > this.bass ? 0.5 : 0.2); if (this.bass < 0.004) this.bass = 0;
+  }
+  // No frames for `ms` (a piece is travelling on the board).
+  pause(ms) { this.pausedUntil = Math.max(this.pausedUntil, this.now() + ms); }
+  // Reduced motion turned on or off: off drops every answer and lays the sand still.
+  setMotion(on) {
+    on = !!on; if (on === this.motion) return;
+    this.motion = on;
+    if (on) { this.armSwell(); return; }
+    this.view.clearTimeout?.(this.swellTimer); this.swellTimer = 0;
+    this.ripples = []; this.shiver = null; this.finger = null; this.dance = 0; this.bass = 0; this.hearing = false;
+    if (this.pushed) { this.dx.fill(0); this.dy.fill(0); this.pushed = false; }
+    if (this.drift) { this.drift = null; this.x.set(this.tx); this.y.set(this.ty); }
+    if (this.drawn) this.draw(1);
+  }
+  // Now and then a slow, faint swell crosses the window from one of its edges.
+  armSwell() {
+    const v = this.view, [shortest, longest] = this.swell || [];
+    if (!this.motion || !shortest || !v.setTimeout || this.stopped) return;
+    v.clearTimeout?.(this.swellTimer);
+    this.swellTimer = v.setTimeout(() => {
+      this.swellTimer = 0;
+      if (this.stopped || !this.motion) return;
+      if (this.drawn && !this.busy && !this.ripples.length && v.document?.visibilityState !== 'hidden') {
+        const r = this.random, t = r(), m = 60, { W, H } = this;
+        const [x, y] = [[t * W, -m], [W + m, t * H], [t * W, H + m], [-m, t * H]][Math.floor(r() * 4) % 4];
+        this.ripple(x, y, { amp: 3.2, speed: 230, width: 120, light: 0.45, life: 9000, slow: true });
+      }
+      this.armSwell();
+    }, shortest + this.random() * Math.max(0, longest - shortest));
+  }
+  // ---- Painting ----
+  // This frame's rings, packed for the loop: [x, y, radius, 1/width, push, inner², outer², light].
+  ringsAt(now) {
+    const out = this.rings; let n = 0;
+    this.ripples = this.ripples.filter(r => now - r.at < r.life);
+    for (const r of this.ripples) {
+      const age = Math.max(0, now - r.at), s = age / r.life, env = 1 - s * s, R = r.from + r.speed * age / 1000, o = n * 8; // strong until late: still bright as it crosses the window
+      out[o] = r.x; out[o + 1] = r.y; out[o + 2] = R; out[o + 3] = 1 / r.width; out[o + 4] = r.amp * env * RING;
+      out[o + 5] = R > 3 * r.width ? (R - 3 * r.width) ** 2 : 0; out[o + 6] = (R + 3 * r.width) ** 2; out[o + 7] = r.light * env;
+      n++;
+    }
+    this.nr = n; return n;
+  }
+  // Paints the sand: during a drift at its point along the way (t), with this frame's answers.
+  draw(t = 1, now = this.now()) {
+    const { count, S, ox, oy, dpr, x: X, y: Y, fx, fy, tx, ty, jx, jy, dx, dy, ux, uy, ph, pixels, rgb } = this;
+    const drifting = !!this.drift && t < 1, w = this.image.width, h = this.image.height;
+    const k = Math.max(1, Math.round(this.size * dpr)), half = k / 2;
+    const dt = Math.min(100, Math.max(0, now - this.lastDraw)); this.lastDraw = now;
+    const nr = this.motion ? this.ringsAt(now) : (this.nr = 0), rb = this.rings;
+    if (this.shiver && now - this.shiver.at >= this.shiver.ms) this.shiver = null;
+    const shake = this.shiverAt(now), osc = shake + this.dance * 2.2, phase = now * 0.001 * 2 * Math.PI * (shake > this.dance ? 10 : 4.5);
+    const breath = this.bass * 0.008, cx = this.W / 2, cy = this.H / 2;
+    // The pointer's path since the last frame, as a capsule `radius` wide.
+    let f = this.finger;
+    if (f && now - f.at > 1200) f = this.finger = null; // a pointer that rests lets the sand back
+    // Near it the lines bend away; under it they part, and they flow back once it has passed.
+    const pushing = this.pushed || !!f, relax = pushing ? Math.exp(-dt / 800) : 1;
+    let fax = 0, fay = 0, fdx = 0, fdy = 0, finv = 0, frad = 0, reach = 0, reach2 = 0, minx = 0, maxx = -1, miny = 0, maxy = -1;
+    if (f) {
+      fax = f.px; fay = f.py; fdx = f.x - f.px; fdy = f.y - f.py; finv = fdx || fdy ? 1 / (fdx * fdx + fdy * fdy) : 0;
+      frad = f.radius; reach = 2 * frad; reach2 = reach * reach;
+      minx = Math.min(f.px, f.x) - reach; maxx = Math.max(f.px, f.x) + reach; miny = Math.min(f.py, f.y) - reach; maxy = Math.max(f.py, f.y) + reach;
+    }
+    const g = this.gctx ? this.gbuf : null, gw = this.gimage?.width || 0, gh = this.gimage?.height || 0, gi = 1 / GLOW;
+    if (g) g.fill(0);
+    pixels.fill(0);
+    let moved = 0;
+    for (let i = 0; i < count; i++) {
+      let px0 = X[i], py0 = Y[i];
+      if (drifting) { const e = this.ease(i, t); px0 = fx[i] + (tx[i] - fx[i]) * e; py0 = fy[i] + (ty[i] - fy[i]) * e; }
+      let sx = ox + px0 * S + jx[i], sy = oy + py0 * S + jy[i], boost = 0;
+      if (pushing) {
+        let ex = dx[i] * relax, ey = dy[i] * relax;
+        if (sx > minx && sx < maxx && sy > miny && sy < maxy) {
+          // How far from the pointer's path this grain lies at rest, and how far out it is pushed:
+          // past the rim from under the pointer, a little less the farther it lies, none at 2×radius.
+          let u = ((sx - fax) * fdx + (sy - fay) * fdy) * finv; u = u < 0 ? 0 : u > 1 ? 1 : u;
+          const vx = sx - fax - fdx * u, vy = sy - fay - fdy * u, d2 = vx * vx + vy * vy;
+          if (d2 < reach2) {
+            const d = Math.sqrt(d2) || 0.01, nx = vx / d, ny = vy / d, want = d < frad ? frad - d + 0.35 * frad : 0.35 * (reach - d), have = ex * nx + ey * ny;
+            if (want > have) { ex += nx * (want - have); ey += ny * (want - have); }
+          }
+        }
+        dx[i] = ex; dy[i] = ey;
+        const m = (ex < 0 ? -ex : ex) + (ey < 0 ? -ey : ey);
+        if (m > moved) moved = m;
+        sx += ex; sy += ey; boost += m > 8 ? 64 : m * 8; // disturbed sand catches the light
+      }
+      if (nr) {
+        let mx = 0, my = 0;
+        for (let r = 0, o = 0; r < nr; r++, o += 8) {
+          const vx = sx - rb[o], vy = sy - rb[o + 1], d2 = vx * vx + vy * vy;
+          if (d2 > rb[o + 6] || d2 < rb[o + 5]) continue;
+          const d = Math.sqrt(d2) || 1, u = (d - rb[o + 2]) * rb[o + 3], e = Math.exp(-u * u), s = -u * e * rb[o + 4] / d;
+          mx += vx * s; my += vy * s; boost += e * rb[o + 7] * 110;
+        }
+        sx += mx; sy += my;
+      }
+      if (osc) { const s = Math.sin(phase + ph[i]) * osc; sx += ux[i] * s; sy += uy[i] * s; }
+      if (breath) { sx += (sx - cx) * breath; sy += (sy - cy) * breath; }
+      const px = Math.round(sx * dpr - half), py = Math.round(sy * dpr - half);
+      if (px >= 0 && py >= 0 && px + k <= w && py + k <= h) {
+        const add = TONES[i % 3] + (boost | 0);
+        for (let r = 0; r < k; r++) for (let c = 0, p = (py + r) * w + px; c < k; c++, p++) {
+          const a = Math.min(255, (LITTLE_ENDIAN ? pixels[p] >>> 24 : pixels[p] & 255) + add);
+          pixels[p] = LITTLE_ENDIAN ? ((a << 24) | rgb) >>> 0 : (rgb | a) >>> 0;
+        }
+      }
+      if (g) { const gx = (sx * gi) | 0, gy = (sy * gi) | 0; if (gx >= 0 && gy >= 0 && gx < gw && gy < gh) g[gy * gw + gx] += 1 + boost * 0.012; }
+    }
+    // The pointer has gone and the sand is back where it lay: exactly back, so the rest is the same.
+    if (pushing) { this.pushed = !!f || moved >= 0.1; if (!this.pushed) { dx.fill(0); dy.fill(0); } }
+    if (f) { f.px = f.x; f.py = f.y; } // the next frame's path starts here
     this.ctx.putImageData(this.image, 0, 0);
+    if (g) this.paintGlow();
+    this.dirty = nr > 0 || osc > 0 || breath > 0 || pushing; // then one more, clean frame follows
     if (!this.drawn) { this.drawn = true; const ready = this.onReady; this.onReady = null; ready?.(); }
   }
-  stop() { if (this.raf) this.view.cancelAnimationFrame?.(this.raf); this.raf = 0; this.job = null; if (this.drift) this.hold(); }
+  // The light: the sand's own glow, softened, and the light of each ring on top of it.
+  paintGlow() {
+    const g = this.gbuf, gw = this.gimage.width, gh = this.gimage.height, rb = this.rings;
+    blur3(g, this.gtmp, gw, gh); // the browser's smoothing as it scales the layer up does the rest
+    for (let r = 0, o = 0; r < this.nr; r++, o += 8) {
+      const a = rb[o + 7] * HALO; if (a < 0.02) continue;
+      const cx = rb[o] / GLOW, cy = rb[o + 1] / GLOW, R = rb[o + 2] / GLOW, wd = 1 / (rb[o + 3] * GLOW), outer = R + 3 * wd, inner = Math.max(0, R - 3 * wd);
+      const y0 = Math.max(0, Math.floor(cy - outer)), y1 = Math.min(gh - 1, Math.ceil(cy + outer));
+      for (let y = y0; y <= y1; y++) {
+        const vy = y + 0.5 - cy, vy2 = vy * vy; if (vy2 > outer * outer) continue;
+        const span = Math.sqrt(outer * outer - vy2), hole = inner * inner > vy2 ? Math.sqrt(inner * inner - vy2) : 0;
+        const xa = Math.max(0, Math.floor(cx - span)), xb = Math.min(gw - 1, Math.ceil(cx + span));
+        for (let x = xa; x <= xb; x++) {
+          const vx = x + 0.5 - cx; if (hole && vx > -hole && vx < hole) { x = Math.ceil(cx + hole - 0.5) - 1; continue; }
+          const u = (Math.sqrt(vx * vx + vy2) - R) / wd; g[y * gw + x] += a * Math.exp(-u * u);
+        }
+      }
+    }
+    const pix = this.gpix, rgb = this.grgb, gain = GLOW_GAIN * (1 + 0.8 * this.dance); // the lines brighten with every note
+    for (let p = 0; p < pix.length; p++) {
+      const v = g[p] * gain;
+      pix[p] = v < 1 ? 0 : LITTLE_ENDIAN ? (((v > 255 ? 255 : v | 0) << 24) | rgb) >>> 0 : (rgb | (v > 255 ? 255 : v | 0)) >>> 0;
+    }
+    this.gctx.putImageData(this.gimage, 0, 0);
+  }
+  stop() {
+    this.stopped = true;
+    if (this.raf) this.view.cancelAnimationFrame?.(this.raf); this.raf = 0; this.job = null;
+    if (this.drift) this.freeze();
+    if (this.swellTimer) this.view.clearTimeout?.(this.swellTimer); this.swellTimer = 0;
+  }
 }
