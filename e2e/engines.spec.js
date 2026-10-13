@@ -44,3 +44,26 @@ test('the campaign names the engine behind each battle', async ({ page }) => {
   await expect(page.locator('.camp-battles li', { hasText: 'The Glass Page' })).toContainText('Lozza 2.5');
   await expect(page.locator('.camp-battles li', { hasText: 'The Vanta King' })).toContainText('Stockfish 19');
 });
+
+test('hovering a section, a way to play or a variant explains it', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Hover is for mouse users; phones show labels');
+  await page.addInitScript(() => { localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1') });
+  await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', route => route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ player: { id: 'me' } }) }));
+  await page.goto('/');
+  const card = page.locator('#hoverGuide');
+  await page.locator('[data-nav="arena"]').hover();
+  await expect(card).toBeVisible();
+  await expect(card.locator('b')).toHaveText('Arena');
+  await expect(card).toContainText('Tournaments');
+  await expect(page.locator('[data-nav="arena"]')).toHaveAttribute('aria-describedby', 'hoverGuide');
+  await page.locator('[data-mode="match"]').click();
+  await page.locator('[data-match-variant="dark"]').hover();
+  await expect(card.locator('b')).toHaveText('Vanta Dark');
+  await expect(page.locator('[data-match-variant="dark"]')).not.toHaveAttribute('title', /./, { timeout: 2000 });
+  await page.locator('[data-match-time="180-0"]').hover();
+  await expect(card.locator('b')).toHaveText('Blitz · 3+0');
+  await page.mouse.move(5, 700);
+  await page.mouse.down(); await page.mouse.up();
+  await expect(card).toBeHidden();
+  await expect(page.locator('[data-match-variant="dark"]')).toHaveAttribute('title', /Fog of war/);
+});

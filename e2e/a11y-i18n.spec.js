@@ -60,8 +60,8 @@ test('switching languages: each one translates, and English comes back without a
 // covers the computer-game screen: players, presence badges, turn, tools, live card and the
 // typed-move box with its spoken announcement.
 const COMPUTER_GAME = {
-  de: { name: 'German', turn: 'Weiß am Zug', you: 'Du · ', local: 'LOKAL', board: 'Schachbrett', resign: '⚑ Aufgeben', card: 'Computerpartie', label: 'Zug eingeben', spoken: 'Weiß Bauer nach e4' },
-  ja: { name: 'Japanese', turn: '白の手番', you: 'あなた · ', local: 'ローカル', board: 'チェス盤', resign: '⚑ 投了', card: 'コンピューター戦', label: '手を入力', spoken: '白 ポーン e4' },
+  de: { name: 'German', turn: 'Weiß am Zug', you: 'Du · ', local: 'LOKAL', board: 'Schachbrett', resign: 'Aufgeben', card: 'Computerpartie', label: 'Zug eingeben', spoken: 'Weiß Bauer nach e4' },
+  ja: { name: 'Japanese', turn: '白の手番', you: 'あなた · ', local: 'ローカル', board: 'チェス盤', resign: '投了', card: 'コンピューター戦', label: '手を入力', spoken: '白 ポーン e4' },
 };
 for (const [lang, t] of Object.entries(COMPUTER_GAME)) {
   test(`${t.name}: the computer-game screen is translated, from its own chunk only`, async ({ page }) => {

@@ -3386,3 +3386,17 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 /* ===== ROUND 13 · ENGINES: which engine plays each computer opponent ===== */
 .bot-card .bot-engine{display:block;margin-top:2px;color:#9fc7b4;font-size:8px;font-style:normal;letter-spacing:.02em;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bot-card[data-bot-slug^="lozza-"] .bot-engine{color:#e1c75d}
+
+/* ===== ROUND 13 · HOVER GUIDE: what each section, tab and mode is (src/hover-guide.js) ===== */
+.hover-guide{position:fixed;z-index:10050;max-width:min(280px,calc(100vw - 16px));padding:9px 12px 10px;border:1px solid #2f4d43;border-radius:11px;background:linear-gradient(180deg,#10211cf7,#08130ff7);box-shadow:0 14px 34px #0009,0 0 0 1px #ffffff08 inset;color:#d7e2dc;font-size:11.5px;line-height:1.4;pointer-events:none;animation:hover-guide-in .14s ease-out}
+.hover-guide[hidden]{display:none}
+.hover-guide b{display:block;margin-bottom:3px;color:#ecd27a;font-size:12px;letter-spacing:.01em}
+.hover-guide span{display:block}
+@keyframes hover-guide-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.hover-guide{animation:none}}
+.tools button{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.tools .tool-ico,.view-title .back-view .tool-ico{width:15px;height:15px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tools .tool-ico .fill{fill:currentColor;stroke:none;opacity:.55}
+.tools #sound[data-off="1"] .sound-wave{opacity:.2}
+.view-title .back-view{display:inline-grid;place-items:center;color:inherit}
+@media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
