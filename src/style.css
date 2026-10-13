@@ -3400,3 +3400,21 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .tools #sound[data-off="1"] .sound-wave{opacity:.2}
 .view-title .back-view{display:inline-grid;place-items:center;color:inherit}
 @media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
+
+/* ===== RESONANCE: Chladni sand on the board and in the Resonance room (src/resonance.js) ===== */
+.fx-layer .resonance-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:difference;opacity:.64;transition:opacity .4s}
+.board[data-resonance="vivid"] .fx-layer .resonance-layer{opacity:.82}
+.resonance-room{display:grid;gap:14px}
+.resonance-stage{position:relative;aspect-ratio:1;width:min(100%,560px);margin:0 auto;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#141b19,#050807 72%);box-shadow:inset 0 0 0 1px #ffffff10,0 18px 50px #0008}
+.resonance-big{position:absolute;inset:0;width:100%;height:100%}
+.resonance-readout{position:absolute;left:12px;bottom:10px;display:grid;gap:1px;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px #000}
+.resonance-readout b{font-size:13px;color:#f1e6c9;letter-spacing:.04em}
+.resonance-readout span{font-size:10px;color:#a9b8b0}
+.resonance-themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:7px}
+.resonance-themes button{display:grid;gap:2px;padding:9px 10px;border:1px solid #293d38;border-radius:9px;background:#091512;text-align:left}
+.resonance-themes button.on{border-color:#e5c17c;background:#1d2117}
+.resonance-themes b{font-size:12px;color:#eef1e9}.resonance-themes small{font-size:9px;color:#83938e}
+.resonance-controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.resonance-controls label{display:flex;align-items:center;gap:8px;font-size:11px;color:#b8c5be}
+.resonance-controls input[type=range]{width:130px}
+@media (prefers-reduced-motion:reduce){.fx-layer .resonance-layer{transition:none}}

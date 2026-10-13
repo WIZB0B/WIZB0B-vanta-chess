@@ -44,6 +44,7 @@ import { VARIANT_WORKER_URL, zhRecordsFromSans, zhReviewPositions } from './vari
 import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-review.js';
 import { ENGINES, LOZZA_BOTS, engineFor, engineName, lozzaBudget } from './engine-roster.js';
 import { guideFor } from './hover-guide.js';
+import { MODES, ResonancePlate, modeForChord, modeForMove, spectrumEnergy } from './resonance.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
@@ -108,6 +109,7 @@ let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back 
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
 let uiLang='en'; // the interface language; set from the saved choice in the language section below
 let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
+let resonance=null,resonanceLevel='off',resonanceMoveKey='',resonanceRoom=null; // Resonance (src/resonance.js), read by render()
 let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
 let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
 let runTimer=0; // ticks the run clock while a run puzzle is on the board
@@ -392,7 +394,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="35" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Resonance <select id="resonanceSetting"><option value="off">Off</option><option value="subtle">Subtle</option><option value="vivid">Vivid</option></select></label><button id="openResonance" type="button" class="theme-relics">Resonance room</button><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -702,6 +704,7 @@ function render(options){
   renderBoard(options);
   if(!statusScheduled){statusScheduled=true;afterBoardPaint(()=>{statusScheduled=false;renderStatus()})}
   if(!announceScheduled){announceScheduled=true;afterBoardPaint(()=>{announceScheduled=false;announceLatestMove();if(analysis){const key=JSON.stringify([analysis.sans,boardShapes]);if(key!==analysis.sentKey){analysis.seq++;analysisSend()}}})}
+  if(resonanceLevel!=='off')afterBoardPaint(resonanceTick); // the sand moves after the piece has landed
 }
 function endText(){if(isZhGame()){const st=zhGameStatus();if(st.over)return st.result==='1/2-1/2'?'Draw · Stalemate':`Checkmate · ${st.result==='1-0'?'White':'Black'} wins`}if(game.isCheckmate())return `Checkmate · ${game.turn()==='w'?'Black':'White'} wins`;if(game.isStalemate())return 'Draw · Stalemate';if(game.isThreefoldRepetition())return 'Draw · Repetition';return 'Draw';}
 function formatTimeControl(seconds,increment=0){
@@ -5023,6 +5026,7 @@ function syncAtmosphere(){
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
 function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
 function syncMusic(mood){
+  if(resonanceRoom?.playing)return; // the Resonance room plays its own score
   const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&liveGameOn()&&document.visibilityState==='visible';
   if(!want){if(vantaScore?.playing)vantaScore.stop();return}
   if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
@@ -5889,4 +5893,87 @@ initRoundTwelve();
   document.addEventListener('focusout',hide);
   for(const type of ['pointerdown','scroll','resize'])window.addEventListener(type,hide,{capture:true,passive:true});
   document.addEventListener('keydown',event=>{if(event.key==='Escape')hide()});
+})();
+// ---- Resonance (src/resonance.js): Chladni figures in sand on the board, rung by the music and the moves ----
+const RESONANCE_KEY='vch.resonance';
+const prefersStill=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+function resonanceCount(level){return Math.round((level==='vivid'?8000:4000)*(matchMedia('(max-width: 800px)').matches?0.55:1))}
+function syncResonance(){
+  const dom=boardDom;if(!dom)return;
+  let canvas=dom.fxLayer.querySelector('canvas.resonance-layer');
+  if(resonanceLevel==='off'){resonance?.stop();resonance=null;canvas?.remove();delete dom.board.dataset.resonance;return}
+  if(!canvas){canvas=document.createElement('canvas');canvas.className='resonance-layer';canvas.setAttribute('aria-hidden','true');dom.fxLayer.prepend(canvas)}
+  dom.board.dataset.resonance=resonanceLevel;
+  if(!resonance||resonance.canvas!==canvas||resonance.level!==resonanceLevel){resonance?.stop();resonance=new ResonancePlate(canvas,{count:resonanceCount(resonanceLevel),color:'#f1e6c9',size:1.15});resonance.level=resonanceLevel;resonance.ctx.globalCompositeOperation='lighter'}
+  if(prefersStill()||document.visibilityState!=='visible'){resonance.stop();resonance.resize();resonance.settle(90);return}
+  resonance.start();
+}
+// Each move rings the plate: where it lands and what moved choose the figure (the music's chord
+// does when the score is playing). In Vanta Dark and Blackout only your own moves ring it, so
+// the sand never tells you about a move you can't see.
+function resonanceTick(){
+  syncResonance();if(!resonance)return;
+  const move=boardLastMove(),key=move?.to?`${move.from||''}${move.to}${move.san||''}:${moveRecords().length}:${reviewState.currentPly}`:'';
+  if(key===resonanceMoveKey)return;resonanceMoveKey=key;if(!key)return;
+  const fog=darkActive()||fogOnline()||(mode==='computer'&&computerRules==='blackout');
+  if(fog&&move.color!==myColor)return;
+  if(!vantaScore?.playing)resonance.setMode(modeForMove({to:move.to,piece:move.piece||'p',captured:move.captured,check:/[+#]/.test(move.san||'')}));
+  resonance.ring(move.captured?1.2:0.8);
+  if(!resonance.running){resonance.resize();resonance.settle(90)}
+}
+// Driven by the music while it plays: the pad's chord picks the figure, its loudness the energy.
+(function resonanceMusicLoop(){
+  setInterval(()=>{
+    const plates=[resonance,resonanceRoom?.plate].filter(Boolean);if(!plates.length||!vantaScore?.playing)return;
+    const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());
+    for(const plate of plates){plate.setMode(mode);plate.setTarget(0.25+energy*0.75)}
+    if(resonanceRoom)resonanceRoom.show?.(mode,energy);
+  },120);
+})();
+function setResonanceLevel(level){
+  resonanceLevel=['subtle','vivid'].includes(level)?level:'off';
+  try{localStorage.setItem(RESONANCE_KEY,resonanceLevel)}catch{}
+  const select=$('#resonanceSetting');if(select)select.value=resonanceLevel;
+  resonanceMoveKey='';syncResonance();if(resonance&&!resonance.running)resonance.settle(90);
+}
+// The Resonance room: the music library seen as sand. Pick a theme, play its score, push the
+// tension and the storm, and watch the figures change.
+const RESONANCE_THEMES=[['vanta','Vanta','D minor'],['ember','Ember','E phrygian'],['umbra','Umbra','C minor, low'],['gilded','Gilded','F lydian'],['mirror','Mirror','A dorian'],['obsidian','Obsidian','B minor'],['rivalry','Rivalry','G harmonic minor']];
+function renderResonanceRoom(){
+  setDynamicView('resonance','Resonance',`<article class="resonance-room">
+    <p class="trainer-intro">Sand on a ringing plate gathers where the plate stays still and draws the figures Ernst Chladni found in 1787. A chessboard is a square plate: here every VCH theme draws its own, live, from its music. Nothing is a picture; each figure is computed as you listen.</p>
+    <div class="resonance-stage"><canvas class="resonance-big" aria-label="Chladni figure drawn by the music" role="img"></canvas><div class="resonance-readout" aria-live="polite"><b>—</b><span>Press play</span></div></div>
+    <div class="resonance-themes" role="group" aria-label="Themes">${RESONANCE_THEMES.map(([id,name,scale])=>`<button type="button" data-resonance-theme="${id}"><b>${name}</b><small>${scale}</small></button>`).join('')}</div>
+    <div class="resonance-controls"><button type="button" class="gold resonance-play">Play</button><label>Tension <input type="range" class="resonance-tension" min="0" max="100" value="35"></label><label>Storm <input type="range" class="resonance-storm" min="0" max="100" value="0"></label></div>
+    <p class="computer-note">Turn on Resonance in the Theme Studio to see the sand on your board during games.</p>
+  </article>`);
+  const root=$('#dynamicView .resonance-room');if(!root)return;
+  const canvas=root.querySelector('.resonance-big'),plate=new ResonancePlate(canvas,{count:matchMedia('(max-width: 800px)').matches?7000:14000,color:'#f1e6c9',size:1.2});
+  plate.ctx.globalCompositeOperation='lighter';plate.setMode(MODES[18]);
+  let theme='vanta';
+  const room={plate,playing:false,show(mode,energy){const r=root.querySelector('.resonance-readout');if(r){r.querySelector('b').textContent=`Mode ${mode.n}·${mode.m}`;r.querySelector('span').textContent=`${Math.round(energy*100)}% · ${RESONANCE_THEMES.find(t=>t[0]===theme)[1]}`}}};
+  resonanceRoom=room;
+  const pick=id=>{theme=id;root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.classList.toggle('on',b.dataset.resonanceTheme===id));if(vantaScore)vantaScore.setKey(id)};
+  root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.onclick=()=>pick(b.dataset.resonanceTheme));pick(theme);
+  const play=root.querySelector('.resonance-play');
+  play.onclick=()=>{
+    if(!vantaScore)vantaScore=new VantaScore();if(!vantaScore.available)return toast('Music needs Web Audio');
+    if(room.playing){room.playing=false;vantaScore.stop();play.textContent='Play';return}
+    vantaScore.setVolume(musicPrefsGet().volume||0.5);vantaScore.setKey(theme);vantaScore.setTension(Number(root.querySelector('.resonance-tension').value)/100);vantaScore.setStorm(Number(root.querySelector('.resonance-storm').value)/100);
+    room.playing=vantaScore.start();play.textContent=room.playing?'Stop':'Play';
+  };
+  root.querySelector('.resonance-tension').oninput=e=>vantaScore?.setTension(Number(e.target.value)/100);
+  root.querySelector('.resonance-storm').oninput=e=>vantaScore?.setStorm(Number(e.target.value)/100);
+  if(prefersStill()){plate.resize();plate.settle(200)}else plate.start();
+  // Leaving the room stops its score and its sand.
+  const watch=new MutationObserver(()=>{if(!canvas.isConnected){watch.disconnect();plate.stop();if(room.playing)vantaScore?.stop();if(resonanceRoom===room)resonanceRoom=null}});
+  watch.observe($('#dynamicView'),{childList:true});
+}
+(function initResonance(){
+  try{resonanceLevel=localStorage.getItem(RESONANCE_KEY)||'off'}catch{}
+  if(!['subtle','vivid'].includes(resonanceLevel))resonanceLevel='off';
+  const select=$('#resonanceSetting');if(select){select.value=resonanceLevel;select.onchange=e=>setResonanceLevel(e.target.value)}
+  $('#openResonance')?.addEventListener('click',()=>{menus.close('theme');setPrimaryScreen('game');renderResonanceRoom();showSidePanel()});
+  document.addEventListener('visibilitychange',()=>{if(resonanceLevel!=='off')syncResonance()});
+  if(resonanceLevel!=='off')render();
 })();

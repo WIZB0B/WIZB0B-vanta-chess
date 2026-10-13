@@ -76,6 +76,8 @@ export const GUIDE = [
   ['.archive-trainer', 'Opening trainer', 'Drills the moves where your games left your own repertoire.'],
   ['.archive-mistakes', 'Learn from your mistakes', 'Positions from your games where a better move was there, brought back until you find it.'],
   ['.archive-army', 'Your army', 'Pieces that served in many of your games, with their deeds.'],
+  ['#openResonance', 'Resonance room', 'The music library as sand on a ringing plate: each theme draws its own Chladni figures, live.'],
+  ['[data-resonance-theme]', null, 'Play this theme and watch the figure its music draws.'],
 ];
 
 // The {title, text} for an element (or the nearest one that has an entry), or null.
