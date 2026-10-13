@@ -68,6 +68,7 @@ import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfS
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
 import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
+import { STATIONS, loadLibrary } from './music-library.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
@@ -391,7 +392,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -5095,29 +5096,58 @@ document.addEventListener('visibilitychange',()=>{if(wallLights.el||musicPrefsGe
 addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.resizeTimer=setTimeout(queueAtmosphere,200)},{passive:true});
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
 function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
-// The score (src/music.js): with Music on it plays everywhere, the calm part between games (the
-// lobby) and the game's own part during one, and every note it plays reaches the room.
-function ensureScore(){if(!vantaScore){vantaScore=new VantaScore();vantaScore.onNote(musicPulse)}return vantaScore.available?vantaScore:null}
+// The music (src/music.js, the tracks in src/music-library.js): with Music on it plays everywhere
+// and follows you (or plays the station you chose), and every beat it plays reaches the room.
+// The library loads the first time Music is on; until it has tracks the music waits.
+let musicLibrary=null;
+function ensureScore(){
+  if(!vantaScore){
+    vantaScore=new VantaScore();vantaScore.onNote(musicPulse);vantaScore.onNote(ev=>{if(ev.track)syncNowPlaying()});
+    void loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore.setTracks(tracks);queueAtmosphere();syncNowPlaying()});
+  }
+  return vantaScore.available?vantaScore:null;
+}
+// Where you are, for the music that follows the game: a Campaign boss, a fast game (three
+// minutes or less, Blackout Blitz), any other game (yours, or one you watch), puzzles, lessons,
+// study and analysis, or the menus.
+const FOCUS_MODES=new Set(['puzzle','survival','lesson','study','analysis','endgame','explore','prep','repertoire','archive']);
+function musicPlace(){
+  if(liveGameOn()){
+    const c=currentBot?.campaign;if(c&&REALMS.find(r=>r.id===c.realm)?.battles?.[c.i]?.boss)return 'boss';
+    if(mode==='computer'?computerRules==='blackout':serverGame?.variant==='blackout')return 'blitz';
+    const seconds=mode==='computer'?600:Number(serverGame?.time_control_seconds||serverGame?.base_seconds||600);
+    return seconds<=180?'blitz':'game';
+  }
+  if(mode==='watch')return 'game';
+  return FOCUS_MODES.has(mode)||reviewState.viewing||!!analysis||currentRightView==='review'?'focus':'lobby';
+}
 function syncMusic(mood){
   const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&document.visibilityState==='visible';
-  if(!want){if(vantaScore?.playing)vantaScore.stop();return}
+  if(!want){if(vantaScore?.playing)vantaScore.stop();return syncNowPlaying()}
   if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
-  const score=ensureScore();if(!score)return;
-  const live=liveGameOn();
-  score.setVolume(p.volume);score.setKey(musicKeyNow());score.setLobby(!live);
-  if(live){
+  const score=ensureScore();if(!score)return syncNowPlaying();
+  score.setVolume(p.volume);score.setStation(p.station);score.setKey(musicKeyNow());score.setPlace(musicPlace());
+  if(liveGameOn()){
     const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
     score.setStorm(storm);score.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
   }else{score.setStorm(0);score.setTension(0)}
   if(!score.playing)score.start();
+  syncNowPlaying();
+}
+// The track playing now, under the Music setting.
+function syncNowPlaying(){
+  const el=$('#musicNow');if(!el)return;
+  const on=musicPrefsGet().on;if(on&&!vantaScore)ensureScore();
+  const track=vantaScore?.nowPlaying,text=track?`Now playing · ${track.title}`:on&&musicLibrary&&!vantaScore?.available?'The music library is on its way':'';
+  if(el.textContent!==text)el.textContent=text;
 }
 // ---- The room follows the music (owner, 2026-10-13: "each wallpaper and everything is supposed
 // to react to music") ----
-// The score announces each note a moment before it sounds, with its time on the audio clock; at
-// that time the candles in the wallpaper leap, a glow breathes round the board, the running clock
-// keeps the beat and the captured pieces nod with each chord. A win flares the room, a loss makes
-// it gutter. Nothing moves with reduced motion or in a hidden tab, and only the candles while a
-// piece travels (the board gets every frame).
+// The player hears every beat of the music (src/music.js listen()); as it sounds the candles in
+// the wallpaper leap, a glow breathes round the board, the running clock keeps the beat and the
+// captured pieces nod with each new phrase. A win flares the room, a loss makes it gutter.
+// Nothing moves with reduced motion or in a hidden tab, and only the candles while a piece
+// travels (the board gets every frame).
 let boardAura=null;
 function musicPulse(ev){
   const ctx=vantaScore?.ctx;if(!ctx||prefersReducedMotion()||document.visibilityState!=='visible')return;
@@ -5152,12 +5182,14 @@ function roomPulse(ev){
   if(k==='chord')document.querySelectorAll('.captured-tray img:not(.arriving),.captured-tray .zh-piece').forEach((el,i)=>el.animate?.([{translate:'0 0'},{translate:'0 -3px',offset:.35},{translate:'0 0'}],{duration:520,delay:i*45,easing:'ease-out'}));
 }
 function syncMusicUi(){
-  const on=musicPrefsGet().on,t=$('#musicToggle'),s=$('#musicSetting');
-  if(t){t.textContent=on?'Music: on':'Music: off';t.setAttribute('aria-pressed',String(on))}
-  if(s)s.value=on?'on':'off';
+  const p=musicPrefsGet(),t=$('#musicToggle'),s=$('#musicSetting');
+  if(t){t.textContent=p.on?'Music: on':'Music: off';t.setAttribute('aria-pressed',String(p.on))}
+  if(s)s.value=p.on?(STATIONS.some(x=>x.id===p.station)?p.station:'on'):'off';
+  syncNowPlaying();
 }
-function setMusicOn(on){
-  musicPrefs=saveMusic({...musicPrefsGet(),on});syncMusicUi();
+// Off, or on: following the game ('on') or playing one station (kept while the music is off).
+function setMusicOn(on,station=musicPrefsGet().station){
+  musicPrefs=saveMusic({...musicPrefsGet(),on,station:station==='off'?musicPrefsGet().station:station});syncMusicUi();
   if(!on)vantaScore?.stop();else syncAtmosphere();
 }
 
@@ -5217,7 +5249,7 @@ function campaignGameOver(info,score,oath){
 function roundTwelveGameOver(info){
   const score=scoreOf(info.result,info.myColor);
   atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};queueAtmosphere();
-  if(vantaScore?.playing){vantaScore.duck(2.6);vantaScore.sting(score===1?'win':score===0?'loss':'draw');vantaScore.setLobby(true)} // the music carries on, calmer, under the sting
+  if(vantaScore?.playing)vantaScore.sting(score===1?'win':score===0?'loss':'draw'); // over the music, which steps back for it and then follows you back to the menus
   const oath=settleOath(info,score);
   campaignGameOver(info,score,oath);
   void twinGameOver(info);
@@ -5227,7 +5259,7 @@ function initRoundTwelve(){
   const prefs=r12Prefs(),vs=$('#veteranSetting'),as=$('#atmosphereSetting'),ms=$('#musicSetting'),mv=$('#musicVolume');
   if(vs){vs.value=prefs.veterans;vs.onchange=e=>{setR12Pref('veterans',e.target.value);hideVeteranCard();render()}}
   if(as){as.value=prefs.atmosphere;as.onchange=e=>{setR12Pref('atmosphere',e.target.value);syncAtmosphere()}}
-  if(ms)ms.onchange=e=>setMusicOn(e.target.value==='on');
+  if(ms)ms.onchange=e=>setMusicOn(e.target.value!=='off',e.target.value);
   if(mv){mv.value=String(Math.round(musicPrefsGet().volume*100));mv.oninput=e=>{musicPrefs=saveMusic({...musicPrefsGet(),volume:Number(e.target.value)/100});vantaScore?.setVolume(musicPrefs.volume)}}
   $('#musicToggle')?.addEventListener('click',()=>setMusicOn(!musicPrefsGet().on));
   syncMusicUi();

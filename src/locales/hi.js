@@ -1916,6 +1916,14 @@ export const ROWS = [
   ["The computer is unavailable in this browser.", "इस ब्राउज़र में कंप्यूटर उपलब्ध नहीं है।"],
   ["Masters", "मास्टर"],
   ["Full strength", "पूरी ताकत"],
+  ["Follows the game", "बाज़ी के अनुसार"],
+  ["Dark cinematic", "गहरा सिनेमाई"],
+  ["Focus", "एकाग्रता"],
+  ["Opera", "ओपेरा"],
+  ["Electric", "इलेक्ट्रिक"],
+  ["Songs", "गीत"],
+  ["Now playing", "अभी बज रहा है"],
+  ["The music library is on its way", "संगीत लाइब्रेरी आने वाली है"],
 ];
 
 export const PATTERNS = [

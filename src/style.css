@@ -1811,8 +1811,11 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 
 
 /* Urgent clock mapping fix: clocks follow the color assigned to each player bar. */
+/* The track playing now, under the Music setting in the Theme Studio. */
+.music-now{display:block;min-height:1em;margin:-4px 0 6px;color:var(--gold,#e5c17c);font-size:12px;letter-spacing:.2px}
+.music-now:empty{display:none}
 /* The room follows the music (src/main.js roomPulse): a glow breathes round the board with each
-   chord and drum, red with the storm's heartbeat, gold for a win; the running clock keeps the
+   phrase and drum, red with the storm's heartbeat, gold for a win; the running clock keeps the
    beat. Opacity only, played by the compositor. */
 .board-aura{grid-column:2;grid-row:1;align-self:stretch;justify-self:stretch;border-radius:12px;pointer-events:none;opacity:0;box-shadow:0 0 34px 8px rgb(229 193 124 / .5),0 0 80px 18px rgb(229 193 124 / .18)}
 .board-aura[data-tone="heartbeat"],.board-aura[data-tone="loss"]{box-shadow:0 0 30px 8px rgb(255 96 80 / .45),0 0 70px 16px rgb(255 70 60 / .16)}

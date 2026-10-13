@@ -414,18 +414,26 @@ deploy waits for round 11 and the owner's approval for that deployment.
 - R12.4 Living atmosphere: the room reacts to check, a low clock, material and the result
   (position and clocks only); full, subtle or off. (PR #55)
 - R12.5 Adaptive music: a Web Audio score in each theme's key that follows the game's
-  tension; off by default. (PR #55) Now a cinematic score (owner, 2026-10-13: "more music...
-  epic, engaging, cinematic, beautiful... HD 3D audio"; Higgsfield cannot make music, its audio
-  tool is speech only): strings over a sub drone, a harp, a formant choir circling behind you,
-  cellos and horns when tense, timpani, war drums and the storm's heartbeat, each theme's motif
-  on a flute or the horns, a concert-hall reverb, every section placed around you in 3D (HRTF);
-  three parts per theme (calm, tense, storm) that change where a phrase ends; the calm part
-  between games (the lobby) when Music is on; a fanfare, falling strings or an open fifth at
-  the end, over the music, which carries on. Moves are heard where they land (a wooden knock
-  placed by its square, heavier for a capture, a ring for a check; plain and centred in the
-  dark). The room follows the music: the candles leap with the notes, a glow breathes round
-  the board, the running clock keeps the beat, captured pieces nod with each chord. Licensed
-  recordings could replace the synths behind the same controls later.
+  tension; off by default. (PR #55) Then a synthesized cinematic score (PR #65, first commits),
+  which the owner turned down (2026-10-13: "That music does not make sense... please use
+  Lyria"). Now real music, made with Lyria 3.5 (Creative Claw): the tracks are data,
+  `public/assets/vch/music/library.json` plus the .mp3 files beside it (same origin: the CSP
+  stays as it is), read by src/music-library.js the first time Music is on. The player
+  (src/music.js) crossfades two decks and loads the next track before the last ends. Music
+  setting: Off, Follows the game, or a station (Dark cinematic, Focus, Opera, Electric, Songs).
+  Following the game: the lobby's music in the menus, focus music for puzzles, lessons, study
+  and analysis, opera for Campaign bosses, electric music for fast games and Blackout Blitz, and
+  in your games a dark cinematic score whose part follows the game (calm, tense, the storm when
+  your clock runs low; it turns at most every ten seconds, the storm at once); a sting at the
+  end of a game over the music, which steps back for it. Theme Studio shows what is playing.
+  Moves are heard where they land (a wooden knock placed by its square, heavier for a capture,
+  a ring for a check; plain and centred in the dark). The room follows the real music: the
+  player listens to itself (onsets in the low end are drums, in the middle beats), and the
+  candles leap, a glow breathes round the board, the running clock keeps the beat, captured
+  pieces nod with each phrase. Music files stream past the service worker (never cached).
+  First batch: game calm, tense and storm; win and loss stings; two focus pieces; an opera
+  boss theme; electric funk; electronic; the lobby; two songs with vocals about everyday
+  things (an old chair, the kitchen stove).
 - R12.6 Vanta Bughouse: two against two on two boards, tables by link, the partner's board
   beside yours, team calls, the first board to finish decides the match. Casual. Server in
   PR #54; app in PR claude/round12-social.

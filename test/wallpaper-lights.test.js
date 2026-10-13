@@ -122,13 +122,14 @@ test('the flames leap with the music and settle; a loss makes them gutter; a plu
   wl.pulse(0.6, 1000); wl.pulse(0.1, 100); assert.ok(wl.flareOf(l, wl.now()) > 0.5);
 });
 
-test('wired: the score plays everywhere when Music is on, and every note reaches the room', () => {
-  assert.match(main, /function ensureScore\(\)\{if\(!vantaScore\)\{vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\)\}/);
-  assert.match(main, /score\.setLobby\(!live\);/, 'the calm part between games');
+test('wired: the music plays everywhere when Music is on, and every beat reaches the room', () => {
+  assert.match(main, /vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\);vantaScore\.onNote\(ev=>\{if\(ev\.track\)syncNowPlaying\(\)\}\);/);
+  assert.match(main, /void loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(tracks\);queueAtmosphere\(\);/, 'the library loads the first time Music is on');
+  assert.match(main, /score\.setVolume\(p\.volume\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setPlace\(musicPlace\(\)\);/, 'it follows you, or plays your station');
   assert.match(main, /const wait=\(ev\.at-ctx\.currentTime\+\(ctx\.outputLatency\|\|ctx\.baseLatency\|\|0\)\)\*1000;/, 'in time with the sound');
   assert.match(main, /if\(!ctx\|\|prefersReducedMotion\(\)\|\|document\.visibilityState!=='visible'\)return;/);
   assert.match(main, /if\(boardIsMoving\(\)\)return;/, 'the board gets every frame while a piece travels');
-  assert.match(main, /vantaScore\.duck\(2\.6\);vantaScore\.sting\(/, 'the sting plays over the music, which carries on');
+  assert.match(main, /if\(vantaScore\?\.playing\)vantaScore\.sting\(score===1\?'win':score===0\?'loss':'draw'\);/, 'the sting plays over the music, which carries on');
   assert.match(main, /playMoveSound\(audioContext\(\),\{place:hidden\?null:moveSoundPlace\(move\?\.to\)/, 'moves heard where they land, never in the dark');
   assert.match(css, /\.board-aura\{grid-column:2;grid-row:1;/);
   assert.match(css, /\.board-shell\.with-aura>\.board\{position:relative;z-index:1\}/);

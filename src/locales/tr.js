@@ -1916,6 +1916,14 @@ export const ROWS = [
   ["The computer is unavailable in this browser.", "Bilgisayar bu tarayıcıda kullanılamıyor."],
   ["Masters", "Ustalar"],
   ["Full strength", "Tam güç"],
+  ["Follows the game", "Oyunu takip eder"],
+  ["Dark cinematic", "Karanlık sinematik"],
+  ["Focus", "Odak"],
+  ["Opera", "Opera"],
+  ["Electric", "Elektronik"],
+  ["Songs", "Şarkılar"],
+  ["Now playing", "Şimdi çalıyor"],
+  ["The music library is on its way", "Müzik kütüphanesi yolda"],
 ];
 
 export const PATTERNS = [

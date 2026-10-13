@@ -1916,6 +1916,14 @@ export const ROWS = [
   ["The computer is unavailable in this browser.", "Il computer non è disponibile in questo browser."],
   ["Masters", "Maestri"],
   ["Full strength", "Piena forza"],
+  ["Follows the game", "Segue la partita"],
+  ["Dark cinematic", "Cinematica cupa"],
+  ["Focus", "Concentrazione"],
+  ["Opera", "Opera"],
+  ["Electric", "Elettrica"],
+  ["Songs", "Canzoni"],
+  ["Now playing", "In riproduzione"],
+  ["The music library is on its way", "La libreria musicale è in arrivo"],
 ];
 
 export const PATTERNS = [

@@ -1916,6 +1916,14 @@ export const ROWS = [
   ["The computer is unavailable in this browser.", "このブラウザーではコンピューターを利用できません。"],
   ["Masters", "マスター級"],
   ["Full strength", "全力"],
+  ["Follows the game", "対局に合わせる"],
+  ["Dark cinematic", "ダーク・シネマティック"],
+  ["Focus", "集中"],
+  ["Opera", "オペラ"],
+  ["Electric", "エレクトリック"],
+  ["Songs", "歌"],
+  ["Now playing", "再生中"],
+  ["The music library is on its way", "音楽ライブラリは準備中です"],
 ];
 
 export const PATTERNS = [

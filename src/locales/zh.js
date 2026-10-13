@@ -1916,6 +1916,14 @@ export const ROWS = [
   ["The computer is unavailable in this browser.", "电脑在此浏览器中不可用。"],
   ["Masters", "大师级"],
   ["Full strength", "全力"],
+  ["Follows the game", "随对局变化"],
+  ["Dark cinematic", "暗黑电影配乐"],
+  ["Focus", "专注"],
+  ["Opera", "歌剧"],
+  ["Electric", "电子"],
+  ["Songs", "歌曲"],
+  ["Now playing", "正在播放"],
+  ["The music library is on its way", "音乐库即将到来"],
 ];
 
 export const PATTERNS = [
