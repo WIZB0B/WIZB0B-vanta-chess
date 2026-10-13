@@ -1934,6 +1934,8 @@ export const ROWS = [
   ["Maximum", "القوة القصوى"],
   ["Full strength, no handicap. The strongest opponent on VCH.", "قوة كاملة دون أي تخفيف. أقوى خصم على VCH."],
   ["The computer is unavailable in this browser.", "الحاسوب غير متاح في هذا المتصفح."],
+  ["Masters", "الأساتذة"],
+  ["Full strength", "القوة الكاملة"],
 ];
 
 export const PATTERNS = [

@@ -1934,6 +1934,8 @@ export const ROWS = [
   ["Maximum", "Maksimum"],
   ["Full strength, no handicap. The strongest opponent on VCH.", "Tam güç, handikap yok. VCH'deki en güçlü rakip."],
   ["The computer is unavailable in this browser.", "Bilgisayar bu tarayıcıda kullanılamıyor."],
+  ["Masters", "Ustalar"],
+  ["Full strength", "Tam güç"],
 ];
 
 export const PATTERNS = [

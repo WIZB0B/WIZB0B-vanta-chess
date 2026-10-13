@@ -1934,6 +1934,8 @@ export const ROWS = [
   ["Maximum", "अधिकतम"],
   ["Full strength, no handicap. The strongest opponent on VCH.", "पूरी ताक़त, कोई रियायत नहीं। VCH पर सबसे मज़बूत प्रतिद्वंद्वी।"],
   ["The computer is unavailable in this browser.", "इस ब्राउज़र में कंप्यूटर उपलब्ध नहीं है।"],
+  ["Masters", "मास्टर"],
+  ["Full strength", "पूरी ताकत"],
 ];
 
 export const PATTERNS = [
