@@ -1,5 +1,6 @@
 import './style.css';
 import './rtl.css';
+import './shadows.css';
 import { Chess } from 'chess.js';
 import { createClient } from '@supabase/supabase-js';
 import { VchApi, stableGuestToken } from './vch-api.js';

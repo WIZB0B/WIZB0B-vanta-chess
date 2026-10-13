@@ -1,0 +1,131 @@
+/* Cast shadows (owner request 2026-10-12: "soft shadows for the pieces; depending on the theme
+   and where the light is coming from in the theme background, the shadow direction changes").
+
+   Every piece throws a soft shadow across the board, away from the scene's key light. The light
+   is set per wallpaper (and per campaign realm) on body with these custom properties; :root
+   holds the default, and later themes and board skins can override them on body or .board:
+     --light-x          where the key light is, seen from the board: -1 left ... 1 right
+     --light-y          -1 behind the board (the top of the screen) ... 1 in front (the player)
+                        (together a direction: only the ratio of x to y matters)
+     --shadow-length    floor length of the tallest piece's shadow, in squares (0 = overhead)
+     --shadow-softness  0 crisp (a small, hard light) ... 1 diffuse (a big, soft light)
+     --shadow-strength  opacity of the shadow's darkest part
+     --shadow-rgb       its colour as "r g b": a near-black tinted like the light's room
+
+   Performance: the shadow is the piece's own ::after: one box painted with two radial
+   gradients (no filter, blur, drop-shadow, mask or blend), so it is rasterised once into the
+   piece's layer and travels with the piece's transform; a move stays a compositor-only
+   transform animation. It sits under the piece's artwork (z-index -1 inside .board-piece) and
+   above the squares, and since pieces stack by screen row, a nearer piece is drawn over a
+   shadow falling toward it.
+
+   Geometry: the shadow is drawn in floor space (x along the shadow, starting at the centre of
+   the piece's footprint), turned away from the light, then flattened by --shadow-depth, so a
+   shadow toward the player is shorter than one thrown sideways. Its near end, wide and darkest,
+   is the piece's body; a narrower tail (the upper body and head) fades out to the tip. Taller
+   pieces throw longer shadows (--piece-h, from the piece's data-piece). The contact shadow
+   under the base (.board-piece::before, style.css) is unchanged. */
+
+:root{
+  /* Gentle default: the Midnight Emerald hall (the default wallpaper). */
+  --light-x:-.3;--light-y:-1;
+  --shadow-length:.48;--shadow-softness:.6;--shadow-strength:.4;--shadow-rgb:16 10 4;
+  /* Set geometry, not theme settings: floor foreshortening, footprint width (squares) and how
+     much of the theme's shadow a set shows. */
+  --shadow-depth:.75;--shadow-width:.5;--shadow-set-strength:1;
+}
+
+/* ---- Light per wallpaper, read from the wallpaper art ---- */
+/* Midnight Emerald: a gothic hall lit from its far end (chandelier and tall window straight
+   behind the board; the candelabra on the left a little brighter): shadows fall toward the
+   player, leaning slightly right. */
+body[data-wallpaper="classic"]{--light-x:-.3;--light-y:-1;--shadow-length:.48;--shadow-softness:.6;--shadow-strength:.4;--shadow-rgb:16 10 4}
+/* Midnight Cobalt: moonlight through the great window behind the board, the moon right of
+   centre: crisper, cooler shadows toward the player, leaning left. */
+body[data-wallpaper="cobalt"]{--light-x:.35;--light-y:-1;--shadow-length:.52;--shadow-softness:.4;--shadow-strength:.42;--shadow-rgb:4 8 22}
+/* Burgundy Brass: shaded sconces high on the back wall and a shelf of candles on the right:
+   warm, soft shadows falling left and toward the player. */
+body[data-wallpaper="burgundy"]{--light-x:.6;--light-y:-.8;--shadow-length:.6;--shadow-softness:.75;--shadow-strength:.4;--shadow-rgb:26 8 4}
+/* Ivory Noir: daylight from the tall window on the right wall, about level with the board:
+   long, clean shadows to the left. */
+body[data-wallpaper="ivory"]{--light-x:1;--light-y:-.15;--shadow-length:.72;--shadow-softness:.45;--shadow-strength:.38;--shadow-rgb:14 12 10}
+
+/* ---- Campaign realms (src/campaign.js: body[data-realm] during a realm battle, over the
+   realm relic's wallpaper) ---- */
+/* The Ashen March (Burgundy): fought "by the light of the embers alone": low, warm firelight
+   from the right, so long, soft shadows. */
+body[data-realm="ashen"]{--light-x:.8;--light-y:-.5;--shadow-length:.72;--shadow-softness:.85;--shadow-rgb:30 8 2}
+/* The Drowned Keep (Cobalt): light filtering down through black water: faint, diffuse, short. */
+body[data-realm="tidal"]{--light-x:.15;--light-y:-1;--shadow-length:.38;--shadow-softness:.95;--shadow-strength:.3;--shadow-rgb:2 10 18}
+/* The Mirror Court (Ivory): a hall of glass, light from every side: the softest, palest. */
+body[data-realm="court"]{--shadow-length:.5;--shadow-softness:.9;--shadow-strength:.26}
+/* The Hollow Crown (Burgundy): the same throne room, a warmer, golden shadow. */
+body[data-realm="crown"]{--shadow-rgb:30 14 2}
+/* The Obsidian Spire (Emerald): the storm's lightning breaks from the upper left (the
+   atmosphere's flash): crisp shadows thrown down and to the right. */
+body[data-realm="spire"]{--light-x:-.7;--light-y:-.8;--shadow-length:.62;--shadow-softness:.3;--shadow-strength:.42;--shadow-rgb:6 6 16}
+
+/* ---- Piece sets: where each piece's footprint is (its centre, from the top of the square,
+   measured from the sprite sheets and the per-piece lifts in style.css) ---- */
+.board-piece{--shadow-base:92%}
+/* Vanta: side view; bases end at 97.8% of the cell (pawns and rooks are lifted 4.5%/2.5%). */
+:root[data-piece-style="vanta"] .board-piece{--shadow-base:94%}
+:root[data-piece-style="vanta"] .board-piece[data-piece$="r"]{--shadow-base:92%}
+:root[data-piece-style="vanta"] .board-piece[data-piece$="p"]{--shadow-base:90%}
+/* Regal: rendered from above, so rounder bases (a deeper floor, a wider footprint) whose
+   centres sit higher, by piece (the regal lifts in style.css). */
+:root[data-piece-style="regal"]{--shadow-depth:.8;--shadow-width:.46}
+:root[data-piece-style="regal"] .board-piece{--shadow-base:89.5%}
+:root[data-piece-style="regal"] .board-piece[data-piece$="b"]{--shadow-base:87%}
+:root[data-piece-style="regal"] .board-piece[data-piece$="n"]{--shadow-base:86%}
+:root[data-piece-style="regal"] .board-piece[data-piece$="r"]{--shadow-base:84.5%}
+:root[data-piece-style="regal"] .board-piece[data-piece$="p"]{--shadow-base:81.5%}
+/* The Ink sets are flat drawings with no contact shadow: only a faint cast shadow. */
+:root[data-piece-style$="-ink"]{--shadow-set-strength:.45}
+
+/* ---- Piece heights: taller pieces throw longer shadows (data-piece = colour + type) ---- */
+.board-piece{--piece-h:.9}
+.board-piece[data-piece$="k"]{--piece-h:1}
+.board-piece[data-piece$="q"]{--piece-h:.96}
+.board-piece[data-piece$="b"]{--piece-h:.9}
+.board-piece[data-piece$="n"]{--piece-h:.88}
+.board-piece[data-piece$="r"]{--piece-h:.84}
+.board-piece[data-piece$="p"]{--piece-h:.74}
+
+/* ---- The shadow ---- */
+/* (A reviewed piece's triumph glow also uses ::after; it replaces the shadow while it shows.) */
+.board-piece:not([data-react="triumph"])::after{
+  --sl:calc(var(--shadow-length) * var(--piece-h));                       /* floor length (squares) */
+  --sw:calc(var(--shadow-width) * (1 + var(--shadow-softness) * .3));     /* width: softer is wider */
+  --sx:calc(var(--sl) + var(--sw));                                       /* box length (squares) */
+  --sa:calc(var(--shadow-strength) * var(--shadow-set-strength));         /* darkest opacity */
+  --s0:calc((1 - var(--shadow-softness)) * 34%);                          /* solid core of each falloff */
+  --su:calc((var(--sw) * .5 + var(--sl) * .2) / var(--sx) * 100%);       /* body: centre = radius */
+  --st:calc((var(--sw) * .5 + var(--sl) * .42) / var(--sx) * 100%);      /* tail: centre */
+  content:"";position:absolute;z-index:-1;pointer-events:none;
+  left:calc(50% - var(--sw) * 50%);top:calc(var(--shadow-base) - var(--sw) * 50%);
+  width:calc(var(--sx) * 100%);height:calc(var(--sw) * 100%);
+  /* Pivot on the footprint's centre: turn away from the light, then foreshorten. */
+  transform-origin:calc(var(--sw) / var(--sx) * 50%) 50%;
+  transform:scaleY(var(--shadow-depth)) rotate(atan2(calc(var(--light-y) * -1),calc(var(--light-x) * -1)));
+  background:
+    /* body: wide and darkest where the piece meets the floor */
+    radial-gradient(var(--su) 48% at var(--su) 50%,
+      rgb(var(--shadow-rgb) / calc(var(--sa) * .62)) var(--s0),
+      rgb(var(--shadow-rgb) / calc(var(--sa) * .36)) calc(var(--s0) + (100% - var(--s0)) * .38),
+      rgb(var(--shadow-rgb) / calc(var(--sa) * .12)) calc(var(--s0) + (100% - var(--s0)) * .72),
+      rgb(var(--shadow-rgb) / 0) 100%),
+    /* tail: narrower (upper body and head), fading out to the tip */
+    radial-gradient(calc(100% - var(--st)) 37% at var(--st) 50%,
+      rgb(var(--shadow-rgb) / calc(var(--sa) * .5)) var(--s0),
+      rgb(var(--shadow-rgb) / calc(var(--sa) * .3)) calc(var(--s0) + (100% - var(--s0)) * .4),
+      rgb(var(--shadow-rgb) / calc(var(--sa) * .1)) calc(var(--s0) + (100% - var(--s0)) * .75),
+      rgb(var(--shadow-rgb) / 0) 100%);
+}
+/* The shadow never animates by itself: no hover or press response (unlike the contact shadow),
+   so hovering or picking a piece just before it moves starts no extra animation in the move.
+   The dragged copy is drawn without shadows (as without its contact shadow); its own piece on
+   the board is hidden while dragged, which hides that piece's shadow too. In Blackout the
+   pieces are invisible, and so are their shadows. (Vanta Dark's hidden pieces are never in the
+   DOM, so they have no shadow to give them away.) */
+.drag-layer .board-piece::after,.board.blackout .board-piece::after{display:none}
