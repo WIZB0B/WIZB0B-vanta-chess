@@ -59,9 +59,11 @@ test('left panel switches between three distinct play-mode views',async({page})=
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  // Six Stockfish 19 levels and two Lozza 2.5 opponents (src/engine-roster.js).
-  await expect(page.locator('#botGrid .bot-card')).toHaveCount(8);
-  await expect(page.locator('#botGrid .bot-card .bot-engine', { hasText: 'Lozza 2.5' })).toHaveCount(2);
+  // Twelve levels from Beginner to Maximum (src/computer-levels.js); no engine names on screen.
+  await expect(page.locator('#botGrid .bot-card')).toHaveCount(12);
+  await expect(page.locator('#botGrid .bot-card').first()).toContainText('Beginner');
+  await expect(page.locator('#botGrid .bot-card').last()).toContainText('Maximum');
+  await expect(page.locator('#botGrid')).not.toContainText(/Stockfish|Lozza/);
   await expect(page.locator('[data-computer-side]')).toHaveCount(3);
   await expect(page.locator('#computerStart')).toBeVisible();
 
@@ -92,7 +94,7 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  await page.locator('[data-bot-slug="gambit"]').click();
+  await page.locator('[data-bot-slug="tournament"]').click();
   await page.locator('#computerStart').click();
   await page.locator('.board-piece[data-square="e2"]').dragTo(page.locator('[data-sq="e4"]'));
   await expect(page.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible();

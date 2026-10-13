@@ -55,9 +55,3 @@ export function engineFor(bot, rules = 'standard') {
   return 'stockfish19';
 }
 export const engineName = id => ENGINES[id]?.name || ENGINES.stockfish19.name;
-
-// Computer opponents played by Lozza, beside the Stockfish levels in the Computer panel.
-export const LOZZA_BOTS = Object.freeze([
-  Object.freeze({ slug: 'lozza-fruitwood', display_name: 'Fruitwood', elo: 1600, portrait: 'wn', engine: 'lozza' }),
-  Object.freeze({ slug: 'lozza-ironbark', display_name: 'Ironbark', elo: 2100, portrait: 'wb', engine: 'lozza' }),
-]);
