@@ -56,9 +56,10 @@ test('time controls are named by Lichess\'s estimate (base + 40 x increment)', (
   assert.match(info.text, /Three to eight minutes/);
 });
 
-test('bot cards describe their engine', () => {
-  const card = el({ cls: ['bot-card'], children: { b: { textContent: 'Fruitwood' }, '.bot-engine': { dataset: { about: 'A JavaScript engine.' } } } });
-  assert.deepEqual({ ...guideFor(card), el: null }, { el: null, title: 'Fruitwood', text: 'A JavaScript engine.' });
+test('computer levels describe how they play, never what plays them', () => {
+  const card = el({ cls: ['bot-card'], attrs: { 'data-about': 'Castles early, fights for the centre.' }, children: { b: { textContent: 'Club Player' }, small: { textContent: '1200 Elo' } } });
+  assert.deepEqual({ ...guideFor(card), el: null }, { el: null, title: 'Club Player · 1200 Elo', text: 'Castles early, fights for the centre.' });
+  for (const [, title, text] of GUIDE) for (const s of [title, text]) if (typeof s === 'string') assert.doesNotMatch(s, /Stockfish|Lozza|engine/i, s);
 });
 
 test('the guide is wired once, for mouse and keyboard, and no icon is a unicode glyph', () => {

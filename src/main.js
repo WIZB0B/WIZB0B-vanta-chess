@@ -42,7 +42,8 @@ import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
 import { playablePuzzleFen } from './puzzle-start.js';
 import { VARIANT_WORKER_URL, zhRecordsFromSans, zhReviewPositions } from './variant-engine.js';
 import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-review.js';
-import { ENGINES, LOZZA_BOTS, engineFor, engineName, lozzaBudget } from './engine-roster.js';
+import { ENGINES, engineFor, lozzaBudget } from './engine-roster.js';
+import { COMPUTER_LEVELS, DEFAULT_LEVEL, OLD_BOT_NAMES, beginnerMove, levelBot } from './computer-levels.js';
 import { guideFor } from './hover-guide.js';
 import { MODES, ResonancePlate, modeForChord, modeForMove, spectrumEnergy } from './resonance.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
@@ -101,7 +102,7 @@ const defaultGuestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 // A guest may choose a display name (Portrait & profile); it is kept on this device and sent
 // with every request that carries the guest's name.
 let guestName=(()=>{try{const v=cleanDisplayName(localStorage.getItem('vch.guestName')||'');return isDisplayName(v)?v:defaultGuestName}catch{return defaultGuestName}})();
-const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug=DEFAULT_LEVEL, toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
@@ -127,15 +128,9 @@ const reactions=new PieceReactions({
   enabled:()=>!prefersReducedMotion()&&motionScale()>0,
 });
 let matchSelection={seconds:600,increment:0,rated:false,variant:'standard'};
-const DEFAULT_COMPUTER_BOTS=[
-  {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
-  {slug:'forge',display_name:'Forge',elo:1200,portrait:'bb'},
-  {slug:'gambit',display_name:'Gambit',elo:1500,portrait:'br'},
-  {slug:'cipher',display_name:'Cipher',elo:1800,portrait:'bq'},
-  {slug:'oracle',display_name:'Oracle',elo:2200,portrait:'bk'},
-  {slug:'legend',display_name:'Legend',elo:2700,portrait:'bp'}
-];
-let computerBots=[...DEFAULT_COMPUTER_BOTS,...LOZZA_BOTS].map(bot=>({...bot}));
+// The computer ladder: twelve levels from Beginner to Maximum (src/computer-levels.js).
+const DEFAULT_COMPUTER_BOTS=COMPUTER_LEVELS.map(levelBot);
+let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
 let moveEvalByPly=[],moveTimeByPly=[];
 let reviewState={running:false,viewing:false,currentPly:0,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
 let reviewPending=null;
@@ -274,7 +269,7 @@ ${splashMarkup(splash)}
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
     <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="match-variants" aria-label="Variant"><button class="on" data-match-variant="standard" title="Classic chess">Standard</button><button data-match-variant="dark" title="Fog of war: you only see what your pieces see. Own rating.">Vanta Dark</button><button data-match-variant="blackout" title="Every four of your moves, the lights go out for two. Own rating.">Blackout Blitz</button></div>
-          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="dark">Vanta Dark · fog of war (own rating)</option><option value="blackout">Blackout Blitz · the lights go out (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <p class="special-opponent hidden" id="specialOpponent" role="status"></p>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="dark">Vanta Dark · fog of war (own rating)</option><option value="blackout">Blackout Blitz · the lights go out (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY THE COMPUTER</small><h3>Choose your opponent.</h3><p>Twelve levels, from Beginner to Maximum. Each one plays the way players at that level do.</p></div>\n          <p class="special-opponent hidden" id="specialOpponent" role="status"></p>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -675,7 +670,7 @@ function boardContext(){
   if(egSession||mode==='endgame')return {kicker:'Endgame drill',line:'Practice position'};
   if(studySession)return {kicker:'Study',line:'Analysis board'};
   if(exploreSession)return {kicker:'Explorer',line:'Opening explorer'};
-  if(mode==='computer'&&currentBot)return {kicker:'Computer game',line:`vs ${currentBot.display_name||currentBot.name||'Stockfish'}`};
+  if(mode==='computer'&&currentBot)return {kicker:'Computer game',line:`vs ${currentBot.display_name||currentBot.name||'Computer'}`};
   return null;
 }
 function renderStatus(){
@@ -983,22 +978,14 @@ function syncSpecialOpponent(bot){
 }
 function renderComputerBots(){
   const grid=$('#botGrid');if(!grid)return;
-  if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=computerBots.find(bot=>Number(bot.elo)===1500)?.slug||computerBots[0]?.slug||'';
-  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small><em class="bot-engine" data-about="${escapeHtml(ENGINES[bot.engine==='lozza'?'lozza':'stockfish19'].about)}">${escapeHtml(engineName(bot.engine==='lozza'?'lozza':'stockfish19'))}</em></span></button>`).join('');
+  if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=DEFAULT_LEVEL;
+  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" data-about="${escapeHtml(bot.about||'')}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Computer')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
   $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;syncSpecialOpponent(null);renderComputerBots()});
 }
-async function loadComputerBots(){
+// The ladder lives in the app (src/computer-levels.js); the server's bots only stand in for an
+// opponent when the match queue is empty.
+function loadComputerBots(){
   if(botsLoaded)return;botsLoaded=true;
-  try{
-    const data=await api.bots(),remote=(data.bots||[]).filter(bot=>Number(bot.elo)>=900&&Number(bot.elo)<=2700).sort((a,b)=>Number(a.elo)-Number(b.elo));
-    if(remote.length){
-      const portraits=['bn','bb','br','bq','bk','bp'];
-      computerBots=[...DEFAULT_COMPUTER_BOTS.map((fallback,index)=>{
-        const bot=remote[index]||fallback;
-        return {...fallback,...bot,slug:bot.slug||fallback.slug,portrait:portraits[index],engine:'stockfish19'};
-      }),...LOZZA_BOTS.map(bot=>({...bot}))];
-    }
-  }catch{}
   renderComputerBots();
 }
 function selectedComputerSide(){
@@ -1212,6 +1199,15 @@ function blindSearch(){
 async function findEngineMove(){
   const moves=game.moves({verbose:true});if(!moves.length)return null;
   const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`,blind=blindSearch();
+  // The lowest levels play some moves the way a beginner would (src/computer-levels.js), after a
+  // human-looking pause. (In the blind modes the move is still one legal on the real board.)
+  if(Number(currentBot?.slip)>0&&Math.random()<Number(currentBot.slip)){
+    await new Promise(resolve=>setTimeout(resolve,350+Math.random()*650));
+    if(game.fen()!==fen)return undefined;
+    // Blind, it can't know which moves capture: any move it believes it can make.
+    if(blind){const pool=moves.filter(m=>blind.searchmoves.includes(m.from+m.to+(m.promotion||'')));return (pool.length?pool:moves)[Math.floor(Math.random()*(pool.length||moves.length))]}
+    return beginnerMove(moves);
+  }
   // Lozza or Stockfish 19 (src/engine-roster.js); the blind computer is always Stockfish.
   const lozza=!blind&&engineFor(currentBot,computerRules)==='lozza',worker=lozza?lozzaEngine:stockfish;
   if(enginePending)enginePending.resolve(null);
@@ -4426,7 +4422,7 @@ function renderLearn(){
 <h4 class="learn-head">Course library</h4><p class="learn-sub">Interactive lessons: read, then play the move on the board. Built from classic chess books and the FIDE Laws.</p>
 ${COURSE_LEVELS.map(level=>{const list=COURSES.filter(c=>c.level===level);return list.length?`<div class="course-level"><small>${escapeHtml(level.toUpperCase())}</small><div class="course-grid">${list.map(courseCard).join('')}</div></div>`:''}).join('')}
 <button type="button" class="famous-entry"><span><small>FAMOUS GAMES</small><b>What would you play?</b><em>${FAMOUS_LESSONS.length} classic games · ${famousDone} done</em></span></button>
-<button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
+<button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · win textbook endgames against the computer</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
   $$('#dynamicView [data-course]').forEach(b=>b.onclick=()=>renderCourse(b.dataset.course));
   $('#dynamicView .famous-entry').onclick=renderFamous;
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
@@ -4657,7 +4653,7 @@ function egBest(fen,depth=14){return new Promise(resolve=>{const id=`eg-${++egSe
 function renderEndgames(){
   if(egSession)endEndgame({restore:false});
   const progress=loadProgress();
-  setDynamicView('endgames','Endgame drills',`<article class="endgames"><p class="trainer-intro">Win (or hold) textbook endgames against Stockfish at full strength. Beat the par for three stars.</p><div class="eg-list">${DRILLS.map(d=>`<button class="eg-card" data-eg="${d.id}"><span><small>${escapeHtml(d.level)}</small><b>${escapeHtml(d.title)}</b><em>${d.goal==='hold'?`Hold for ${d.limit} moves`:`Par ${d.par} moves`}</em></span><span class="eg-stars" aria-label="${progress[d.id]||0} of 3 stars">${[1,2,3].map(n=>`<i class="${n<=(progress[d.id]||0)?'on':''}"></i>`).join('')}</span></button>`).join('')}</div></article>`);
+  setDynamicView('endgames','Endgame drills',`<article class="endgames"><p class="trainer-intro">Win (or hold) textbook endgames against the computer at full strength. Beat the par for three stars.</p><div class="eg-list">${DRILLS.map(d=>`<button class="eg-card" data-eg="${d.id}"><span><small>${escapeHtml(d.level)}</small><b>${escapeHtml(d.title)}</b><em>${d.goal==='hold'?`Hold for ${d.limit} moves`:`Par ${d.par} moves`}</em></span><span class="eg-stars" aria-label="${progress[d.id]||0} of 3 stars">${[1,2,3].map(n=>`<i class="${n<=(progress[d.id]||0)?'on':''}"></i>`).join('')}</span></button>`).join('')}</div></article>`);
   $$('#dynamicView [data-eg]').forEach(b=>b.onclick=()=>startEndgame(b.dataset.eg));
 }
 function startEndgame(id){
@@ -4697,7 +4693,7 @@ async function egReply(){
   const s=egSession;if(!s||s.over)return;s.thinking=true;
   const fen=game.fen(),best=await egBest(fen);
   if(egSession!==s||game.fen()!==fen){return}
-  s.thinking=false;if(!best)return toast('Stockfish 19 unavailable in this browser.');
+  s.thinking=false;if(!best)return toast('The computer is unavailable in this browser.');
   let made=null;try{made=game.move({from:best.slice(0,2),to:best.slice(2,4),promotion:best[4]||undefined})}catch{}
   if(!made)return;rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);updateMoves();
   if(!egCheck(made))drawEndgame();
@@ -5075,7 +5071,7 @@ function drawCampaign(){
         <header><span class="camp-sigil" aria-hidden="true"></span><div><h4>${escapeHtml(r.name)}</h4><small>${freed?'Freed':open?'Unlocked':'Locked'} · Relic: ${escapeHtml(relic.name)}</small></div></header>
         <p>${escapeHtml(r.story)}</p>
         <ol class="camp-battles">${r.battles.map((b,i)=>{const won=st.won[battleKey(r.id,i)],can=battleOpen(st,ri,i);
-          return `<li class="${b.boss?'boss ':''}${won?'won':can?'next':'locked'}"><span><b>${escapeHtml(b.name)}</b><small>${b.rules==='shadow'?'Your strength':`${b.elo} Elo`} · ${b.side==='w'?'you play White':'you play Black'} · ${escapeHtml(engineName(b.engine==='lozza'?'lozza':'stockfish19'))}</small>${b.twist?`<em>${escapeHtml(b.twist)}</em>`:''}</span>${campaignStars(won?.stars||0)}${can?`<button type="button" class="${won?'':'gold '}camp-fight" data-realm-index="${ri}" data-battle="${i}">${won?'Replay':'Fight'}</button>`:''}</li>`}).join('')}</ol></li>`}).join('')}</ol></article>`;
+          return `<li class="${b.boss?'boss ':''}${won?'won':can?'next':'locked'}"><span><b>${escapeHtml(b.name)}</b><small>${b.rules==='shadow'?'Your strength':`${b.elo} Elo`} · ${b.side==='w'?'you play White':'you play Black'}</small>${b.twist?`<em>${escapeHtml(b.twist)}</em>`:''}</span>${campaignStars(won?.stars||0)}${can?`<button type="button" class="${won?'':'gold '}camp-fight" data-realm-index="${ri}" data-battle="${i}">${won?'Replay':'Fight'}</button>`:''}</li>`}).join('')}</ol></li>`}).join('')}</ol></article>`;
   target.querySelectorAll('.camp-fight').forEach(b=>b.onclick=()=>void startCampaignBattle(Number(b.dataset.realmIndex),Number(b.dataset.battle)));
 }
 async function startCampaignBattle(ri,i){
@@ -5367,9 +5363,10 @@ let rivalsCache=null;
 async function loadRivals(force=false){
   if(!signedIn())return [];
   if(!force&&rivalsCache&&Date.now()-rivalsCache.at<300000)return rivalsCache.list;
-  const out=await api.archive(100),botNames=new Set([...computerBots,...DEFAULT_COMPUTER_BOTS].map(b=>String(b.display_name||b.name||'').toLowerCase()).filter(Boolean));
+  const out=await api.archive(100),botNames=new Set([...DEFAULT_COMPUTER_BOTS.map(b=>String(b.display_name).toLowerCase()),...OLD_BOT_NAMES,...OLD_BOT_NAMES.map(n=>`vanta_${n}`)]);
   const me=currentProfile?.id||currentPlayerId;
-  const games=(out.games||[]).filter(g=>!botNames.has(String((g.white_player_id===me?g.black_name:g.white_name)||'').toLowerCase())); // until history carries bot_player_id everywhere
+  // Games against the computer are not rivalries (older rows lack bot_player_id: their names tell).
+  const games=(out.games||[]).filter(g=>!g.bot_player_id&&!botNames.has(String((g.white_player_id===me?g.black_name:g.white_name)||'').toLowerCase()));
   const list=rivalsFrom(games,me);rivalsCache={at:Date.now(),list};return list;
 }
 async function renderRivals(){

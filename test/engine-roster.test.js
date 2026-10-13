@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { ENGINES, LOZZA_BOTS, LOZZA_LEVELS, LOZZA_MAX_ELO, LOZZA_MIN_ELO, engineFor, engineName, lozzaBudget, lozzaNodes } from '../src/engine-roster.js';
+import { ENGINES, LOZZA_LEVELS, LOZZA_MAX_ELO, LOZZA_MIN_ELO, engineFor, engineName, lozzaBudget, lozzaNodes } from '../src/engine-roster.js';
 import { REALMS } from '../src/campaign.js';
 
 const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
@@ -34,8 +34,7 @@ test('engineFor: Lozza plays standard chess in its range; Stockfish plays everyt
   assert.deepEqual(Object.values(ENGINES).map(e => e.license), ['GPL-3.0', 'MIT', 'GPL-3.0']);
 });
 
-test('every Lozza opponent is inside the measured range', () => {
-  for (const bot of LOZZA_BOTS) assert.equal(engineFor(bot, 'standard'), 'lozza', bot.slug);
+test('every campaign guard Lozza plays is inside the measured range', () => {
   const battles = REALMS.flatMap(r => r.battles);
   const lozza = battles.filter(b => b.engine === 'lozza');
   assert.ok(lozza.length >= 4);
