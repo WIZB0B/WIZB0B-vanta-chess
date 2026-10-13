@@ -2229,9 +2229,12 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 .captured-tray{display:inline-flex;align-items:center;gap:5px;margin-left:8px;min-height:18px}
 .captured-tray:empty{display:none}
 .tray-group{display:inline-flex}
-.tray-group img{width:18px;height:18px;object-fit:contain;margin-left:-9px}
+.tray-group img{position:relative;width:18px;height:18px;object-fit:contain;margin-left:-9px;transition:transform .18s ease}
 .tray-group img:first-child{margin-left:0}
-.tray-lead{font-size:11px;font-weight:700;color:#c9d3cf;letter-spacing:.3px}
+.tray-group img:hover{z-index:1;transform:translateY(-3px) scale(1.3)}
+.tray-lead{display:inline-block;font-size:11px;font-weight:700;color:#c9d3cf;letter-spacing:.3px}
+.tray-lead.big{color:var(--gold,#e5c17c);text-shadow:0 0 8px rgb(229 193 124 / .45)}
+@media (min-width:901px){.tray-group img{width:22px;height:22px;margin-left:-10px}}
 /* Game end: --wave staggers the cheer across the winner's pieces. */
 .board-piece[data-ending="cheer"] .piece{animation:vch-cheer .62s cubic-bezier(.3,.7,.3,1) var(--wave,0ms) 3 both}
 .board-piece[data-ending="topple"] .piece{transform-origin:50% 95%;animation:vch-topple .9s cubic-bezier(.5,0,.75,.2) .25s forwards}
@@ -2952,8 +2955,19 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .zh-piece{position:relative;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:#0b1715}
 .zh-piece img{width:26px;height:26px}
 .zh-piece b{position:absolute;right:-4px;bottom:-4px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#e5c17c;color:#10120e;font:700 10px/15px ui-sans-serif,system-ui,sans-serif;text-align:center}
-button.zh-piece{cursor:pointer}button.zh-piece:hover:not([disabled]){border-color:rgba(130,237,186,.6)}
-button.zh-piece.on{border-color:var(--mint,#82edba);box-shadow:0 0 0 2px rgba(130,237,186,.35)}
+button.zh-piece{cursor:pointer;transition:transform .18s ease}button.zh-piece:hover:not([disabled]){border-color:rgba(130,237,186,.6)}
+button.zh-piece.on{border-color:var(--mint,#82edba);box-shadow:0 0 0 2px rgba(130,237,186,.35);transform:translateY(-3px)}
+/* Your pocket glows while you can drop (opacity only: the compositor plays it). */
+button.zh-piece::after{content:'';position:absolute;inset:-3px;border-radius:9px;box-shadow:0 0 12px 2px rgb(229 193 124 / .5);opacity:0;pointer-events:none}
+button.zh-piece:not([disabled])::after{animation:zh-ready 2.4s ease-in-out infinite}
+button.zh-piece.on::after{animation:none;opacity:1}
+@keyframes zh-ready{50%{opacity:.85}}
+/* Captured pieces, alive (src/capture-tray.js): a piece in flight, its place waiting for it, a
+   dropped piece waiting on its square for its flight from the pocket. */
+.capture-flight{position:fixed;left:0;top:0;z-index:60;pointer-events:none;object-fit:contain;will-change:transform;filter:drop-shadow(0 8px 10px rgb(0 0 0 / .45))}
+.captured-tray img.arriving{opacity:0}
+.board-piece.dropping{opacity:0}
+@media (prefers-reduced-motion:reduce){button.zh-piece:not([disabled])::after{animation:none;opacity:.5}.tray-group img,button.zh-piece{transition:none}}
 button.zh-piece[disabled]{opacity:.55;cursor:default}
 .zh-empty{color:var(--muted);font-size:10px}
 

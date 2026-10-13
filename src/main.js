@@ -19,6 +19,7 @@ import { PieceLayer } from './piece-layer.js';
 import { PieceReactions } from './piece-reactions.js';
 import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
 import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
+import { TRAY_KINDS, bump, captureSquare, countKinds, flightKeyframes, flightMs, isCapture, leave, popIn, settle, trayChange } from './capture-tray.js';
 import { FLAG_URL, countryList, countryName } from './flags.js';
 import { BIO_MAX, PORTRAIT_PRESETS, avatarFromFile, cleanBio, cleanDisplayName, isDisplayName, isPortraitPreset, presetLabel, presetMarkup, setPortrait } from './portrait.js';
 import { moderateText } from './moderation.js';
@@ -559,19 +560,83 @@ function landingFx(made){
   }
 }
 // ---- Game feel (src/game-feel.js) ----
-// Captured-pieces trays: each player bar lists the pieces that player has taken, smallest
-// last, with the material lead (+N) for the side ahead.
+// Captured-pieces trays: each player bar keeps the pieces that player has taken, biggest first,
+// each kind in its own place, with the material lead (+N) for the side ahead. Alive (owner,
+// 2026-10-13, src/capture-tray.js): a captured piece is knocked off its square as the capturing
+// piece lands and flies to its place, where it settles; the lead counts up; pieces taken back
+// leave. A jump (a loaded game, many plies at once) pops pieces in without flights. In Vanta Dark
+// and Blackout the hidden opponent's captures (and any you step back to) arrive without a flight,
+// so no square is given away.
+const trayMemory={frame:'',counts:{},lead:{},pockets:{}};
+function trayFlightsHidden(){
+  const color=premovePlayerColor(),mine=!color||game.turn()!==color;
+  return (darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
+}
+// A piece flies between two boxes of the window (measured when it sets off, after `delay` ms):
+// a picture of it is tossed in an arc and lands at the size of the box it flies to.
+function pieceFlight(fromBox,toBox,key,style,{delay=0,spin=null}={}){
+  return new Promise(resolve=>setTimeout(()=>{
+    const from=fromBox(),to=toBox();
+    if(!from?.width||!to?.width||!document.body.animate)return resolve(false);
+    const fly=document.createElement('img');fly.className='capture-flight';fly.src=pieceAssetFor(style,key);fly.alt='';fly.setAttribute('aria-hidden','true');
+    fly.style.width=`${from.width}px`;fly.style.height=`${from.height}px`;document.body.append(fly);
+    const dx=to.left+to.width/2-from.left-from.width/2,dy=to.top+to.height/2-from.top-from.height/2;
+    const flight=fly.animate(flightKeyframes(from,to,{spin:spin??(dx<0?-1:1)}),{duration:flightMs(Math.hypot(dx,dy),motionScale()),easing:'cubic-bezier(.3,.62,.34,1)',fill:'forwards'});
+    flight.finished.then(()=>{fly.remove();resolve(true)},()=>{fly.remove();resolve(false)});
+  },delay));
+}
+// The capture in a tray: hidden in its place until the piece, knocked off `sq`, lands there
+// (then `landed()` runs: the lead counts up as it lands).
+function flyIntoPlace(target,sq,key,style,landed=null){
+  target.classList.add('arriving');
+  const reveal=ok=>{target.classList.remove('arriving');if(ok&&target.isConnected)settle(target);landed?.()};
+  pieceFlight(()=>document.querySelector(`#board .square[data-sq="${sq}"]`)?.getBoundingClientRect(),()=>target.isConnected?target.getBoundingClientRect():null,key,style,{delay:Math.max(0,boardMotionUntil-performance.now())}).then(reveal);
+}
+// The material lead on a tray (+N): it counts up with a pop.
+function drawLead(tray,lead,animate){
+  let badge=tray.querySelector('.tray-lead');
+  if(!lead){badge?.remove();return}
+  if(!badge){badge=document.createElement('b');badge.className='tray-lead';tray.append(badge)}
+  const text=`+${lead}`;if(badge.textContent!==text){badge.textContent=text;if(animate)bump(badge)}
+  badge.classList.toggle('big',lead>=3);
+}
+// Puts a tray's pieces right: adds and removes only what changed. Returns the pictures added.
+function drawTray(tray,color,counts,style,animate){
+  const enemy=color==='w'?'b':'w',added=[];
+  for(const type of TRAY_KINDS){
+    const n=counts[type]||0;let group=tray.querySelector(`.tray-group[data-type="${type}"]`);
+    if(!n&&!group)continue;
+    if(!group){
+      group=document.createElement('span');group.className='tray-group';group.dataset.type=type;
+      const later=[...tray.children].find(el=>el.classList.contains('tray-lead')||TRAY_KINDS.indexOf(el.dataset.type)>TRAY_KINDS.indexOf(type));
+      tray.insertBefore(group,later||null);
+    }
+    const imgs=[...group.querySelectorAll('img:not(.leaving)')];
+    for(let i=imgs.length;i<n;i++){const img=document.createElement('img');img.src=pieceAssetFor(style,enemy+type);img.alt='';group.append(img);added.push({type,img})}
+    for(let i=n;i<imgs.length;i++){if(animate){imgs[i].classList.add('leaving');leave(imgs[i])}else imgs[i].remove()}
+    if(!n){if(animate)setTimeout(()=>{if(!group.querySelector('img:not(.leaving)'))group.remove()},260);else group.remove()}
+  }
+  return added;
+}
 function syncCapturedTrays(boardGame,placement){
   const style=document.documentElement.dataset.pieceStyle||'vanta',bars=playerBarClockColors();
   if(isZhGame()&&!reviewState.viewing&&!browse)return drawPockets(style,bars);
-  for(const id of ['#topCaptured','#bottomCaptured'])$(id)?.classList.remove('zh-pocket');
-  const key=`${placement}|${style}|${bars.top}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
-  const caps=capturedPieces(boardGame.board());
-  for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
-    const tray=$(id);if(!tray)continue;
-    const enemy=color==='w'?'b':'w',groups=[];
-    for(const type of caps[color]){const last=groups.at(-1);if(last?.type===type)last.n++;else groups.push({type,n:1})}
-    tray.innerHTML=groups.map(g=>`<span class="tray-group" data-type="${g.type}">${Array(g.n).fill(`<img src="${pieceAssetFor(style,enemy+g.type)}" alt="">`).join('')}</span>`).join('')+(caps.lead[color]?`<b class="tray-lead">+${caps.lead[color]}</b>`:'');
+  const frame=`${style}|${bars.top}`,key=`${placement}|${frame}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  // A new piece style, the board turned round, or the trays were pockets: drawn afresh, still.
+  const trays=[['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]].map(([id,color])=>[$(id),color]).filter(([tray])=>tray);
+  const fresh=trayMemory.frame!==frame||trays.some(([tray])=>tray.classList.contains('zh-pocket'));trayMemory.frame=frame;
+  const caps=capturedPieces(boardGame.board()),animate=!fresh&&motionScale()>0,move=boardLastMove();
+  const plans=trays.map(([tray,color])=>{const counts=countKinds(caps[color]);return {tray,color,counts,change:trayChange(fresh?{}:trayMemory.counts[color]||{},counts)}});
+  // One new piece, taken by the last move: it flies there from its square. Anything else pops in.
+  const sq=animate&&plans.reduce((n,p)=>n+p.change.added.length,0)===1&&isCapture(move)&&!trayFlightsHidden()?captureSquare(move):null;
+  const flyer=sq?plans.find(p=>p.change.added.length===1&&(!move.color||move.color===p.color)&&(!move.captured||move.captured===p.change.added[0])):null;
+  for(const p of plans){
+    const {tray,color,counts}=p;
+    if(fresh){tray.classList.remove('zh-pocket');tray.replaceChildren()}
+    const added=drawTray(tray,color,counts,style,animate);
+    trayMemory.counts[color]=counts;trayMemory.lead[color]=caps.lead[color];
+    if(p===flyer)flyIntoPlace(added[0].img,sq,(color==='w'?'b':'w')+added[0].type,style,()=>drawLead(tray,trayMemory.lead[color],true));
+    else{drawLead(tray,caps.lead[color],animate);if(animate)added.forEach((a,i)=>popIn(a.img,i*60))}
     tray.setAttribute('aria-label',caps[color].length?`Captured: ${caps[color].map(t=>pieceNames[t]).join(', ')}${caps.lead[color]?`, ahead by ${caps.lead[color]}`:''}`:'No captures yet');
   }
 }
@@ -2806,14 +2871,49 @@ function zhGameStatus(){const st=zhClientState();return (watchSession?.state||se
 function zhClientState(){const g=watchSession?.state||serverGame||{};return zhState(g.zh_pockets,g.zh_promoted)}
 function boardOver(){return isZhGame()?zhGameStatus().over:game.isGameOver()}
 function zhDropTargets(type){if(!isZhGame())return [];return zhDrops(Chess,game,zhClientState()).filter(d=>d.drop===type).map(d=>d.to)}
+// The pockets (Crazyhouse, Bughouse): the pieces waiting to be dropped. Yours glow while you can
+// drop them; a capture flies into the pocket and its number counts up; a dropped piece flies
+// from the pocket to its square (src/capture-tray.js).
 function drawPockets(style,bars){
   const st=zhClientState(),mine=myColor&&isOnlineGame()&&serverGame?.status==='active'&&game.turn()===myColor;
   const key=`zh|${style}|${bars.top}|${JSON.stringify(st.pockets)}|${zhDropSelected}|${mine}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  const frame=`zh|${style}|${bars.top}`,fresh=trayMemory.frame!==frame;trayMemory.frame=frame;
+  // In Bughouse a capture goes to the partner's pocket on the other board, so captures never fly here.
+  // Your own drop is on the board before the server has it: the move just made comes first.
+  const animate=!fresh&&motionScale()>0,move=(lastMoveCache.fen===game.fen()&&lastMoveCache.move)||boardLastMove(),bughouse=(watchSession?.state||serverGame)?.variant==='bughouse',dropped=animate&&move?.to&&(move.drop||/@/.test(String(move.san||'')))?String(move.drop||move.san.split('@')[0]).toLowerCase().slice(-1):null;
+  const flights=[];
   for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
-    const tray=$(id);if(!tray)continue;const pocket=st.pockets[color]||{},own=color===myColor;
-    tray.classList.add('zh-pocket');
-    tray.innerHTML=ZH_PIECES.filter(t=>pocket[t]>0).map(t=>own?`<button type="button" class="zh-piece${zhDropSelected===t?' on':''}" data-drop="${t}"${mine?'':' disabled'} aria-label="Drop ${pieceNames[t]} (${pocket[t]} in pocket)"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></button>`:`<span class="zh-piece"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></span>`).join('')||'<small class="zh-empty">Pocket empty</small>';
+    const tray=$(id);if(!tray)continue;const pocket=st.pockets[color]||{},own=color===myColor,before=fresh?{}:trayMemory.pockets[color]||{};
+    if(fresh||!tray.classList.contains('zh-pocket')){tray.classList.add('zh-pocket');tray.replaceChildren()}
+    tray.querySelector('.zh-empty')?.remove();
+    for(const t of ZH_PIECES){
+      const n=pocket[t]||0,had=before[t]||0,caught=animate&&!bughouse&&n>had&&isCapture(move)&&!!move.to;let el=tray.querySelector(`.zh-piece[data-kind="${t}"]:not(.leaving)`);
+      // The dropped piece sets off from where it waited.
+      if(dropped===t&&n<had&&color===(move.color||color)&&el)flights.push({drop:true,from:el.getBoundingClientRect(),sq:move.to,key:color+t});
+      if(!n){if(el){if(animate){el.classList.add('leaving');leave(el)}else el.remove()}continue}
+      if(!el){
+        el=document.createElement(own?'button':'span');el.className='zh-piece';el.dataset.kind=t;
+        if(own){el.type='button';el.dataset.drop=t}
+        el.innerHTML=`<img src="${pieceAssetFor(style,color+t)}" alt=""><b></b>`;
+        const later=[...tray.children].find(x=>ZH_PIECES.indexOf(x.dataset.kind)>ZH_PIECES.indexOf(t));
+        tray.insertBefore(el,later||null);
+        if(animate&&!caught)popIn(el);
+      }
+      const badge=el.querySelector('b');if(badge.textContent!==String(n)){if(animate&&had&&n!==had)bump(badge);badge.textContent=String(n)}
+      if(own){el.disabled=!mine;el.classList.toggle('on',zhDropSelected===t);el.setAttribute('aria-label',`Drop ${pieceNames[t]} (${n} in pocket)`)}
+      // A capture lands in the pocket.
+      if(caught)flights.push({into:el,sq:captureSquare(move),key:color+t});
+    }
+    if(!ZH_PIECES.some(t=>pocket[t]>0))tray.insertAdjacentHTML('beforeend','<small class="zh-empty">Pocket empty</small>');
     tray.setAttribute('aria-label',`Pocket: ${ZH_PIECES.filter(t=>pocket[t]>0).map(t=>`${pocket[t]} ${pieceNames[t]}`).join(', ')||'empty'}`);
+    trayMemory.pockets[color]={...pocket};
+  }
+  for(const f of flights){
+    if(f.into){flyIntoPlace(f.into.querySelector('img')||f.into,f.sq,f.key,style);continue}
+    // A drop: the piece on its square waits, hidden, until its flight from the pocket lands.
+    const piece=boardDom?.pieces.element(f.sq);if(!piece)continue;
+    piece.classList.add('dropping');
+    pieceFlight(()=>f.from,()=>document.querySelector(`#board .square[data-sq="${f.sq}"]`)?.getBoundingClientRect(),f.key,style).then(landed=>{piece.classList.remove('dropping');if(landed&&piece.isConnected)piece.firstChild?.animate?.([{transform:'scale(1.14)'},{transform:'scale(.95)',offset:.5},{transform:'scale(1)'}],{duration:300,easing:'ease-out'})});
   }
 }
 document.addEventListener('click',e=>{

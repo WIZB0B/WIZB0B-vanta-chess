@@ -445,6 +445,15 @@ Pieces show how their position feels; landings can shock the enemy. Owner's idea
   defeat poses at game end, idle breathing.
 - E6 Setting: Expressions Full / Subtle / Off (prototype in Theme Studio); later in the Settings page, plus a separate shockwave toggle.
 - E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
+- E8 Captured pieces, alive (owner, 2026-10-13: captured pieces "should be animated... where
+  they will be staying"): a captured piece is knocked off its square as the capturing piece
+  lands and flies in an arc to its own place in the capturer's tray (each kind keeps its
+  place, biggest first), lands with a bounce, and the material lead counts up as it lands;
+  pieces taken back leave the tray; jumps pop in without flights. Crazyhouse/Bughouse pockets
+  (the pieces waiting to come into the game) glow while you can drop them, a capture flies
+  into the pocket and its number counts up, a dropped piece flies from the pocket to its
+  square. Fog-safe: the hidden opponent's captures arrive without a flight. Reduced motion
+  and Motion 0: no flights. (src/capture-tray.js)
 
 ## P. Piece sets, themes and store (later; owner will send references)
 - P1 More piece sets, each in a 3D and a 2D version, all supporting expressions (3D fuller).
