@@ -23,15 +23,17 @@ test('primary menus and study controls are not dead buttons',async({page})=>{
   await expect(page.locator('#studyCount')).toContainText('1 /');
 
   await page.locator('[data-nav="famous"]').click();
-  await expect(page.locator('[data-famous="0"]')).toBeVisible();
-  await page.locator('[data-famous="0"]').click();
+  await expect(page.locator('[data-famous-replay="opera-game"]')).toBeVisible();
+  await page.locator('[data-famous-replay="opera-game"]').click();
   await expect(page.locator('.study-board .study-square')).toHaveCount(64);
   await page.locator('#studyLast').click();
   await expect(page.locator('#studyCount')).not.toContainText('0 /');
 
   await page.locator('[data-nav="learn"]').click();
-  await page.locator('[data-lesson="0"]').click();
-  await expect(page.locator('.lesson-detail')).toContainText('Training focus');
+  await page.locator('[data-course="tactics"]').click();
+  await page.locator('[data-lesson="tactics/forks"]').click();
+  await expect(page.locator('.lesson-player h4')).toHaveText('Forks');
+  await page.locator('[data-nav="learn"]').click();
   await expect(page.locator('.start-puzzle')).toBeVisible();
 
   await page.locator('[data-nav="review"]').click();
@@ -57,7 +59,11 @@ test('left panel switches between three distinct play-mode views',async({page})=
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  await expect(page.locator('#botGrid .bot-card')).toHaveCount(6);
+  // Twelve levels from Beginner to Maximum (src/computer-levels.js); no engine names on screen.
+  await expect(page.locator('#botGrid .bot-card')).toHaveCount(12);
+  await expect(page.locator('#botGrid .bot-card').first()).toContainText('Beginner');
+  await expect(page.locator('#botGrid .bot-card').last()).toContainText('Maximum');
+  await expect(page.locator('#botGrid')).not.toContainText(/Stockfish|Lozza/);
   await expect(page.locator('[data-computer-side]')).toHaveCount(3);
   await expect(page.locator('#computerStart')).toBeVisible();
 
@@ -88,7 +94,7 @@ test('board controls, theme studio, and local Stockfish computer game work',asyn
 
   await page.locator('[data-mode="computer"]').click();
   await expect(page.locator('[data-mode-view="computer"]')).toBeVisible();
-  await page.locator('[data-bot-slug="gambit"]').click();
+  await page.locator('[data-bot-slug="tournament"]').click();
   await page.locator('#computerStart').click();
   await page.locator('.board-piece[data-square="e2"]').dragTo(page.locator('[data-sq="e4"]'));
   await expect(page.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible();

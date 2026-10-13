@@ -5,6 +5,9 @@
 // Obsidian Spire. Beating a boss frees the realm, unlocks its relic and opens the next one.
 // Battles earn up to three stars: the win, a win in 40 moves or fewer, and a fulfilled oath.
 // Progress lives on this device. Pure; src/main.js draws the map and starts the battles.
+// Engines (src/engine-roster.js): from the Mirror Court on, the guards think with Lozza 2.5, a
+// different mind from Stockfish; the first realms' guards (below Lozza's measured range) and
+// every boss are Stockfish 19, which alone plays blind, plays Chess960, and is the strongest.
 
 export const CAMPAIGN_KEY = 'vch.campaign';
 export const REALMS = [
@@ -25,22 +28,22 @@ export const REALMS = [
   { id: 'court', name: 'The Mirror Court', relic: 'court', atmosphere: 'still', music: 'mirror',
     story: 'A hall of glass where every courtier wears your face. The last one plays exactly as you do.',
     battles: [
-      { name: 'The Glass Page', elo: 1350, side: 'w', rules: 'standard' },
-      { name: 'The Silver Herald', elo: 1500, side: 'b', rules: 'standard' },
+      { name: 'The Glass Page', elo: 1350, side: 'w', rules: 'standard', engine: 'lozza' },
+      { name: 'The Silver Herald', elo: 1500, side: 'b', rules: 'standard', engine: 'lozza' },
       { name: 'The Pale Reflection', elo: 0, side: 'w', rules: 'shadow', boss: true, twist: 'Your Shadow: your own openings, at your strength' },
     ] },
   { id: 'crown', name: 'The Hollow Crown', relic: 'crown', atmosphere: 'embers', music: 'gilded',
     story: 'A usurper holds the throne and never sets his court the same way twice.',
     battles: [
-      { name: 'The Turncoat', elo: 1600, side: 'b', rules: 'standard' },
-      { name: 'The Gilded Guard', elo: 1750, side: 'w', rules: 'standard' },
+      { name: 'The Turncoat', elo: 1600, side: 'b', rules: 'standard', engine: 'lozza' },
+      { name: 'The Gilded Guard', elo: 1750, side: 'w', rules: 'standard', engine: 'lozza' },
       { name: 'The Usurper', elo: 1850, side: 'b', rules: 'freestyle', boss: true, twist: 'Chess960: the back ranks are shuffled' },
     ] },
   { id: 'spire', name: 'The Obsidian Spire', relic: 'eclipse', atmosphere: 'storm', music: 'obsidian',
     story: 'At the top of the black tower, in the storm, the Vanta King waits.',
     battles: [
-      { name: 'The Night Warden', elo: 1950, side: 'w', rules: 'standard' },
-      { name: 'The Eclipse Knight', elo: 2150, side: 'b', rules: 'standard' },
+      { name: 'The Night Warden', elo: 1950, side: 'w', rules: 'standard', engine: 'lozza' },
+      { name: 'The Eclipse Knight', elo: 2150, side: 'b', rules: 'standard', engine: 'lozza' },
       { name: 'The Vanta King', elo: 2400, side: 'w', rules: 'standard', boss: true, twist: 'The strongest opponent in VCH, in the storm' },
     ] },
 ];

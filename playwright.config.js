@@ -5,6 +5,8 @@ const launchOptions=process.env.PW_CHROMIUM_PATH ? { executablePath: process.env
 export default defineConfig({
   testDir: './e2e',
   retries: process.env.CI ? 2 : 0,
+  // On GitHub, failures also become annotations on the check, readable without the job log.
+  reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: { baseURL: externalBaseURL || 'http://127.0.0.1:4173', trace: 'retain-on-failure', launchOptions },
   webServer: externalBaseURL ? undefined : {
     command: 'npx vite preview --port 4173 --host 127.0.0.1',

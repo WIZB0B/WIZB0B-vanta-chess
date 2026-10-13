@@ -436,3 +436,29 @@ export function cleanCrest(v) {
   };
   return Object.values(out).every(Boolean) ? out : null;
 }
+
+// ---- Puzzles: the start position ----
+// A Lichess puzzle's game PGN runs up to and including the opponent's move that sets the puzzle
+// (`initialPly` is that move's index, counting from 0), and the solution starts with the
+// solver's first move. So the puzzle starts after initialPly + 1 plies. (Starting one ply early
+// left the wrong side to move and the board unplayable.)
+export function puzzleStartFen(Chess, pgn = '', initialPly = null) {
+  const moves = String(pgn || '').trim().split(/\s+/).filter(Boolean);
+  if (!moves.length) return null;
+  const n = Number(initialPly), plies = initialPly === null || initialPly === undefined || !Number.isFinite(n) ? moves.length : Math.min(moves.length, Math.max(0, n + 1));
+  const c = new Chess();
+  for (let i = 0; i < plies; i++) { try { if (!c.move(moves[i])) return null; } catch { return null; } }
+  return c.fen();
+}
+const firstMoveFits = (Chess, fen, uci) => {
+  if (!fen || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(String(uci || ''))) return false;
+  try { const c = new Chess(fen); return !!c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' }); } catch { return false; }
+};
+// The position to play a puzzle from: the stored FEN when the solution's first move fits it,
+// otherwise the position rebuilt from the game. null when neither fits (skip that puzzle).
+export function playablePuzzleFen(Chess, { fen = null, solution = [], gamePgn = '', initialPly = null } = {}) {
+  const first = Array.isArray(solution) ? solution[0] : null;
+  if (firstMoveFits(Chess, fen, first)) return fen;
+  const rebuilt = puzzleStartFen(Chess, gamePgn, initialPly);
+  return firstMoveFits(Chess, rebuilt, first) ? rebuilt : null;
+}

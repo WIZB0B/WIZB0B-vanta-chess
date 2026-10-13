@@ -1,11 +1,16 @@
 import './style.css';
+import './rtl.css';
+import './shadows.css';
 import { Chess } from 'chess.js';
 import { createClient } from '@supabase/supabase-js';
 import { VchApi, stableGuestToken } from './vch-api.js';
 import { initialClocks, normalizeRoomId } from './game-config.js';
 import { createClockSnapshot, projectedClocks, seatFromEnvelope } from './server-state.js';
-import { OPENINGS, FAMOUS_GAMES, LESSONS, detectOpening } from './content.js';
-import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, winPercentageLoss } from './review.js';
+import { OPENINGS, FAMOUS_GAMES, detectOpening } from './content.js';
+import { COURSES, COURSE_LEVELS, courseById, lessonById } from './courses.js';
+import { FAMOUS_ERAS, FAMOUS_LESSONS, checkAnswer, famousLessonById, lessonScore, momentPosition, momentSide } from './famous-lessons.js';
+import { answerQuiz, courseProgress, courseStars, currentStep, loadProgress as loadLessonProgress, newFamousRun, nextLesson, nextMoment, nextStep, playCourseMove, recordFamousAnswer, saveLessonResult, startRun } from './lesson-player.js';
+import { REVIEW_DEPTH, CLASSIFICATION_META, accuracyFromLosses, classificationAsset, classifyMove, formatMoveDuration, gameAccuracy, winPercentageLoss } from './review.js';
 import { migratePieceStyle, normalizePieceStyle, pieceAssetFor, pieceStyleOptions } from './piece-styles.js';
 import { PremoveQueue, consumeLegalPremove, premovedPieceAt } from './premove.js';
 import { dragDistanceExceeded, dropOutcome, squareFromPoint } from './board-drag.js';
@@ -15,7 +20,9 @@ import { PieceReactions } from './piece-reactions.js';
 import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
 import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
 import { FLAG_URL, countryList, countryName } from './flags.js';
-import { avatarFromFile, setPortrait } from './portrait.js';
+import { BIO_MAX, PORTRAIT_PRESETS, avatarFromFile, cleanBio, cleanDisplayName, isDisplayName, isPortraitPreset, presetLabel, presetMarkup, setPortrait } from './portrait.js';
+import { moderateText } from './moderation.js';
+import { EMOJI_SET, REACTIONS as CHAT_REACTIONS, REACTION_CSS, parseReaction, reactionMarkup, reactionMessage } from './reactions.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
@@ -32,6 +39,14 @@ import { dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from './
 import { openingName, trainerReport } from './opening-trainer.js';
 import { opponentUsername, poolsPlayed, profileUrl, ratingChartModel, recordText } from './profile-view.js';
 import { FREESTYLE_LABEL, freestyleFen } from './freestyle.js';
+import { playablePuzzleFen } from './puzzle-start.js';
+import { VARIANT_WORKER_URL, zhRecordsFromSans, zhReviewPositions } from './variant-engine.js';
+import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-review.js';
+import { ENGINES, engineFor, lozzaBudget } from './engine-roster.js';
+import { COMPUTER_LEVELS, DEFAULT_LEVEL, OLD_BOT_NAMES, beginnerMove, levelBot } from './computer-levels.js';
+import { guideFor } from './hover-guide.js';
+import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
+import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
 import { lazyWorker } from './lazy-worker.js';
 import { resolveTypedMove } from './typed-move.js';
@@ -61,7 +76,7 @@ import { moveLabels, studyPositions, studyUrl } from './study.js';
 import { coachNote } from './coach.js';
 import { KIND_LABEL, badgeCount, safeNotificationUrl, timeAgo } from './notifications.js';
 import { explorerRows, formatScore, parseMultiPv, scoreValue } from './explorer-view.js';
-import { LANGUAGES, LANG_KEY, RTL, addTranslations, detectLanguage, translateText, translateTree } from './i18n.js';
+import { LANGUAGES, LANG_KEY, RTL, detectLanguage, loadLanguage, translateText, translateTree } from './i18n.js';
 import { BOARD_SETS, unlockedSets } from './season-themes.js';
 import { planReady, planText } from './plan-moves.js';
 import { collectMistakes, dueMistakes, gradeMistake, loadMistakes, mergeMistakes, mistakeStats, saveMistakes } from './mistakes.js';
@@ -82,14 +97,21 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_q3KU0sdaVKOeMcLND2D15Q_Qsu2X5pN';
 const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
-const guestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
-const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug='gambit', toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
+const defaultGuestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
+// A guest may choose a display name (Portrait & profile); it is kept on this device and sent
+// with every request that carries the guest's name.
+let guestName=(()=>{try{const v=cleanDisplayName(localStorage.getItem('vch.guestName')||'');return isDisplayName(v)?v:defaultGuestName}catch{return defaultGuestName}})();
+const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug=DEFAULT_LEVEL, toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
 // Round 12 state (the functions are in the round 12 section below)
-let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null;
-let streakSession=null; // Puzzle Streak: {count,best,skipUsed}
+let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
+let uiLang='en'; // the interface language; set from the saved choice in the language section below
+let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
+let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
+let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
+let runTimer=0; // ticks the run clock while a run puzzle is on the board
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
@@ -103,15 +125,9 @@ const reactions=new PieceReactions({
   squareEl:square=>boardDom?.squares.get(square)||null,
   enabled:()=>!prefersReducedMotion()&&motionScale()>0,
 });
-let matchSelection={seconds:600,increment:0,rated:false};
-const DEFAULT_COMPUTER_BOTS=[
-  {slug:'scout',display_name:'Scout',elo:900,portrait:'bn'},
-  {slug:'forge',display_name:'Forge',elo:1200,portrait:'bb'},
-  {slug:'gambit',display_name:'Gambit',elo:1500,portrait:'br'},
-  {slug:'cipher',display_name:'Cipher',elo:1800,portrait:'bq'},
-  {slug:'oracle',display_name:'Oracle',elo:2200,portrait:'bk'},
-  {slug:'legend',display_name:'Legend',elo:2700,portrait:'bp'}
-];
+let matchSelection={seconds:600,increment:0,rated:false,variant:'standard'};
+// The computer ladder: twelve levels from Beginner to Maximum (src/computer-levels.js).
+const DEFAULT_COMPUTER_BOTS=COMPUTER_LEVELS.map(levelBot);
 let computerBots=DEFAULT_COMPUTER_BOTS.map(bot=>({...bot}));
 let moveEvalByPly=[],moveTimeByPly=[];
 let reviewState={running:false,viewing:false,currentPly:0,signature:'',token:0,positions:[],moves:[],evaluations:[],results:[]};
@@ -121,10 +137,14 @@ let reviewPending=null;
 const stockfish=lazyWorker('/stockfish.worker.js');
 const analysisWorker=lazyWorker('/stockfish.worker.js');
 const reviewWorker=lazyWorker('/stockfish.worker.js');
+// Crazyhouse games are reviewed by the multi-variant engine (public/variant.worker.js).
+const variantReviewWorker=lazyWorker(VARIANT_WORKER_URL);
+// Lozza 2.5 plays the opponents src/engine-roster.js gives it (public/lozza.worker.js).
+const lozzaEngine=lazyWorker(ENGINES.lozza.worker);
 // Bot moves, live analysis and game review each own a separate Stockfish worker, so the
 // bot and analysis never share one engine.
 let engineRequestSeq=0,analysisRequest=null;
-stockfish.onmessage=({data})=>{
+stockfish.onmessage=lozzaEngine.onmessage=({data})=>{
   if(!enginePending||data.requestId!==enginePending.id)return;
   if(data.type==='uci'&&String(data.line||'').startsWith('bestmove ')){const u=String(data.line).split(' ')[1];enginePending.resolve(u);enginePending=null}
   if(data.type==='unavailable'){enginePending.resolve(null);enginePending=null}
@@ -134,7 +154,7 @@ analysisWorker.onmessage=({data})=>{
   if(!analysisRequest||data.requestId!==analysisRequest.id)return;
   if(data.type==='uci'&&String(data.line||'').startsWith('info '))updateAnalysisFromUci(String(data.line),analysisRequest);
 };
-reviewWorker.onmessage=({data})=>{
+reviewWorker.onmessage=variantReviewWorker.onmessage=({data})=>{
   if(!reviewPending||data.requestId!==reviewPending.id)return;
   const line=String(data.line||'');
   if(data.type==='uci'&&line.startsWith('info ')){
@@ -201,7 +221,7 @@ ${splashMarkup(splash)}
         <nav class="profile-menu-items" aria-label="Account">
           <button id="profileMenuProfile" type="button">Profile</button>
           <button id="profileMenuInsights" type="button">Insights</button>
-          <button id="profileMenuEdit" type="button">Edit portrait &amp; flag</button>
+          <button id="profileMenuEdit" type="button">Edit profile</button>
           <button id="profileMenuSettings" type="button">Settings</button>
           <button id="profileMenuModeration" type="button" class="hidden">Moderation</button>
           <button id="profileMenuAuth" type="button">Sign in</button>
@@ -246,7 +266,8 @@ ${splashMarkup(splash)}
   </section>
 
   <main id="gameWorkspace" aria-hidden="${startsInGame?'false':'true'}">
-    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY STOCKFISH</small><h3>Choose your opponent.</h3><p>Each personality uses Stockfish 19 at a different target strength.</p></div>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
+    <aside class="lpanel panel">\n      <div class="hero">\n        <div class="hero-art" aria-hidden="true"><img src="/assets/vch/ui/hero-knight.webp" alt=""></div>\n        <label>LIVE CHESS</label>\n        <h1>Play your<br>next game.</h1>\n        <p>Guest play is instant. Rated games save your Elo and tournament record.</p>\n      </div>\n\n      <div class="modes" aria-label="Play mode">\n        <button data-mode="match"><span>Match</span></button>\n        <button data-mode="room" class="on"><span>Room</span></button>\n        <button data-mode="computer"><span>Computer</span></button>\n      </div>\n      <div class="oath-row" id="oathRow"><label><span>Swear an oath</span><select id="oathPick" aria-describedby="oathVow"><option value="">No oath</option></select></label><small id="oathVow" class="oath-vow">Optional. Keep it to earn honor and relics.</small></div>\n\n      <div class="mode-stage">\n        <section class="mode-view match-view" data-mode-view="match" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">QUICK MATCH</small><h3>Find your next opponent.</h3><p>Choose a clock and queue for the closest available player.</p></div>\n          <div class="time-chips" aria-label="Match time control">\n            <button data-match-time="60-0">1+0</button><button data-match-time="180-0">3+0</button><button data-match-time="300-0">5+0</button><button class="on" data-match-time="600-0">10+0</button><button data-match-time="900-10">15+10</button>\n          </div>\n          <div class="match-variants" aria-label="Variant"><button class="on" data-match-variant="standard" title="Classic chess">Standard</button><button data-match-variant="dark" title="Fog of war: you only see what your pieces see. Own rating.">Vanta Dark</button><button data-match-variant="blackout" title="Every four of your moves, the lights go out for two. Own rating.">Blackout Blitz</button></div>
+          <div class="rated-switch" aria-label="Match type"><button class="on" data-match-rated="false">Casual</button><button data-match-rated="true">Rated</button></div>\n          <button class="gold match-action" id="findOpponent"><span id="findOpponentLabel">Find opponent</span></button>\n          <div id="matchSearch" class="match-search hidden" aria-live="polite"><span class="search-pulse" aria-hidden="true"></span><div><b>Searching the pool</b><small>Expanding the Elo window while you wait.</small></div></div>\n          <div class="online-count"><b id="playersOnline">—</b> players online</div>\n        </section>\n\n        <section class="mode-view room-view active" data-mode-view="room" aria-hidden="false">\n          <div class="private-card"><div><h3>Create a private room</h3><p>Generate a shareable game link instantly.</p><small>Guests can join casual rooms without an account.</small></div></div>\n          <label class="tiny">GAME SETTINGS</label>\n          <div class="settings">\n            <label><span>Time control</span><select id="time"><option value="600">10+0 Rapid</option><option value="300">5+0 Blitz</option><option value="180">3+0 Blitz</option><option value="daily-1">Daily · 1 day per move</option><option value="daily-3">Daily · 3 days per move</option><option value="daily-7">Daily · 7 days per move</option></select></label>\n            <label><span>Room type</span><select id="level"><option value="casual">Casual — Guest OK</option><option value="rated">Rated — Account required</option></select></label>\n            <label class="variant-field"><span>Variant</span><select id="variant"><option value="standard">Standard</option><option value="freestyle">Freestyle · Chess960 (own rating)</option><option value="crazyhouse">Crazyhouse · drop what you capture (own rating)</option><option value="dark">Vanta Dark · fog of war (own rating)</option><option value="blackout">Blackout Blitz · the lights go out (own rating)</option><option value="bughouse">Bughouse · two against two on two boards</option><option value="twin">Twin Fates · a famous position, played twice</option></select></label>\n          </div>\n          <button class="gold" id="create"><span>Create room & get link</span></button>\n          <div class="divider">or join an existing room</div>\n          <div class="join"><input id="roomInput" placeholder="Enter room code" maxlength="12"><button id="join">Join room</button></div>\n          <div class="room room-created hidden"><small>ROOM CODE</small><strong>${room}</strong><em>Ready</em><p>Share this link</p><div><input id="share" readonly value="${location.origin+location.pathname}?game=${room}"><button id="copy" aria-label="Copy room link">Copy</button></div><small class="room-note">Keep this tab open. Your opponent can enter from any modern browser.</small></div>\n        </section>\n\n        <section class="mode-view computer-view" data-mode-view="computer" aria-hidden="true">\n          <div class="mode-heading"><small class="mode-kicker">PLAY THE COMPUTER</small><h3>Choose your opponent.</h3><p>Twelve levels, from Beginner to Maximum. Each one plays the way players at that level do.</p></div>\n          <p class="special-opponent hidden" id="specialOpponent" role="status"></p>\n          <div id="botGrid" class="bot-grid" aria-label="Computer opponents"></div>\n          <div class="computer-side" aria-label="Play as"><button class="on" data-computer-side="w">White</button><button data-computer-side="b">Black</button><button data-computer-side="random">Random</button></div>\n          <div class="computer-side computer-coach" aria-label="Coach"><button data-coach="off" class="on">Coach off</button><button data-coach="on">Coach on</button></div>\n          <div class="computer-side computer-variant" aria-label="Variant"><button class="on" data-computer-variant="standard">Standard</button><button data-computer-variant="freestyle">Freestyle 960</button><button data-computer-variant="dark">Vanta Dark</button><button data-computer-variant="blackout">Blackout Blitz</button></div>\n          <p class="computer-variant-note hidden" id="computerVariantNote"></p>\n          <button class="gold computer-start" id="computerStart"><span>Start game</span></button>\n          <div class="computer-extras"><button type="button" class="computer-shadow"><b>Your Shadow</b><small>A bot built from your own games</small></button><button type="button" class="computer-gauntlet"><b>The Vanta Gauntlet</b><small>Seven bots, three lives</small></button><button type="button" class="computer-campaign"><b>The Vanta Campaign</b><small>Five realms, five bosses</small></button></div>\n          <p class="computer-note">The board resets when you start. Choose Black and the engine moves first.</p>\n        </section>\n      </div>\n    </aside>\n    <section class="game">
       <div class="m-gamebar"><button id="mBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><div><b id="mGameTitle">Game</b><small id="mGameSub"></small></div></div>
       <div class="player top" data-player-bar="opponent">
         <span class="avatar" id="topAvatar">OP</span>
@@ -294,9 +315,9 @@ ${splashMarkup(splash)}
         </div>
         <time id="bottomClock" data-color="w">10:00</time>
       </div>
-      <div class="twin-line hidden" id="twinLine" aria-live="polite"></div>\n      <div class="bh-partner hidden" id="bhPartner" aria-label="Your partner's board"></div>\n      <div class="tools"><button id="flip">⇄ Flip board</button><button id="sound">♫ Sound on</button><button id="theme">▦ Board theme</button><button id="resign" class="danger">⚑ Resign</button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button><button id="musicToggle" type="button" aria-pressed="false">Music: off</button></div></details></div>
+      <div class="twin-line hidden" id="twinLine" aria-live="polite"></div>\n      <div class="bh-partner hidden" id="bhPartner" aria-label="Your partner's board"></div>\n      <div class="tools"><button id="flip"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg><span>Flip board</span></button><button id="sound"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="sound-wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span>Sound on</span></button><button id="theme"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 12h16M12 4v16"/><path class="fill" d="M4 4h8v8H4zM12 12h8v8h-8z"/></svg><span>Board theme</span></button><button id="resign" class="danger"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4.5h11l-2.5 4 2.5 4H6"/></svg><span>Resign</span></button><details class="game-more"><summary aria-label="More game actions"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="game-more-menu"><button id="hint" type="button" class="hidden">Hint</button><button id="takeback" type="button" class="hidden">Ask to take back</button><button id="draw" type="button">Offer draw</button><button id="openChat" type="button">Chat <span id="chatUnread" class="chat-unread hidden" aria-label="Unread messages">0</span></button><button id="musicToggle" type="button" aria-pressed="false">Music: off</button></div></details></div>
       <div class="m-movebar"><button type="button" data-browse="prev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><div id="mMoves" class="m-moves" aria-label="Moves"></div><button type="button" data-browse="next" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
-      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="takeback" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span>Takeback</span></button><button type="button" data-m-action="leave" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Stop watching</span></button><button type="button" data-m-action="puzzle-next" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Next</span></button><button type="button" data-m-action="puzzle-streak" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3 0-3-1-5 0-8Z"/></svg><span>Streak</span></button><button type="button" data-m-action="puzzle-skip" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Skip once</span></button><button type="button" data-m-action="puzzle-end" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>End streak</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
+      <div class="m-actions" aria-label="Game actions"><button type="button" data-m-action="options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Options</span></button><button type="button" data-m-action="draw"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" transform="rotate(45 12 12)"/></svg><span>Draw</span></button><button type="button" data-m-action="takeback" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span>Takeback</span></button><button type="button" data-m-action="leave" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Stop watching</span></button><button type="button" data-m-action="puzzle-next" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Next</span></button><button type="button" data-m-action="puzzle-menu" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Puzzles</span></button><button type="button" data-m-action="puzzle-streak" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3 0-3-1-5 0-8Z"/></svg><span>Streak</span></button><button type="button" data-m-action="puzzle-skip" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/></svg><span>Skip once</span></button><button type="button" data-m-action="puzzle-end" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>End streak</span></button><button type="button" data-m-action="resign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg><span>Resign</span></button><button type="button" data-m-action="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/></svg><span>Chat</span></button><button type="button" data-m-action="undo" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg><span>Undo</span></button><button type="button" data-m-action="hint" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg><span>Hint</span></button><button type="button" data-m-action="review" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.8 2.8L16.8 9"/></svg><span>Review</span></button><button type="button" data-m-action="rematch" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg><span>Rematch</span></button><button type="button" data-m-action="new" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button></div>
     </section>
 
     <aside class="rpanel panel">
@@ -361,7 +382,8 @@ ${splashMarkup(splash)}
 <aside id="chatDrawer" class="chat-drawer" aria-hidden="true">
   <header><div><small>PLAYER CHAT</small><h3>Game conversation</h3></div><button id="closeChat" aria-label="Close chat">×</button></header>
   <div id="messages"></div>
-  <form id="chat"><input id="message" maxlength="160" placeholder="Send a friendly message…"><button>Send</button></form>
+  <div id="chatTray" class="chat-tray hidden" role="dialog" aria-label="Emoji and reactions"><div class="chat-tray-tabs" role="tablist"><button type="button" data-tray="reactions" class="on" role="tab">Reactions</button><button type="button" data-tray="emoji" role="tab">Emoji</button></div><div class="chat-tray-body"></div></div>
+  <form id="chat"><button type="button" id="chatTrayBtn" class="chat-tray-btn" aria-label="Emoji and reactions" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.4 2.2 2 3.5 2s2.5-.6 3.5-2"/><circle cx="9" cy="10" r="1.1"/><circle cx="15" cy="10" r="1.1"/></svg></button><input id="message" maxlength="160" placeholder="Send a friendly message…"><button class="chat-send">Send</button></form>
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
@@ -456,7 +478,10 @@ function ensureBoardDom(){
     board.insertBefore(fragment,boardDom.pieceLayer);boardDom.squaresFlipped=flipped;
     const rankCoords=$('#rankCoords'),fileCoords=$('#fileCoords');
     if(rankCoords)rankCoords.innerHTML=(flipped?['1','2','3','4','5','6','7','8']:['8','7','6','5','4','3','2','1']).map(value=>`<span>${value}</span>`).join('');
-    if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map(value=>`<span>${value}</span>`).join('');
+    // Coordinates sit inside the edge squares, each in the other square colour so it reads.
+    // The bottom-left square is dark and the top-left light whichever way the board faces.
+    if(rankCoords)[...rankCoords.children].forEach((el,i)=>el.className=i%2?'on-dark':'on-light');
+    if(fileCoords)fileCoords.innerHTML=(flipped?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h']).map((value,i)=>`<span class="${i%2?'on-light':'on-dark'}">${value}</span>`).join('');
   }
   return boardDom;
 }
@@ -475,6 +500,7 @@ function boardLastMove(){
   return reviewLast||serverLast||localLastMove();
 }
 function grabbableColor(){
+  if(lessonSession&&mode==='lesson')return lessonAwaitsMove()?game.turn():'';
   if(retrySession||freeBoard())return game.turn();
   if(studySession)return ''; // reading a study
   if(browse||mode==='watch'||mode==='archive')return '';
@@ -492,7 +518,7 @@ function renderArrows(dom=ensureBoardDom()){
 // and shockwaves react to a move already made, so they stay on at every level but Off.
 function ratedLiveGame(){return !!(serverGameId&&serverGame?.rated&&!localGameOver&&serverGame?.status==='active'&&!serverGame?.bot_player_id)}
 function expressionLevel(){
-  if(typeof darkActive==='function'&&(darkActive()||computerRules==='blackout'&&computerLive()))return 'off'; // moods would give hidden pieces away
+  if(typeof darkActive==='function'&&(darkActive()||computerRules==='blackout'&&computerLive()||fogOnline()))return 'off'; // moods would give hidden pieces away
   if(prefersReducedMotion()||motionScale()<=0||expressionSetting==='off')return 'off';
   if(ratedLiveGame())return 'fair';
   return expressionSetting==='subtle'?'subtle':'full';
@@ -575,12 +601,16 @@ function renderBoard({hint=null,instant=false}={}){
   const browseFen=!reviewFen&&browse?browse.positions[browse.ply]:null;
   const boardGame=reviewFen||browseFen?new Chess(reviewFen||browseFen):game,placement=boardGame.fen().split(' ')[0];
   dom.board.classList.toggle('browsing',!!browseFen);
-  dom.board.classList.toggle('blackout',!reviewFen&&!browseFen&&blackoutActive());
+  document.body.classList.toggle('puzzle-mode',mode==='puzzle'&&!!puzzleSession);
+  document.body.classList.toggle('puzzle-board',mode==='puzzle'); // no Resign or clocks, solved or not
+  dom.board.classList.toggle('blackout',!reviewFen&&!browseFen&&(blackoutActive()||onlineBlind()));
   if(placement!==lastBoardPlacement){if(lastBoardPlacement)boardShapes=[];lastBoardPlacement=placement} // a move clears arrows and marks
-  const legal=new Set(reviewState.viewing||browse?[]:zhDropSelected?zhDropTargets(zhDropSelected):!selected?[]:game.moves({square:selected,verbose:true}).map(m=>m.to));
+  const legal=new Set(reviewState.viewing||browse?[]:zhDropSelected?zhDropTargets(zhDropSelected):!selected?[]:fogOnline()?(Array.isArray(serverGame.legal)?serverGame.legal.filter(m=>m.startsWith(selected)).map(m=>m.slice(2,4)):[]):game.moves({square:selected,verbose:true}).map(m=>m.to));
   const lastMove=boardLastMove(),fullPosition=positionMap(boardGame.board());
-  const sight=boardGame===game&&darkActive()?visibleSquares(game.fen(),computerSide,{reveal:darkCheckers(game,computerSide)}):null;
-  const position=sight?fogPosition(fullPosition,sight,computerSide):fullPosition;
+  const darkOnline=boardGame===game&&onlineDark();
+  const checkerSquares=darkOnline?new Set(serverGame.fog?.checkers||[]):boardGame===game&&darkActive()?new Set(darkCheckers(game,computerSide)):null; // revealed and marked in the dark
+  const sight=darkOnline?new Set(serverGame.fog?.seen||[]):checkerSquares?visibleSquares(game.fen(),computerSide,{reveal:[...checkerSquares]}):null;
+  const position=sight&&!darkOnline?fogPosition(fullPosition,sight,computerSide):fullPosition; // online, the server already left the hidden pieces out
   dom.board.classList.toggle('vanta-dark',!!sight);
   let checked=null;
   if(boardGame.inCheck())for(const [sq,key] of position)if(key===boardGame.turn()+'k')checked=sq;
@@ -589,10 +619,11 @@ function renderBoard({hint=null,instant=false}={}){
   const dragOver=pointerDrag?.started?pointerDrag.over:null;
   for(const [sq,el] of dom.squares){
     const key=position.get(sq),mark=marks.get(sq),fogged=sight&&!sight.has(sq);
-    const cls=`square ${el.dataset.shade}${key?' occupied':''}${fogged?' fog':''}${lastMove&&!fogged&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.moves.some(m=>m.from===sq||m.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
+    const cls=`square ${el.dataset.shade}${key?' occupied':''}${fogged?' fog':''}${lastMove&&!fogged&&(lastMove.from===sq||lastMove.to===sq)?' last-move':''}${selected===sq?' selected':''}${premoves.selected===sq?' premove-selecting':''}${premoves.moves.some(m=>m.from===sq||m.to===sq)?' premove':''}${legal.has(sq)?' legal':''}${checked===sq?' check':''}${checkerSquares?.has(sq)?' checker':''}${mated&&checked===sq?' mated-king':''}${dragOver===sq?' drag-over':''}${reactions.hoverSquare===sq?' hover-piece':''}${reactions.hintSquare===sq&&legal.has(sq)?' hint-hover':''}${mark?` shape-mark shape-mark-${mark}`:''}`;
     if(el.className!==cls)el.className=cls;
     const label=sq+(key?` ${key[0]==='w'?'white':'black'} ${pieceNames[key[1]]}`:' empty');
-    if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
+    const spoken=uiLang==='en'?label:(translateText(label,uiLang)||label); // re-set every render, so translate here
+    if(el.getAttribute('aria-label')!==spoken)el.setAttribute('aria-label',spoken);
   }
   const motion=dom.pieces.sync(position,{flipped,animate:!instant,duration:(from,to)=>moveDurationMs(from,to,scale),hint});
   syncVeteranMarks(dom,boardGame);queueAtmosphere();
@@ -624,6 +655,22 @@ function renderBoard({hint=null,instant=false}={}){
   renderArrows(dom);
   dom.board.classList.toggle('mate',game.isCheckmate());
 }
+// What the board is showing when it isn't a live game, for the card beside it (sweep fix: a
+// puzzle used to read "Live Game · Real time · Casual game"). null means a live game.
+function boardContext(){
+  if(lessonSession&&mode==='lesson')return lessonSession.kind==='famous'?{kicker:'Famous game',line:lessonSession.lesson.title}:{kicker:'Lesson',line:lessonSession.lesson.title};
+  if(watchSession)return {kicker:'Watching',line:'Live game · Spectating'};
+  if(archiveSession)return {kicker:'Game review',line:'A finished game'};
+  if(mode==='puzzle'){
+    const kind=puzzleSession?.kind==='battle'?'Puzzle Battle':streakSession?(streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'):puzzleSession?.daily?'Daily puzzle':'Puzzle';
+    return {kicker:kind,line:puzzleSession?'Find the best move':'Puzzle complete'};
+  }
+  if(egSession||mode==='endgame')return {kicker:'Endgame drill',line:'Practice position'};
+  if(studySession)return {kicker:'Study',line:'Analysis board'};
+  if(exploreSession)return {kicker:'Explorer',line:'Opening explorer'};
+  if(mode==='computer'&&currentBot)return {kicker:'Computer game',line:`vs ${currentBot.display_name||currentBot.name||'Computer'}`};
+  return null;
+}
 function renderStatus(){
   if(localGameOver){
     $('#turn').textContent=localGameOverInfo?.reason==='on time'?'Game over · Time expired':'Game over · Resignation';
@@ -633,8 +680,11 @@ function renderStatus(){
     $('#state').textContent='Authoritative server result';
   }else{
     $('#turn').textContent=boardOver()?endText():`${game.turn()==='w'?'White':'Black'} to move`;
-    $('#state').textContent=game.inCheck()?'Check · Real time':'Real time  •  Casual game';
+    const ctx=boardContext();
+    $('#state').textContent=ctx?(game.inCheck()?`Check · ${ctx.line}`:ctx.line):game.inCheck()?'Check · Real time':'Real time  •  Casual game';
   }
+  const kicker=$('.live-card-copy small'),kick=localGameOver||!boardContext()?'●   Live Game':`●   ${boardContext().kicker}`;
+  if(kicker&&kicker.textContent!==kick)kicker.textContent=kick;
   document.body.dataset.seat=myColor||'';
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
@@ -748,36 +798,39 @@ function rematchSettings(){
   const ended=serverGame||{};
   return {seconds:Number(ended.time_control_seconds||ended.base_seconds||600),increment:Number(ended.increment_seconds||0),rated:!!ended.rated};
 }
+// Rematches are made by the server (security review C1): an offer and the new game are kept on
+// the finished game, and each client opens the new game by id once the server says it exists.
 async function startOnlineRematch(){
-  if(!serverGameId||!realtimeChannel||!realtimeReady)return toast('Rematch is unavailable because the game connection has closed');
-  rematchOfferPending=true;broadcastAux('rematch_offer',{from:realtimeClientId,...rematchSettings()});toast('Rematch offered');
+  if(!serverGameId)return toast('Rematch is unavailable');
+  try{const out=await api.request('rematch',{gameId:serverGameId});if(out?.rematchGameId)return void openRematchGame(out.rematchGameId);if(out?.game)serverGame={...serverGame,...out.game};rematchOfferPending=true;toast('Rematch offered')}catch(error){toast(error.message)}
 }
-async function acceptRematchOffer(payload){
-  if(!payload?.from||payload.gameId!==serverGameId)return;
-  broadcastAux('rematch_accept',{from:realtimeClientId,to:payload.from});toast('Rematch accepted');
+async function acceptRematchOffer(){
+  if(!serverGameId)return;
+  try{const out=await api.request('rematch',{gameId:serverGameId});if(out?.rematchGameId)void openRematchGame(out.rematchGameId)}catch(error){toast(error.message)}
 }
-async function createRematchForPeer(payload){
-  if(!rematchOfferPending||payload?.to!==realtimeClientId||payload.gameId!==serverGameId)return;
-  rematchOfferPending=false;const oldChannel=realtimeChannel,oldGameId=serverGameId,{seconds,increment,rated}=rematchSettings();
-  try{
-    const state=await api.create({name:(currentProfile?.username||guestName),seconds,increment,rated}),next=state.game||state,code=next.invite_code;
-    if(oldChannel&&realtimeReady)await oldChannel.send({type:'broadcast',event:'rematch_ready',payload:{gameId:oldGameId,from:realtimeClientId,to:payload.from,code}});
-    applyServerState(state);room=code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(code)}`);syncRoomUi();await loadChat();toast('Rematch ready');
-  }catch(error){toast(error.message)}
-}
-async function joinRematchFromPeer(payload){
-  if(payload?.to!==realtimeClientId||payload.gameId!==serverGameId||!payload.code)return;
+let rematchOpening=null,rematchOfferSeen=null;
+async function openRematchGame(id){
+  if(rematchOpening===id||serverGameId===id)return;rematchOpening=id;
   document.querySelector('.vch-dialog-layer .vch-dialog-close')?.click();
   try{
-    const state=await api.join(payload.code,guestName);applyServerState(state);room=(state.game||state).invite_code||payload.code;roomCreated=false;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
-  }catch(error){toast(error.message)}
+    const state=await api.state(id);applyServerState(state);room=(state.game||state).invite_code||room;roomCreated=false;rematchOfferPending=false;
+    history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
+  }catch(error){toast(error.message)}finally{rematchOpening=null}
+}
+// Called with each server state of a finished game: a rematch offer from the opponent, or
+// the new game the server made.
+function syncRematch(g){
+  if(!g||!serverGameId||g.id!==serverGameId||['active','waiting'].includes(g.status))return;
+  if(g.rematch_game_id)return void openRematchGame(g.rematch_game_id);
+  const offer=g.rematch_offer_by&&g.rematch_offer_by!==currentPlayerId?`${g.id}:${g.rematch_offer_by}`:null;
+  if(offer&&offer!==rematchOfferSeen){rematchOfferSeen=offer;toast('Rematch offered',{duration:10000,actionLabel:'Accept',onAction:()=>acceptRematchOffer()})}
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
   lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);roundTwelveGameOver(info);
   if(!info.online&&mode==='computer'){
     lastLocalArchiveId=`local-${Date.now()}`;
-    saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason});
+    saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason,variant:computerRules||'standard'});
   }playUiSound(title==='Draw'?'draw':won?'win':'lose');
   await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
@@ -788,7 +841,7 @@ async function maybeShowGameOver(){
 }
 function premovePlayerColor(){if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
 function premoveBlocked(){return !!puzzleSession||mode==='puzzle'||reviewState.running||reviewState.viewing||currentRightView==='review'}
-function canQueuePremove(){if(freeBoard())return false;
+function canQueuePremove(){if(freeBoard()||fogOnline())return false;
   const color=premovePlayerColor();
   if(!color||premoveBlocked()||localGameOver||game.isGameOver())return false;
   if(serverGameId&&!['active','playing','in_progress'].includes(serverGame?.status||'active'))return false;
@@ -819,6 +872,7 @@ async function clickSquare(sq,p,{instant=false}={}){
   if(browse){exitBrowse();return} // a tap on the board while looking back returns to the game
   if(mode==='watch')return; // spectators can't move
   if(mode==='archive'&&!retrySession)return;
+  if(fogOnline())return fogClick(sq,p);
   if(premoves.move?.from===sq){cancelPremove();return}
   if(canQueuePremove()){
     const color=premovePlayerColor();
@@ -895,7 +949,7 @@ async function beginMatchSearch(){
   game.reset();render();updateMoves();setMatchSearching(true);
   const started=Date.now();
   try{
-    const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated});
+    const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated,...(matchSelection.variant!=='standard'?{variant:matchSelection.variant}:{})});
     if(first.game||first.matched){setMatchSearching(false);updateOnlineCount(2);applyServerState(first);showMovesView();toast('Player matched');return}
     matchTimer=setInterval(async()=>{
       try{
@@ -909,24 +963,26 @@ async function beginMatchSearch(){
     },1000);
   }catch(error){setMatchSearching(false);toast(error.message)}
 }
+// A Campaign boss, a Gauntlet rung or Your Shadow is not one of the cards below: while one is
+// on the board the panel says so, and the usual opponent and variant choices stop looking picked.
+function syncSpecialOpponent(bot){
+  const view=$('.computer-view'),note=$('#specialOpponent');
+  view?.classList.toggle('special-game',!!bot);
+  if(!note)return;
+  note.classList.toggle('hidden',!bot);
+  const rules=bot&&computerRules!=='standard'?` · ${{freestyle:'Freestyle 960',dark:'Vanta Dark',blackout:'Blackout Blitz'}[computerRules]||''}`:'';
+  note.textContent=bot?`Now playing ${bot.display_name||bot.name||'a special opponent'}${rules}. Choose an opponent below for a regular game.`:'';
+}
 function renderComputerBots(){
   const grid=$('#botGrid');if(!grid)return;
-  if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=computerBots.find(bot=>Number(bot.elo)===1500)?.slug||computerBots[0]?.slug||'';
-  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Stockfish')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
-  $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;renderComputerBots()});
+  if(!computerBots.some(bot=>bot.slug===selectedComputerBotSlug))selectedComputerBotSlug=DEFAULT_LEVEL;
+  grid.innerHTML=computerBots.map(bot=>`<button class="bot-card ${bot.slug===selectedComputerBotSlug?'on':''}" data-bot-slug="${escapeHtml(bot.slug)}" data-about="${escapeHtml(bot.about||'')}" type="button"><span class="bot-portrait"><img src="${pieceAsset(escapeHtml(bot.portrait||'bn'))}" alt="" loading="lazy" decoding="async"></span><span><b>${escapeHtml(bot.display_name||bot.name||'Computer')}</b><small>${Number(bot.elo)||1200} Elo</small></span></button>`).join('');
+  $$('#botGrid .bot-card').forEach(button=>button.onclick=()=>{selectedComputerBotSlug=button.dataset.botSlug;syncSpecialOpponent(null);renderComputerBots()});
 }
-async function loadComputerBots(){
+// The ladder lives in the app (src/computer-levels.js); the server's bots only stand in for an
+// opponent when the match queue is empty.
+function loadComputerBots(){
   if(botsLoaded)return;botsLoaded=true;
-  try{
-    const data=await api.bots(),remote=(data.bots||[]).filter(bot=>Number(bot.elo)>=900&&Number(bot.elo)<=2700).sort((a,b)=>Number(a.elo)-Number(b.elo));
-    if(remote.length){
-      const portraits=['bn','bb','br','bq','bk','bp'];
-      computerBots=DEFAULT_COMPUTER_BOTS.map((fallback,index)=>{
-        const bot=remote[index]||fallback;
-        return {...fallback,...bot,slug:bot.slug||fallback.slug,portrait:portraits[index]};
-      });
-    }
-  }catch{}
   renderComputerBots();
 }
 function selectedComputerSide(){
@@ -941,8 +997,10 @@ function startComputerGame(opts={}){
   if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   const selectedBot=opts.bot||computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
-  computerRules=opts.variant||computerVariant;
+  computerRules=opts.variant||computerVariant;engineSight=null;
+  if(searching)void cancelMatchSearch({announce:false}); // a computer game ends any search for an online one
   if(opts.bot?.campaign)applyRealmTheme(realmById(opts.bot.campaign.realm));else restoreRealmTheme();
+  syncSpecialOpponent(opts.bot?selectedBot:null);
   currentBot={...selectedBot};localGameOver=false;localGameOverInfo=null;lowTimeWarned=false;computerStarted=true;computerSide=opts.side||selectedComputerSide();premoves.cancel();
   myColor=computerSide;orientationSet=true;flipped=computerSide==='b';selected=null;game.reset();boardShapes=[];
   if(computerRules==='freestyle'){game.load(freestyleFen());toast(FREESTYLE_LABEL)}
@@ -957,6 +1015,39 @@ function startComputerGame(opts={}){
 // ---- Round 11: Vanta Dark (fog of war) and Blackout Blitz, games against the computer ----
 function computerLive(){return mode==='computer'&&computerStarted&&!localGameOver&&!game.isGameOver()&&!reviewState.viewing&&!browse}
 function darkActive(){return computerRules==='dark'&&computerLive()}
+// Online Vanta Dark / Blackout Blitz (round 13): the server sends each player only what they may
+// see (supabase/functions/chess/fog.js). The board shows that view, moves go straight to the
+// server (no relay, no optimistic move, no premoves), and the whole game shows at the end.
+function fogOnline(){return isOnlineGame()&&['dark','blackout'].includes(serverGame?.variant)&&serverGame?.status==='active'&&!!myColor}
+const onlineDark=()=>fogOnline()&&serverGame.variant==='dark';
+const onlineBlind=()=>fogOnline()&&serverGame.variant==='blackout'&&!!serverGame.fog?.blind;
+// The position to put in chess.js for a fog view: the fogged FEN (an enemy king may be out of
+// sight, so validation is skipped) or an empty board while the lights are out.
+function loadFogView(state){
+  const turn=Number(state.move_count||0)%2?'b':'w';
+  const fen=state.fen||`8/8/8/8/8/8/8/8 ${turn} - - 0 1`;
+  try{game.load(fen,{skipValidation:true})}catch{}
+}
+async function fogClick(sq,p){
+  const g=serverGame;if(!myColor||onlineMovePending||game.turn()!==myColor)return;
+  const blind=onlineBlind();
+  if(!selected){if(blind||p?.color===myColor){selected=sq;render()}return}
+  if(sq===selected){selected=null;render();return}
+  if(!blind&&p?.color===myColor){selected=sq;render();return}
+  const from=selected;selected=null;
+  const options=Array.isArray(g.legal)?g.legal.filter(m=>m.startsWith(from+sq)):null;
+  if(options&&!options.length){rejectMove(from,sq,{quietRule:true});render();return}
+  let promotion='q';if(options?.some(m=>m.length===5)){promotion=await choosePromotion();if(!promotion){render();return}}
+  render();await fogSend({from,to:sq,promotion});
+}
+async function fogSend(move){
+  onlineMovePending=true;
+  try{const out=await api.move(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion,clientMoveAt:serverAlignedNowIso()});applyServerState(out);afterBoardPaint(playTone)}
+  catch(error){
+    if(error?.status===409)await refreshServerState();
+    else{playIllegalTone();buzz(HAPTICS.illegal);toast(/illegal/i.test(error?.message||'')?'That move is not legal here':error.message)}
+  }finally{onlineMovePending=false}
+}
 function blackoutActive(){return computerRules==='blackout'&&computerLive()&&inBlackout(myMoveCount(game.history(),computerSide))}
 let blackoutWas=false;
 function syncBlackout(){
@@ -966,6 +1057,7 @@ function syncBlackout(){
 }
 function maskedRecords(records){
   if(darkActive())return records.map((r,i)=>({...r,san:darkSan(r,i,computerSide)}));
+  if(fogOnline())return records.map(r=>r?.hidden?{...r,san:serverGame.variant==='blackout'?'•':'?'}:r);
   if(blackoutActive())return records.map(r=>({...r,san:'•'}));
   return records;
 }
@@ -983,7 +1075,7 @@ async function activateLeftMode(next){
   if(next==='computer'){renderComputerBots();loadComputerBots()}
   syncOnlineTransport();
 }
-async function makeMove(move,remote=false,retry=true){if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
+async function makeMove(move,remote=false,retry=true){if(lessonSession&&mode==='lesson'&&!remote)return lessonMove(move);if(fogOnline()&&!remote){if(Array.isArray(serverGame.legal)&&!serverGame.legal.some(m=>m.startsWith(move.from+move.to)))return rejectMove(move.from,move.to,{quietRule:true});return fogSend(move)}if(planSession&&!remote)return planMove(move);if(studySession?.editing&&!remote)return studyMove(move);if(exploreSession&&!remote)return exploreMove(move);if(repEdit&&!remote)return repEditMove(move);if(egSession&&!remote)return egMove(move);if(prepSession&&!remote)return prepMove(move);if(analysis&&!remote)return analysisMove(move);if(retrySession&&!remote)return retryAttempt(move);if(puzzleSession&&!remote){const uci=move.from+move.to+(move.promotion||'');if(puzzleSession.kind==='repertoire'&&uci!==puzzleSession.solution[puzzleSession.index]){const full=repContinue(puzzleSession.lines,game.fen(),puzzleSession.full.slice(0,puzzleSession.offset+puzzleSession.index),uci);if(full){puzzleSession.full=full;puzzleSession.solution=full.slice(puzzleSession.offset)}}const expected=puzzleSession.solution[puzzleSession.index];if(uci!==expected&&!(expected?.length===4&&uci===expected+'q')){if(puzzleSession.kind==='battle')return battleMiss(move);if(streakSession)return endStreak(move);if(puzzleSession.trainer)return drillMiss();puzzleMiss(move);return}
   const made=rememberLastMove(game.move(move));puzzleSession.played.push(uci);puzzleSession.index++;render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
   if(puzzleSession.index>=puzzleSession.solution.length){if(puzzleSession.kind==='battle')return battleSolved();if(puzzleSession.trainer)return drillSolved();await recordPuzzle(true);puzzleSolved();return}
   const reply=puzzleSession.solution[puzzleSession.index];
@@ -1064,7 +1156,7 @@ function moveCell(record,index,records,signature){
   const current=(reviewState.viewing&&reviewState.currentPly===index+1)||(!reviewState.viewing&&browse?.ply===index+1)?' current':'';
   return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
-function moveRecords(){return watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
+function moveRecords(){return archiveSession?.records?archiveSession.records:watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
 function updateMoves(){
   const records=maskedRecords(moveRecords());syncBlackout();
   syncMoveStrip(records);
@@ -1081,17 +1173,51 @@ function updateMoves(){
     cell.onclick=jump;cell.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();jump()}};
   });
 }
+// Vanta Dark and Blackout Blitz: the computer plays blind too (src/blind-engine.js). It searches
+// the board it believes in, choosing only among moves legal there and on the real board.
+function blindSearch(){
+  if(mode!=='computer'||!['dark','blackout'].includes(computerRules))return null;
+  const color=game.turn(),realFen=game.fen(),history=game.history({verbose:true});
+  try{
+    if(computerRules==='dark'){
+      if(engineSight?.rules!=='dark')engineSight={rules:'dark',memory:startMemory(Chess,new Chess().fen(),color)};
+      const look=lookAround(Chess,realFen,color,engineSight.memory,{turn:history.length,captured:capturedBy(history,color)});
+      engineSight.memory=look.memory;
+      const fen=beliefFen(Chess,realFen,color,new Map([...look.memory].map(([sq,p])=>[sq,{type:p.type}])),{seen:look.seen});
+      return fen?{fen,searchmoves:sharedMoves(Chess,realFen,fen)}:null;
+    }
+    // Blackout: while its lights are on it sees the board (and remembers it); then it plays blind.
+    if(!engineBlind(history.map(m=>m.san),color)){engineSight={rules:'blackout',snapshot:realFen,at:history.length};return null}
+    const snap=engineSight?.rules==='blackout'?engineSight:{snapshot:realFen,at:history.length};
+    const fen=blackoutBelief(Chess,snap.snapshot,history.slice(snap.at).filter(m=>m.color===color),realFen,color);
+    return fen?{fen,searchmoves:sharedMoves(Chess,realFen,fen)}:null;
+  }catch{return null}
+}
 async function findEngineMove(){
   const moves=game.moves({verbose:true});if(!moves.length)return null;
-  const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`;
+  const requestedElo=Number(currentBot?.elo||currentBot?.rating||1500),fen=game.fen(),id=`bot-${++engineRequestSeq}`,blind=blindSearch();
+  // The lowest levels play some moves the way a beginner would (src/computer-levels.js), after a
+  // human-looking pause. (In the blind modes the move is still one legal on the real board.)
+  if(Number(currentBot?.slip)>0&&Math.random()<Number(currentBot.slip)){
+    await new Promise(resolve=>setTimeout(resolve,350+Math.random()*650));
+    if(game.fen()!==fen)return undefined;
+    // Blind, it can't know which moves capture: any move it believes it can make.
+    if(blind){const pool=moves.filter(m=>blind.searchmoves.includes(m.from+m.to+(m.promotion||'')));return (pool.length?pool:moves)[Math.floor(Math.random()*(pool.length||moves.length))]}
+    return beginnerMove(moves);
+  }
+  // Lozza or Stockfish 19 (src/engine-roster.js); the blind computer is always Stockfish.
+  const lozza=!blind&&engineFor(currentBot,computerRules)==='lozza',worker=lozza?lozzaEngine:stockfish;
   if(enginePending)enginePending.resolve(null);
   const uci=await new Promise(resolve=>{
     enginePending={id,resolve};
-    stockfish.postMessage({mode:'bot',fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id});
-    setTimeout(()=>{if(enginePending?.id===id){enginePending=null;stockfish.postMessage({action:'stop'});resolve(null)}},BOT_MOVE_TIMEOUT_MS);
+    if(lozza)worker.postMessage({mode:'bot',fen,nodes:lozzaBudget(requestedElo),requestId:id});
+    else worker.postMessage({mode:'bot',fen:blind?.fen||fen,elo:requestedElo,nodes:botSearchNodes(requestedElo),requestId:id,...(blind?{searchmoves:blind.searchmoves}:{})});
+    setTimeout(()=>{if(enginePending?.id===id){enginePending=null;worker.postMessage({action:'stop'});resolve(null)}},BOT_MOVE_TIMEOUT_MS);
   });
   if(game.fen()!==fen)return undefined; // position changed while searching (new game, takeback): drop the result
-  return uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
+  const chosen=uci&&moves.find(x=>x.from+x.to+(x.promotion||'')===uci);
+  if(!chosen&&blind&&uci){const pool=moves.filter(x=>blind.searchmoves.includes(x.from+x.to+(x.promotion||'')));return pool[Math.floor(Math.random()*pool.length)]||moves[0]}
+  return chosen;
 }
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
@@ -1154,6 +1280,7 @@ function currentClockSeconds(){
   return {w:Math.max(0,clocks.w),b:Math.max(0,clocks.b)};
 }
 function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
+  if(mode==='puzzle'&&runTimer)return; // the run clock owns your clock during a puzzle run
   const colors=playerBarClockColors(),top=$('#topClock'),bottom=$('#bottomClock');
   const apply=(element,color)=>{
     if(!element)return;
@@ -1221,7 +1348,7 @@ function setPlayerFlag(element,code){
   element.toggleAttribute('aria-hidden',!flagSrc);
   if(flagSrc){
     element.innerHTML=`<img src="${flagSrc}" alt="">`;
-    element.setAttribute('aria-label',`${countryName(normalized)} flag`);element.title=countryName(normalized);
+    element.setAttribute('aria-label',`${countryName(normalized,uiLang)} flag`);element.title=countryName(normalized,uiLang);
   }else{
     element.replaceChildren();
     element.removeAttribute('aria-label');
@@ -1269,8 +1396,8 @@ function syncPlayerBars(){
   $('#bottomRating').textContent=`${ratingFor(pool)} rating`;
   const opponent=opponentInfo&&opponentInfo.gameId===serverGameId?opponentInfo:null;
   {const link=!currentBot&&!serverGame?.bot_player_id&&opponent?.account?opponentUsername(serverGame,myColor):null,tn=$('#topPlayerName');tn.dataset.profile=link||'';tn.classList.toggle('pp-link',!!link);tn.title=link?'View profile':''}
-  setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,label:topName});
-  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:ownName});
+  setPortrait($('#topAvatar'),currentBot?{initials:playerInitials(topName,'OP'),label:topName}:{avatar:opponent?.avatar_data,preset:opponent?.avatar_preset,label:topName});
+  setPortrait($('#bottomAvatar'),ownPortrait(ownName));
   if(serverGameId&&opponentId&&!currentBot)void loadOpponentInfo(serverGameId,opponentId);
   const opponentColor=myColor==='w'?'black':'white',ownColor=myColor==='w'?'white':myColor==='b'?'black':null;
   setPlayerFlag($('#topFlag'),opponent?.country_code||(opponentColor?serverGame?.[`${opponentColor}_country_code`]:null));
@@ -1280,6 +1407,9 @@ function syncPlayerBars(){
   const online=isOnlineGame();
   setPresence($('#topPresence'),currentBot?'ENGINE':opponentId&&online?'LIVE':'WAITING',!!opponentId&&online&&!currentBot);
   setPresence($('#bottomPresence'),online?'LIVE':'LOCAL',online);
+  // Puzzles have no opponent or clock: say so instead of "Waiting for opponent · 10:00".
+  const puzzling=mode==='puzzle'&&!!puzzleSession;document.body.classList.toggle('puzzle-mode',puzzling);
+  if(puzzling){$('#topPlayerName').textContent=puzzleSession.kind==='battle'?'Puzzle Battle':'Puzzle';$('#topRating').textContent=puzzleSession.rating?`${puzzleSession.rating} rating`:'Find the best move';setPresence($('#topPresence'),'PUZZLE',false);$('#bottomRating').textContent=`${puzzleRatingNow()} puzzle rating`;setPresence($('#bottomPresence'),'SOLVING',false)}
   $('#hint')?.classList.toggle('hidden',mode!=='computer');
   $('#undoMove')?.classList.toggle('hidden',mode!=='computer');
   syncConnectionUi();syncClockBars();
@@ -1355,8 +1485,10 @@ function applyServerState(payload,{animateMove=true}={}){
   if(myColor&&!orientationSet){flipped=myColor==='b';orientationSet=true}
   if(myColor&&['active','playing','in_progress'].includes(state.status)&&(previousState?.status==='waiting'||Number(state.move_count||0)===0))showGameStartBanner(myColor,state.time_control_seconds||state.base_seconds||600,state.increment_seconds||0,`online:${state.id}:${state.started_at||'active'}`);
   clockSnapshot=createClockSnapshot(payload);
-  if(state.fen){try{game.load(state.fen)}catch{}}
+  if(['dark','blackout'].includes(state.variant)&&state.status==='active')loadFogView(state);
+  else if(state.fen){try{game.load(state.fen)}catch{}}
   if(state.id&&state.id!==previousGameId)void loadChat();
+  syncRematch(state);
   const lastServerMove=previousGameId===state.id&&Number(state.version)>previousVersion?state.move_history?.at?.(-1):null;
   syncRoomUi();render({hint:lastServerMove,instant:!animateMove});afterBoardPaint(updateMoves);syncOpponentConnectionToast(state);
   if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
@@ -1384,13 +1516,14 @@ function syncIdentityUI(){
   const signed=!!authSession?.access_token&&!!currentProfile?.account;
   const name=signed?(currentProfile.username||currentProfile.display_name||'Player'):guestName;
   const rating=ratingFor('rapid');
-  const user=$('#accountBtn');if(user){user.querySelector('span').textContent=name;user.querySelector('small').textContent=rating+' rating'}
+  const user=$('#accountBtn');if(user){user.querySelector(':scope>span').textContent=name;user.querySelector(':scope>small').textContent=rating+' rating'}
   const bottom=$('#bottomPlayerName');if(bottom)bottom.textContent='You · '+name;
   const bottomRating=$('#bottomRating');if(bottomRating)bottomRating.textContent=rating+' rating';
-  setPortrait($('#bottomAvatar'),{avatar:currentProfile?.avatar_data,label:name});
+  setPortrait($('#bottomAvatar'),ownPortrait(name));
+  const headerAvatar=$('#accountBtn>i');if(headerAvatar){headerAvatar.classList.add('avatar');setPortrait(headerAvatar,ownPortrait(name))}
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code);
   syncPlayerBars();
-  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),{avatar:currentProfile?.avatar_data,label:name});$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
+  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),ownPortrait(name));$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
@@ -1421,6 +1554,12 @@ async function detectCountry(){
   if(!/^[A-Z]{2}$/.test(code)||!FLAG_URL[code])throw new Error('Could not detect your country. Pick it from the list.');
   return code;
 }
+// Your VCH portrait: the server's copy once the round 13 server is live, else this device's.
+function ownPreset(){
+  const server=currentProfile?.avatar_preset;if(isPortraitPreset(server))return server;
+  try{const v=localStorage.getItem('vch.portraitPreset');return isPortraitPreset(v)?v:null}catch{return null}
+}
+function ownPortrait(label){return {avatar:currentProfile?.avatar_data,preset:ownPreset(),label}}
 async function saveProfileChanges(changes){
   const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
 }
@@ -1442,7 +1581,7 @@ function showFlagPrompt(){
     const choice=event.target.closest('[data-flag]')?.dataset.flag;if(!choice)return;
     if(choice==='no'){done();return}
     if(choice==='choose'){done();void openProfileEditor();return}
-    try{const code=await detectCountry();await saveProfileChanges({country_code:code});done();toast(`Flag set: ${countryName(code)}`)}
+    try{const code=await detectCountry();await saveProfileChanges({country_code:code});done();toast(`Flag set: ${countryName(code,uiLang)}`)}
     catch(error){done();toast(error.message);void openProfileEditor()}
   });
   document.body.append(card);
@@ -1451,26 +1590,52 @@ function showFlagPrompt(){
     if(!flagPromptCalm()){clearInterval(watch);card.remove();setTimeout(showFlagPrompt,6000)}
   },700);
 }
+// Portrait & profile: name, VCH portrait or picture, About line and flag. Guests can change
+// their display name (kept on this device), wear a VCH portrait and set a flag; pictures and
+// usernames belong to signed-in accounts.
 async function openProfileEditor(){
   const account=!!authSession?.access_token&&!!currentProfile?.account;
-  let avatar=currentProfile?.avatar_data||null,country=currentProfile?.country_code||'';
+  let avatar=currentProfile?.avatar_data||null,preset=ownPreset(),country=currentProfile?.country_code||'';
+  const startName=account?(currentProfile.username||''):guestName,startBio=currentProfile?.bio||'';
   const body=document.createElement('div');body.className='profile-editor';
-  const options=['<option value="">No flag</option>',...countryList().map(([code,name])=>`<option value="${code}">${escapeHtml(name)}</option>`)].join('');
-  body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div>${account?`<label class="pe-upload"><input type="file" accept="image/*" hidden><span>Upload picture</span></label><button type="button" class="pe-remove">Remove picture</button><small>Square crop, 128px. JPEG, PNG or WebP.</small>`:`<small>Sign in to add a profile picture. Guests show an empty portrait.</small>`}</div></div>
+  const options=['<option value="">No flag</option>',...countryList(uiLang).map(([code,name])=>`<option value="${code}" data-no-i18n>${escapeHtml(name)}</option>`)].join('');
+  body.innerHTML=`<div class="pe-portrait"><span class="avatar pe-avatar" aria-hidden="true"></span><div class="pe-who">
+    <label class="pe-field"><span>${account?'Username':'Display name'}</span><input class="pe-name" maxlength="20" autocomplete="${account?'username':'nickname'}" value="${escapeHtml(startName)}" placeholder="${account?'3–20 letters, numbers or _':'3–20 characters'}"></label>
+    <small class="pe-name-note">${account?'Your username is unique and shown everywhere.':'Guests: your name is kept on this device. Sign in to keep it everywhere and add a picture.'}</small></div></div>
+<div class="pe-section"><span class="pe-title">VCH portrait</span><div class="pe-presets" role="listbox" aria-label="VCH portraits">${PORTRAIT_PRESETS.map(id=>`<button type="button" class="pe-preset avatar" role="option" data-preset="${id}" aria-label="${escapeHtml(presetLabel(id))}" title="${escapeHtml(presetLabel(id))}">${presetMarkup(id)}</button>`).join('')}</div>
+${account?`<div class="pe-upload-row"><label class="pe-upload"><input type="file" accept="image/*" hidden><span>Upload picture</span></label><button type="button" class="pe-remove">No picture</button><small>Square crop, 128px. JPEG, PNG or WebP. A picture shows instead of your portrait.</small></div>`:''}</div>
+<label class="pe-field pe-bio"><span>About you <em class="pe-count"></em></span><textarea maxlength="${BIO_MAX}" rows="2" placeholder="Favourite opening, club, a line about you">${escapeHtml(startBio)}</textarea></label>
 <label class="pe-country"><span>Country flag</span><select>${options}</select></label>
 <button type="button" class="pe-detect">Detect from my connection</button>
 <p class="pe-note">Your flag is shown to opponents. Detect looks up only your country from your connection; we keep the 2-letter code, never your IP address. Choose "No flag" to hide it.</p>`;
-  const preview=body.querySelector('.pe-avatar'),select=body.querySelector('select');
-  const draw=()=>setPortrait(preview,{avatar});draw();select.value=country;
-  select.onchange=()=>{country=select.value};
+  const previewEl=body.querySelector('.pe-avatar'),select=body.querySelector('select'),nameInput=body.querySelector('.pe-name'),bio=body.querySelector('textarea'),count=body.querySelector('.pe-count');
+  const draw=()=>{setPortrait(previewEl,{avatar,preset});body.querySelectorAll('.pe-preset').forEach(b=>{const on=!avatar&&b.dataset.preset===preset;b.classList.toggle('on',on);b.setAttribute('aria-selected',on?'true':'false')})};
+  const counter=()=>{count.textContent=`${bio.value.length}/${BIO_MAX}`};draw();counter();select.value=country;
+  bio.oninput=counter;select.onchange=()=>{country=select.value};
+  body.querySelectorAll('.pe-preset').forEach(b=>b.onclick=()=>{preset=b.dataset.preset===preset&&!avatar?null:b.dataset.preset;if(preset)avatar=null;draw()});
   body.querySelector('.pe-detect').onclick=async()=>{try{country=await detectCountry();select.value=country}catch(error){toast(error.message)}};
   body.querySelector('input[type=file]')?.addEventListener('change',async event=>{try{avatar=await avatarFromFile(event.target.files?.[0]);draw()}catch(error){toast(error.message)}});
   const remove=body.querySelector('.pe-remove');if(remove)remove.onclick=()=>{avatar=null;draw()};
-  const action=await vchDialog({title:'Portrait & flag',body,actions:[{label:'Cancel',value:false},{label:'Save',value:true,primary:true}]});
+  const action=await vchDialog({title:'Portrait & profile',body,actions:[{label:'Cancel',value:false},{label:'Save',value:true,primary:true}]});
   if(!action)return;
-  const changes={country_code:country||null};
+  const name=cleanDisplayName(nameInput.value),about=cleanBio(bio.value);
+  // Names and the About line follow the chat rules (src/moderation.js); the server checks again.
+  for(const text of [name,about]){if(text&&!moderateText(text).ok)return toast('Please keep your name and About line friendly')}
+  const changes={country_code:country||null,avatar_preset:preset||null,bio:about||null};
   if(account&&avatar!==(currentProfile?.avatar_data||null))changes.avatar_data=avatar;
-  try{await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')}catch(error){toast(error.message)}
+  try{
+    if(account&&name&&name!==startName){
+      if(!/^[A-Za-z0-9_]{3,20}$/.test(name))return toast('Usernames are 3–20 letters, numbers or _');
+      const out=await api.request('profile',{name,username:name});currentProfile={...currentProfile,...(out.player||out.profile||{})};
+    }
+    if(!account&&name!==guestName){
+      if(!isDisplayName(name))return toast('Names are 3–20 letters or numbers (spaces, _ . - inside)');
+      guestName=name;try{localStorage.setItem('vch.guestName',name)}catch{}
+      await api.profile(guestName).then(out=>{currentProfile={...currentProfile,...(out.player||out.profile||{})}}).catch(()=>{});
+    }
+    try{if(preset)localStorage.setItem('vch.portraitPreset',preset);else localStorage.removeItem('vch.portraitPreset')}catch{}
+    await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')
+  }catch(error){syncIdentityUI();toast(error.message)}
 }
 async function loadProfile(){
   try{const out=await api.profile(guestName);currentProfile=out.player||out.profile||null;syncIdentityUI();scheduleFlagPrompt();if(signedIn())startSocial();return out}
@@ -1514,7 +1679,7 @@ function sendRealtimePing(){
   });
 }
 function broadcastMoved(gameId,version,{from,to,promotion=null,fenBefore}={},{early=false}={}){
-  if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId)return;
+  if(!realtimeChannel||!realtimeReady||realtimeGameId!==gameId||fogOnline())return; // hidden-information games never relay moves
   realtimeChannel.send({type:'broadcast',event:'moved',payload:{gameId,version:Number(version),from,to,promotion:promotion||null,fenBefore,...(early?{provisional:true}:{})}}).catch(()=>{});
 }
 // Provisional moves (see online-sync.js): shown at once, confirmed by the server shortly after.
@@ -1579,6 +1744,9 @@ function applyRealtimeMove(incoming){
     legalMove=game.moves({square:incoming.from,verbose:true}).find(candidate=>candidate.to===incoming.to&&(!candidate.promotion||candidate.promotion===requestedPromotion));
   }catch{return false}
   if(!legalMove)return false;
+  // A relayed move is only ever the opponent's: a message that would move your own pieces is
+  // ignored (security review C1). The server's state settles everything either way.
+  if(!myColor||legalMove.color===myColor||fogOnline())return false;
   let made;
   try{made=game.move({from:incoming.from,to:incoming.to,...(legalMove.promotion?{promotion:incoming.promotion||legalMove.promotion}:{})})}catch{return false}
   rememberLastMove(made);
@@ -1626,29 +1794,33 @@ function handleDrawResponse(message){
   const payload=message?.payload||{};if(payload.gameId!==serverGameId||payload.from===realtimeClientId||payload.to!==currentPlayerId)return;
   if(payload.status==='declined')toast('Draw offer declined');if(payload.status==='expired')toast('Draw offer expired');
 }
-function handleRematchOffer(message){
-  const payload=message?.payload||{};if(payload.gameId!==serverGameId||payload.from===realtimeClientId)return;
-  toast('Rematch offered',{duration:8000,actionLabel:'Accept',onAction:()=>acceptRematchOffer(payload)});
+// The game's realtime topic is private to its two players: the server names it from a secret
+// (game_channel; per seat for hidden-information games). Before the round 13 server is live
+// the action is unknown and the old public topic is used.
+let realtimeTopicFor=null,realtimeTopicPending=null;
+async function gameTopic(gameId){
+  if(realtimeTopicFor?.gameId===gameId)return realtimeTopicFor.topic;
+  try{const out=await api.request('game_channel',{gameId});if(out?.topic){realtimeTopicFor={gameId,topic:out.topic};return out.topic}}catch(error){if(error?.status===403||error?.status===404)return null}
+  return `game:${gameId}`;
 }
-function handleRematchAccept(message){const payload=message?.payload||{};if(payload.from===realtimeClientId)return;void createRematchForPeer(payload)}
-function handleRematchReady(message){const payload=message?.payload||{};if(payload.from===realtimeClientId)return;void joinRematchFromPeer(payload)}
 function startRealtime(){
   if(!isOnlineGame()){stopRealtime();return}
   if(realtimeChannel&&realtimeGameId===serverGameId)return;
+  if(realtimeTopicPending===serverGameId)return;
+  const gameId=serverGameId;realtimeTopicPending=gameId;
+  void gameTopic(gameId).then(topic=>{realtimeTopicPending=null;if(topic&&serverGameId===gameId&&!(realtimeChannel&&realtimeGameId===gameId))openRealtime(gameId,topic)});
+}
+function openRealtime(gameId,topic){
   stopRealtime();
-  const gameId=serverGameId;
   realtimeGameId=gameId;latencyMs=null;syncConnectionUi();
   realtimeChannel=realtimeClient
-    .channel(`game:${gameId}`,{config:{broadcast:{self:true}}})
+    .channel(topic,{config:{broadcast:{self:true}}})
     .on('broadcast',{event:'state'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'moved'},message=>{handleRealtimeMessage(message)})
     .on('broadcast',{event:'move_void'},message=>{handleMoveVoid(message)})
     .on('broadcast',{event:'draw_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void refreshServerState()})
     .on('broadcast',{event:'draw_response'},message=>{handleDrawResponse(message)})
     .on('broadcast',{event:'chat_hint'},message=>{const payload=message?.payload||{};if(payload.gameId===serverGameId&&payload.from!==realtimeClientId)void loadChat()})
-    .on('broadcast',{event:'rematch_offer'},message=>{handleRematchOffer(message)})
-    .on('broadcast',{event:'rematch_accept'},message=>{handleRematchAccept(message)})
-    .on('broadcast',{event:'rematch_ready'},message=>{handleRematchReady(message)})
     .on('broadcast',{event:'ping'},message=>{
       const nonce=message?.payload?.nonce;
       if(!pingProbe||nonce!==pingProbe.nonce)return;
@@ -1751,25 +1923,56 @@ async function renderPuzzleStats(){
     target.querySelector('.next-puzzle').onclick=()=>showBackendView('puzzle');
   }catch(error){toast(error.message);showBackendView('puzzle')}
 }
-function startStreak(){streakSession={count:0,best:loadBestStreak(),skipUsed:false};puzzleSession=null;showBackendView('streak')}
+function startStreak(runMode=RUN_MODES.streak){
+  if(runMode instanceof Event||typeof runMode!=='string')runMode=RUN_MODES.streak;
+  const survival=runMode===RUN_MODES.survival;
+  streakSession={mode:survival?'survival':'streak',count:0,best:survival?loadBestSurvival():loadBestStreak(),startedAt:Date.now()};
+  puzzleSession=null;showBackendView('streak');
+}
+const startSurvival=()=>startStreak(RUN_MODES.survival);
+// The run clock: Streak counts up (this puzzle and the whole run); Survival counts down and
+// ends the run at zero. It shows in the card and in your clock under the board.
+function stopRunTimer(){if(runTimer){clearInterval(runTimer);runTimer=0}document.body.classList.remove('puzzle-timed','puzzle-hurry')}
+function tickRunTimer(){
+  const run=streakSession,p=puzzleSession;
+  if(!run||!p||mode!=='puzzle'){stopRunTimer();return}
+  const survival=run.mode==='survival',now=Date.now();
+  const left=survival?survivalLeft(run.count,p.started,now):0;
+  const main=survival?runClock(left+999):runClock(now-p.started);
+  const clock=$('#bottomClock');if(clock){clock.textContent=main;clock.classList.toggle('low-time',survival&&left<10000)}
+  document.body.classList.toggle('puzzle-hurry',survival&&left<10000);
+  const card=$('#dynamicView .run-clock b');if(card)card.textContent=main;
+  const total=$('#dynamicView .run-total');if(total)total.textContent=`Run ${runClock(now-run.startedAt)}`;
+  if(survival&&left<=0){stopRunTimer();endStreak(null,{timeout:true})}
+}
+function startRunTimer(){stopRunTimer();document.body.classList.add('puzzle-timed');tickRunTimer();runTimer=setInterval(tickRunTimer,250)}
+function skipRunPuzzle(){
+  if(!streakSession||!puzzleSession)return;
+  const purse=spendSkip();if(!purse)return toast('No skip tokens left · one more tomorrow');
+  puzzleSession=null;stopRunTimer();toast(`Skipped · ${purse.tokens} ${purse.tokens===1?'token':'tokens'} left`,{duration:1200});showBackendView('streak');
+}
 function puzzleSolved(){
   const session=puzzleSession;puzzleSession=null;markPlan('puzzles');
+  renderStatus();syncPlayerBars(); // "Puzzle complete", not the solving labels
   if(!streakSession){toast('Puzzle solved');return}
-  streakSession.count++;streakSession.best=saveBestStreak(streakSession.count);
+  stopRunTimer();
+  streakSession.count++;streakSession.best=streakSession.mode==='survival'?saveBestSurvival(streakSession.count):saveBestStreak(streakSession.count);
+  if(earnMilestone(streakSession.count))setTimeout(()=>toast(`${streakSession?.count||''} solved · a skip token earned`,{duration:1600}),700);
   toast(`Streak ${streakSession.count}${streakSession.count===streakSession.best&&streakSession.count>1?' · new best':''}`,{duration:1200});
   setTimeout(()=>{if(streakSession)showBackendView('streak')},900);
 }
-function endStreak(move){
-  const session=streakSession;if(!session)return;streakSession=null;
+function endStreak(move,{timeout=false}={}){
+  const session=streakSession;if(!session)return;streakSession=null;stopRunTimer();
+  const survival=session.mode==='survival',runName=survival?'Survival':'Streak';
   if(move){playIllegalTone();buzz(HAPTICS.illegal)}
   const solution=puzzleSession?.solution?.[puzzleSession.index];
   if(puzzleSession&&move)void recordPuzzle(false,move);
-  if(session.count>0)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
+  if(session.count>0&&!survival)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
   if(solution){boardShapes=[{from:solution.slice(0,2),to:solution.slice(2,4),brush:'green'}];render()}
   puzzleSession=null;
-  const best=Math.max(saveBestStreak(session.count),Number(currentProfile?.puzzle_best_streak||0)),target=$('#dynamicView .view-content');
-  if(target)target.innerHTML=`<article class="puzzle-info streak-info streak-over"><div class="streak-count"><small>STREAK</small><b>${session.count}</b><span>Best ${best}</span></div><h4>${move?'Streak over':'Streak ended'}</h4><p>${move&&solution?'The green arrow shows the move that kept it going.':session.count?'Well played.':'Have another go.'}</p><div class="streak-actions"><button class="primary-action start-streak">Start again</button><button class="next-puzzle">Back to training</button></div></article>`;
-  $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
+  const best=survival?saveBestSurvival(session.count):Math.max(saveBestStreak(session.count),Number(currentProfile?.puzzle_best_streak||0)),target=$('#dynamicView .view-content');
+  if(target)target.innerHTML=`<article class="puzzle-info streak-info streak-over run-${session.mode}"><div class="streak-count"><small>${runName.toUpperCase()}</small><b>${session.count}</b><span>Best ${best}</span></div><h4>${timeout?"Time's up":move?`${runName} over`:`${runName} ended`}</h4><p class="run-total-final">Run time ${runClock(Date.now()-session.startedAt)}</p><p>${move&&solution?'The green arrow shows the move that kept it going.':session.count?'Well played.':'Have another go.'}</p><div class="streak-actions"><button class="primary-action start-streak">Start again</button><button class="next-puzzle">Back to training</button></div></article>`;
+  $('#dynamicView .start-streak')?.addEventListener('click',()=>startStreak(session.mode));
   $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
   if(isMobileApp())setTimeout(()=>{mTab='puzzles';setMView('panel')},move?1600:0); // phones: the result card lives in the panel
 }
@@ -1817,22 +2020,26 @@ function drawArchive(){
   target.querySelector('.archive-mistakes')?.addEventListener('click',renderMistakes);
 }
 async function openArchivedGame(entry){
+  if(onlineGameBusy())return;
   if(!entry)return;
-  if(entry.variant==='crazyhouse')return toast("Crazyhouse games can't be replayed here yet");
   if(entry.variant==='bughouse')return toast("Bughouse games can't be replayed here yet");
-  const freestyle=entry.variant==='freestyle'&&entry.startFen&&Array.isArray(entry.sans);
+  if(entry.variant==='crazyhouse'&&!Array.isArray(entry.sans))return toast("This Crazyhouse game can't be replayed here");
+  // Crazyhouse: the moves are replayed with the pieces in hand, so drops land where they did.
+  const zh=entry.variant==='crazyhouse'?zhRecordsFromSans(Chess,entry.sans,entry.startFen):null;
+  if(zh&&!zh.records.length)return toast('This game has no moves to review');
+  const freestyle=!zh&&entry.variant==='freestyle'&&entry.startFen&&Array.isArray(entry.sans);
   const replayed=freestyle?replay960(Chess,entry.startFen,entry.sans):null;
-  const loaded=new Chess();if(!freestyle){try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}}
-  if(freestyle?!replayed.moves.length:!loaded.history().length)return toast('This game has no moves to review');
+  const loaded=new Chess();if(!freestyle&&!zh){try{loaded.loadPgn(entry.pgn)}catch{return toast('This game could not be opened')}}
+  if(!zh&&(freestyle?!replayed.moves.length:!loaded.history().length))return toast('This game has no moves to review');
   if(searching)await cancelMatchSearch({announce:false});
   if(watchSession)stopWatching({reset:false});
   stopOnlineSync();stopStory();retrySession=null;
   const prevMode=archiveSession?.prevMode||(['match','room','computer'].includes(mode)?mode:'room');
   serverGameId=null;serverGame=null;currentBot=null;puzzleSession=null;computerStarted=false;localGameOver=false;localClockState=null;clockSnapshot=null;premoves.cancel();selected=null;browse=null;
   resetReviewState();
-  game.reset();if(freestyle)game.load(replayed.positions.at(-1));else game.loadPgn(entry.pgn);lastMoveCache={fen:'',move:null};
+  game.reset();if(zh)game.load(zh.fen,{skipValidation:true});else if(freestyle)game.load(replayed.positions.at(-1));else game.loadPgn(entry.pgn);lastMoveCache={fen:'',move:null};
   mode='archive';myColor=entry.myColor;flipped=entry.myColor==='b';orientationSet=true;
-  archiveSession={entry,prevMode,records:freestyle?replayed.moves:null};document.body.dataset.archive='1';
+  archiveSession={entry,prevMode,records:zh?zh.records:freestyle?replayed.moves:null};document.body.dataset.archive='1';
   syncPlayerBars();render({instant:true});updateMoves();
   await startGameReview();
   if(archiveSession?.entry===entry&&!isMobileApp())$('#storyCard')?.scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -1873,7 +2080,7 @@ function renderStoryCard(){
     <ol class="story-chapters">${chapters.map(c=>`<li class="${inChapter(c)?'on':''}"><button type="button" data-story-ply="${c.from}"><b>${c.title}</b><small>moves ${Math.ceil(c.from/2)}–${Math.ceil(c.to/2)}</small><span><em>You ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,mine))}</em><em>Them ${pct(chapterAccuracy(reviewState.results,reviewState.moves,c,them))}</em></span></button></li>`).join('')}</ol>
     ${moments.length?`<div class="story-moments"><small>Moments that decided it</small>${moments.map(m=>`<button type="button" data-story-ply="${m.ply}" class="moment ${m.color===mine?'mine':'theirs'}${ply===m.ply?' on':''}"><b>${escapeHtml(m.label)}</b><span>${Math.ceil(m.ply/2)}${m.color==='w'?'.':'…'} ${escapeHtml(m.san)}</span><em>${m.color===mine?'you':'them'} · −${Math.round(m.loss)}%</em></button>`).join('')}</div>`:'<p class="story-quiet">A clean game: no single move swung it.</p>'}
     <div class="story-share"><button type="button" data-story="share-card">Share image</button><button type="button" data-story="share-clip">Share clip</button></div>
-    ${worst?`<button type="button" class="story-retry" data-story="retry">${retrySession?'Replaying your moment…':`Replay your toughest moment (move ${Math.ceil(worst.ply/2)})`}</button>`:''}`;
+    ${worst&&!reviewState.variant?`<button type="button" class="story-retry" data-story="retry">${retrySession?'Replaying your moment…':`Replay your toughest moment (move ${Math.ceil(worst.ply/2)})`}</button>`:''}`;
   card.querySelectorAll('[data-story-ply]').forEach(b=>b.onclick=()=>{stopStory();setReviewPly(Number(b.dataset.storyPly))});
   card.querySelector('[data-story="play"]')?.addEventListener('click',playStory);
   card.querySelector('[data-story="stop"]')?.addEventListener('click',()=>{stopStory();renderReviewDashboard()});
@@ -1941,6 +2148,7 @@ async function renderTrainer(){
   target.querySelector('.trainer-back').onclick=()=>void renderArchive();
 }
 function startDrill(i){
+  if(onlineGameBusy())return;
   const d=trainerDrills[i];if(!d)return void renderTrainer();
   trainerIndex=i;cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   streakSession=null;game.load(d.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];
@@ -2005,6 +2213,7 @@ function renderMistakes(){
   $('#dynamicView .mistakes-start')?.addEventListener('click',startMistakeDrill);
 }
 function startMistakeDrill(){
+  if(onlineGameBusy())return;
   const m=dueMistakes(loadMistakes())[0];if(!m){toast('All caught up');return void renderMistakes()}
   currentMistakeId=m.id;cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   streakSession=null;try{game.load(m.fen)}catch{const bank=loadMistakes().filter(x=>x.id!==m.id);saveMistakes(bank);return startMistakeDrill()}
@@ -2032,6 +2241,7 @@ function stopStory(){if(storyTimer){clearTimeout(storyTimer);storyTimer=null}}
 // you try to find the engine's choice. Two tries, then it is shown.
 function startRetry(worst){
   stopStory();if(!worst)return;
+  if(reviewState.variant)return toast('Replaying a moment works in standard chess games for now');
   const fen=reviewState.positions[worst.ply-1];if(!fen)return;
   // Put the real game back afterwards: its moves (local and archived games) or its position (online).
   retrySession={...worst,fen,tries:0,returnPly:reviewState.currentPly,restorePgn:serverGameId?null:game.pgn(),restoreFen:game.fen()};
@@ -2181,20 +2391,25 @@ function startSocial(){
   if(socialState.channelFor!==currentProfile.id){
     if(socialState.channel)realtimeClient.removeChannel(socialState.channel).catch(()=>{});
     socialState.channelFor=currentProfile.id;
-    socialState.channel=realtimeClient.channel(`player:${currentProfile.id}`)
+    // Your player topic is private (named by the server, security review H2). Events are only
+    // hints: games are opened from what the server lists for you, never from a code in a message.
+    socialState.channel=realtimeClient.channel(`player:${currentProfile.notify_topic||currentProfile.id}`)
       .on('broadcast',{event:'notify'},()=>void refreshInbox())
-      .on('broadcast',{event:'tournament_game'},message=>{const code=message?.payload?.code;if(!code)return;toast(`Round ${message.payload.round} is ready`);if(!isOnlineGame()&&mode!=='computer')setTimeout(()=>{location.search='?game='+encodeURIComponent(code)},1200)})
+      .on('broadcast',{event:'tournament_game'},message=>{toast(`Round ${Number(message?.payload?.round)||''} is ready`.trim());void openTournamentRound()})
       .on('broadcast',{event:'challenge'},()=>{toast('New challenge');void refreshSocial()})
-      .on('broadcast',{event:'battle'},message=>{const code=message?.payload?.code;if(code&&(!battle||battle.status!=='live')){clearInterval(battleQueueTimer);battleQueueTimer=null;void joinBattle(code)}})
+      .on('broadcast',{event:'battle'},message=>{const code=String(message?.payload?.code||'');if(battleQueueTimer&&/^[A-Za-z0-9]{4,12}$/.test(code)&&(!battle||battle.status!=='live')){clearInterval(battleQueueTimer);battleQueueTimer=null;void joinBattle(code)}})
       .on('broadcast',{event:'challenge_answer'},message=>{
         const p=message?.payload||{};
         if(!p.accepted){toast('Your challenge was declined');return void refreshSocial()}
-        socialState.seenAccepted.add(p.id);
-        if(p.code&&!isOnlineGame()&&mode!=='computer'){toast('Challenge accepted · opening the game');openGameCode(p.code)}
-        else{toast('Challenge accepted');void refreshSocial()}
+        toast('Challenge accepted');void refreshSocial(); // refreshSocial opens the game the server lists
       })
       .subscribe();
   }
+}
+// A Swiss round is ready: open your game from the server's list of your tournament games.
+async function openTournamentRound(){
+  if(isOnlineGame()||mode==='computer')return;
+  try{const data=await api.tournaments(),game=(data.myGames||[]).find(g=>g?.code);if(game)setTimeout(()=>{location.search='?game='+encodeURIComponent(game.code)},1200)}catch{}
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&socialState.timer)void refreshSocial()});
 function drawFriendsLists(){
@@ -2311,7 +2526,7 @@ function drawProfile(){
   const p=d.player,h=d.headToHead,pools=poolsPlayed(d.history),earned=achievementBoard(p.achievements).filter(a=>a.earned);
   const seasons=(p.achievements||[]).filter(a=>String(a?.id||'').startsWith('season-')).map(a=>a.id.replace(/^season-/,'').split('-')).map(([y,m,div])=>({label:`${div[0].toUpperCase()+div.slice(1)} · ${y}-${m}`,div}));
   target.innerHTML=`<article class="pp">
-    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · ${d.club.crest?`<span class="pp-crest">${crestSvg(d.club.crest,{size:16,label:`${d.club.name} crest`})}</span>`:''}<button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small></div></header>
+    <header class="pp-head"><span class="avatar pp-avatar" aria-hidden="true"></span><div><h4>${escapeHtml(p.username)} <span class="player-flag pp-flag hidden" aria-hidden="true"></span></h4><small><i class="presence-dot${p.online?' on':''}"></i>${p.online?'Online':'Offline'} · ${escapeHtml(d.division)} league${d.club?` · ${d.club.crest?`<span class="pp-crest">${crestSvg(d.club.crest,{size:16,label:`${d.club.name} crest`})}</span>`:''}<button class="pp-club" data-club="${escapeHtml(d.club.slug)}">${escapeHtml(d.club.name)}</button>`:''}${p.member_since?` · since ${escapeHtml(p.member_since)}`:''}</small>${p.bio?`<p class="pp-bio">${escapeHtml(p.bio)}</p>`:''}</div></header>
     <div class="pp-actions">${d.self?'':`<button class="pp-follow">${d.following?'Following':'Follow'}</button><button class="pp-challenge primary">Challenge</button><button class="pp-prep">Prep against ${escapeHtml(p.username)}</button>`}<button class="pp-copy">Copy link</button>${d.self?'':'<button class="pp-report">Report</button>'}</div>
     ${h?`<div class="pp-h2h"><small>YOU VS ${escapeHtml(p.username.toUpperCase())}</small><b>${recordText(h)}</b><span>${h.wins+h.draws+h.losses?`${Math.round(100*(h.wins+h.draws/2)/(h.wins+h.draws+h.losses))}% score`:'No games yet'}</span></div>`:''}
     <div class="rating-grid">${['bullet','blitz','rapid','classical','daily'].map(pool=>`<div><small>${pool}</small><b>${Number(p.ratings?.[pool]??1200)}</b><em>${Number(p.provisional_games?.[pool]||0)} games</em></div>`).join('')}<div><small>Puzzles</small><b>${p.puzzle_rating}</b><em>${recordText(p)}</em></div></div>
@@ -2321,7 +2536,7 @@ function drawProfile(){
     <h4>Achievements <small>${earned.length}</small></h4><div class="pp-badges">${earned.map(a=>`<span class="achievement earned" title="${escapeHtml(a.text)}"><span class="achievement-mark">${escapeHtml(a.mark)}</span><b>${escapeHtml(a.title)}</b></span>`).join('')}${seasons.map(s=>`<span class="achievement earned season-${escapeHtml(s.div)}"><span class="achievement-mark">S</span><b>${escapeHtml(s.label)}</b></span>`).join('')||(earned.length?'':'<p class="menu-empty">None yet.</p>')}</div>
     ${hallOfRelicsHtml(d)}
   </article>`;
-  setPortrait(target.querySelector('.pp-avatar'),{avatar:p.avatar_data,label:p.username});setPlayerFlag(target.querySelector('.pp-flag'),p.country_code);
+  setPortrait(target.querySelector('.pp-avatar'),{avatar:p.avatar_data,preset:p.avatar_preset,label:p.username});setPlayerFlag(target.querySelector('.pp-flag'),p.country_code);
   target.querySelectorAll('[data-pp-pool]').forEach(b=>b.onclick=()=>{profilePool=b.dataset.ppPool;drawProfile()});
   wireProfileChart();
   target.querySelector('.pp-copy').onclick=async()=>{try{await navigator.clipboard.writeText(profileUrl(p.username));toast('Profile link copied')}catch{toast(profileUrl(p.username))}};
@@ -2475,8 +2690,8 @@ async function savePlan(){
   const lines=[...(planLines.gameId===serverGameId?planLines.lines:[]),planSession.moves];
   try{const out=await api.conditionalSet(serverGameId,lines);planLines={gameId:serverGameId,lines:out.lines};exitPlan({silent:true});toast('Plan saved')}catch(error){toast(error.message)}
 }
-const VARIANT_NOTES={dark:'Normal rules, but you only see your own pieces and the squares they can reach. The computer sees the whole board, so pick a weaker bot than usual.',blackout:'Three minutes. After every four of your moves, your next two are played blind: the pieces disappear until the lights come back.'};
-$$('[data-computer-variant]').forEach(b=>b.addEventListener('click',()=>{computerVariant=b.dataset.computerVariant;$$('[data-computer-variant]').forEach(x=>x.classList.toggle('on',x===b));const note=$('#computerVariantNote');if(note){note.textContent=VARIANT_NOTES[computerVariant]||'';note.classList.toggle('hidden',!VARIANT_NOTES[computerVariant])}}));
+const VARIANT_NOTES={dark:'Normal rules, but you only see your own pieces and the squares they can reach. The computer plays in the dark too: it sees only what its pieces see and remembers where it last saw yours.',blackout:'Three minutes. After every four of your moves, your next two are played blind: the pieces disappear until the lights come back. The computer goes blind on the same rhythm and plays from the board it remembers.'};
+$$('[data-computer-variant]').forEach(b=>b.addEventListener('click',()=>{computerVariant=b.dataset.computerVariant;syncSpecialOpponent(null);$$('[data-computer-variant]').forEach(x=>x.classList.toggle('on',x===b));const note=$('#computerVariantNote');if(note){note.textContent=VARIANT_NOTES[computerVariant]||'';note.classList.toggle('hidden',!VARIANT_NOTES[computerVariant])}}));
 // ---- Account: password, your data, delete ----
 async function authPut(path,body,token){
   const response=await fetch(SUPABASE_URL+path,{method:'PUT',headers:{'content-type':'application/json',apikey:SUPABASE_PUBLISHABLE_KEY,authorization:'Bearer '+token},body:JSON.stringify(body)});
@@ -2611,7 +2826,7 @@ async function zhDropOnline(type,to){
   }catch(error){onlineMovePending=false;serverGame=prev;try{game.load(before)}catch{}syncCapturedTrays.key='';render();toast(error.message);void refreshServerState()}
 }
 // ---- Studies (src/study.js): annotate a line, share it by link ----
-let studySession=null;
+// studySession is declared with the early state near the top (boardContext reads it on first render).
 function freeBoard(){return !!planSession||!!studySession?.editing||!!exploreSession||!!repEdit||!!analysis}
 function endStudy({restore=true}={}){
   if(!studySession)return;studySession=null;
@@ -2632,6 +2847,7 @@ function studyMove(move){
   rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);drawStudyPanel();
 }
 function startStudy({startFen=null,code=null,title='',intro='',moves=[],mine=true,owner=''}={}){
+  if(onlineGameBusy())return;
   cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   puzzleSession=null;streakSession=null;planSession=null;
   if(isOnlineGame()||(mode==='computer'&&computerStarted)){stopOnlineSync();serverGameId=null;serverGame=null;computerStarted=false;currentBot=null;myColor=null}
@@ -2770,7 +2986,7 @@ function showReaction(id){
   chip.addEventListener('animationend',()=>chip.remove(),{once:true});setTimeout(()=>chip.remove(),3000);shell.append(chip);
 }
 // ---- Opening explorer from VCH games (server: opening_explorer) ----
-let exploreSession=null;
+// exploreSession is declared with the early state near the top (boardContext reads it on first render).
 function endExplore({restore=true}={}){
   if(!exploreSession)return;exploreSession=null;
   if(explorerEval){explorerWorker.postMessage({action:'stop'});explorerEval=null}
@@ -2873,18 +3089,36 @@ if(params.get('league'))setTimeout(()=>{openSection('friends');void renderLeague
 if(params.get('challenges'))setTimeout(()=>{setPrimaryScreen('game');openSection('friends')},400);
 
 // ---- Watch: public live games, read-only (server watch_state + Realtime) ----
+// Watch has two tabs: VCH games being played now, and chess streamers live on Twitch or
+// YouTube (from Lichess's public list, through the chess function). Streams open in a new tab.
+let watchTab='games';
+const watchTabs=()=>`<div class="watch-tabs" role="tablist"><button type="button" role="tab" data-watch-tab="games" class="${watchTab==='games'?'on':''}">VCH games</button><button type="button" role="tab" data-watch-tab="streams" class="${watchTab==='streams'?'on':''}"><i class="live-dot" aria-hidden="true"></i>Streamers live</button></div>`;
+function wireWatchTabs(){$$('#dynamicView [data-watch-tab]').forEach(b=>b.onclick=()=>{watchTab=b.dataset.watchTab;void renderWatch()})}
+async function renderStreams(){
+  setDynamicView('watch','Watch',watchTabs()+brandLoading('Finding streamers…'));wireWatchTabs();
+  try{
+    const {streams=[]}=await api.request('live_streams'),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch'||watchTab!=='streams')return;
+    const card=x=>`<article class="stream-card service-${x.service}"><div class="stream-head"><span class="stream-badge">${x.service==='youtube'?'YouTube':'Twitch'}</span>${x.lang?`<em>${escapeHtml(x.lang.toUpperCase())}</em>`:''}<i class="live-dot" aria-hidden="true"></i></div><b>${x.title?`<span class="stream-title">${escapeHtml(x.title)}</span> `:''}${escapeHtml(x.name)}</b><p>${escapeHtml(x.status||x.headline||'')}</p><div class="stream-actions"><a class="library-action" href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">Watch on ${x.service==='youtube'?'YouTube':'Twitch'}</a><a class="library-action ghost" href="${escapeHtml(x.profile)}" target="_blank" rel="noopener noreferrer">Profile</a></div></article>`;
+    target.innerHTML=watchTabs()+(streams.length?`<p class="watch-intro">Chess streamers live now. Streams open on Twitch or YouTube in a new tab.</p><div class="stream-grid">${streams.map(card).join('')}</div><p class="stream-source">Live list from Lichess's streamer directory. <button type="button" class="watch-refresh">Refresh</button></p>`:`<div class="watch-empty"><h4>No streamers live right now</h4><p>Check back soon: the list refreshes every minute.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
+    wireWatchTabs();target.querySelector('.watch-refresh')?.addEventListener('click',()=>void renderStreams());
+  }catch(error){toast(error.message)}
+}
 async function renderWatch(){
-  setDynamicView('watch','Watch',brandLoading('Finding live games…'));
+  if(watchTab==='streams')return renderStreams();
+  setDynamicView('watch','Watch',watchTabs()+brandLoading('Finding live games…'));wireWatchTabs();
   try{
     const [{games=[]},moment]=await Promise.all([api.liveGames(),loadMoment()]),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch')return;
-    target.innerHTML=momentHtml(moment)+(games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
+    target.innerHTML=watchTabs()+momentHtml(moment)+(games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
       :`<div class="watch-empty"><h4>No live games right now</h4><p>Games from matchmaking and arenas appear here while they're played. Private rooms are never listed.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
-    wireMoment(target,moment);
+    wireMoment(target,moment);wireWatchTabs();
     target.querySelectorAll('[data-watch]').forEach(el=>el.onclick=()=>startWatching(games[Number(el.dataset.watch)].id));
     target.querySelector('.watch-refresh')?.addEventListener('click',()=>void renderWatch());
   }catch(error){toast(error.message)}
 }
+// An online game in progress keeps its board: views that would replace it wait until it ends.
+function onlineGameBusy(){if(isOnlineGame()&&liveGameOn()){toast('Finish your game first');return true}return false}
 async function startWatching(id){
+  if(onlineGameBusy())return;
   try{
     const out=await api.watchState(id);if(archiveSession)leaveArchive({reset:false});
     if(searching)await cancelMatchSearch({announce:false});
@@ -2895,9 +3129,10 @@ async function startWatching(id){
     watchSession={id,state:null,prevMode,timer:null,channel:null};
     applyWatchState(out);
     watchSession.timer=setInterval(()=>{if(!watchSession||document.hidden)return;api.watchState(id).then(applyWatchState).catch(()=>{})},5000);
-    watchSession.channel=realtimeClient.channel(`game:${id}`)
+    // Spectators listen on the public watch topic: the server sends the trimmed watch fields
+    // there; the players' own topic is private (security review C1).
+    watchSession.channel=realtimeClient.channel(`watch:${id}`)
       .on('broadcast',{event:'state'},message=>{const state=message?.payload?.game;if(watchSession?.id===id&&state?.id===id)applyWatchState({game:state,serverNow:message.payload.serverNow})})
-      .on('broadcast',{event:'moved'},message=>watchRelay(message?.payload))
       .on('broadcast',{event:'reaction'},message=>showReaction(String(message?.payload?.r||'')))
       .subscribe();
     showMovesView();
@@ -2917,10 +3152,6 @@ function applyWatchState(payload){
   if(over&&!watchSession.over){watchSession.over=true;toast(`Game over · ${state.result||''}${state.end_reason?` · ${normalizedEndReason(state.end_reason)}`:''}`)}
 }
 // The mover's instant relay reaches spectators too: show it at once if it fits the board.
-function watchRelay(payload){
-  if(!watchSession||payload?.gameId!==watchSession.id||!payload.from||!payload.to||payload.fenBefore!==game.fen())return;
-  try{const made=game.move({from:payload.from,to:payload.to,promotion:payload.promotion||undefined});if(made){browse=null;render({hint:made});afterBoardPaint(playTone)}}catch{}
-}
 function stopWatching({reset=true}={}){$('#reactionBar')?.classList.add('hidden');
   const session=watchSession;if(!session)return;
   watchSession=null;clearInterval(session.timer);if(session.channel)realtimeClient.removeChannel(session.channel).catch(()=>{});
@@ -2993,6 +3224,14 @@ function currentGameKey(){
   if(watchSession)return `watch:${watchSession.id}`;
   if(archiveSession)return `archive:${archiveSession.entry.id}`;
   if(puzzleSession)return `puzzle:${puzzleSession.id}`;
+  // Board tools (endgames, studies, explorer, repertoire, prep, analyse together) open the board on phones too.
+  if(egSession)return `endgame:${egSession.drill?.id||egSession.drill?.name||''}`;
+  if(lessonSession&&mode==='lesson')return `lesson:${lessonSession.lesson.id}`;
+  if(studySession)return `study:${studySession.code||'new'}`;
+  if(exploreSession)return 'explore';
+  if(repEdit)return `repertoire:${repEdit.color}`;
+  if(prepSession)return `prep:${prepSession.color}`;
+  if(analysis)return `analysis:${analysis.code}`;
   if(liveGameOn())return lastGameStartKey||`game:${serverGameId||'computer'}`;
   if(serverGameId&&serverGame?.status==='waiting')return `waiting:${serverGameId}`;
   return null;
@@ -3030,13 +3269,13 @@ function syncMobileShell(){
   shell.classList.toggle('m-over',over);
   const show=(action,visible)=>$(`[data-m-action="${action}"]`)?.classList.toggle('hidden',!visible);
   const watching=!!watchSession;
-  const puzzling=!!puzzleSession;
-  show('puzzle-next',puzzling&&!streakSession);show('puzzle-streak',puzzling&&!streakSession);show('puzzle-skip',puzzling&&!!streakSession&&!streakSession.skipUsed);show('puzzle-end',puzzling&&!!streakSession);
+  const puzzling=!!puzzleSession,puzzleMode=mode==='puzzle'; // after a solve the session ends but you're still in puzzles
+  show('puzzle-next',puzzleMode&&!streakSession);show('puzzle-streak',puzzleMode&&!streakSession);show('puzzle-menu',puzzleMode&&!streakSession);show('puzzle-skip',puzzling&&!!streakSession&&loadSkips().tokens>0);show('puzzle-end',puzzling&&!!streakSession);
   show('options',true);show('draw',human&&live);show('resign',live);show('takeback',takebackAvailable());show('leave',watching);show('chat',human);show('hint',mode==='computer'&&live);show('undo',mode==='computer'&&live);
   show('review',over);show('rematch',over&&human);show('new',over);
   const title=$('#mGameTitle'),sub=$('#mGameSub');
   if(title){
-    const t=puzzleSession&&streakSession?`Puzzle Streak · ${streakSession.count}`:archiveSession?'Game story':watchSession?'Watching':puzzleSession?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
+    const t=puzzleSession&&streakSession?`${streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'} · ${streakSession.count}`:archiveSession?'Game story':watchSession?'Watching':puzzleSession||mode==='puzzle'?'Puzzle':mode==='computer'?`vs ${currentBot?.display_name||currentBot?.name||'Computer'}`:serverGame?.status==='waiting'?'Waiting for opponent':serverGame?.rated?'Rated game':'Casual game';
     if(title.textContent!==t)title.textContent=t;
   }
   if(sub){
@@ -3068,7 +3307,7 @@ function openMoreSheet(){
     {label:'Famous games',run:()=>openSection('famous')},
     {label:'My games & Game Story',run:()=>openSection('review')},
     {label:'Board & pieces',run:()=>$('#theme').click()},
-    {label:'Portrait & flag',run:()=>void openProfileEditor()},
+    {label:'Edit profile',run:()=>void openProfileEditor()},
     {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
     {label:'Notifications',run:()=>void openNotifications()},
     {label:'Install the app',run:()=>$('#installBtn').click()},
@@ -3093,7 +3332,8 @@ const M_ACTIONS={
   takeback:()=>void requestTakeback(),
   'puzzle-next':()=>void showBackendView('puzzle'),
   'puzzle-streak':startStreak,
-  'puzzle-skip':()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;void showBackendView('streak')},
+  'puzzle-menu':()=>{mTab='puzzles';setMView('panel')}, // daily puzzle, stats, battle, themes
+  'puzzle-skip':()=>skipRunPuzzle(),
   'puzzle-end':()=>endStreak(null),
   leave:()=>{stopWatching();mTab='watch';openSection('watch')},
   review:()=>void startGameReview(),
@@ -3150,13 +3390,40 @@ function syncOnlineTransport(){
   if(!isOnlineGame()){stopOnlineSync();return}
   startRealtime();startPolling();
 }
-function addMessage(text,mine=true){const e=document.createElement('p');e.className=mine?'mine':'';e.textContent=String(text).slice(0,160);$('#messages').append(e);e.scrollIntoView()}
+// A chat line: text, or one of VCH's animated reactions (":r:<id>", src/reactions.js).
+function addMessage(text,mine=true){
+  const e=document.createElement('p'),reaction=parseReaction(text);
+  e.className=(mine?'mine':'')+(reaction?' reaction-line':'');
+  if(reaction){e.innerHTML=reactionMarkup(reaction.id,{size:72});e.setAttribute('aria-label',reaction.label)}else e.textContent=String(text).slice(0,160);
+  $('#messages').append(e);e.scrollIntoView({block:'nearest'});
+}
+// Emoji and reactions tray under the chat. Reactions send at once; emoji go into the message.
+let chatTrayTab='reactions';
+function ensureReactionCss(){if(document.getElementById('vchReactionCss'))return;const st=document.createElement('style');st.id='vchReactionCss';st.textContent=REACTION_CSS;document.head.append(st)}
+function renderChatTray(){
+  const body=$('#chatTray .chat-tray-body');if(!body)return;ensureReactionCss();
+  $$('#chatTray [data-tray]').forEach(b=>b.classList.toggle('on',b.dataset.tray===chatTrayTab));
+  body.innerHTML=chatTrayTab==='reactions'
+    ?`<div class="reaction-grid">${CHAT_REACTIONS.map(r=>`<button type="button" class="reaction-pick" data-reaction="${r.id}" title="${escapeHtml(r.label)}" aria-label="${escapeHtml(r.label)}">${reactionMarkup(r.id,{size:52})}<span>${escapeHtml(r.label)}</span></button>`).join('')}</div>`
+    :EMOJI_SET.map(g=>`<div class="emoji-group"><small>${escapeHtml(g.group)}</small><div>${g.items.map(x=>`<button type="button" class="emoji-pick" data-emoji="${escapeHtml(x.char)}" aria-label="${escapeHtml(x.name)}" title="${escapeHtml(x.name)}" data-no-i18n>${x.char}</button>`).join('')}</div></div>`).join('');
+}
+function toggleChatTray(force){
+  const tray=$('#chatTray'),open=force??tray.classList.contains('hidden');
+  tray.classList.toggle('hidden',!open);$('#chatTrayBtn')?.setAttribute('aria-expanded',open?'true':'false');if(open)renderChatTray();
+}
+async function sendChatBody(body){
+  if(!serverGameId)return toast('Start or join a game to chat');
+  // Friendly first: blocked words never leave the device (the server checks again and keeps
+  // the strikes, src/moderation.js).
+  const verdict=moderateText(body);if(!verdict.ok&&!parseReaction(body))return toast("That message wasn't sent: keep chat friendly",{duration:3200});
+  try{await api.chatSend(serverGameId,body);broadcastAux('chat_hint',{from:realtimeClientId});await loadChat();return true}catch(error){toast(error.message,{duration:4200});return false}
+}
 function chatIsOpen(){return $('#chatDrawer')?.classList.contains('open')===true}
 function updateChatUnread(){const badge=$('#chatUnread');if(!badge)return;badge.textContent=String(chatUnread);badge.classList.toggle('hidden',chatUnread<=0)}
 function openChatDrawer(){chatUnread=0;updateChatUnread();$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');void loadChat()}
 function closeChatDrawer(){$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')}
 function previewChatMessage(item){
-  const name=String(item?.display_name||'Opponent'),body=String(item?.body||'').slice(0,60);
+  const name=String(item?.display_name||'Opponent'),reaction=parseReaction(item?.body),body=reaction?reaction.label:String(item?.body||'').slice(0,60);
   toast(`${name}: ${body}`,{duration:4200,onClick:openChatDrawer});
 }
 async function loadChat(){
@@ -3169,8 +3436,15 @@ async function loadChat(){
   if(fresh.length&&!chatIsOpen()){chatUnread+=fresh.length;updateChatUnread();previewChatMessage(fresh.at(-1))}
   if(chatIsOpen()){chatUnread=0;updateChatUnread()}
 }
-$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(!serverGameId)return toast('Start or join a game to chat');try{await api.chatSend(serverGameId,v);broadcastAux('chat_hint',{from:realtimeClientId});$('#message').value='';await loadChat()}catch(error){toast(error.message)}};
+$('#chat').onsubmit=async e=>{e.preventDefault();const v=$('#message').value.trim();if(!v||v.length>160)return;if(await sendChatBody(v))$('#message').value=''};
+$('#chatTrayBtn').onclick=()=>toggleChatTray();
+$('#chatTray').addEventListener('click',event=>{
+  const tab=event.target.closest('[data-tray]');if(tab){chatTrayTab=tab.dataset.tray;renderChatTray();return}
+  const r=event.target.closest('[data-reaction]');if(r){toggleChatTray(false);void sendChatBody(reactionMessage(r.dataset.reaction));return}
+  const em=event.target.closest('[data-emoji]');if(em){const input=$('#message'),at=input.selectionStart??input.value.length;input.value=(input.value.slice(0,at)+em.dataset.emoji+input.value.slice(input.selectionEnd??at)).slice(0,160);input.focus();const pos=Math.min(160,at+em.dataset.emoji.length);input.setSelectionRange(pos,pos)}
+});
 $$('.modes button').forEach(button=>button.onclick=()=>activateLeftMode(button.dataset.mode));
+$$('[data-match-variant]').forEach(button=>button.onclick=()=>{matchSelection={...matchSelection,variant:button.dataset.matchVariant};$$('[data-match-variant]').forEach(item=>item.classList.toggle('on',item===button))});
 $$('[data-match-time]').forEach(button=>button.onclick=()=>{
   const [seconds,increment]=button.dataset.matchTime.split('-').map(Number);
   matchSelection={...matchSelection,seconds,increment};
@@ -3191,7 +3465,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.textContent=e.currentTarget.dataset.off?'♫ Sound off':'♫ Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if($('#variant').value==='crazyhouse'&&String($('#time').value).startsWith('daily'))return toast('Crazyhouse is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const v=$('#roomInput').value.trim();if(v)location.search='?game='+encodeURIComponent(v)};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -3413,14 +3687,15 @@ boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointer
 render();startClock();
 recordNav(); // the starting screen is the first entry Back returns to
 // ---- Interface language (src/i18n.js) ----
-let uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
-const i18nPending=new Set();let i18nFrame=0,moreTranslations=null;
+uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
+const i18nPending=new Set();let i18nFrame=0;
 function applyLanguage(lang,{save=false}={}){
   uiLang=LANGUAGES[lang]?lang:'en';
   document.documentElement.lang=uiLang;document.documentElement.dir=RTL.has(uiLang)?'rtl':'ltr';
   translateTree(document.body,uiLang);
-  // The rest of the dictionary (toasts, lessons, game-over messages…) loads on first use.
-  if(uiLang!=='en'&&!moreTranslations)moreTranslations=import('./i18n-more.js').then(m=>{addTranslations(m.MORE_ROWS,m.PATTERNS);if(uiLang!=='en')translateTree(document.body,uiLang)}).catch(()=>{moreTranslations=null});
+  // Each language's dictionary (src/locales/<code>.js) downloads the first time it is chosen;
+  // until it arrives the page shows English, never the previous language.
+  if(uiLang!=='en'){const wanted=uiLang;loadLanguage(wanted).then(()=>{if(uiLang===wanted)translateTree(document.body,uiLang)}).catch(()=>{})}
   if(save)try{localStorage.setItem(LANG_KEY,uiLang)}catch{}
   const select=$('#languageSelect');if(select)select.value=uiLang;
 }
@@ -3443,7 +3718,7 @@ function announceLatestMove(){
   const before=announceState;announceState={key,count};
   if(before.key!==key||count!==before.count+1||browse)return; // a new game, a reload or a takeback: nothing to read
   const last=records.at(-1);if(!last?.san)return;
-  if(blackoutActive()||darkActive()&&(last.color||(count%2?'w':'b'))!==computerSide)return; // the dark stays dark for screen readers too
+  if(blackoutActive()||darkActive()&&(last.color||(count%2?'w':'b'))!==computerSide||last?.hidden||onlineBlind())return; // the dark stays dark for screen readers too
   announce(spokenMove({...last,color:last.color||(count%2?'w':'b')},uiLang));
 }
 $('#speakMoves').checked=speakOn();
@@ -3575,17 +3850,19 @@ function parseReviewInfo(line,fen){
   const depth=Number(line.match(/\bdepth (\d+)/)?.[1]||0),pv=line.match(/\bpv (.+)$/)?.[1]||'';
   return {cp,depth,pv,bestMove:pv.split(/\s+/)[0]||''};
 }
-function analyzeReviewFen(fen,index,token){
+function analyzeReviewFen(fen,index,token,{engineFen=null,variant=null,searchmoves=null}={}){
+  const worker=variant?variantReviewWorker:reviewWorker;
   return new Promise((resolve,reject)=>{
     const id=`review-${token}-${index}`;
-    const timer=setTimeout(()=>{if(reviewPending?.id===id){reviewPending=null;reviewWorker.postMessage({action:'stop'});reject(new Error('Game review timed out'))}},30000);
+    const timer=setTimeout(()=>{if(reviewPending?.id===id){reviewPending=null;worker.postMessage({action:'stop'});reject(new Error('Game review timed out'))}},30000);
     reviewPending={id,fen,latest:{cp:0,depth:0,pv:'',bestMove:''},resolve,reject,timer};
-    reviewWorker.postMessage({mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id});
+    worker.postMessage({mode:'analysis',fen:engineFen||fen,depth:variant?Math.min(REVIEW_DEPTH,14):REVIEW_DEPTH,requestId:id,...(variant?{variant}:{}),...(searchmoves?.length?{searchmoves}:{})});
   });
 }
 // Where the game began: Freestyle games (and archived ones) start from their own position.
 function reviewStartFen(){
-  if(archiveSession?.entry?.startFen)return archiveSession.entry.startFen;
+  // (A replayed archive's board was loaded at its last position, so its FEN header is the end, not the start.)
+  if(archiveSession)return archiveSession.entry?.startFen||(archiveSession.records?null:game.getHeaders?.().FEN)||null;
   if(watchSession)return watchSession.state?.start_fen||null;
   if(serverGameId)return serverGame?.start_fen||null;
   return game.getHeaders?.().FEN||null;
@@ -3600,7 +3877,7 @@ function buildReviewGame(records=currentReviewRecords(),startFen=reviewStartFen(
     let made=null;
     try{made=record?.from&&record?.to?position.move({from:record.from,to:record.to,promotion:record.promotion||undefined}):position.move(record.san||record.lan||'')}catch{}
     if(!made)break;
-    moves.push({...record,from:made.from,to:made.to,san:made.san,lan:made.lan,color:made.color,piece:made.piece,captured:made.captured||record.captured||null,promotion:made.promotion||record.promotion||null});
+    moves.push({...record,from:made.from,to:made.to,san:made.san,lan:made.lan,color:made.color,piece:made.piece,captured:made.captured||record.captured||null,promotion:made.promotion||record.promotion||null,flags:made.flags});
     positions.push(position.fen());
   }
   return {records:moves,positions,signature:moveRecordSignature(moves)};
@@ -3664,19 +3941,26 @@ function reviewExplanation(index){
   const result=reviewState.results[index],move=reviewState.moves[index];if(!result||!move)return 'Start position — use Next to step through the review.';
   const label=CLASSIFICATION_META[result.classification]?.label||'Move',best=reviewBestSan(index);
   if(result.classification==='book')return `Book move ${move.san} — follows established opening theory.`;
+  if(result.classification==='ambushed')return `Ambushed: ${move.san} cost ${Math.round(result.realLoss||0)} points of winning chances, but on the board you could see it was ${result.beliefBest&&String(result.beliefBest).toLowerCase()===`${move.from}${move.to}${move.promotion||''}`.toLowerCase()?'the best move':'a sound move'}. Your accuracy counts it as you could judge it.${best&&normalizedSan(best)!==normalizedSan(move.san)?` With the whole board in view, ${best} was best.`:''}`;
   if(result.classification==='brilliant')return `Brilliant ${move.san} — a strong sacrifice that keeps the engine's best continuation.`;
   if(result.classification==='best')return `Best move ${move.san} — matches Stockfish's first choice.`;
   if(result.classification==='great')return `Great move ${move.san} — keeps nearly all of the position's winning chances.`;
   if(best&&normalizedSan(best)!==normalizedSan(move.san))return `${label}: ${move.san}. Best was ${best} — it preserves more winning chances.`;
   return `${label}: ${move.san} — the engine line confirms the position remains close to best play.`;
 }
+// The Lichess game-accuracy formula (src/review.js) over the review's evaluations.
 function reviewAccuracyFor(color){
-  const losses=reviewState.results.filter((result,index)=>reviewState.moves[index]?.color===color).map(result=>result.loss);
-  return accuracyFromLosses(losses);
+  const results=reviewState.results;
+  if(!results.length)return 100;
+  if(results.every(r=>Number.isFinite(r?.beforeCp)&&Number.isFinite(r?.afterCp))){
+    const acc=gameAccuracy([results[0].beforeCp,...results.map(r=>r.afterCp)],reviewState.moves[0]?.color==='b'?'b':'w',{losses:results.map(r=>r.fogLoss??null)})[color];
+    return acc??100;
+  }
+  return accuracyFromLosses(results.filter((result,index)=>reviewState.moves[index]?.color===color).map(result=>result.loss));
 }
 function renderReviewCounts(){
   const target=$('#reviewCounts');if(!target)return;
-  const order=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder'];
+  const order=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder',...(reviewState.fog?['ambushed']:[])];
   target.innerHTML=order.map(key=>{
     const count=reviewState.results.filter(result=>result.classification===key).length,meta=CLASSIFICATION_META[key];
     return `<span title="${escapeHtml(meta.label)}"><img src="${classificationAsset(key)}" alt=""><b>${count}</b><small>${escapeHtml(meta.label)}</small></span>`;
@@ -3713,9 +3997,51 @@ function setReviewPly(ply){
   const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
   render();updateMoves();renderReviewDashboard();
 }
+// Which rules the reviewed game was played under.
+function reviewVariant(){
+  if(archiveSession)return archiveSession.entry?.variant||'standard';
+  if(watchSession)return watchSession.state?.variant||'standard';
+  if(serverGameId)return serverGame?.variant||'standard';
+  return mode==='computer'?computerRules||'standard':'standard';
+}
+// A Crazyhouse game: positions with pockets (src/variant-engine.js) and its moves, drops included.
+function buildZhReviewGame(records=currentReviewRecords(),startFen=reviewStartFen()){
+  const list=zhReviewPositions(Chess,records,startFen);
+  const moves=list.slice(1).map(p=>({...p.move,lan:p.move.uci,piece:p.move.drop||null,captured:null,promotion:null}));
+  return {records:moves,positions:list.map(p=>p.fen),engineFens:list.map(p=>p.engineFen),signature:moveRecordSignature(moves),variant:'crazyhouse'};
+}
+// Vanta Dark / Blackout Blitz (src/fog-review.js): every costly move gets a second look on the
+// board its player could know. Sound there → Ambushed, and it counts as they could judge it.
+async function fogReviewPass(built,token){
+  const beliefs=fogBeliefs(Chess,built.positions,built.records,reviewState.fog);
+  for(let i=0;i<reviewState.results.length;i++){
+    const result=reviewState.results[i],move=built.records[i],belief=beliefs[i];
+    if(!belief||!move||!(result.loss>=15))continue;
+    const before=await analyzeReviewFen(belief.fen,`fog-${i}`,token,{searchmoves:belief.searchmoves});
+    if(reviewState.token!==token)return;
+    const played=`${move.from}${move.to}${move.promotion||''}`.toLowerCase(),beliefBest=String(before.bestMove||'').toLowerCase();
+    let beliefLoss=null;
+    if(played===beliefBest)beliefLoss=0;
+    else{
+      const afterFen=beliefAfter(Chess,belief.fen,move);
+      if(!afterFen)continue; // it only worked because of something they couldn't see: no excuse
+      const after=await analyzeReviewFen(afterFen,`fog-${i}-after`,token);
+      if(reviewState.token!==token)return;
+      beliefLoss=winPercentageLoss(before.cp,after.cp,move.color);
+    }
+    if(!isAmbush({realLoss:result.loss,beliefLoss,played,beliefBest}))continue;
+    reviewState.results[i]={...result,classification:'ambushed',realLoss:result.loss,loss:beliefLoss,fogLoss:beliefLoss,beliefBest};
+  }
+}
+// Crazyhouse evaluations run several times larger than chess ones (material in hand counts
+// double), so they are scaled before winning chances are worked out; otherwise every move
+// would look like a blunder. VCH's own approximation.
+const ZH_CP_SCALE=0.35;
 async function startGameReview(){
   cancelPremove(false);
-  const built=buildReviewGame();
+  const variant=reviewVariant();
+  if(variant==='bughouse')return toast("Bughouse boards can't be reviewed move by move: pieces arrive from the other board");
+  const built=variant==='crazyhouse'?buildZhReviewGame():buildReviewGame();
   if(!built.records.length)return toast('Play at least one move before starting review');
   showMovesView();
   $$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.tab==='analysis'));
@@ -3724,27 +4050,33 @@ async function startGameReview(){
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');setReviewPly(reviewState.moves.length);return;
   }
   const token=reviewState.token+1;
-  reviewState={running:true,viewing:false,currentPly:0,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[]};
+  reviewState={running:true,viewing:false,currentPly:0,signature:built.signature,token,positions:built.positions,moves:built.records,evaluations:[],results:[],variant:built.variant||null,fog:FOG_REVIEW_VARIANTS.has(variant)?variant:null};
   setReviewProgress(0,built.positions.length,'Analyzing every position');
   try{
     for(let index=0;index<built.positions.length;index++){
-      const evaluation=await analyzeReviewFen(built.positions[index],index,token);
+      const raw=await analyzeReviewFen(built.positions[index],index,token,built.variant?{engineFen:built.engineFens[index],variant:built.variant}:{});
+      const evaluation=built.variant?{...raw,cp:Math.round(Number(raw.cp||0)*ZH_CP_SCALE)}:raw;
       if(reviewState.token!==token){reviewState.running=false;return}
       reviewState.evaluations[index]=evaluation;
       setReviewProgress(index+1,built.positions.length,'Analyzing every position');
     }
     reviewState.results=built.records.map((move,index)=>{
       const before=reviewState.evaluations[index]||{cp:0,bestMove:''},after=reviewState.evaluations[index+1]||before;
-      const actual=`${move.from}${move.to}${move.promotion||''}`.toLowerCase(),best=String(before.bestMove||'').toLowerCase();
-      const isBest=!!best&&actual===best,isBook=isBookMove(built.records,index),isSacrifice=isReviewSacrifice(move,built.positions[index]);
+      const actual=(move.drop?`${String(move.drop).toUpperCase()}@${move.to}`:`${move.from}${move.to}${move.promotion||''}`).toLowerCase(),best=String(before.bestMove||'').toLowerCase();
+      const isBest=!!best&&actual===best,isBook=!built.variant&&isBookMove(built.records,index),isSacrifice=!built.variant&&isReviewSacrifice(move,built.positions[index]);
       const classification=classifyMove({beforeCp:before.cp,afterCp:after.cp,color:move.color,isBook,isBest,isSacrifice});
       return {classification,from:move.from,to:move.to,beforeCp:before.cp,afterCp:after.cp,loss:winPercentageLoss(before.cp,after.cp,move.color),bestMove:before.bestMove||''};
     });
+    if(reviewState.fog){
+      setReviewProgress(built.positions.length,built.positions.length,'Checking what each side could see');
+      await fogReviewPass(built,token);
+      if(reviewState.token!==token){reviewState.running=false;return}
+    }
     reviewState.running=false;
     moveEvalByPly=reviewState.results.map(result=>result.afterCp/100);
     const archiveId=archiveSession?.entry.id||serverGameId||lastLocalArchiveId;
     if(archiveId)saveReviewSummary(archiveId,{accuracy:{w:reviewAccuracyFor('w'),b:reviewAccuracyFor('b')}});
-    try{rememberMistakes()}catch(error){console.warn('mistakes',error)}
+    if(!built.variant&&!reviewState.fog)try{rememberMistakes()}catch(error){console.warn('mistakes',error)}
     setReviewProgress(built.positions.length,built.positions.length,'Review complete');
     if(depthEl)depthEl.textContent=String(REVIEW_DEPTH);
     setReviewPly(reviewState.moves.length);
@@ -3773,10 +4105,14 @@ function syncServerMoveTimes(previous,state){
 function currentHistory(){if(watchSession)return (watchSession.state?.move_history||[]).map(x=>x.san||x.lan||'');return serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history.map(x=>x.san||x.lan||''):game.history()}
 function updateOpeningLabel(){
   if(isGameFinishedForReview())return;
-  const opening=darkActive()?null:detectOpening(currentHistory());
+  const opening=darkActive()||fogOnline()?null:detectOpening(currentHistory());
   const state=$('#state');if(!state)return;
-  const base=game.inCheck()?'Check · Real time':(serverGame?.rated?'Real time · Rated game':'Real time · Casual game');
-  state.textContent=opening?`${base} · ${opening.name}`:base;
+  const ctx=boardContext(),line=ctx?ctx.line:serverGame?.rated?'Real time · Rated game':'Real time · Casual game';
+  const base=game.inCheck()?(ctx?`Check · ${ctx.line}`:'Check · Real time'):line;
+  // The 50-move rule: 50 moves each with no capture and no pawn move is a draw. Shown from 30 on
+  // (not in the blind modes, where the count would tell you about moves you can't see).
+  const half=Number(game.fen().split(' ')[4])||0,fifty=half>=60&&!darkActive()&&computerRules!=='blackout'&&!fogOnline()?` · 50-move rule: ${Math.max(0,Math.ceil((100-half)/2))} ${Math.ceil((100-half)/2)===1?'move':'moves'} left`:'';
+  state.textContent=(opening?`${base} · ${opening.name}`:base)+fifty;
 }
 function formatPv(pv=''){
   try{
@@ -3863,9 +4199,10 @@ function setDynamicView(kind,title,html){
   if(kind!=='endgames'&&egSession)endEndgame();
   if(kind!=='prep'&&prepSession)endPrep();
   if(kind!=='analysis'&&analysis)leaveAnalysis();
+  if(kind!=='lesson'&&lessonSession)leaveLesson({restore:false});
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
-  const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view">←</button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
+  const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view" aria-label="Back"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
   target.querySelector('.back-view').onclick=showMovesView;
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
 }
@@ -3909,19 +4246,182 @@ function renderOpenings(){
   $('#dynamicView .rep-open')?.addEventListener('click',()=>void renderRepertoire());
   $$('#dynamicView [data-opening]').forEach(b=>b.onclick=()=>{const o=OPENINGS[Number(b.dataset.opening)];renderStudy('openings',o.name,o.line,`${o.eco} · ${o.idea}`)});
 }
-function renderFamous(){
-  setDynamicView('famous','Famous Games',`<div class="library-list famous-list">${FAMOUS_GAMES.map((g,i)=>`<article><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.players)} · ${g.place} ${g.year}</small></div><p><strong>${g.result}</strong> · ${escapeHtml(g.opening)} — ${escapeHtml(g.lesson)}</p><button class="library-action" data-famous="${i}">Replay game</button></article>`).join('')}</div>`);
-  $$('#dynamicView [data-famous]').forEach(b=>b.onclick=()=>{const g=FAMOUS_GAMES[Number(b.dataset.famous)];renderStudy('famous',g.title,g.moves,`${g.players} · ${g.year} · ${g.result}`)});
+// ---- Learn library (round 13): courses (src/courses.js) and famous-game lessons
+// (src/famous-lessons.js), played on the board by the lesson player (src/lesson-player.js). ----
+const stars=n=>`<span class="lesson-stars" aria-label="${n} of 3 stars">${[0,1,2].map(i=>`<i class="${i<n?'on':''}"></i>`).join('')}</span>`;
+function lessonAwaitsMove(){
+  const s=lessonSession;if(!s)return false;
+  if(s.kind==='famous')return !s.run.answered&&!s.busy;
+  const step=currentStep(s.lesson,s.run);return step?.type==='move'&&!s.run.stepDone&&!s.busy;
 }
-function renderLesson(index){
-  const lesson=LESSONS[index];
-  setDynamicView('learn',lesson.title,`<article class="lesson-detail"><small>${escapeHtml(lesson.level)}</small><h4>${escapeHtml(lesson.title)}</h4><p>${escapeHtml(lesson.body)}</p><div class="lesson-checklist"><b>Training focus</b><span>✓ Identify the position goal before calculating.</span><span>✓ Compare forcing moves: checks, captures and threats.</span><span>✓ Explain the move in words before playing it.</span></div><button class="primary-action start-puzzle">Practice with a live puzzle</button><button class="secondary-action all-lessons">Back to lessons</button></article>`);
-  $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
-  $('#dynamicView .all-lessons').onclick=renderLearn;
+function leaveLesson({restore=true}={}){
+  if(!lessonSession)return;lessonSession=null;
+  if(mode==='lesson'){mode='room';if(restore){game.reset();boardShapes=[];render();updateMoves()}}
+}
+function lessonGuard(){
+  if(onlineGameBusy())return false;
+  if(liveGameOn()&&mode==='computer'&&computerStarted&&!localGameOver){toast('Finish your game first');return false}
+  cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
+  puzzleSession=null;streakSession=null;stopRunTimer();if(egSession)endEndgame({restore:false});if(exploreSession)endExplore({restore:false});if(repEdit)endRepEdit({restore:false});
+  return true;
+}
+// Puts a position on the board for the lesson, facing `side`.
+function lessonBoard(fen,shapes=[],side=null){
+  try{game.load(fen)}catch{toast('This position could not be shown');return false}
+  boardShapes=shapes;selected=null;mode='lesson';serverGameId=null;clockSnapshot=null;browse=null;
+  flipped=(side||game.turn())==='b';orientationSet=true;setPrimaryScreen('game');render();updateMoves();
+  return true;
+}
+const stepShapes=step=>[...(step?.arrows||[]).map(([from,to])=>({from,to,brush:'green'})),...(step?.marks||[]).map(sq=>({from:sq,brush:'yellow'}))];
+function courseOfLesson(id){return COURSES.find(c=>c.lessons.some(l=>l.id===id))||null}
+function startCourseLesson(id){
+  const lesson=lessonById(id),course=courseOfLesson(id);if(!lesson||!course||!lessonGuard())return;
+  const first=lesson.steps.find(st=>st.type==='move'),side=first?new Chess(first.fen).turn():'w';
+  lessonSession={kind:'course',lesson,course,run:startRun(lesson),side,feedback:null,busy:false,showHint:false};
+  showCourseStep();
+}
+function showCourseStep(){
+  const s=lessonSession;if(!s)return;const step=currentStep(s.lesson,s.run);
+  s.feedback=null;s.showHint=false;
+  if(step.fen)lessonBoard(step.fen,stepShapes(step),s.side);
+  drawLesson();
+}
+function drawLesson(){
+  const s=lessonSession;if(!s)return;
+  if(s.kind==='famous')return drawFamous();
+  const {lesson,course,run}=s,step=currentStep(lesson,run),index=course.lessons.findIndex(l=>l.id===lesson.id);
+  const dots=lesson.steps.map((st,i)=>`<i class="${i<run.step||(i===run.step&&run.stepDone)?'done':''}${i===run.step?' now':''} kind-${st.type}"></i>`).join('');
+  const last=run.step===lesson.steps.length-1;
+  let body='';
+  if(step.type==='read')body=`<p class="lesson-text" dir="auto">${escapeHtml(step.text)}</p>`;
+  if(step.type==='move')body=`<p class="lesson-prompt" dir="auto">${escapeHtml(step.prompt)}</p>${s.showHint&&!run.stepDone?`<p class="lesson-hint" dir="auto">${escapeHtml(step.hint||'')}</p>`:''}${s.feedback?`<p class="lesson-feedback ${s.feedback.ok?'ok':'no'}">${escapeHtml(s.feedback.text)}</p>`:''}${run.stepDone?`<p class="lesson-explain" dir="auto">${escapeHtml(step.explain||'')}</p>`:''}`;
+  if(step.type==='quiz')body=`<p class="lesson-prompt" dir="auto">${escapeHtml(step.question)}</p><div class="lesson-options">${step.options.map((o,i)=>`<button type="button" data-quiz="${i}" class="${run.stepDone&&i===step.answer?'right':s.wrong?.includes(i)?'wrong':''}"${run.stepDone?' disabled':''}>${escapeHtml(o)}</button>`).join('')}</div>${run.stepDone?`<p class="lesson-explain" dir="auto">${escapeHtml(step.explain||'')}</p>`:s.feedback&&!s.feedback.ok?`<p class="lesson-feedback no">${escapeHtml(s.feedback.text)}</p>`:''}`;
+  const html=`<article class="lesson-player"><small>${escapeHtml(course.title.toUpperCase())} · LESSON ${index+1} OF ${course.lessons.length}</small><h4>${escapeHtml(lesson.title)}</h4>${run.step===0?`<p class="lesson-goal" dir="auto">${escapeHtml(lesson.goal)}</p>`:''}<div class="lesson-dots" aria-label="Step ${run.step+1} of ${lesson.steps.length}">${dots}</div>
+<div class="lesson-step kind-${step.type}">${body}</div>
+<div class="lesson-actions">${step.type==='move'&&!run.stepDone?'<button type="button" class="lesson-hint-btn">Hint</button>':''}${run.step>0?'<button type="button" class="lesson-back">Back</button>':''}<button type="button" class="primary-action lesson-next"${run.stepDone?'':' disabled'}>${last?'Finish lesson':'Next'}</button></div>
+<button type="button" class="lesson-course-link">${escapeHtml(course.title)} · all lessons</button></article>`;
+  if(currentRightView!=='lesson')setDynamicView('lesson',course.title,html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const root=$('#dynamicView');
+  root.querySelector('.lesson-next')?.addEventListener('click',()=>{if(!s.run.stepDone)return;if(last)return finishCourseLesson();s.wrong=null;nextStep(lesson,run);showCourseStep()});
+  root.querySelector('.lesson-back')?.addEventListener('click',()=>{run.step=Math.max(0,run.step-1);run.ply=0;run.stepDone=true;s.wrong=null;showCourseStep()});
+  root.querySelector('.lesson-hint-btn')?.addEventListener('click',()=>{if(!s.showHint){run.hints++;s.showHint=true}const want=step.solution?.[run.ply];if(want)boardShapes=[...stepShapes(step),{from:want.slice(0,2),brush:'green'}];render();drawLesson()});
+  root.querySelectorAll('[data-quiz]').forEach(b=>b.onclick=()=>{const out=answerQuiz(lesson,run,Number(b.dataset.quiz));if(out.ok){playTone();s.feedback=null}else{playIllegalTone();s.wrong=[...(s.wrong||[]),Number(b.dataset.quiz)];s.feedback={ok:false,text:'Not that one. Try again.'}}drawLesson()});
+  root.querySelector('.lesson-course-link')?.addEventListener('click',()=>renderCourse(course.id));
+}
+function lessonMove(move){
+  const s=lessonSession;if(!s)return;
+  if(s.kind==='famous')return famousMove(move);
+  const step=currentStep(s.lesson,s.run);if(step?.type!=='move'||s.run.stepDone||s.busy)return;
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||undefined})}catch{}
+  if(!made)return;
+  const uci=made.from+made.to+(made.promotion||''),out=playCourseMove(s.lesson,s.run,uci);
+  if(!out.ok){game.undo();selected=null;render();playIllegalTone();buzz(HAPTICS.illegal);s.feedback={ok:false,text:'Not quite. Look again: that is not the move this position asks for.'};drawLesson();return}
+  rememberLastMove(made);boardShapes=[];render({hint:made,instant:instantMoveAnimation});afterBoardPaint(playTone);
+  s.feedback=out.stepDone?{ok:true,text:out.alternative?'Also good! Here is the idea:':'Correct!'}:{ok:true,text:'Good. Keep going.'};
+  if(out.reply){s.busy=true;drawLesson();setTimeout(()=>{if(lessonSession!==s)return;try{const r=game.move({from:out.reply.slice(0,2),to:out.reply.slice(2,4),promotion:out.reply[4]});rememberLastMove(r);render({hint:r});afterBoardPaint(playTone)}catch{}s.busy=false;drawLesson()},420);return}
+  drawLesson();
+}
+function finishCourseLesson(){
+  const s=lessonSession;if(!s)return;const {lesson,course,run}=s,earned=courseStars(run);
+  const progress=saveLessonResult(lesson.id,earned),next=nextLesson(course,progress),done=courseProgress(course,progress);
+  const html=`<article class="lesson-player lesson-done"><small>${escapeHtml(course.title.toUpperCase())}</small><h4>${escapeHtml(lesson.title)} · complete</h4>${stars(earned)}<p>${run.mistakes+run.hints===0?'Flawless: no mistakes, no hints.':`${run.mistakes} ${run.mistakes===1?'mistake':'mistakes'} · ${run.hints} ${run.hints===1?'hint':'hints'}`}</p><div class="course-meter"><i style="width:${Math.round(100*done.done/done.total)}%"></i></div><p class="course-meter-text">${done.done} of ${done.total} lessons in ${escapeHtml(course.title)}</p><div class="lesson-actions">${next&&next.id!==lesson.id?`<button type="button" class="primary-action lesson-go" data-lesson="${escapeHtml(next.id)}">Next: ${escapeHtml(next.title)}</button>`:''}<button type="button" class="lesson-again">Again</button><button type="button" class="lesson-course-link">All lessons</button></div></article>`;
+  const t=$('#dynamicView .view-content');if(t)t.innerHTML=html;
+  const root=$('#dynamicView');
+  root.querySelector('.lesson-go')?.addEventListener('click',e=>startCourseLesson(e.currentTarget.dataset.lesson));
+  root.querySelector('.lesson-again')?.addEventListener('click',()=>startCourseLesson(lesson.id));
+  root.querySelector('.lesson-course-link')?.addEventListener('click',()=>renderCourse(course.id));
+}
+function renderCourse(id){
+  const course=courseById(id);if(!course)return;const progress=loadLessonProgress(),done=courseProgress(course,progress);
+  const html=`<article class="course-head"><small>${escapeHtml(course.level.toUpperCase())} · ${course.minutes} MIN · ${course.lessons.length} LESSONS</small><h4>${escapeHtml(course.title)}</h4><p>${escapeHtml(course.summary)}</p><div class="course-meter"><i style="width:${Math.round(100*done.done/done.total)}%"></i></div><p class="course-meter-text">${done.done} of ${done.total} done</p></article>
+<ol class="course-lessons">${course.lessons.map((l,i)=>`<li><button type="button" data-lesson="${escapeHtml(l.id)}" class="${progress[l.id]?'done':''}"><span class="course-num">${i+1}</span><span><b>${escapeHtml(l.title)}</b><small>${escapeHtml(l.goal)}</small></span>${progress[l.id]?stars(progress[l.id].stars):'<em>Start</em>'}</button></li>`).join('')}</ol>
+<details class="course-sources"><summary>Sources</summary><ul>${course.sources.map(src=>`<li>${escapeHtml(src.author?`${src.author}, `:'')}<i>${escapeHtml(src.title)}</i>${src.year?` (${escapeHtml(String(src.year))})`:''}${src.note?` · ${escapeHtml(src.note)}`:''} · <a href="${escapeHtml(src.url)}" target="_blank" rel="noopener noreferrer">link</a></li>`).join('')}</ul><p>Lessons are written by VCH in our own words, based on these works.</p></details>
+<button type="button" class="secondary-action course-back">Course library</button>`;
+  if(lessonSession)leaveLesson({restore:false});
+  setDynamicView('learn',course.title,html);
+  $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>startCourseLesson(b.dataset.lesson));
+  $('#dynamicView .course-back').onclick=renderLearn;
+}
+// Famous games as lessons: at each moment you find the master's move (on the board or from
+// the choices), then see what was played and why.
+function startFamousLesson(id){
+  const lesson=famousLessonById(id);if(!lesson||!lessonGuard())return;
+  lessonSession={kind:'famous',lesson,run:newFamousRun(lesson),busy:false,showChoices:false,verdict:null,fenCache:new Map()};
+  showMoment();
+}
+function momentFen(s,m){if(!s.fenCache.has(m.ply))s.fenCache.set(m.ply,momentPosition(Chess,s.lesson,m));return s.fenCache.get(m.ply)}
+function showMoment(){
+  const s=lessonSession;if(!s)return;const m=s.lesson.moments[s.run.moment];
+  s.showChoices=false;s.verdict=null;s.busy=false;
+  lessonBoard(momentFen(s,m),[],momentSide(m));drawFamous();
+}
+function drawFamous(){
+  const s=lessonSession;if(!s||s.kind!=='famous')return;const {lesson,run}=s,m=lesson.moments[run.moment],n=lesson.moments.length;
+  const side=momentSide(m)==='w'?lesson.white:lesson.black,v=s.verdict;
+  const dots=lesson.moments.map((_,i)=>{const r=run.results[i];return `<i class="${r?(r.correct?'done':'miss'):''}${i===run.moment?' now':''}"></i>`}).join('');
+  const html=`<article class="lesson-player famous-player"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))} · MOMENT ${run.moment+1} OF ${n}</small><h4>${escapeHtml(lesson.title)}</h4>${run.moment===0&&!run.answered?`<p class="lesson-goal" dir="auto">${escapeHtml(lesson.intro)}</p>`:''}<div class="lesson-dots">${dots}</div>
+<div class="lesson-step"><p class="lesson-prompt" dir="auto">${escapeHtml(m.prompt)}</p><p class="famous-side">${escapeHtml(side)} to move · play it on the board${s.showChoices?' or pick one':''}</p>
+${s.showChoices&&!run.answered?`<div class="lesson-options famous-choices">${m.choices.map(c=>`<button type="button" data-choice="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div>`:''}
+${run.hinted&&!run.answered?`<p class="lesson-hint" dir="auto">${escapeHtml(m.hint||'')}</p>`:''}
+${v?`<p class="lesson-feedback ${v.correct?'ok':'no'}">${v.correct?(v.accepted?`Good move! The engine likes it too. ${escapeHtml(side)} played ${escapeHtml(v.best)}.`:`Yes! ${escapeHtml(v.best)} is what ${escapeHtml(side)} played.`):`${escapeHtml(side)} played ${escapeHtml(v.best)}.`}</p><p class="lesson-explain" dir="auto">${escapeHtml(m.explain||'')}</p>`:''}</div>
+<div class="lesson-actions">${run.answered?`<button type="button" class="primary-action famous-next">${run.moment+1<n?'Next moment':'See your score'}</button>`:`${s.showChoices?'':'<button type="button" class="famous-choices-btn">Show choices</button>'}<button type="button" class="lesson-hint-btn">Hint</button><button type="button" class="famous-reveal">Show me</button>`}</div>
+<button type="button" class="lesson-course-link">Famous games</button></article>`;
+  if(currentRightView!=='lesson')setDynamicView('lesson','Famous Games',html);else{const t=$('#dynamicView .view-content');if(t)t.innerHTML=html}
+  const root=$('#dynamicView');
+  root.querySelector('.famous-choices-btn')?.addEventListener('click',()=>{s.showChoices=true;drawFamous()});
+  root.querySelector('.lesson-hint-btn')?.addEventListener('click',()=>{run.hinted=true;drawFamous()});
+  root.querySelector('.famous-reveal')?.addEventListener('click',()=>answerMoment(null));
+  root.querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>answerMoment(b.dataset.choice));
+  root.querySelector('.famous-next')?.addEventListener('click',()=>{if(nextMoment(lesson,run))showMoment();else finishFamous()});
+  root.querySelector('.lesson-course-link')?.addEventListener('click',renderFamous);
+}
+// The learner answers with a SAN (board move or choice), or null to just be shown.
+function answerMoment(san){
+  const s=lessonSession;if(!s||s.kind!=='famous'||s.run.answered)return;const m=s.lesson.moments[s.run.moment];
+  const v=san?checkAnswer(s.lesson,m,san):{correct:false,accepted:false,best:m.answer};
+  recordFamousAnswer(s.run,v.correct);s.verdict=v;
+  if(v.correct)playTone();else if(san){playIllegalTone();buzz(HAPTICS.illegal)}
+  // Show the master's move on the board.
+  try{game.load(momentFen(s,m));const made=game.move(m.answer);rememberLastMove(made);boardShapes=[];render({hint:made})}catch{}
+  drawFamous();
+}
+function famousMove(move){
+  const s=lessonSession;if(!s||s.run.answered||s.busy)return;
+  let made=null;try{made=game.move({from:move.from,to:move.to,promotion:move.promotion||undefined})}catch{}
+  if(!made)return;
+  render({hint:made,instant:instantMoveAnimation});
+  s.busy=true;setTimeout(()=>{if(lessonSession!==s)return;s.busy=false;answerMoment(made.san)},350);
+}
+function finishFamous(){
+  const s=lessonSession;if(!s)return;const {lesson,run}=s,score=lessonScore(run.results);
+  if(score.stars)saveLessonResult(`famous/${lesson.id}`,score.stars);
+  const right=run.results.filter(r=>r.correct).length;
+  const html=`<article class="lesson-player lesson-done"><small>${escapeHtml(lesson.white)} vs ${escapeHtml(lesson.black)} · ${escapeHtml(String(lesson.year))}</small><h4>${escapeHtml(lesson.title)}</h4>${stars(score.stars)}<p>You found ${right} of ${run.results.length} moves · ${score.score} of ${score.max} points.</p><p class="lesson-explain" dir="auto">${escapeHtml(lesson.ending||lesson.theme||'')}</p><div class="lesson-actions"><button type="button" class="primary-action famous-replay">Replay the whole game</button><button type="button" class="lesson-again">Try again</button><button type="button" class="lesson-course-link">Famous games</button></div></article>`;
+  const t=$('#dynamicView .view-content');if(t)t.innerHTML=html;
+  const root=$('#dynamicView');
+  root.querySelector('.famous-replay')?.addEventListener('click',()=>{leaveLesson({restore:false});renderStudy('famous',lesson.title,lesson.moves,`${lesson.white} vs ${lesson.black} · ${lesson.year} · ${lesson.result}`)});
+  root.querySelector('.lesson-again')?.addEventListener('click',()=>startFamousLesson(lesson.id));
+  root.querySelector('.lesson-course-link')?.addEventListener('click',renderFamous);
+}
+function renderFamous(){
+  if(lessonSession)leaveLesson({restore:false});
+  const progress=loadLessonProgress();
+  const card=g=>{const done=progress[`famous/${g.id}`];return `<article class="famous-card"><div><b>${escapeHtml(g.title)}</b><small>${escapeHtml(g.white)} vs ${escapeHtml(g.black)} · ${escapeHtml(g.event||'')} ${escapeHtml(String(g.year))} · ${escapeHtml(g.result)}</small></div><p>${escapeHtml(g.theme)}</p><div class="famous-card-foot">${done?stars(done.stars):`<em>${g.moments.length} moments</em>`}<button class="library-action" data-famous-lesson="${escapeHtml(g.id)}">${done?'Play again':'What would you play?'}</button><button class="library-action ghost" data-famous-replay="${escapeHtml(g.id)}">Replay</button></div></article>`};
+  setDynamicView('famous','Famous Games',`<p class="famous-intro">Step into the great games. At each turning point, find the move the master played; then see why it worked.</p>${FAMOUS_ERAS.map(era=>{const games=FAMOUS_LESSONS.filter(g=>g.era===era.id);return games.length?`<section class="famous-era"><h4>${escapeHtml(era.label)} <small>${escapeHtml(era.years)}</small></h4><p>${escapeHtml(era.blurb)}</p><div class="library-list famous-list">${games.map(card).join('')}</div></section>`:''}).join('')}`);
+  $$('#dynamicView [data-famous-lesson]').forEach(b=>b.onclick=()=>startFamousLesson(b.dataset.famousLesson));
+  $$('#dynamicView [data-famous-replay]').forEach(b=>b.onclick=()=>{const g=famousLessonById(b.dataset.famousReplay);renderStudy('famous',g.title,g.moves,`${g.white} vs ${g.black} · ${g.year} · ${g.result}`)});
 }
 function renderLearn(){
-  setDynamicView('learn','Practice & Learn',`<button class="plan-open"><span><small>TODAY'S TRAINING</small><b>${escapeHtml(planHeadline())}</b></span><em class="plan-streak" aria-label="Streak">${currentStreak(loadStreak())}</em></button><div class="lesson-grid">${LESSONS.map((l,i)=>`<article><small>${escapeHtml(l.level)}</small><h4>${escapeHtml(l.title)}</h4><p>${escapeHtml(l.body)}</p><button data-lesson="${i}">Study lesson</button></article>`).join('')}</div><button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · beat Stockfish from textbook positions</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
-  $$('#dynamicView [data-lesson]').forEach(b=>b.onclick=()=>renderLesson(Number(b.dataset.lesson)));
+  if(lessonSession)leaveLesson({restore:false});
+  const progress=loadLessonProgress(),famousDone=FAMOUS_LESSONS.filter(g=>progress[`famous/${g.id}`]).length;
+  const courseCard=c=>{const d=courseProgress(c,progress);return `<button type="button" class="course-card level-${escapeHtml(c.level.toLowerCase())}" data-course="${escapeHtml(c.id)}"><small>${escapeHtml(c.level)} · ${c.minutes} min</small><b>${escapeHtml(c.title)}</b><span>${escapeHtml(c.summary)}</span><div class="course-meter"><i style="width:${Math.round(100*d.done/d.total)}%"></i></div><em>${d.done?`${d.done} of ${d.total} lessons`:`${d.total} lessons`}</em></button>`};
+  setDynamicView('learn','Practice & Learn',`<button class="plan-open"><span><small>TODAY'S TRAINING</small><b>${escapeHtml(planHeadline())}</b></span><em class="plan-streak" aria-label="Streak">${currentStreak(loadStreak())}</em></button>
+<h4 class="learn-head">Course library</h4><p class="learn-sub">Interactive lessons: read, then play the move on the board. Built from classic chess books and the FIDE Laws.</p>
+${COURSE_LEVELS.map(level=>{const list=COURSES.filter(c=>c.level===level);return list.length?`<div class="course-level"><small>${escapeHtml(level.toUpperCase())}</small><div class="course-grid">${list.map(courseCard).join('')}</div></div>`:''}).join('')}
+<button type="button" class="famous-entry"><span><small>FAMOUS GAMES</small><b>What would you play?</b><em>${FAMOUS_LESSONS.length} classic games · ${famousDone} done</em></span></button>
+<button class="primary-action start-puzzle">Start a live puzzle</button><button class="secondary-action open-studies">Studies · annotate and share a line</button><button class="secondary-action open-endgames">Endgame drills · win textbook endgames against the computer</button><button class="secondary-action open-together">Analyse together · a shared board with a friend</button>`);
+  $$('#dynamicView [data-course]').forEach(b=>b.onclick=()=>renderCourse(b.dataset.course));
+  $('#dynamicView .famous-entry').onclick=renderFamous;
   $('#dynamicView .start-puzzle').onclick=()=>showBackendView('puzzle');
   $('#dynamicView .open-studies')?.addEventListener('click',()=>void renderStudies());
   $('#dynamicView .open-endgames')?.addEventListener('click',renderEndgames);
@@ -3939,23 +4439,38 @@ function renderReview(){
 function brandLoading(label){
   return `<div class="loading-card brand-loading"><img src="/assets/vch/brand/vch-metal.svg" alt="VCH"><span>${escapeHtml(label)}</span></div>`;
 }
+let puzzleRetries=0;
+// The card beside a run puzzle: mode, count and best, the clock, the token purse, Skip, End.
+function runCard(side){
+  const run=streakSession,survival=run.mode==='survival',purse=loadSkips();
+  if(purse.daily)setTimeout(()=>toast('Daily skip token added',{duration:1400}),400);
+  const tokens=Array.from({length:SKIP_MAX},(_,i)=>`<i class="${i<purse.tokens?'on':''}">${SKIP_TOKEN_SVG}</i>`).join('');
+  return `<article class="puzzle-info streak-info run-${run.mode}"><div class="run-head"><div class="streak-count"><small>${survival?'SURVIVAL':'STREAK'}</small><b>${run.count}</b><span>Best ${run.best}</span></div><div class="run-clock${survival?' countdown':''}"><small>${survival?`${survivalSeconds(run.count)}s per puzzle`:'This puzzle'}</small><b>${survival?runClock(survivalSeconds(run.count)*1000):'0:00'}</b><span class="run-total">Run 0:00</span></div></div>
+<h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(run.count))} · ${survival?'a wrong move or the clock running out ends the run':'one wrong move ends the run'}</p>
+<div class="skip-purse" title="Skip tokens: one more each day you visit, one for every 10 solved in a run, up to ${SKIP_MAX}."><span class="skip-tokens" aria-label="${purse.tokens} skip tokens">${tokens}</span><button class="skip-puzzle"${purse.tokens?'':' disabled'}>${SKIP_TOKEN_SVG}<span>Skip puzzle</span></button></div>
+<div class="streak-actions"><button class="end-streak">End run</button></div></article>`;
+}
 async function showBackendView(kind){
   if(kind==='puzzle-stats')return void renderPuzzleStats();
   if(kind==='puzzle'||kind==='streak'||kind==='daily'){
+    if(onlineGameBusy())return;
     cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
     const streak=kind==='streak',daily=kind==='daily';if(!streak)streakSession=null;if(streak||daily)puzzleAngle=null;
-    setDynamicView('puzzles',streak?'Puzzle Streak':daily?'Daily Puzzle':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:daily?"Loading today's puzzle…":'Loading a real tactical position…'));
+    setDynamicView('puzzles',streak?(streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'):daily?'Daily Puzzle':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:daily?"Loading today's puzzle…":'Loading a real tactical position…'));
     try{
       const data=daily?await api.puzzleDaily():await api.puzzleNext(streak?streakDifficulty(streakSession.count):difficultyForRating(puzzleRatingNow()),puzzleRatingNow(),streak?null:puzzleAngle),puzzle=data.puzzle||data;
       if(streak&&!streakSession)return;
-      game.load(puzzle.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;
+      // Start where the solution's first move fits (older cached puzzles began one move early).
+      const startFen=playablePuzzleFen(Chess,{fen:puzzle.fen,solution:puzzle.solution||puzzle.moves||[],gamePgn:puzzle.gamePgn,initialPly:puzzle.initialPly});
+      if(!startFen){if(!daily&&puzzleRetries++<3)return void showBackendView(kind);puzzleRetries=0;throw new Error(daily?"Today's puzzle can't be played. Try the regular puzzles.":"Puzzles can't be loaded right now. Try again in a moment.")}
+      puzzleRetries=0;game.load(startFen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;
       flipped=game.turn()==='b';orientationSet=true; // you play the side to move
-      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now(),failed:false,daily};
-      render();
+      puzzleSession={id:puzzle.id||puzzle.puzzleId,solution:puzzle.solution||puzzle.moves||[],index:0,played:[],started:Date.now(),failed:false,daily,rating:Number(puzzle.rating)||null};
+      syncPlayerBars();render();
       const side=game.turn()==='w'?'White':'Black';
       $('#dynamicView .view-content').innerHTML=streak
-        ?`<article class="puzzle-info streak-info"><div class="streak-count"><small>STREAK</small><b>${streakSession.count}</b><span>Best ${streakSession.best}</span></div><h4>${side} to move · find the best move</h4><p>${escapeHtml(streakDifficulty(streakSession.count))} · one wrong move ends the streak</p><div class="streak-actions"><button class="skip-puzzle"${streakSession.skipUsed?' disabled':''}>${streakSession.skipUsed?'Skip used':'Skip this one (once)'}</button><button class="end-streak">End streak</button></div></article>`
-        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><button class="start-streak">Start a Puzzle Streak · best ${bestStreakShown()}</button><button class="start-battle">Puzzle Battle · race a friend</button></article>`;
+        ?runCard(side)
+        :`<article class="puzzle-info"><small>${daily?`DAILY PUZZLE · ${escapeHtml(data.date||'')}`:'LIVE PUZZLE'} · ${puzzle.rating||'—'} RATING</small><h4>${side} to move · find the best continuation</h4><p>${escapeHtml((puzzle.themes||[]).map(themeLabel).join(' · ')||'Tactical training')}</p>${daily&&data.solved?'<p class="puzzle-daily-done">You solved today\'s puzzle already. Play it again for fun; your rating won\'t change.</p>':''}${puzzleAngle?`<p class="puzzle-theme-pick">Theme: <b>${escapeHtml(themeLabel(puzzleAngle))}</b> <button class="clear-theme">Mixed themes</button></p>`:''}<div class="puzzle-rating">Your puzzle rating <b id="puzzleRatingNow">${puzzleRatingNow()}</b> <span id="puzzleRatingDelta"></span></div><div class="puzzle-progress">Move <b>1</b> of ${Math.max(1,Math.ceil((puzzleSession.solution.length||1)/2))}</div><button class="primary-action next-puzzle">Next puzzle</button><div class="puzzle-more"><button class="daily-puzzle">Daily puzzle</button><button class="puzzle-stats">My puzzle stats</button></div><button class="learn-mistakes">Learn from your mistakes${mistakeStats(loadMistakes()).due?` · ${mistakeStats(loadMistakes()).due} due`:''}</button><div class="run-modes"><button class="start-streak run-mode" title="No time limit. One wrong move ends the run; the clock shows how long each puzzle takes."><b>Puzzle Streak</b><small>No time limit · best ${bestStreakShown()}</small></button><button class="start-survival run-mode" title="Every puzzle has a countdown that shortens as they get harder. A wrong move or running out of time ends the run."><b>Puzzle Survival</b><small>Beat the countdown · best ${loadBestSurvival()}</small></button></div><button class="start-battle">Puzzle Battle · race a friend</button></article>`;
       $('#dynamicView .next-puzzle')?.addEventListener('click',()=>showBackendView('puzzle'));
       $('#dynamicView .start-streak')?.addEventListener('click',startStreak);
       $('#dynamicView .start-battle')?.addEventListener('click',()=>void renderBattle());
@@ -3963,7 +4478,9 @@ async function showBackendView(kind){
       $('#dynamicView .puzzle-stats')?.addEventListener('click',()=>showBackendView('puzzle-stats'));
       $('#dynamicView .learn-mistakes')?.addEventListener('click',renderMistakes);
       $('#dynamicView .clear-theme')?.addEventListener('click',()=>{puzzleAngle=null;showBackendView('puzzle')});
-      $('#dynamicView .skip-puzzle')?.addEventListener('click',()=>{if(!streakSession||streakSession.skipUsed)return;streakSession.skipUsed=true;puzzleSession=null;showBackendView('streak')});
+      $('#dynamicView .skip-puzzle')?.addEventListener('click',skipRunPuzzle);
+      $('#dynamicView .start-survival')?.addEventListener('click',startSurvival);
+      if(streak)startRunTimer();
       $('#dynamicView .end-streak')?.addEventListener('click',()=>endStreak(null));
     }catch(error){toast(error.message);showMovesView()}
     return;
@@ -3991,8 +4508,12 @@ async function showBackendView(kind){
             await api.tournamentJoin(t.id);
             if(t.format==='swiss'){join.textContent='Joined';join.disabled=true;return toast('Joined · your games are paired for you each round')}
             if(phase==='upcoming'){join.textContent='Registered';join.disabled=true;return toast(`Registered · ${arenaPhase(t).label.toLowerCase()}`)}
-            await api.queueJoin({seconds:Number(t.base_seconds||600),increment:Number(t.increment_seconds||0),rated:!!t.rated,tournamentId:t.id});mode='match';toast('Arena queue joined');
-            const timer=setInterval(async()=>{try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(timer);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){clearInterval(timer);toast(error.message)}},1000);
+            if(searching)await cancelMatchSearch({announce:false}); // one search at a time
+            await api.queueJoin({seconds:Number(t.base_seconds||600),increment:Number(t.increment_seconds||0),rated:!!t.rated,tournamentId:t.id});
+            // The same search as Quick match: shown in the Match panel with a Cancel button, and
+            // stopped when you start something else.
+            await activateLeftMode('match');setMatchSearching(true);toast('Arena queue joined · searching');
+            matchTimer=setInterval(async()=>{if(!searching){clearInterval(matchTimer);matchTimer=null;return}try{const state=await api.queueStatus(!!t.rated);if(state.game||state.matched){clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);applyServerState(state);showMovesView();toast('Arena match found')}}catch(error){void cancelMatchSearch({announce:false});toast(error.message)}},1000);
           }catch(error){toast(error.message)}
         };
         row.querySelector('.arena-lobby').onclick=()=>void openTournamentLobby(t);
@@ -4129,7 +4650,7 @@ function egBest(fen,depth=14){return new Promise(resolve=>{const id=`eg-${++egSe
 function renderEndgames(){
   if(egSession)endEndgame({restore:false});
   const progress=loadProgress();
-  setDynamicView('endgames','Endgame drills',`<article class="endgames"><p class="trainer-intro">Win (or hold) textbook endgames against Stockfish at full strength. Beat the par for three stars.</p><div class="eg-list">${DRILLS.map(d=>`<button class="eg-card" data-eg="${d.id}"><span><small>${escapeHtml(d.level)}</small><b>${escapeHtml(d.title)}</b><em>${d.goal==='hold'?`Hold for ${d.limit} moves`:`Par ${d.par} moves`}</em></span><span class="eg-stars" aria-label="${progress[d.id]||0} of 3 stars">${[1,2,3].map(n=>`<i class="${n<=(progress[d.id]||0)?'on':''}"></i>`).join('')}</span></button>`).join('')}</div></article>`);
+  setDynamicView('endgames','Endgame drills',`<article class="endgames"><p class="trainer-intro">Win (or hold) textbook endgames against the computer at full strength. Beat the par for three stars.</p><div class="eg-list">${DRILLS.map(d=>`<button class="eg-card" data-eg="${d.id}"><span><small>${escapeHtml(d.level)}</small><b>${escapeHtml(d.title)}</b><em>${d.goal==='hold'?`Hold for ${d.limit} moves`:`Par ${d.par} moves`}</em></span><span class="eg-stars" aria-label="${progress[d.id]||0} of 3 stars">${[1,2,3].map(n=>`<i class="${n<=(progress[d.id]||0)?'on':''}"></i>`).join('')}</span></button>`).join('')}</div></article>`);
   $$('#dynamicView [data-eg]').forEach(b=>b.onclick=()=>startEndgame(b.dataset.eg));
 }
 function startEndgame(id){
@@ -4169,7 +4690,7 @@ async function egReply(){
   const s=egSession;if(!s||s.over)return;s.thinking=true;
   const fen=game.fen(),best=await egBest(fen);
   if(egSession!==s||game.fen()!==fen){return}
-  s.thinking=false;if(!best)return toast('Stockfish 19 unavailable in this browser.');
+  s.thinking=false;if(!best)return toast('The computer is unavailable in this browser.');
   let made=null;try{made=game.move({from:best.slice(0,2),to:best.slice(2,4),promotion:best[4]||undefined})}catch{}
   if(!made)return;rememberLastMove(made);render({hint:made});afterBoardPaint(playTone);updateMoves();
   if(!egCheck(made))drawEndgame();
@@ -4559,7 +5080,7 @@ async function startCampaignBattle(ri,i){
   }
   saveCampaign({...st,pending:{realm:realm.id,i}});
   const variant={blackout:'blackout',dark:'dark',freestyle:'freestyle'}[b.rules]||'standard';
-  await playComputer({bot:{slug:`campaign-${realm.id}-${i}`,display_name:b.name,elo,portrait:b.boss?'bk':i?'br':'bn',campaign:{realm:realm.id,i},...(shadowTree?{shadowTree}:{})},side:b.side,variant});
+  await playComputer({bot:{slug:`campaign-${realm.id}-${i}`,display_name:b.name,elo,portrait:b.boss?'bk':i?'br':'bn',campaign:{realm:realm.id,i},engine:b.engine||'stockfish19',...(shadowTree?{shadowTree}:{})},side:b.side,variant});
   if(currentBot?.campaign?.realm===realm.id&&currentBot.campaign.i===i)toast(b.twist?`${b.name} · ${b.twist}`:`${realm.name} · ${b.name}`,{duration:2600});
 }
 function campaignGameOver(info,score,oath){
@@ -4651,7 +5172,7 @@ function applyBughouse(out){
   if(partner?.id&&bhSession.partnerId!==partner.id){
     if(bhSession.partnerChannel)realtimeClient.removeChannel(bhSession.partnerChannel).catch(()=>{});
     const id=partner.id;bhSession.partnerId=id;
-    bhSession.partnerChannel=realtimeClient.channel(`game:${id}`).on('broadcast',{event:'state'},message=>{
+    bhSession.partnerChannel=realtimeClient.channel(`watch:${id}`).on('broadcast',{event:'state'},message=>{
       const g=message?.payload?.game,d=bhSession?.data;if(!d?.seat||g?.id!==id)return;
       const key=otherBoard(d.seat[0]),cur=d.games[key];if(cur&&Number(g.version)<Number(cur.version))return;
       d.games[key]={...cur,...Object.fromEntries(BH_PUBLIC.map(k=>[k,g[k]??null]))};drawPartnerStrip();if(currentRightView==='bughouse')drawBughouse();
@@ -4838,9 +5359,10 @@ let rivalsCache=null;
 async function loadRivals(force=false){
   if(!signedIn())return [];
   if(!force&&rivalsCache&&Date.now()-rivalsCache.at<300000)return rivalsCache.list;
-  const out=await api.archive(100),botNames=new Set([...computerBots,...DEFAULT_COMPUTER_BOTS].map(b=>String(b.display_name||b.name||'').toLowerCase()).filter(Boolean));
+  const out=await api.archive(100),botNames=new Set([...DEFAULT_COMPUTER_BOTS.map(b=>String(b.display_name).toLowerCase()),...OLD_BOT_NAMES,...OLD_BOT_NAMES.map(n=>`vanta_${n}`)]);
   const me=currentProfile?.id||currentPlayerId;
-  const games=(out.games||[]).filter(g=>!botNames.has(String((g.white_player_id===me?g.black_name:g.white_name)||'').toLowerCase())); // until history carries bot_player_id everywhere
+  // Games against the computer are not rivalries (older rows lack bot_player_id: their names tell).
+  const games=(out.games||[]).filter(g=>!g.bot_player_id&&!botNames.has(String((g.white_player_id===me?g.black_name:g.white_name)||'').toLowerCase()));
   const list=rivalsFrom(games,me);rivalsCache={at:Date.now(),list};return list;
 }
 async function renderRivals(){
@@ -4937,7 +5459,8 @@ function nextBattlePuzzle(){
   if(!battle)return;const l=battle.local,p=battle.puzzles[l.index];
   if(!p||l.misses>=battle.maxMisses||Date.now()>Date.parse(battle.ends_at)){puzzleSession=null;const st=$('#dynamicView .battle-status');if(st)st.textContent=l.misses>=battle.maxMisses?'Out of lives · waiting for the end':'Done · waiting for the end';return}
   cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});streakSession=null;
-  game.load(p.fen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];flipped=game.turn()==='b';orientationSet=true;
+  const startFen=playablePuzzleFen(Chess,{fen:p.fen,solution:p.solution});if(!startFen){l.index++;return nextBattlePuzzle()} // unplayable: skip it
+  game.load(startFen);mode='puzzle';serverGameId=null;clockSnapshot=null;browse=null;boardShapes=[];flipped=game.turn()==='b';orientationSet=true;
   puzzleSession={id:`battle-${p.id}`,solution:p.solution,index:0,played:[],started:Date.now(),failed:false,kind:'battle'};
   setPrimaryScreen('game');render();
   const st=$('#dynamicView .battle-status');if(st)st.textContent=`Puzzle ${l.index+1} · ${game.turn()==='w'?'White':'Black'} to move`;
@@ -5278,10 +5801,11 @@ $('#searchInput').oninput=e=>{
   const results=[
     ...OPENINGS.filter(x=>(x.name+' '+x.eco+' '+x.idea).toLowerCase().includes(q)).map(x=>({type:'Opening',title:x.name,sub:x.idea,action:'openings'})),
     ...FAMOUS_GAMES.filter(x=>(x.title+' '+x.players+' '+x.opening).toLowerCase().includes(q)).map(x=>({type:'Famous game',title:x.title,sub:x.players,action:'famous'})),
-    ...LESSONS.filter(x=>(x.title+' '+x.body).toLowerCase().includes(q)).map(x=>({type:'Lesson',title:x.title,sub:x.level,action:'learn'}))
+    ...COURSES.flatMap(c=>c.lessons.map(l=>({c,l}))).filter(({c,l})=>(l.title+' '+l.goal+' '+c.title).toLowerCase().includes(q)).map(({c,l})=>({type:'Lesson',title:l.title,sub:c.title,action:'learn',lesson:l.id})),
+    ...FAMOUS_LESSONS.filter(x=>(x.title+' '+x.white+' '+x.black+' '+x.opening).toLowerCase().includes(q)).map(x=>({type:'Famous lesson',title:x.title,sub:`${x.white} vs ${x.black} · ${x.year}`,action:'famous',famous:x.id}))
   ].slice(0,8);
   target.innerHTML=results.map((r,i)=>`<button data-result="${i}"><small>${r.type}</small><b>${escapeHtml(r.title)}</b><span>${escapeHtml(r.sub)}</span></button>`).join('')||'<p>No results yet.</p>';
-  [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{menus.close('search');activateNav(results[i].action)});
+  [...target.querySelectorAll('[data-result]')].forEach((b,i)=>b.onclick=()=>{menus.close('search');const r=results[i];activateNav(r.action);if(r.lesson)startCourseLesson(r.lesson);else if(r.famous)startFamousLesson(r.famous)});
 };
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.add('ready')});
 $('#installBtn').onclick=async()=>{if(installPrompt){installPrompt['prompt']();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
@@ -5295,7 +5819,9 @@ const normalizeMotionCss=value=>{
   const milliseconds=raw.endsWith('s')&&!raw.endsWith('ms')?amount*1000:amount;
   return `${Math.round(clamp(milliseconds,0,400,400))}ms`;
 };
-savedTheme.pieceTint=0;
+savedTheme.pieceTint=0; // the pre-sprite tint (default .18) muddied the sprite sets; it no longer applies
+// The tint chosen since the sprite sets (0 by default) is kept across visits.
+savedTheme.spriteTint=clamp(savedTheme.spriteTint,0,.7,0);
 savedTheme['--glass']=String(clamp(savedTheme['--glass'],.35,1,.94));
 savedTheme['--motion']=normalizeMotionCss(savedTheme['--motion']);
 // Backdrop blur only where the glass is see-through. At the near-opaque default the blurred
@@ -5307,8 +5833,8 @@ function syncGlassBlur(value){document.documentElement.dataset.glass=Number(valu
 syncGlassBlur(savedTheme['--glass']);
 document.documentElement.style.setProperty('--white-piece',savedTheme.whitePiece||'#f0d9a4');
 document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece||'#342019');
-document.documentElement.style.setProperty('--piece-tint','0');
-for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else if(key!=='pieceStyle'&&key!=='pieceTint')document.documentElement.style.setProperty(key,value)}
+document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));
+for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else if(key!=='pieceStyle'&&key!=='pieceTint'&&key!=='spriteTint')document.documentElement.style.setProperty(key,value)}
 motionScaleCache=null; // the saved Motion setting is applied now
 const glassControl=$('[data-theme="--glass"]'),motionControl=$('[data-theme="--motion"]');
 if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'])*100));
@@ -5322,7 +5848,51 @@ localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#expressionsSetting').value=expressionSetting;
 $('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
 $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
-$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=0;$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.pieceTint=Number(e.target.value)/100;document.documentElement.style.setProperty('--piece-tint',String(savedTheme.pieceTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
+$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
 initRoundTwelve();
+// ---- Hover guide (src/hover-guide.js): what each section, tab and mode is, on hover or focus ----
+(function hoverGuide(){
+  const card=document.createElement('div');card.id='hoverGuide';card.className='hover-guide';card.setAttribute('role','tooltip');card.hidden=true;document.body.append(card);
+  let timer=null,shown=null;
+  const tr=text=>(uiLang!=='en'&&translateText(text,uiLang))||text;
+  function place(el){
+    const r=el.getBoundingClientRect(),c=card.getBoundingClientRect(),gap=8;
+    let top=r.bottom+gap;if(top+c.height>innerHeight-8)top=r.top-gap-c.height;
+    const left=Math.max(8,Math.min(innerWidth-c.width-8,r.left+r.width/2-c.width/2));
+    card.style.top=`${Math.max(8,top)}px`;card.style.left=`${left}px`;
+  }
+  function show(info){
+    shown=info.el;
+    // The card replaces the browser's own tooltip while it shows.
+    if(shown.hasAttribute('title')){shown.dataset.guideTitle=shown.getAttribute('title');shown.removeAttribute('title')}
+    card.replaceChildren();const b=document.createElement('b'),span=document.createElement('span');b.textContent=tr(info.title);span.textContent=tr(info.text);card.append(b,span);
+    card.hidden=false;place(shown);shown.setAttribute('aria-describedby','hoverGuide');
+  }
+  function hide(){
+    clearTimeout(timer);timer=null;card.hidden=true;
+    if(shown){shown.removeAttribute('aria-describedby');if(shown.dataset.guideTitle!=null){shown.setAttribute('title',shown.dataset.guideTitle);delete shown.dataset.guideTitle}}
+    shown=null;
+  }
+  document.addEventListener('pointerover',event=>{
+    if(event.pointerType!=='mouse')return;
+    const info=guideFor(event.target);
+    if(info&&info.el===shown)return;
+    hide();if(info)timer=setTimeout(()=>{timer=null;if(info.el.isConnected)show(info)},350);
+  });
+  document.addEventListener('pointerout',event=>{if(event.pointerType==='mouse'&&!event.relatedTarget)hide()});
+  // A pointer that comes to rest over an element without a fresh pointerover (the page scrolled
+  // under it, say) still gets its card.
+  document.addEventListener('pointermove',event=>{
+    if(event.pointerType!=='mouse'||shown||timer)return;
+    const info=guideFor(event.target);if(info)timer=setTimeout(()=>{timer=null;if(info.el.isConnected)show(info)},350);
+  },{passive:true});
+  document.addEventListener('focusin',event=>{let info=null;try{if(event.target.matches(':focus-visible'))info=guideFor(event.target)}catch{}hide();if(info)show(info)});
+  document.addEventListener('focusout',hide);
+  // A click hides it; scrolling or resizing hides a card that is showing (it would be out of
+  // place) but lets one that is about to show come up where it belongs.
+  window.addEventListener('pointerdown',hide,{capture:true,passive:true});
+  for(const type of ['scroll','resize'])window.addEventListener(type,()=>{if(shown)hide()},{capture:true,passive:true});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')hide()});
+})();

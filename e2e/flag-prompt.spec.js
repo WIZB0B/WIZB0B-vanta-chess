@@ -31,7 +31,7 @@ test('the flag prompt waits while a game is on and never covers the chat', async
   await page.locator('.game-more>summary').click();await page.locator('#openChat').click();
   await expect(page.locator('#chatDrawer')).toHaveClass(/open/);
   await page.locator('#message').fill('hello');
-  await page.locator('#chat button').click({timeout:3000});
+  await page.locator('#chat .chat-send').click({timeout:3000});
   await expect(page.locator('#message')).toHaveValue('');
 });
 

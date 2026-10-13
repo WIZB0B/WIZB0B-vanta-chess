@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { securityHeaders } from './security-headers.mjs';
@@ -41,6 +42,32 @@ for (const asset of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wa
   if (!existsSync(join('public/engines', asset))) failures.push(`prepared Stockfish asset missing: ${asset}`);
 }
 if (existsSync('public/engines/Copying.txt') && !readFileSync('public/engines/Copying.txt', 'utf8').includes('GNU GENERAL PUBLIC LICENSE')) failures.push('prepared Stockfish GPL license is invalid');
+// Multi-variant Stockfish (Crazyhouse): pinned, WebAssembly only, no eval, no other engine builds.
+if (packageJson.dependencies?.['stockfish.js'] !== '10.0.2') failures.push('multi-variant Stockfish dependency must be pinned to stockfish.js 10.0.2');
+for (const asset of ['stockfish-mv-10.js', 'stockfish-mv-10.wasm', 'README-stockfish-mv-10.md']) {
+  if (!existsSync(join('public/engines', asset))) failures.push(`prepared multi-variant Stockfish asset missing: ${asset}`);
+}
+if (existsSync('public/engines/stockfish-mv-10.js')) {
+  const loader = readFileSync('public/engines/stockfish-mv-10.js', 'utf8');
+  if (/\beval\s*\(|\bFunction\s*\(/.test(loader)) failures.push('multi-variant Stockfish loader must not use eval or the Function constructor');
+  if (!loader.includes('wasmBinaryFile="stockfish-mv-10.wasm"')) failures.push('multi-variant Stockfish loader must fetch stockfish-mv-10.wasm');
+}
+// Lozza 2.5 (MIT, plain JavaScript): the vendored upstream file, unchanged (pinned digest), with
+// no dynamic code or network use, and its license beside it.
+const LOZZA_SHA256 = '72366aad692fdf4e9959998e1d33a98fc3bc3e3c151708529e5d5c9fdf1cd6d4';
+for (const directory of ['public/engines', 'dist/engines']) {
+  const file = join(directory, 'lozza-2.5.js');
+  if (!existsSync(file)) { if (directory === 'public/engines') failures.push('prepared Lozza engine missing: lozza-2.5.js'); continue; }
+  const bytes = readFileSync(file);
+  if (createHash('sha256').update(bytes).digest('hex') !== LOZZA_SHA256) failures.push(`${file}: must be the pinned upstream Lozza 2.5`);
+  if (/\beval\s*\(|\bnew\s+Function\s*\(|\bimportScripts\s*\(|\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(bytes.toString('utf8'))) failures.push(`${file}: no dynamic code or network use`);
+  if (!existsSync(join(directory, 'LICENSE-lozza.txt'))) failures.push(`${directory}: Lozza's MIT license must ship with it`);
+}
+const shippedEngines = new Set(['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-mv-10.js', 'stockfish-mv-10.wasm', 'lozza-2.5.js']);
+for (const directory of ['public/engines', 'dist/engines']) {
+  if (!existsSync(directory)) continue;
+  for (const name of readdirSync(directory)) if (/\.(js|wasm)$/.test(name) && !shippedEngines.has(name)) failures.push(`${directory}/${name}: only the Stockfish 19 lite single and multi-variant WebAssembly builds and Lozza 2.5 may ship (no asm.js fallback)`);
+}
 const vchAssets = [
   'pieces/wk.webp','pieces/wq.webp','pieces/wr.webp','pieces/wb.webp','pieces/wn.webp','pieces/wp.webp',
   'pieces/bk.webp','pieces/bq.webp','pieces/br.webp','pieces/bb.webp','pieces/bn.webp','pieces/bp.webp',

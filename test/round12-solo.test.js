@@ -215,9 +215,8 @@ test('round 12 is wired into the app', () => {
   assert.match(css, /prefers-reduced-motion:reduce\)\{#atmosphere \*\{animation:none!important\}/);
 });
 test('round 12 speaks every language', async () => {
-  const { addTranslations, translateText } = await import('../src/i18n.js');
-  const { MORE_ROWS, PATTERNS } = await import('../src/i18n-more.js');
-  addTranslations(MORE_ROWS, PATTERNS);
+  const { loadLanguage, translateText } = await import('../src/i18n.js');
+  await Promise.all(['fr', 'es', 'pt', 'ar'].map(loadLanguage));
   assert.equal(translateText('Oath fulfilled · Oath of the Hound · +1 honor', 'fr'), 'Serment accompli · Serment du Limier · +1 d\'honneur');
   assert.equal(translateText('Knight of g1', 'es'), 'Caballo de g1');
   assert.equal(translateText('Victory · 3 of 3 stars', 'pt'), 'Vitória · 3 de 3 estrelas');

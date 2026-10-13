@@ -73,9 +73,13 @@ test('a new request stops the running search and output is tagged with the right
 
 test('bot, live analysis and review each use their own Stockfish worker',()=>{
   assert.match(main,/const stockfish=lazyWorker\('\/stockfish\.worker\.js'\);\nconst analysisWorker=lazyWorker\('\/stockfish\.worker\.js'\);\nconst reviewWorker=lazyWorker\('\/stockfish\.worker\.js'\);/);
-  assert.match(main,/stockfish\.postMessage\(\{mode:'bot',fen,elo:requestedElo,nodes:botSearchNodes\(requestedElo\),requestId:id\}\)/);
+  // Vanta Dark / Blackout send the board the computer believes in, with the moves it may choose.
+  assert.match(main,/else worker\.postMessage\(\{mode:'bot',fen:blind\?\.fen\|\|fen,elo:requestedElo,nodes:botSearchNodes\(requestedElo\),requestId:id,\.\.\.\(blind\?\{searchmoves:blind\.searchmoves\}:\{\}\)\}\)/);
+  // Lozza 2.5 (src/engine-roster.js) plays some opponents, in its own worker; the blind computer is Stockfish.
+  assert.match(main,/const lozza=!blind&&engineFor\(currentBot,computerRules\)==='lozza',worker=lozza\?lozzaEngine:stockfish;/);
   assert.match(main,/analysisWorker\.postMessage\(\{mode:'analysis',fen,depth:ANALYSIS_MAX_DEPTH,requestId:analysisRequest\.id\}\)/);
-  assert.match(main,/reviewWorker\.postMessage\(\{mode:'analysis',fen,depth:REVIEW_DEPTH,requestId:id\}\)/);
+  assert.match(main,/const worker=variant\?variantReviewWorker:reviewWorker;/);
+  assert.match(main,/worker\.postMessage\(\{mode:'analysis',fen:engineFen\|\|fen,depth:variant\?Math\.min\(REVIEW_DEPTH,14\):REVIEW_DEPTH,requestId:id,/);
   assert.doesNotMatch(main,/stockfish\.postMessage\(\{mode:'analysis'/);
   assert.doesNotMatch(main,/analysisWorker\.postMessage\(\{mode:'bot'/);
 });

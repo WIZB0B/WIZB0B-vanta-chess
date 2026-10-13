@@ -24,9 +24,10 @@ test('desktop geometry at 1672x941: board fills the screen height between the pa
   });
   const near=(actual,target,tolerance)=>expect(Math.abs(actual-target)).toBeLessThanOrEqual(tolerance);
   near(boxes.top.x,48,4); near(boxes.top.h,58,3);
-  // The board now fills the screen height (owner request, 2026-10-09), so it is larger than
-  // the mockup's 600px: 941px tall viewport minus the bars and tools = 653px.
-  near(boxes.board.w,653,12); near(boxes.board.h,boxes.board.w,2);
+  // The board fills the screen height (owner request, 2026-10-09) and, since round 13, the
+  // coordinates sit inside it and the bars are slimmer ("the 64 squares need to be larger"):
+  // 941px tall viewport minus the bars and tools = 713px.
+  near(boxes.board.w,713,12); near(boxes.board.h,boxes.board.w,2);
   expect(boxes.board.y+boxes.board.h).toBeLessThanOrEqual(941);
   // Panels sit either side of the game column, which hugs the board.
   expect(boxes.left.x+boxes.left.w).toBeLessThan(boxes.game.x);

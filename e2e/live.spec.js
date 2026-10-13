@@ -35,12 +35,23 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   // Chat lives in the board's "More game actions" (⋯) menu since the Batch 5 right-panel cleanup.
   for(const page of [a,b]){await page.locator('.game-more>summary').click();await page.locator('#openChat').click();await expect(page.locator('#chatDrawer')).toHaveClass(/open/)}
   await a.locator('#message').fill('acceptance-chat');
-  await a.locator('#chat button').click();
+  await a.locator('#chat .chat-send').click();
   await expect(b.locator('#messages')).toContainText('acceptance-chat',{timeout:6000});
 
   await a.reload();
   await expect(a.locator('.board-piece[data-square="e4"] .piece.w.piece-p')).toBeVisible({timeout:6000});
   await expect(a.locator('.board-piece[data-square="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
+
+  // A live game can't be swapped for a puzzle ("Finish your game first", round 13), so it ends
+  // here: A resigns, and the server's answer is the end of the game.
+  const resigned=a.waitForResponse(response=>{
+    if(!response.url().includes('/functions/v1/chess')||response.request().method()!=='POST')return false;
+    try{return response.request().postDataJSON()?.action==='resign'}catch{return false}
+  });
+  await a.locator('#resign').click();
+  await a.locator('.vch-dialog-action.primary').click();
+  expect((await resigned).ok()).toBe(true);
+  await a.waitForTimeout(600);
 
   const puzzleResponse=a.waitForResponse(async response=>{
     if(!response.url().includes('/functions/v1/chess')||response.request().method()!=='POST')return false;

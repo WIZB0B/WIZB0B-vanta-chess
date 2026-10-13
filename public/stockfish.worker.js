@@ -4,6 +4,7 @@
  *
  * Requests:
  *   {mode:'bot', fen, elo, nodes, requestId}      fixed node budget, Elo/Skill limited
+ *     optional searchmoves: the bot chooses only among these (Vanta Dark, Blackout Blitz)
  *   {mode:'analysis', fen, depth, requestId}      full strength, searches to depth
  *     optional multipv (1-10) and searchmoves ['e2e4', …] (score only those moves)
  *   {action:'stop'}                               stops the current search
@@ -51,7 +52,7 @@ function configureStrength(worker,request){
 
 function goCommand(request){
   if(request.mode==='analysis')return `go depth ${clamp(request.depth,1,MAX_DEPTH,18)}${request.searchmoves.length?` searchmoves ${request.searchmoves.join(' ')}`:''}`;
-  return `go nodes ${clamp(request.nodes,MIN_NODES,MAX_NODES,100000)}`;
+  return `go nodes ${clamp(request.nodes,MIN_NODES,MAX_NODES,100000)}${request.searchmoves.length?` searchmoves ${request.searchmoves.join(' ')}`:''}`;
 }
 
 function start(request){
@@ -67,7 +68,7 @@ self.onmessage=({data})=>{
     if(data?.action==='stop'){queued=null;if(engine&&searching)engine.postMessage('stop');return} // nothing to stop yet
     const worker=ensureEngine();
     if(!data?.fen)return;
-    const searchmoves=(Array.isArray(data.searchmoves)?data.searchmoves:[]).map(String).filter(m=>/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m)).slice(0,30);
+    const searchmoves=(Array.isArray(data.searchmoves)?data.searchmoves:[]).map(String).filter(m=>/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m)).slice(0,120);
     const request={mode:data.mode==='analysis'?'analysis':'bot',fen:String(data.fen).replace(/[^\w\/ -]/g,''),elo:data.elo,nodes:data.nodes,depth:data.depth,multipv:clamp(data.multipv,1,10,1),searchmoves,requestId:data.requestId??null};
     if(searching){queued=request;worker.postMessage('stop');return}
     start(request);
