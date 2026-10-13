@@ -5147,7 +5147,7 @@ function roomPulse(ev){
   if(aura&&frames){if(aura.dataset.tone!==tone)aura.dataset.tone=tone;aura.getAnimations?.().forEach(a=>a.cancel());aura.animate?.(frames,{duration:k==='chord'?1800:k==='sting'?2600:420,easing:'ease-out'})}
   if(k==='beat'||k==='heartbeat'){
     const clock=document.querySelector('.player time.running:not(.low-time)');
-    if(clock){clock.dataset.pulse=k;clock.animate?.([{opacity:0},{opacity:.35+.5*s,offset:.15},{opacity:0}],{duration:k==='heartbeat'?380:300,easing:'ease-out',pseudoElement:'::after'})}
+    if(clock&&'pseudoElement' in (globalThis.KeyframeEffect?.prototype||{})){clock.dataset.pulse=k;clock.animate([{opacity:0},{opacity:.35+.5*s,offset:.15},{opacity:0}],{duration:k==='heartbeat'?380:300,easing:'ease-out',pseudoElement:'::after'})} // browsers that cannot animate a ::after would dim the whole clock
   }
   if(k==='chord')document.querySelectorAll('.captured-tray img:not(.arriving),.captured-tray .zh-piece').forEach((el,i)=>el.animate?.([{translate:'0 0'},{translate:'0 -3px',offset:.35},{translate:'0 0'}],{duration:520,delay:i*45,easing:'ease-out'}));
 }
