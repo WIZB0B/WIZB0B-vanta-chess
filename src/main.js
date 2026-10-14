@@ -70,6 +70,7 @@ import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINC
 import { FATES, points as twinPoints } from './twin-fates.js';
 import { KEY_FOR_THEME, VantaScore, WORLDS, chordFor, hideTrack, likeTrack, loadMusic, loadMusicLikes, moodFor, saveMusic, saveMusicLikes } from './music.js';
 import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-library.js';
+import { ACCEPT as MY_MUSIC_ACCEPT, MAX_SONG_MB, MAX_SONGS, addSongs, listSongs, myMusicServed, putSong, removeSong, renameSong, songTrack } from './my-music.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
 import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
@@ -5161,9 +5162,26 @@ function ensureScore(){
   if(!vantaScore){
     vantaScore=new VantaScore();vantaScore.onNote(musicPulse);vantaScore.onNote(ev=>{if(ev.track)syncNowPlaying()});
     vantaScore.setLikes(musicLikesGet());vantaScore.setLanguage(uiLang);
-    scoreLibrary=loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore.setTracks(tracks);queueAtmosphere();syncNowPlaying();return tracks});
+    scoreLibrary=loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore.setTracks(musicTracks());queueAtmosphere();syncNowPlaying();return tracks});
+    void loadMySongs();
   }
   return vantaScore.available?vantaScore:null;
+}
+// My music (src/my-music.js; owner, 2026-10-14: players "add their own songs"): song files you
+// add from your device. They stay on it (the browser's own storage) and are never uploaded; the
+// service worker plays them, on the My music station and in Everything, and they can be liked.
+// Each is measured as it is added and brought to the library's loudness.
+let mySongs=null,mySongsLoading=null,mySongsSettled=false,myMusicOn=false,myMusicNotes=[];
+const MY_MUSIC_WORKS='serviceWorker' in navigator&&'indexedDB' in window;
+function musicTracks(){return [...(musicLibrary||[]),...(myMusicOn?(mySongs||[]).map(songTrack):[])]}
+// Your songs (once), and whether the service worker plays them.
+function loadMySongs(fresh=false){
+  if(!MY_MUSIC_WORKS)return Promise.resolve([]);
+  if(fresh||!mySongsLoading)mySongsLoading=listSongs().catch(()=>[]).then(async songs=>{
+    mySongs=songs;if(songs.length&&!myMusicOn)myMusicOn=await myMusicServed();
+    if(vantaScore&&(musicLibrary||myMusicOn))vantaScore.setTracks(musicTracks());
+    mySongsSettled=true;if(currentRightView==='music')drawMusicList();syncNowPlaying();return songs});
+  return mySongsLoading;
 }
 // The score once its library has come (null if there is no music to play).
 async function scoreReady(){const now=ensureScore();if(now)return now;await scoreLibrary;return ensureScore()}
@@ -5196,6 +5214,7 @@ function syncMusic(mood){
   if(!want){if(vantaScore?.playing)vantaScore.stop();return syncNowPlaying()}
   if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
   const score=ensureScore();if(!score)return syncNowPlaying();
+  if(p.station==='mine'&&MY_MUSIC_WORKS&&!mySongsSettled){void loadMySongs();return syncNowPlaying()} // your songs first
   const place=musicPlace(),games=['game','boss','blitz','result'];
   // Into a game and out of it the music turns on its next bar line; anywhere else it waits a
   // moment first, in case you are only passing through.
@@ -5342,6 +5361,8 @@ function syncMusicUi(){
 // Off, or on: following the game ('on') or playing one station (kept while the music is off).
 function setMusicOn(on,station=musicPrefsGet().station){
   musicPrefs=saveMusic({...musicPrefsGet(),on,station:station==='off'?musicPrefsGet().station:station});syncMusicUi();
+  // My music with no songs yet follows the game; the Music list is where songs are added.
+  if(on&&station==='mine')void loadMySongs().then(songs=>{if(!songs.length)toast('Add your songs in the Music list',{duration:4200,onClick:()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()}})});
   if(!on)vantaScore?.stop();else syncAtmosphere();
 }
 
@@ -6192,22 +6213,83 @@ $('#nowPlayingSetting').onchange=e=>{try{localStorage.setItem(NOW_KEY,e.target.v
 const MUSIC_GROUPS=['cinematic','worlds','focus','opera','electric','songs'];
 function renderMusicList(){
   setDynamicView('music','Music list','');drawMusicList();
-  if(!musicLibrary)void loadLibrary().then(tracks=>{musicLibrary=tracks;if(vantaScore&&!vantaScore.tracks.length)vantaScore.setTracks(tracks);drawMusicList()});
+  if(!musicLibrary)void loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore?.setTracks(musicTracks());drawMusicList()});
+  void loadMySongs();
+}
+// My music in the list: add songs (or drop them here), and each song to play, rename, like or remove.
+function myMusicHtml(likes,now){
+  if(!MY_MUSIC_WORKS)return `<section class="my-music"><h4>My music</h4><p class="trainer-intro">This browser can't play your own songs here</p></section>`;
+  const songs=mySongs||[],mb=songs.reduce((sum,x)=>sum+(x.size||0),0)/1048576;
+  const use=songs.length?`${songs.length} ${songs.length===1?'song':'songs'} · ${mb<10?mb.toFixed(1):Math.round(mb)} MB on this device`:'No songs yet';
+  const row=t=>{const liked=likes.liked.includes(t.id);
+    return `<li class="music-row mine${t.id===now?' playing':''}" data-track="${escapeHtml(t.id)}"><button type="button" data-music-play>${t.id===now?'On now':'Listen'}</button><span class="mr-title" data-no-i18n>${escapeHtml(t.title)}</span><button type="button" data-my-rename>Rename</button><button type="button" data-music-like aria-pressed="${liked}">${liked?'Liked':'Like'}</button><button type="button" data-my-remove>Remove</button></li>`};
+  return `<section class="my-music" data-my-music><h4>My music</h4>
+    <p class="trainer-intro">Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.</p>
+    <p class="music-liked"><button type="button" data-my-add>Add songs</button><input type="file" data-my-file accept="${MY_MUSIC_ACCEPT}" multiple hidden><span class="my-music-use">${use}</span>${songs.length?'<button type="button" data-my-station>Play My music</button>':''}</p>
+    ${myMusicNotes.length?`<ul class="my-music-notes">${myMusicNotes.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>`:''}
+    ${songs.length?`<ul>${songs.map(row).join('')}</ul>`:''}</section>`;
 }
 function drawMusicList(){
   const target=$('#dynamicView .view-content');if(!target||currentRightView!=='music')return;
-  if(!musicLibrary){target.innerHTML='<p class="trainer-intro">The music library is on its way</p>';return}
-  const likes=musicLikesGet(),np=vantaScore?.nowPlaying,now=np?.of||np?.id,music=musicLibrary.filter(t=>!isSting(t)&&!t.of);
+  const likes=musicLikesGet(),np=vantaScore?.nowPlaying,now=np?.of||np?.id,mine=myMusicHtml(likes,now);
+  if(!musicLibrary){target.innerHTML=`<article class="music-list" data-quiet>${mine}<p class="trainer-intro">The music library is on its way</p></article>`;wireMusicList(target);return}
+  const music=musicLibrary.filter(t=>!isSting(t)&&!t.of);
   const row=t=>{const liked=likes.liked.includes(t.id),hidden=likes.hidden.includes(t.id),lang=t.lang&&t.lang!=='en'?`<small>${escapeHtml(LANGUAGES[t.lang]||t.lang.toUpperCase())}</small>`:'';
     return `<li class="music-row${t.id===now?' playing':''}${hidden?' put-away':''}" data-track="${escapeHtml(t.id)}"><button type="button" data-music-play>${t.id===now?'On now':'Listen'}</button><span class="mr-title">${escapeHtml(t.title)} ${lang}</span><button type="button" data-music-like aria-pressed="${liked}">${liked?'Liked':'Like'}</button><button type="button" data-music-hide aria-pressed="${hidden}">${hidden?'Hidden':'Not for me'}</button></li>`};
   const groups=MUSIC_GROUPS.map(id=>[id,music.filter(t=>t.station===id)]).filter(([,list])=>list.length);
   target.innerHTML=`<article class="music-list" data-quiet><p class="trainer-intro">Like the music you love: it comes round more often. Not for me: it won't play for you. Listen: hear it now.</p>
     <p class="music-liked">${likes.liked.length?`Liked · ${likes.liked.length} <button type="button" data-music-station>Play the Liked station</button>`:'Nothing liked yet'}</p>
+    ${mine}
     ${groups.map(([id,list])=>`<h4>${escapeHtml(STATIONS.find(x=>x.id===id)?.name||id)}</h4><ul>${list.map(row).join('')}</ul>`).join('')}</article>`;
+  wireMusicList(target);
+}
+function wireMusicList(target){
   target.querySelectorAll('[data-music-play]').forEach(b=>b.onclick=()=>playFromList(b.closest('[data-track]').dataset.track));
   target.querySelectorAll('[data-music-like]').forEach(b=>b.onclick=()=>{const id=b.closest('[data-track]').dataset.track,on=b.getAttribute('aria-pressed')!=='true';setMusicLikes(likeTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-on':'toggle-off')});
   target.querySelectorAll('[data-music-hide]').forEach(b=>b.onclick=()=>{const id=b.closest('[data-track]').dataset.track,on=b.getAttribute('aria-pressed')!=='true';setMusicLikes(hideTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-off':'toggle-on')});
   target.querySelector('[data-music-station]')?.addEventListener('click',()=>{setMusicOn(true,'liked');queueAtmosphere();setTimeout(drawMusicList,60)});
+  // My music
+  const box=target.querySelector('[data-my-music]'),file=target.querySelector('[data-my-file]');
+  if(!box)return;
+  target.querySelector('[data-my-add]')?.addEventListener('click',()=>file?.click());
+  file?.addEventListener('change',()=>{const files=[...(file.files||[])];file.value='';void addMyMusic(files)});
+  box.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();box.classList.add('dropping')}});
+  box.addEventListener('dragleave',e=>{if(!box.contains(e.relatedTarget))box.classList.remove('dropping')});
+  box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dropping');void addMyMusic([...(e.dataTransfer?.files||[])])});
+  target.querySelector('[data-my-station]')?.addEventListener('click',()=>{setMusicOn(true,'mine');queueAtmosphere();setTimeout(drawMusicList,60)});
+  box.querySelectorAll('[data-my-rename]').forEach(b=>b.onclick=()=>renameMySong(b.closest('[data-track]')));
+  box.querySelectorAll('[data-my-remove]').forEach(b=>b.onclick=()=>void removeMySong(b.closest('[data-track]').dataset.track));
+}
+// Adds song files from your device (measured first; anything that cannot be added is listed).
+async function addMyMusic(files){
+  if(!files.length||!MY_MUSIC_WORKS)return;
+  toast(files.length===1?'Adding 1 song':`Adding ${files.length} songs`,{sound:false,duration:60000});
+  let added=[],skipped=[];
+  try{({added,skipped}=await addSongs(files,{have:(await loadMySongs()).length}))}
+  catch{skipped=files.map(f=>({name:String(f?.name||''),why:'store'}))}
+  if(added.length)try{await navigator.storage?.persist?.()}catch{} // so the browser keeps them when space runs low
+  const why=({name,why})=>why==='type'?`${name}: not a song file`:why==='size'?`${name} is over ${MAX_SONG_MB} MB`:why==='full'?`My music is full (${MAX_SONGS} songs)`:why==='space'?'Not enough space on this device':why==='store'?`${name}: couldn't be saved on this device`:`${name}: this browser can't play it`;
+  myMusicNotes=[...new Set(skipped.map(why))];
+  await loadMySongs(true);
+  const said=[added.length?(added.length===1?'Added 1 song':`Added ${added.length} songs`):'',...myMusicNotes.slice(0,1)].filter(Boolean).join(' · ');
+  if(added.length&&!myMusicOn)toast('Saved. Reload the page to play your songs',{sound:false,duration:4000});
+  else toast(said,{sound:added.length?'success':'error',duration:3200});
+}
+function renameMySong(li){
+  const id=li?.dataset.track,span=li?.querySelector('.mr-title'),song=(mySongs||[]).find(x=>x.id===id);if(!span||!song)return;
+  const input=document.createElement('input');input.type='text';input.className='mr-rename';input.maxLength=80;input.value=song.title;input.setAttribute('aria-label','Song title');
+  span.replaceWith(input);input.focus();input.select();
+  let done=false;
+  const finish=async save=>{if(done)return;done=true;const title=input.value.trim();
+    if(save&&title&&title!==song.title){await renameSong(id,title).catch(()=>null);await loadMySongs(true)}else drawMusicList()};
+  input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();void finish(true)}else if(e.key==='Escape'){e.preventDefault();void finish(false)}};
+  input.onblur=()=>void finish(true);
+}
+async function removeMySong(id){
+  const song=await removeSong(id).catch(()=>null);if(!song)return;
+  const likes=musicLikesGet();if(likes.liked.includes(id))setMusicLikes(likeTrack(likes,id,false));
+  await loadMySongs(true);playUiSound('toggle-off');
+  toast('Removed',{sound:false,duration:5000,actionLabel:'Undo',onAction:async()=>{await putSong(song).catch(()=>{});await loadMySongs(true)}});
 }
 // Plays a track from the list now (turning the music on if it was off).
 function playFromList(id){
@@ -6243,7 +6325,7 @@ async function auditionSound(set,name){
 async function auditionSting(kind){
   if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
   ensureScore();if(!musicLibrary)musicLibrary=await loadLibrary();
-  if(vantaScore&&!vantaScore.tracks.length)vantaScore.setTracks(musicLibrary);
+  if(vantaScore&&!vantaScore.tracks.some(t=>!t.src))vantaScore.setTracks(musicTracks());
   if(!vantaScore?.sting(kind))toast('The music library is on its way',{sound:false});
 }
 initRoundTwelve();

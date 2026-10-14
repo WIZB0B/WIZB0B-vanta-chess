@@ -48,7 +48,7 @@ test('with Music on the music plays, the board glows with its beat, and a statio
   // The Theme Studio says what is playing; a station plays its own tracks.
   await page.locator('#theme').click();
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Beat');
-  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Old worlds', 'Everything', 'Liked']);
+  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Old worlds', 'Everything', 'Liked', 'My music']);
   await page.locator('#musicSetting').selectOption('songs');
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Song');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.music')))).toMatchObject({ on: true, station: 'songs' });

@@ -123,8 +123,9 @@ export function hideTrack(likes, id, on = true) {
 }
 // ---- The library: what suits a moment ----
 const GAME_PARTS = { calm: ['calm', 'tense'], tense: ['tense', 'calm'], storm: ['storm', 'tense'], ahead: ['ahead', 'tense'], behind: ['behind', 'tense'] };
-// The tracks that suit a moment. A station plays its own tracks (Everything: all of them; Liked:
-// the ones you liked, or follows the game until you like one). Following the game: the menus
+// The tracks that suit a moment. A station plays its own tracks (Everything: all of them, your
+// own songs too; Liked: the ones you liked, or follows the game until you like one; My music:
+// your own songs, or follows the game until you add one). Following the game: the menus
 // play your division's hall and the open themes (songs only on the Songs station); a game plays
 // its theme's part (the theme's nearest part when it has not that one, then Vanta's); a boss its
 // realm's opera; after a game the win or loss music; a relic set its own theme; the rest their
@@ -135,6 +136,7 @@ export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'cal
   const all = tracks.filter(t => !isSting(t)), inParts = new Set(all.filter(t => t.of).map(t => t.of));
   const music = all.filter(t => !t.of), at = p => music.filter(t => placesOf(t).includes(p));
   if (station === 'liked') { const liked = new Set(likes?.liked || []), mine = music.filter(t => liked.has(t.id)); if (mine.length) return mine; station = 'on'; }
+  if (station === 'mine') { const mine = music.filter(t => t.station === 'mine'); if (mine.length) return mine; station = 'on'; }
   if (station && station !== 'on') return station === 'mix' ? music.filter(t => !placesOf(t).includes('skin')) : music.filter(t => t.station === station);
   const game = () => {
     const all = [...at('game').filter(t => !inParts.has(t.id)), ...tracks.filter(t => t.of && placesOf(t).includes('game'))];
@@ -245,16 +247,23 @@ export class VantaScore {
   // The menus (and any station) play like an album; a game's music runs on.
   get album() { return this.station !== 'on' || !CONTINUOUS.includes(this.place); }
   levelOf(t) { return dbToGain(t?.gain); }
-  // A browser that cannot play a file's format never tries it (AAC in .m4a, MP3).
+  // Where a track's file is: the library's folder, or (your own songs) its own address.
+  urlOf(t) { return t.src || this.base + t.file; }
+  // A browser that cannot play a file's format never tries it (AAC in .m4a, MP3; your own songs
+  // by their type).
   playable(t) {
     let el = this.probe;
     if (el === undefined) { try { el = this.Audio ? new this.Audio() : null; } catch { el = null; } this.probe = el; }
     if (!el?.canPlayType) return true;
+    if (t.src) return !t.type || el.canPlayType(t.type) !== '';
     return el.canPlayType(t.file.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4; codecs="mp4a.40.2"') !== '';
   }
   // The library arrived (src/music-library.js loadLibrary).
   setTracks(tracks) {
     this.tracks = (Array.isArray(tracks) ? tracks : []).filter(t => this.playable(t));
+    // The track playing keeps playing as the list changes (a song renamed shows its new name).
+    const now = this.active?.track, fresh = now && this.tracks.find(t => t.id === now.id && this.urlOf(t) === this.urlOf(now));
+    if (fresh) this.active.track = fresh;
     if (this.playing && !(this.active?.track && this.suits(this.active.track))) this.update('now');
   }
   // Every beat the player hears, and each new track or phrase: fn({kind: 'beat' | 'drum' |
@@ -342,15 +351,15 @@ export class VantaScore {
     const now = this.ctx.currentTime, album = style === 'next' && this.album;
     // When: the menus' next track after a pause; otherwise the outgoing track's next bar line (its
     // next beat, into the storm), at least a moment ahead so the incoming one can get ready; a
-    // beat line when the bar line is far off (a slow track); at once from silence or without a
-    // beat grid.
+    // beat line when the bar line is far off (a slow track); at once from silence; without a beat
+    // grid (your own songs), once the old one has faded away (a moment).
     let wait = 0;
     if (album) { wait = from ? ALBUM_GAP : 0; this.crossing = null; }
     else if (from && style !== 'start') {
       const ft = from.track, beat = ft.bpm ? 60 / ft.bpm : 0, t = from.el.currentTime || 0;
       let line = nextLine(ft, t, style === 'storm' ? beat : barSeconds(ft), 0.35);
       if (line !== null && line - t > 4.5) line = nextLine(ft, t, beat, 0.35);
-      wait = line === null ? 0.05 : clamp(line - t, 0.05, 4.5);
+      wait = line === null ? (style === 'storm' ? 0.35 : 0.8) : clamp(line - t, 0.05, 4.5);
       this.crossing = { from, line: t + wait };
     } else this.crossing = null;
     // How: never two at once. The old one fades out just before the line and the new one starts
@@ -368,7 +377,7 @@ export class VantaScore {
     const launch = () => {
       if (this.active !== to) return;
       const ahead = Math.max(0, at - this.ctx.currentTime), lead = album ? 0 : Math.min(entry, ahead), delay = ahead - lead;
-      if (to.file !== track.file || to.el.error) { to.file = track.file; to.el.src = this.base + track.file; }
+      if (to.file !== this.urlOf(track) || to.el.error) { to.file = this.urlOf(track); to.el.src = to.file; }
       to.filter.frequency.cancelScheduledValues?.(this.ctx.currentTime); to.filter.frequency.setValueAtTime(OPEN, this.ctx.currentTime);
       try { to.el.currentTime = entry - lead; } catch {}
       const go = () => { if (this.active === to) to.el.play?.()?.catch?.(() => {}); };
@@ -405,7 +414,7 @@ export class VantaScore {
     const deck = this.spare();
     if (!track || !deck || (deck.track && !deck.el.paused)) return; // that deck is still fading out: load it when the change comes
     this.next = track;
-    if (deck.file !== track.file || deck.el.error) { deck.file = track.file; deck.el.src = this.base + track.file; deck.el.load?.(); }
+    if (deck.file !== this.urlOf(track) || deck.el.error) { deck.file = this.urlOf(track); deck.el.src = deck.file; deck.el.load?.(); }
   }
   suits(track) { return track.id === this.pinned || tracksFor(this.tracks, this.moment).some(t => t.id === track.id); }
   clearDebounce() { if (this.debounce) { this.timers.clearTimeout?.(this.debounce); this.debounce = null; } }
@@ -555,7 +564,7 @@ export class VantaScore {
     if (!track || !this.ensure()) return false;
     if (this.ctx.state === 'suspended') this.ctx.resume?.();
     const d = this.stingDeck, now = this.ctx.currentTime, wait = this.playing ? STING_WAIT : 0;
-    if (d.file !== track.file || d.el.error) { d.track = track; d.file = track.file; d.el.src = this.base + track.file; }
+    if (d.file !== this.urlOf(track) || d.el.error) { d.track = track; d.file = this.urlOf(track); d.el.src = d.file; }
     try { d.el.currentTime = track.start || 0; } catch {}
     d.gain.gain.cancelScheduledValues?.(now); d.gain.gain.setValueAtTime(this.levelOf(track), now);
     const go = () => d.el.play?.()?.catch?.(() => {});
