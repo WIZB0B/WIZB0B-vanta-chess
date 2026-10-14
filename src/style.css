@@ -2383,7 +2383,6 @@ body.m-app .shell[data-mview="home"] .hero h1{font-size:34px;margin:6px 0 4px}
 body.m-app .shell[data-mview="panel"] .rpanel .live-card,body.m-app .shell[data-mview="panel"] .rpanel>.tabs{display:none}
 body.m-app .m-return{display:block;position:fixed;left:50%;bottom:calc(var(--m-tabs-h) + 10px);z-index:55;translate:-50% 0;padding:11px 20px;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:800;box-shadow:0 12px 28px rgba(0,0,0,.45)}
 body.m-app .m-return.hidden{display:none}
-
 /* Game: the board fills the screen; nothing scrolls. */
 body.m-app .shell[data-mview="game"]{padding:0!important}
 body.m-app .shell[data-mview="game"] .topbar,body.m-app .shell[data-mview="game"] .m-tabs,
@@ -2453,6 +2452,18 @@ body.m-app .vch-dialog-panel{max-height:calc(100dvh - 24px);overflow-y:auto;over
 body.m-app .shell[data-mview="review"] .feature-card{display:none!important}
 
 /* === END PHONE APP SHELL === */
+/* Your online game while you look at something else (src/live-game.js): back to it, from anywhere. */
+.return-game{position:fixed;top:calc(74px + env(safe-area-inset-top));left:50%;translate:-50% 0;z-index:56;display:flex;align-items:center;gap:10px;padding:10px 20px;border:0;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-family:inherit;font-size:14px;font-weight:800;line-height:1.2;letter-spacing:.01em;box-shadow:0 12px 28px rgba(0,0,0,.45);cursor:pointer;animation:return-game-in .35s ease-out}
+.return-game.hidden{display:none}
+body.m-app .return-game{display:none}
+.return-game .rg-turn{padding:3px 9px;border-radius:999px;background:#14130f;color:#efd59d;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.return-game .rg-turn.hidden{display:none}
+.return-game.your-move{animation:return-game-in .35s ease-out,return-game-call 1.6s ease-in-out .35s infinite}
+.return-game:hover{filter:brightness(1.06)}
+.return-game:focus-visible{outline:3px solid #fff;outline-offset:3px}
+@keyframes return-game-in{from{opacity:0;translate:-50% -10px}}
+@keyframes return-game-call{50%{box-shadow:0 12px 28px rgba(0,0,0,.45),0 0 0 6px rgba(239,213,157,.28)}}
+@media (prefers-reduced-motion:reduce){.return-game,.return-game.your-move{animation:none}}
 
 /* Looking back through the game (src/move-browse.js). */
 .move-nav{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:6px;margin-top:8px}

@@ -25,6 +25,7 @@ import { moderateText } from './moderation.js';
 import { EMOJI_SET, REACTIONS as CHAT_REACTIONS, REACTION_CSS, parseReaction, reactionMarkup, reactionMessage } from './reactions.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
+import { endedFor, liveFrom, loadLive, saveLive, sideToMove } from './live-game.js';
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
 import { browseLine, browseStep, browseTo, undoPlies } from './move-browse.js';
 import { arenaPhase, isWeeklyArena, sortArenas, standingsRows } from './arena.js';
@@ -117,6 +118,7 @@ let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,st
 let runTimer=0; // ticks the run clock while a run puzzle is on the board
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
+let liveGame=loadLive(),liveState=null,liveSeenAt=0,liveBeating=false,liveReturning=null; // your online game, wherever you are (src/live-game.js)
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
 let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
@@ -376,6 +378,7 @@ ${splashMarkup(splash)}
     </aside>
   </main>
   <button id="mReturnGame" class="m-return hidden" type="button">Back to your game</button>
+  <button id="returnGame" class="return-game hidden" type="button"><b class="rg-turn hidden">Your move</b><span>Back to your game</span></button>
   <nav class="m-tabs" aria-label="Sections"><button type="button" data-m-tab="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg><span>Play</span></button><button type="button" data-m-tab="puzzles"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v4.2a2.8 2.8 0 1 0 4 0V4h6v6h-4.2a2.8 2.8 0 1 0 0 4H20v6h-6v-4.2a2.8 2.8 0 1 0-4 0V20H4v-6h4.2a2.8 2.8 0 1 0 0-4H4V4Z"/></svg><span>Puzzles</span></button><button type="button" data-m-tab="learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A3.5 3.5 0 0 1 7 2h4v18H7a3.5 3.5 0 0 0-3.5 3V5.5ZM20.5 5.5A3.5 3.5 0 0 0 17 2h-4v18h4a3.5 3.5 0 0 1 3.5 3V5.5Z"/></svg><span>Learn</span></button><button type="button" data-m-tab="watch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Watch</span></button><button type="button" data-m-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>More</span></button></nav>
   <div id="mSheet" class="m-sheet" hidden><div class="m-sheet-backdrop" data-m-close></div><section class="m-sheet-card" role="dialog" aria-modal="true" aria-labelledby="mSheetTitle"><header><b id="mSheetTitle">More</b><button type="button" data-m-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><div id="mSheetItems" class="m-sheet-items"></div></section></div>
 </div>
@@ -948,6 +951,7 @@ async function cancelMatchSearch({announce=true}={}){
 }
 async function beginMatchSearch(){
   if(searching){await cancelMatchSearch();return}
+  if(onlineGameBusy())return;
   if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
   stopOnlineSync();
   serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
@@ -1001,6 +1005,7 @@ let computerVariant='standard',computerRules='standard';
 // opts (round 11): {bot, side, variant} for Your Shadow and the Vanta Gauntlet.
 function startComputerGame(opts={}){
   if(!opts||opts instanceof Event)opts={};
+  if(onlineGameBusy())return; // your online game stays yours: back to it, or resign it there
   if(typeof hideCoach==='function')hideCoach();
   if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   const selectedBot=opts.bot||computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
@@ -1501,6 +1506,7 @@ function applyServerState(payload,{animateMove=true}={}){
   syncRoomUi();render({hint:lastServerMove,instant:!animateMove});afterBoardPaint(updateMoves);syncOpponentConnectionToast(state);
   if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
   playQueuedPremove();afterBoardPaint(()=>void maybePlayBot());
+  keepLiveGame(state);
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(move===undefined)return;if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
@@ -1654,7 +1660,14 @@ async function loadProfile(){
   }
 }
 function openAccount(){syncIdentityUI();menus.open('account')}
-async function connect(){try{await loadProfile();if(params.get('game')){let state;try{state=await api.join(room,guestName)}catch(error){if(error.status===404&&await openBughouse(room,{quiet:true}))return;throw error}applyServerState(state);await loadChat();toast(`Joined room ${room}`)}else if(params.get('bughouse'))await openBughouse(String(params.get('bughouse')).slice(0,12))}catch(error){toast(error.message)}}
+async function connect(){try{await loadProfile();if(params.get('game')){let state;try{state=await api.join(room,guestName)}catch(error){if(error.status===404&&await openBughouse(room,{quiet:true}))return;throw error}applyServerState(state);await loadChat();toast(`Joined room ${room}`)}else if(params.get('bughouse'))await openBughouse(String(params.get('bughouse')).slice(0,12));else if(liveGame&&!location.search)await resumeLiveGame()}catch(error){toast(error.message)}}
+// VCH opened again (a reload, a tab closed by mistake) while your game is still on: straight back
+// into it. A game that ended meanwhile is let go.
+async function resumeLiveGame(){
+  const live=liveGame;if(!live)return;
+  try{const payload=await api.state(live.id),state=payload?.game||payload;if(liveGame?.id!==live.id)return;if(state?.status!=='active'){forgetLiveGame();return}liveState=state;liveSeenAt=Date.now();await returnToLiveGame(live)}
+  catch(error){if(error?.status===403||error?.status===404)forgetLiveGame()}
+}
 function stopPolling(){
   if(pollTimer){clearInterval(pollTimer);pollTimer=null}
   pollCount=0;
@@ -3124,7 +3137,10 @@ async function renderWatch(){
   }catch(error){toast(error.message)}
 }
 // An online game in progress keeps its board: views that would replace it wait until it ends.
-function onlineGameBusy(){if(isOnlineGame()&&liveGameOn()){toast('Finish your game first');return true}return false}
+function onlineGameBusy(){
+  const here=isOnlineGame()&&liveGameOn(),away=liveAway();if(!here&&!away)return false;
+  toast('Finish your game first',away?{duration:3600,actionLabel:'Back to your game',onAction:()=>void returnToLiveGame()}:{});return true;
+}
 async function startWatching(id){
   if(onlineGameBusy())return;
   try{
@@ -3291,7 +3307,7 @@ function syncMobileShell(){
     const t=puzzleSession&&streakSession?`Best ${streakSession.best} · ${streakDifficulty(streakSession.count)}`:archiveSession?`${archiveSession.entry.white} vs ${archiveSession.entry.black}`:watchSession?`${watchSession.state?.white_name||'White'} vs ${watchSession.state?.black_name||'Black'}`:over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
     if(sub.textContent!==t)sub.textContent=t;
   }
-  $('#mReturnGame')?.classList.toggle('hidden',!(live&&mView!=='game'&&mView!=='review'));
+  $('#mReturnGame')?.classList.toggle('hidden',!((live&&mView!=='game'&&mView!=='review')||liveAway()));
 }
 function openSheet(title,items){
   const sheet=$('#mSheet'),list=$('#mSheetItems');if(!sheet||!list)return;
@@ -3357,7 +3373,8 @@ $$('[data-m-tab]').forEach(button=>button.onclick=()=>{
   openSection(tab);
 });
 $('#mBack').onclick=()=>{if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
-$('#mReturnGame').onclick=()=>setMView('game');
+$('#mReturnGame').onclick=()=>liveAway()?void returnToLiveGame():setMView('game');
+$('#returnGame').onclick=()=>void returnToLiveGame();
 $$('#mSheet [data-m-close]').forEach(el=>el.onclick=closeSheet);
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheet()});
 isMobileApp();mobileMedia.addEventListener?.('change',syncMobileShell);syncMobileShell();
@@ -3397,6 +3414,78 @@ function startPolling(){
 function syncOnlineTransport(){
   if(!isOnlineGame()){stopOnlineSync();return}
   startRealtime();startPolling();
+}
+// ---- Your game, wherever you are (owner, 2026-10-13: "if a person leave the play section, the
+// person is unable to return to the game ... the win was handed to my opponent, which is not
+// fair"). See src/live-game.js. While the board shows something else (the Computer tab, a
+// puzzle, a lesson, analysis...) your online game keeps beating here, so your opponent sees you
+// are still with us and cannot claim it (your clock still runs); "Back to your game" brings it
+// back, and VCH opened again (a closed tab, a reload) takes you straight back to it.
+function liveOnBoard(){return !!liveGame&&isOnlineGame()&&serverGameId===liveGame.id}
+// Your game is on and the board shows something else (its last news under a minute old: one
+// the server stopped answering about does not hold you back).
+function liveAway(){return !!liveGame&&!liveOnBoard()&&liveState?.status==='active'&&Date.now()-liveSeenAt<60000}
+function keepLiveGame(state){
+  if(!state?.id||state.id!==serverGameId||watchSession)return;
+  if(liveGame?.id===state.id&&state.status!=='active'&&state.status!=='waiting'){forgetLiveGame();return}
+  const live=isOnlineGame()&&myColor?liveFrom(state,{seat:myColor,mode}):null;
+  if(live){if(liveGame?.id!==live.id||liveGame.room!==live.room||liveGame.mode!==live.mode)liveGame=saveLive(live);liveState=state;liveSeenAt=Date.now()}
+  syncLiveReturn();
+}
+function forgetLiveGame(){liveGame=saveLive(null);liveState=null;liveSeenAt=0;syncLiveReturn()}
+// Every five seconds while the board shows something else: your game's heartbeat (the board's
+// own polling beats while it shows the game), its news (your opponent moved, it ended).
+async function liveBeat(){
+  if(!liveGame||liveOnBoard()||liveBeating||liveReturning)return syncLiveReturn();
+  const live=liveGame;liveBeating=true;
+  try{
+    const payload=await api.heartbeat(live.id),state=payload?.game||payload;
+    if(liveGame?.id!==live.id||!state)return;
+    const before=liveState;liveState=state;liveSeenAt=Date.now();
+    const ended=endedFor(live,state);
+    if(ended){forgetLiveGame();toast(ended==='won'?'Your game ended · you won':ended==='lost'?'Your game ended · you lost':ended==='draw'?'Your game ended · drawn':'Your game ended',{duration:5200,actionLabel:'Back to your game',onAction:()=>void returnToLiveGame(live)});return}
+    if(before?.status==='active'&&sideToMove(before)!==live.seat&&sideToMove(state)===live.seat)toast('Your move',{duration:3600,actionLabel:'Back to your game',onAction:()=>void returnToLiveGame()});
+  }catch(error){if(error?.status===403||error?.status===404)forgetLiveGame()}
+  finally{liveBeating=false;syncLiveReturn()}
+}
+setInterval(()=>void liveBeat(),5000);
+// Whatever the board shows (a puzzle, a lesson, analysis, a review...) steps aside for your game.
+function leaveBoardActivity(){
+  if(watchSession)stopWatching({reset:false});
+  if(archiveSession)leaveArchive({reset:false});
+  if(retrySession)endRetry();
+  endStudy({restore:false});endExplore({restore:false});leaveAnalysis({restore:false});leaveLesson({restore:false});
+  endEndgame({restore:false});endPrep({restore:false});endRepEdit({restore:false});
+  if(puzzleSession?.kind==='battle')stopBattle();
+  if(streakSession){streakSession=null;stopRunTimer()}
+  puzzleSession=null;planSession=null;browse=null;boardShapes=[];selected=null;
+}
+// Back to your game (target: a game that just ended while you were away, to see how).
+async function returnToLiveGame(target=liveGame){
+  if(!target)return;
+  if(serverGameId===target.id&&isOnlineGame()){showLiveBoard();return}
+  if(liveReturning)return;liveReturning=target.id;
+  try{
+    const payload=await api.state(target.id);
+    leaveBoardActivity();
+    if(searching)await cancelMatchSearch({announce:false});
+    await activateLeftMode(target.mode); // a computer game on the board ends here
+    orientationSet=false;
+    applyServerState(payload,{animateMove:false});
+    if(target.room){room=target.room;roomCreated=false;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`)}
+    syncRoomUi();showLiveBoard();await loadChat();
+  }catch(error){if(error?.status===403||error?.status===404){if(liveGame?.id===target.id)forgetLiveGame()}toast(error.message)}
+  finally{liveReturning=null;syncLiveReturn()}
+}
+function showLiveBoard(){setPrimaryScreen('game');activateNav('play');if(isMobileApp())setMView('game');syncLiveReturn()}
+// The button that brings it back: on a computer at the top of the page, on a phone above the tabs.
+function syncLiveReturn(){
+  const away=liveAway(),pill=$('#returnGame');
+  if(pill){
+    pill.classList.toggle('hidden',!away||isMobileApp());
+    const mine=away&&sideToMove(liveState)===liveGame.seat;pill.classList.toggle('your-move',mine);pill.querySelector('.rg-turn')?.classList.toggle('hidden',!mine);
+  }
+  if(isMobileApp())syncMobileShell();
 }
 // A chat line: text, or one of VCH's animated reactions (":r:<id>", src/reactions.js).
 function addMessage(text,mine=true){
@@ -3473,7 +3562,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
