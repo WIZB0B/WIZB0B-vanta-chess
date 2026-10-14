@@ -2262,10 +2262,10 @@
    "file": "sting-start.m4a",
    "place": "sting",
    "part": "start",
-   "seconds": 4.0,
+   "seconds": 2.47,
    "start": 0,
-   "end": 4.0,
-   "gain": 1.6
+   "end": 2.47,
+   "gain": 0.2
   },
   {
    "id": "sting-win",

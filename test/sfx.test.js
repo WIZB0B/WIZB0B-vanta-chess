@@ -52,6 +52,15 @@ test('sfx: VCH\'s own sound sets have every sound, made from packs recorded with
   }
 });
 
+test('sfx: a game starts with a brief trumpet call, not a tune (owner, 2026-10-14)', () => {
+  const lib = JSON.parse(readFileSync(new URL('../public/assets/vch/music/library.json', import.meta.url), 'utf8'));
+  const sting = lib.tracks.find(t => t.id === 'sting-start');
+  assert.equal(sting.place, 'sting'); assert.equal(sting.part, 'start');
+  assert.ok(sting.end - (sting.start || 0) <= 2.5, 'the start sting is brief');
+  const json = JSON.parse(readFileSync(new URL('../public/assets/vch/sfx/sfx.json', import.meta.url), 'utf8'));
+  assert.ok(json.sets.ui.sounds.start.seconds > 1, 'without the music, the interface plays the same call, not a click');
+});
+
 test('sfx: one sound per action, the most telling one', () => {
   const later = [], played = [], gate = uiGate(k => played.push(k), { timers: { setTimeout: fn => later.push(fn) } });
   const flush = () => later.splice(0).forEach(fn => fn());
