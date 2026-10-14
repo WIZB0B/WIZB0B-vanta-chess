@@ -6,7 +6,7 @@ import { RANKS, addGames, armyList, careers, countsForCareer, deeds, emptyCareer
 import { HONOR_RELICS, OATHS, dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from '../src/oaths.js';
 import { atmosphereFor, materialFromFen, tensionFor } from '../src/atmosphere.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, starsFor, totalStars } from '../src/campaign.js';
-import { KEY_FOR_THEME, MAX_LEVEL, MUSIC_KEYS, VantaScore, barSeconds, chordFor, entryOf, equalPower, hideTrack, keysRelated, levelFor, likeTrack, loadMusic, loadMusicLikes, midiHz, moodFor, nextLine, partFor, pickTrack, saveMusic, saveMusicLikes, stingFor, tracksFor } from '../src/music.js';
+import { KEY_FOR_THEME, MAX_LEVEL, MUSIC_KEYS, VantaScore, WORLDS, barSeconds, chordFor, entryOf, equalPower, hideTrack, keysRelated, levelFor, likeTrack, loadMusic, loadMusicLikes, midiHz, moodFor, nextLine, partFor, pickTrack, saveMusic, saveMusicLikes, stingFor, tracksFor } from '../src/music.js';
 import { DIVISIONS, LIBRARY_URL, MUSIC_BASE, PLACES, STATIONS, STINGS, checkTrack, isSting, loadLibrary, placesOf, readLibrary } from '../src/music-library.js';
 import { playMoveSound, soundPlace } from '../src/move-sound.js';
 import { RELICS, relicById } from '../src/relics.js';
@@ -182,7 +182,7 @@ test('music: each theme has its key, chords are triads in that key; the setting 
   const store = memory(); assert.deepEqual(loadMusic(store), { on: false, volume: 0.5, station: 'on' }, 'off unless you turn it on');
   saveMusic({ on: true, volume: 2 }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 1, station: 'on' });
   saveMusic({ on: true, volume: 0.3, station: 'opera' }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 0.3, station: 'opera' });
-  assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'mix', 'liked']);
+  assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'worlds', 'mix', 'liked']);
   // The volume has a ceiling (owner: "too loud"), and a curve: full is about 3 dB down.
   assert.equal(levelFor(1), MAX_LEVEL); assert.equal(levelFor(0), 0); assert.ok(MAX_LEVEL <= 0.71);
   assert.ok(levelFor(0.5) < 0.3 && levelFor(0.5) > 0.25, 'half way is a quiet bed'); assert.equal(levelFor(7), MAX_LEVEL);
@@ -354,13 +354,22 @@ test('music: VCH\'s own library has music for every moment, made with Lyria 3.5'
   for (const theme of Object.keys(MUSIC_KEYS)) for (const part of ['calm', 'tense', 'storm'])
     assert.ok(music.some(t => placesOf(t).includes('game') && (t.theme || 'vanta') === theme && t.part === part), `${theme} ${part}`);
   assert.ok(music.some(t => t.part === 'ahead') && music.some(t => t.part === 'behind'), 'ahead and behind');
-  for (const d of DIVISIONS) assert.ok(music.filter(t => t.division === d).length >= 2, `${d}: a hall of its own`);
+  // A hall of its own for every division (two for most; Bronze and Platinum lost a take each to the music check).
+  for (const d of DIVISIONS) assert.ok(music.filter(t => t.division === d).length >= 1, `${d}: a hall of its own`);
   for (const r of REALMS) assert.ok(music.some(t => placesOf(t).includes('boss') && t.theme === r.music), `${r.id}: its boss's opera`);
   for (const p of ['focus', 'blitz', 'result', 'skin']) assert.ok(music.some(t => placesOf(t).includes(p)), p);
   for (const st of STATIONS.filter(s => !['on', 'mix', 'liked'].includes(s.id))) assert.ok(music.some(t => t.station === st.id), `${st.id} station`);
   assert.ok(music.filter(t => t.kind === 'song').length >= 10, 'songs');
   for (const k of STINGS) assert.ok(stings.some(t => t.part === k), `a sting for ${k}`);
   assert.ok(PLACES.includes('sting'));
+  // The old worlds: a theme of their own in the menus, a battle suite whose parts play in a game.
+  for (const w of WORLDS) assert.ok(music.some(t => placesOf(t).includes('lobby') && t.theme === w && t.station === 'worlds'), `${w}: its theme in the menus`);
+  const whole = new Map(music.filter(t => !t.of).map(t => [t.id, t]));
+  for (const t of music.filter(t => t.of)) assert.ok(whole.get(t.of)?.file === t.file && t.start >= 0 && t.end <= t.seconds, `${t.id}: a part of ${t.of}`);
+  // Every piece has a name of its own, from its world's lore (owner, 2026-10-13: "you cannot just
+  // name something ancient Egypt, ancient Greece... be creative with the names").
+  assert.equal(new Set(music.map(t => t.title)).size, music.length, 'no two pieces share a title');
+  assert.ok(!music.some(t => /^(Ancient |Old Japan|Kingdom of)|Battle Suite| · Theme\b/.test(t.title)), 'no plain names');
 });
 
 test('music: in musical time, a bar line, a downbeat and an even crossfade', () => {
@@ -571,6 +580,60 @@ test('music: Next, Not for me, a chosen track, and what comes next', () => {
   assert.equal(score.playNow('nope'), false); assert.equal(score.playNow('win'), false, 'not a sting');
   // The Liked station: what you liked, and nothing else.
   score.setLikes({ liked: ['study'], hidden: [] }); score.setStation('liked'); assert.equal(score.nowPlaying.id, 'study');
+});
+
+// The old worlds and the battle suites (owner, 2026-10-13: "old civilization type music and
+// themes"; one piece in three parts so a change of part never changes key or ensemble).
+const WORLDLIB = [
+  { id: 'hall', title: 'Hall', file: 'hall.m4a', station: 'cinematic', place: 'lobby', seconds: 150, start: 0, end: 148, bpm: 80, beat: 0 },
+  { id: 'hall-bronze', title: 'Bronze Hall', file: 'hall-bronze.m4a', station: 'cinematic', place: 'lobby', division: 'bronze', seconds: 150, start: 0, end: 148, bpm: 80, beat: 0 },
+  { id: 'rome-theme', title: 'Latrunculi · A Soldiery of Glass', file: 'rome-theme.m4a', station: 'worlds', place: 'lobby', theme: 'rome', seconds: 150, start: 0, end: 148, bpm: 96, beat: 0 },
+  { id: 'suite-rome', title: 'Latrunculi · The Twin Foe', file: 'suite-rome.m4a', station: 'worlds', place: 'game', theme: 'rome', seconds: 180, start: 0, end: 178, bpm: 96, beat: 0 },
+  { id: 'rome-calm', title: 'Latrunculi · Opening', file: 'suite-rome.m4a', station: 'worlds', place: 'game', part: 'calm', theme: 'rome', of: 'suite-rome', seconds: 180, start: 0, end: 57.5, bpm: 96, beat: 0 },
+  { id: 'rome-tense', title: 'Latrunculi · Middlegame', file: 'suite-rome.m4a', station: 'worlds', place: 'game', part: 'tense', theme: 'rome', of: 'suite-rome', seconds: 180, start: 60, end: 117.5, bpm: 96, beat: 0 },
+  { id: 'rome-storm', title: 'Latrunculi · Time Trouble', file: 'suite-rome.m4a', station: 'worlds', place: 'game', part: 'storm', theme: 'rome', of: 'suite-rome', seconds: 180, start: 120, end: 170, bpm: 96, beat: 0 },
+  { id: 'calm', title: 'Calm', file: 'calm.m4a', station: 'cinematic', place: 'game', part: 'calm', seconds: 150, start: 0, end: 148, bpm: 90, beat: 0 },
+  { id: 'won', title: 'After the Win', file: 'won.m4a', station: 'cinematic', place: 'result', part: 'win', seconds: 90, start: 0, end: 62, fade: 3, bpm: 80, beat: 0 },
+];
+test('music: a battle suite plays whole on a station and in its parts in a game; a world plays its own in the menus', () => {
+  assert.equal(readLibrary({ tracks: WORLDLIB }).length, WORLDLIB.length, 'every field is one the library takes');
+  assert.equal(checkTrack({ ...WORLDLIB[4], place: 'lobby' }), null, 'a part belongs to a game');
+  assert.equal(checkTrack({ ...WORLDLIB[4], of: 'rome-calm' }), null, 'a part is not its own piece');
+  assert.equal(checkTrack({ ...WORLDLIB[4], of: '../x' }), null);
+  assert.equal(checkTrack({ ...WORLDLIB[0], fade: 3 }).fade, 3, 'a fade with an end');
+  assert.equal(checkTrack({ ...WORLDLIB[0], fade: 3, end: undefined }).fade, undefined, 'no end, no fade');
+  assert.equal(checkTrack({ ...WORLDLIB[0], fade: 30 }).fade, undefined);
+  const ids = moment => tracksFor(WORLDLIB, moment).map(t => t.id);
+  // In a game: the part for the moment, never the whole suite.
+  assert.deepEqual(ids({ place: 'game', part: 'calm', theme: 'rome' }), ['rome-calm']);
+  assert.deepEqual(ids({ place: 'game', part: 'storm', theme: 'rome' }), ['rome-storm']);
+  assert.deepEqual(ids({ place: 'game', part: 'calm', theme: 'vanta' }), ['calm'], 'another theme: its own');
+  // On a station, in Everything and in the lists: the whole suite, never a part on its own.
+  assert.deepEqual(ids({ station: 'worlds' }), ['rome-theme', 'suite-rome']);
+  assert.ok(!ids({ station: 'mix' }).some(id => id.startsWith('rome-') && id !== 'rome-theme'));
+  // The menus: a world's theme only for a player who chose that world, with their hall.
+  assert.deepEqual(ids({ place: 'lobby', theme: 'rome' }), ['rome-theme', 'hall-bronze']);
+  assert.deepEqual(ids({ place: 'lobby' }), ['hall-bronze', 'hall'], 'Vanta: the halls, no world\'s theme');
+  assert.ok(MUSIC_KEYS.rome && WORLDS.includes('rome') && WORLDS.every(w => MUSIC_KEYS[w]), 'every world has its key');
+  // Liking or hiding the suite likes or hides its parts.
+  const parts = [...WORLDLIB, { id: 'rome-calm-2', title: 'Latrunculi · Opening II', file: 'suite-rome-2.m4a', station: 'worlds', place: 'game', part: 'calm', theme: 'rome', seconds: 180, start: 0, end: 57.5 }];
+  for (const r of [0, 0.4, 0.8, 0.99]) assert.equal(pickTrack(parts, { place: 'game', part: 'calm', theme: 'rome', likes: { hidden: ['suite-rome'] }, random: () => r }).id, 'rome-calm-2');
+  const share = () => { let n = 0; for (let i = 0; i < 400; i++) if (pickTrack(parts, { place: 'game', part: 'calm', theme: 'rome', likes: { liked: ['suite-rome'] }, random: () => (i + 0.5) / 400 }).id === 'rome-calm') n++; return n / 400; };
+  assert.ok(Math.abs(share() - 3 / 4) < 0.01, 'the liked suite\'s part: three shares to one');
+});
+
+test('music: a piece cut short of its own ending fades out over its last seconds', () => {
+  const { score, clock, flush } = player({ tracks: WORLDLIB });
+  score.start(); flush(); clock.now = 5000;
+  score.setResult('win'); score.setPlace('result', true); flush();
+  const won = score.active; assert.equal(score.nowPlaying.id, 'won'); won.el.duration = 90;
+  won.el.currentTime = 50; clock.now = 20000; score.tick();
+  assert.notEqual(target(won.gain.gain), 0, 'not yet');
+  won.el.currentTime = 59.5; score.tick();
+  assert.equal(target(won.gain.gain), 0, 'it fades out before its end');
+  const c = curve(won.gain.gain); assert.ok(c[3] > 2 && c[3] <= 2.5, `over what is left of it (${c[3]})`);
+  const curves = () => won.gain.gain.events.filter(x => x[0] === 'curve').length, n = curves();
+  won.el.currentTime = 60.5; score.tick(); assert.equal(curves(), n, 'once');
 });
 
 test('music: a dialog muffles the music, and a sting steps it back', () => {

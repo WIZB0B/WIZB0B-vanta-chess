@@ -48,14 +48,97 @@ SKINS = ['ember', 'crystal', 'shadow', 'celestial', 'gilded', 'tidal']
 def base_of(i):
     return i[:-2] if i[-2:] in ('-2', '-3') else i
 
+# ---- The second library (owner, 2026-10-13: "make sure all the audios we have currently now pass
+# that test... no skips... no sudden change in tones or melody or some weird AI shit"). Every
+# piece below passed two checks before it joined: Flow Music's Producer listened to it whole
+# against a written bar, and scripts/audio/audit.py (and lyrics.py, for songs) measured it;
+# where the two disagreed, the Producer listened again at the exact moment the measurement
+# flagged, and the owner's ears have the last word (Theme Studio's Sound test). The verdicts are
+# in docs/music-check.md.
+# Pieces that did not pass are left out; where only an opening or an ending failed and the rest
+# passed (the Producer confirmed it from there), only the clean part plays.
+EXCLUDE = {
+    # the relic sets' one-part pieces: their battle suites replace them (one piece in three parts,
+    # one key and one tempo, so a change of part never changes key or ensemble)
+    *(f'{t}-{p}' for t in ('ember', 'umbra', 'mirror', 'gilded', 'obsidian', 'rivalry') for p in ('opening', 'middlegame', 'time-trouble')),
+    'vanta-time-trouble-2',      # 0:59 abrupt cut into another groove, 1:16 jumps back
+    'lobby-vanta-2', 'lobby-tournament', 'skin-shadow', 'skin-celestial', 'focus-deep-calculation-3',
+    'lobby-platinum-2',          # 1:10 cut mid-phrase into another ensemble
+    'song-endgame-2',            # 1:40 jump, 2:26 and 2:36 stumbles
+    'electric-neon-gambit',      # 0:14 and 1:31 dropouts mid-phrase
+    'realm-japan',               # 0:12 jumps in; from there it cuts the opening phrase (new takes replace it)
+    'lobby-bronze',              # soft humming at 0:25 in an instrumental
+    'electric-overclocked',      # vocal chops at 0:13, 0:44 and 1:28 in an instrumental
+    'vanta-advantage-2',         # could not be checked (Flow would not take the file back): left out until it is
+}
+# Pieces whose opening or ending failed: the part that plays (seconds), and a fade for an ending
+# cut short.
+TRIM = {
+    'boss-pale-reflection': dict(start=25.7),  # from its full entrance (the opening jumped in)
+    'lobby-bronze-2': dict(start=25.0),
+    'realm-greece-b': dict(start=5.2),
+    'result-win': dict(end=62.0, fade=3.0),    # a complete piece to 1:02; it then restarted
+    'focus-night-analysis': dict(end=160.0, fade=4.0),  # resolved by 2:35; a dropout cut its tail at 2:51
+}
+# The old worlds (owner: "old civilization type music and themes... like the old chinese and
+# japanese style, rome and so on"): a theme for the menus and a battle suite for games each.
+# Their names (owner, 2026-10-13: "you cannot just name something ancient Egypt, ancient
+# Greece... be creative with the names... live with the lore", and not names everyone knows
+# already): each world is named for a game of strategy its people played, chess's ancestors and
+# cousins, or for the land in its own people's words; each piece for a story from that world.
+# The sources are in docs/music-check.md (Names).
+WORLDS = {'egypt': 'Mehen', 'greece': 'Petteia', 'rome': 'Latrunculi', 'china': 'Liubo', 'japan': 'Heian', 'persia': 'Chatrang', 'babylon': 'Etemenanki', 'benin': 'Igodomigodo'}
+THEME_TITLES = {
+    'realm-egypt-v3a': 'Iteru at Low Water', 'realm-egypt-v3b': 'The Twelve Hours', 'realm-egypt-v3c': 'Lions of the Coil', 'realm-egypt-v3d': "The Soul's Road",
+    'realm-greece': 'Cities of Pebble', 'realm-greece-b': 'Dogs of the Polis',
+    'realm-rome-b': 'A Soldiery of Glass',
+    'realm-china': 'Immortals at Play',
+    'realm-japan-v2a': 'The Jade General', 'realm-japan-v2b': 'Incense Chariot', 'realm-japan-v2c': 'The Laurel Horse',
+    'realm-persia': 'Emerald and Ruby',
+    'realm-babylon': 'Foundation of Heaven and Earth',
+    'realm-benin': 'Sand from a Snail Shell',
+}
+SUITE_TITLES = {
+    'suite-egypt-b': "The Serpent's Head", 'suite-greece-b': 'Between Two Stones', 'suite-rome-v2': 'The Twin Foe', 'suite-china': 'The Owl and the Fish',
+    'suite-japan-v3a': 'The Drunken Elephant', 'suite-japan-v3b': 'Silver and Gold', 'suite-persia-v2': "Wuzurgmihr's Answer",
+    'suite-babylon': 'Powerful Like a Lion', 'suite-benin': 'Kings from the Sky',
+    'suite-vanta-v3a': 'When the Candles Gutter', 'suite-vanta-v3b': 'The Storm Builds',
+    'suite-ember': 'Cinders on the Wind', 'suite-umbra': 'Bells Under Water', 'suite-mirror': 'The Other Hand', 'suite-gilded': "The Usurper's Feast",
+    'suite-rivalry': 'Old Scores', 'suite-obsidian-v2': 'The Last Ascent',
+}
+# Battle suites (one file each, its theme): played whole on a station, in its three parts in a
+# game. Their sections come from suite_sections.py (<work dir>/suite_grid.json).
+SUITES = {
+    'suite-ember': 'ember', 'suite-umbra': 'umbra', 'suite-mirror': 'mirror', 'suite-gilded': 'gilded', 'suite-rivalry': 'rivalry', 'suite-obsidian-v2': 'obsidian',
+    'suite-egypt-b': 'egypt', 'suite-greece-b': 'greece', 'suite-china': 'china', 'suite-babylon': 'babylon', 'suite-benin': 'benin', 'suite-rome-v2': 'rome', 'suite-persia-v2': 'persia',
+    'suite-vanta-v3a': 'vanta', 'suite-vanta-v3b': 'vanta', 'suite-japan-v3a': 'japan', 'suite-japan-v3b': 'japan',
+}
+SUITE_PARTS = (('calm', 'Opening'), ('tense', 'Middlegame'), ('storm', 'Time Trouble'))
+# The final hit of each suite (the Producer's time): the storm loops before it.
+SUITE_FINAL = {'suite-ember': 173, 'suite-umbra': 168, 'suite-mirror': 170, 'suite-gilded': 171, 'suite-rivalry': 173, 'suite-obsidian-v2': 157,
+               'suite-egypt-b': 170, 'suite-greece-b': 174, 'suite-china': 165, 'suite-babylon': 170, 'suite-benin': 170, 'suite-rome-v2': 161, 'suite-persia-v2': 174,
+               'suite-vanta-v3a': 171.5, 'suite-vanta-v3b': 167, 'suite-japan-v3a': 165, 'suite-japan-v3b': 170}
+# A part that loops must last at least this long (seconds); a shorter one carries on into the next.
+MIN_LOOP = 24.0
+# The old worlds' themes (menus): file id -> world.
+WORLD_THEMES = {'realm-greece': 'greece', 'realm-greece-b': 'greece', 'realm-rome-b': 'rome', 'realm-china': 'china', 'realm-persia': 'persia', 'realm-babylon': 'babylon', 'realm-benin': 'benin',
+                'realm-japan-v2a': 'japan', 'realm-japan-v2b': 'japan', 'realm-japan-v2c': 'japan',
+                'realm-egypt-v3a': 'egypt', 'realm-egypt-v3b': 'egypt', 'realm-egypt-v3c': 'egypt', 'realm-egypt-v3d': 'egypt'}
+# Songs in other languages (each with its own lyrics, written for it): title; the language is
+# the id's second part.
+SONG_TITLES = {
+    'song-de-zug-um-zug': 'Zug um Zug', 'song-de-baeckerei': 'Die alte Bäckerei', 'song-es-jaque-al-rey': 'Jaque al rey', 'song-es-jaque-al-rey-b': 'Jaque al rey II',
+    'song-es-cocina-abuela': 'La cocina de mi abuela', 'song-fr-echec-et-mat': 'Échec et mat', 'song-fr-vieux-velo': 'Mon vieux vélo', 'song-it-la-regina': 'La regina',
+    'song-it-caffe-domenica': 'Il caffè della domenica', 'song-pt-xeque-mate': 'Xeque-mate', 'song-pt-varanda': 'A varanda', 'song-tr-hamle': 'Hamle', 'song-tr-hamle-b': 'Hamle II',
+    'song-tr-cay-bahcesi': 'Çay Bahçesi', 'song-ru-hod-konyom': 'Ход конём', 'song-ru-dacha': 'Дача', 'song-ar-kish-malik': 'كش ملك', 'song-ar-qahwat-alsabah': 'قهوة الصباح',
+    'song-hi-shah-aur-maat': 'शह और मात', 'song-hi-shah-aur-maat-b': 'शह और मात II', 'song-hi-chai-ki-tapri': 'चाय की टपरी', 'song-zh-yi-bu-yi-bu': '一步一步',
+    'song-zh-waipo-xiaoyuan': '外婆的小院', 'song-ja-itte-zutsu': '一手ずつ', 'song-ja-shotengai': '商店街の夕暮れ', 'song-ko-han-su': '한 수 한 수',
+}
+
 def meta(i):
     """Where and how the player uses a track (src/music-library.js)."""
     b = base_of(i)
     roman = {'-2': ' II', '-3': ' III'}.get(i[len(b):], '')
-    for theme, realm in REALM.items():
-        for p, part in PART_OF.items():
-            if b == f'{theme}-{p}':
-                return dict(title=f'{realm} · {PART_TITLE[p]}{roman}', station='cinematic', place='game', part=part, theme=theme)
     if b in ('vanta-opening', 'vanta-middlegame', 'vanta-time-trouble'):
         return dict(station='cinematic', place='game', part=PART_OF[b[6:]], theme='vanta')
     if b == 'vanta-advantage': return dict(station='cinematic', place='game', part='ahead', theme='vanta')
@@ -68,33 +151,68 @@ def meta(i):
     if b.startswith('focus-'): return dict(station='focus', place='focus')
     if b.startswith('electric-'): return dict(station='electric', place='blitz')
     if b in BOSS_THEME: return dict(station='opera', place='boss', theme=BOSS_THEME[b])
-    if b.startswith('song-'): return dict(station='songs', place='lobby', kind='song')
+    if i in SONG_TITLES: return dict(title=SONG_TITLES[i], station='songs', place='lobby', kind='song', lang=i.split('-')[1])
+    if b.startswith('song-'): return dict(station='songs', place='lobby', kind='song', lang='en')
     if b == 'result-win': return dict(station='cinematic', place='result', part='win')
     if b == 'result-loss': return dict(station='cinematic', place='result', part='loss')
+    if i in WORLD_THEMES:
+        w = WORLD_THEMES[i]
+        return dict(title=f'{WORLDS[w]} · {THEME_TITLES[i]}', station='worlds', place='lobby', theme=w)
     if b.startswith('skin-') and b[5:] in SKINS:
         s = b[5:]
         return dict(title=f'{s.capitalize()} Relics', station='cinematic', place='skin', skin=s)
     return None
 
+def suite_entries(i, a, key_of, grid):
+    """A battle suite: the whole piece (stations, the music list) and its three parts (games)."""
+    theme = SUITES[i]; name = WORLDS.get(theme) or REALM.get(theme) or 'Vanta'
+    station = 'worlds' if theme in WORLDS else 'cinematic'
+    n = [k for k in SUITES if SUITES[k] == theme].index(i)
+    sfx = '' if n == 0 else f'-{n + 1}'  # a theme's second suite: ids of its own (each suite has its own title)
+    g = grid[i]; secs = g['sections']; final = SUITE_FINAL[i]
+    starts = [a['start']] + [s['start'] for s in secs[1:]]
+    whole = dict(id=i, title=f'{name} · {SUITE_TITLES[i]}', file=f'{i}.m4a', station=station, place='game', theme=theme, seconds=a['seconds'], start=a['start'], end=a['end'], gain=a['gain'],
+                 bpm=round(secs[0]['bpm'], 2), beat=round(starts[1] % (240 / secs[0]['bpm']), 3))
+    keys = key_of(i, sections=True)
+    if keys and keys.get('global'): whole['key'] = keys['global']
+    out = [whole]
+    for k, (part, label) in enumerate(SUITE_PARTS):
+        bar = 240 / secs[k]['bpm']
+        start = starts[k]
+        nxt = starts[k + 1] if k < 2 else final
+        end = nxt - bar if k < 2 else final - 2 * bar
+        j = k
+        while end - start < MIN_LOOP and j < 2:  # too short to loop: it carries on into the next part
+            j += 1; nxt = starts[j + 1] if j < 2 else final; end = nxt - bar if j < 2 else final - 2 * bar
+        e = dict(id=f'{theme}-{part}{sfx}', title=f'{SUITE_TITLES[i]} · {label}', file=f'{i}.m4a', station=station, place='game', part=part, theme=theme, of=i,
+                 seconds=a['seconds'], start=round(start, 3), end=round(end, 3), gain=a['gain'], bpm=round(secs[k]['bpm'], 2), beat=round(start % bar, 3))
+        sk = (keys or {}).get('sections') or []
+        if len(sk) == 3 and sk[k]: e['key'] = sk[k]
+        out.append(e)
+    return out
+
 # Stings: the part of each sting piece to keep (seconds), its moment, and its fades. Lyria writes
 # a whole piece, so a sting is its ending: from a strong onset before the final chord to the end
 # of the ring-out (the start sting is the piece's opening instead). Chosen from each piece's
-# loudness and onsets (tools/sting_end.py).
+# loudness and onsets (tools/sting_end.py). An ending runs on until the piece's own decay is below
+# -60 dB, the fade only taking away what is left under about -48 dB (the music check, 2026-10-13:
+# cut sooner, the realm sting's "reverb tail cut off abruptly before natural decay completes").
+# Solved, failed and start fade out music that goes on, by design.
 STINGS = [
     # id, source, moment, title, start, end, fade in, fade out
-    ('sting-win', 'sting-victory', 'win', 'Victory', 50.40, 58.40, 0.006, 0.6),
-    ('sting-loss', 'sting-defeat', 'loss', 'Defeat', 52.00, 56.20, 0.006, 0.6),
-    ('sting-draw', 'sting-draw', 'draw', 'Draw', 47.95, 54.00, 0.006, 0.8),
-    ('sting-checkmate', 'sting-checkmate', 'checkmate', 'Checkmate', 57.57, 62.70, 0.006, 0.6),
+    ('sting-win', 'sting-victory', 'win', 'Victory', 50.40, 59.15, 0.006, 0.85),
+    ('sting-loss', 'sting-defeat', 'loss', 'Defeat', 52.00, 56.90, 0.006, 0.9),
+    ('sting-draw', 'sting-draw', 'draw', 'Draw', 47.95, 54.90, 0.006, 1.1),
+    ('sting-checkmate', 'sting-checkmate', 'checkmate', 'Checkmate', 57.57, 63.15, 0.006, 0.65),
     ('sting-start', 'sting-game-start', 'start', 'Game start', 0.00, 4.00, 0.006, 1.4),
-    ('sting-rank-up', 'sting-rank-up', 'rank-up', 'Rank up', 56.87, 63.30, 0.006, 0.6),
-    ('sting-rank-down', 'sting-rank-down', 'rank-down', 'Rank down', 50.00, 55.70, 0.25, 0.6),
-    ('sting-rank-down-2', 'sting-rank-down-2', 'rank-down', 'Rank down II', 50.84, 59.00, 0.006, 0.8),
-    ('sting-relic', 'sting-relic', 'relic', 'Relic earned', 52.50, 58.40, 0.02, 0.6),
-    ('sting-realm', 'sting-realm-freed', 'realm', 'Realm freed', 52.48, 58.30, 0.006, 0.6),
+    ('sting-rank-up', 'sting-rank-up', 'rank-up', 'Rank up', 56.87, 63.95, 0.006, 0.8),
+    ('sting-rank-down', 'sting-rank-down', 'rank-down', 'Rank down', 50.00, 56.95, 0.25, 1.3),
+    ('sting-rank-down-2', 'sting-rank-down-2', 'rank-down', 'Rank down II', 50.84, 59.85, 0.006, 0.8),
+    ('sting-relic', 'sting-relic', 'relic', 'Relic earned', 52.50, 59.35, 0.02, 1.1),
+    ('sting-realm', 'sting-realm-freed', 'realm', 'Realm freed', 52.48, 59.35, 0.006, 1.3),
     ('sting-solved', 'sting-puzzle-solved', 'solved', 'Puzzle solved', 50.86, 54.00, 0.006, 1.2),
     ('sting-failed', 'sting-puzzle-failed', 'failed', 'Puzzle failed', 55.96, 59.00, 0.006, 1.2),
-    ('sting-brilliant', 'sting-brilliant', 'brilliant', 'Brilliant move', 53.45, 57.10, 0.006, 0.6),
+    ('sting-brilliant', 'sting-brilliant', 'brilliant', 'Brilliant move', 53.45, 58.10, 0.006, 1.05),
 ]
 
 def run(cmd):
@@ -107,18 +225,54 @@ def loudness(path):
     j = json.loads(r.stderr[r.stderr.rindex('{'):])
     return float(j['input_i']), float(j['input_tp'])
 
+def load_keys():
+    """The key the music check measured for each piece (audit.py's reports in the work dir)."""
+    import glob
+    found = {}
+    for d in sorted(glob.glob(os.path.join(WORK, 'audit', '*'))):
+        for f in glob.glob(os.path.join(d, '*.json')):
+            if f.endswith('summary.json'): continue
+            try: r = json.load(open(f))
+            except Exception: continue
+            k = r.get('key') or {}
+            if r.get('name') and k.get('global'): found[r['name']] = {'global': k['global'], 'sections': (r.get('sections') or {}).get('key')}
+    def key_of(i, sections=False):
+        v = found.get(i)
+        return v if sections else (v or {}).get('global')
+    return key_of
+
 def build_music():
     os.makedirs(MUSIC, exist_ok=True)
-    tracks = []
+    key_of = load_keys()
+    grid_path = os.path.join(WORK, 'suite_grid.json')
+    grid = json.load(open(grid_path)) if os.path.exists(grid_path) else {}
+    tracks, files = [], set()
     for f in sorted(os.listdir(CACHE)):
         a = json.load(open(os.path.join(CACHE, f)))
-        i = a['id']; m = meta(i)
-        if not m: raise SystemExit(f'no metadata for {i}')
-        title = m.pop('title', None) or TITLES[i]
+        i = a['id']
+        if i in EXCLUDE: continue
+        if i in SUITES:
+            if i not in grid: raise SystemExit(f'no sections for {i}: run suite_sections.py')
+            entries = suite_entries(i, a, key_of, grid)
+        else:
+            m = meta(i)
+            if not m: raise SystemExit(f'no metadata for {i}')
+            title = m.pop('title', None) or TITLES[i]
+            t = dict(id=i, title=title, file=f'{i}.m4a', **m, seconds=a['seconds'], start=a['start'], end=a['end'], gain=a['gain'])
+            if a.get('bpm'): t.update(bpm=a['bpm'], beat=a['beat'])
+            k = key_of(i)
+            if k: t['key'] = k
+            trim = TRIM.get(i, {})
+            if 'start' in trim:
+                t['start'] = trim['start']
+                if t.get('bpm'):  # the beat grid's origin moves to the new first downbeat
+                    t['beat'] = round(trim['start'] % (240 / t['bpm']), 3)
+            if 'end' in trim: t['end'] = trim['end']
+            if 'fade' in trim: t['fade'] = trim['fade']
+            entries = [t]
         shutil.copyfile(os.path.join(SRC, f'vch-{i}.m4a'), os.path.join(MUSIC, f'{i}.m4a'))
-        t = dict(id=i, title=title, file=f'{i}.m4a', **m, seconds=a['seconds'], start=a['start'], end=a['end'], gain=a['gain'])
-        if a.get('bpm'): t.update(bpm=a['bpm'], beat=a['beat'])
-        tracks.append(t)
+        files.add(f'{i}.m4a')
+        tracks.extend(entries)
     for sid, src, part, title, a, b, fi, fo in STINGS:
         out = os.path.join(MUSIC, f'{sid}.m4a'); d = round(b - a, 3)
         run(['ffmpeg', '-v', 'error', '-y', '-ss', str(a), '-t', str(d), '-i', os.path.join(SRC, f'vch-{src}.m4a'),
@@ -126,8 +280,12 @@ def build_music():
         I, TP = loudness(out)
         gain = round(min(max(-12.0, -14.0 - I), -1.0 - TP), 1) # stings sit a little above the music (-14 LUFS)
         tracks.append(dict(id=sid, title=title, file=f'{sid}.m4a', place='sting', part=part, seconds=d, start=0, end=d, gain=gain))
+        files.add(f'{sid}.m4a')
+    # Files of pieces no longer in the library go (the folder holds exactly what it lists).
+    for f in os.listdir(MUSIC):
+        if f.endswith(('.m4a', '.mp3')) and f not in files: os.remove(os.path.join(MUSIC, f))
     tracks.sort(key=lambda t: t['id'])
-    json.dump({'tracks': tracks}, open(os.path.join(MUSIC, 'library.json'), 'w'), indent=1)
+    json.dump({'tracks': tracks}, open(os.path.join(MUSIC, 'library.json'), 'w'), indent=1, ensure_ascii=False)
     return tracks
 
 # ---- Sound effects ----

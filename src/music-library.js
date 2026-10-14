@@ -3,11 +3,11 @@
 // library.json lists them and their files sit beside it, so new music needs no new code. The page
 // loads the list the first time Music is on. Each track:
 //   {id, title, file, station, place, part?, theme?, division?, kind?, skin?, lang?, key?,
-//    seconds?, start?, end?, gain?, bpm?, beat?}
+//    of?, seconds?, start?, end?, fade?, gain?, bpm?, beat?}
 //   id        unique, lower-case letters, digits and dashes;
 //   title     its name, shown under the Music setting while it plays;
 //   file      its file's name in public/assets/vch/music/ (.m4a or .mp3);
-//   station   the station that plays it: cinematic, focus, opera, electric or songs;
+//   station   the station that plays it: cinematic, focus, opera, electric, songs or worlds;
 //   place     where "Follows the game" plays it (one place or a list): lobby (the menus), game,
 //             focus (puzzles, lessons, study, analysis), boss (Campaign bosses), blitz (games of
 //             three minutes or less, Blackout Blitz, the Arena), result (the screen after a
@@ -16,8 +16,9 @@
 //             out), ahead or behind (the game going your way, or not); after a game: win, loss
 //             or draw; a sting's moment: win, loss, draw, checkmate, start, rank-up, rank-down,
 //             relic, realm, solved, failed, brilliant;
-//   theme     the relic set or realm whose music it is (a game's three parts share one key and
-//             one tempo, so one can hand over to the next on the beat);
+//   theme     the relic set, realm or old world whose music it is (a game's three parts share
+//             one key and one tempo, so one can hand over to the next on the beat); in the menus
+//             a theme's music plays only for a player who chose that world;
 //   division  the league division whose menus it plays in (bronze ... diamond; none: everyone);
 //   kind      'song' for a song with vocals (the Songs station plays them, not the menus);
 //   skin      the piece set it was made for;
@@ -26,7 +27,11 @@
 //             others hand over quickly so two keys never clash;
 //   seconds   its length; start/end: where its sound begins and ends (silence trimmed), or the
 //             section of a longer piece (a battle suite's calm, tense and storm parts share one
-//             file);
+//             file), or the clean part of a piece whose opening or ending did not pass the music
+//             check (scripts/audio/audit.py);
+//   fade      for a piece cut before its own ending: the seconds it fades out over;
+//   of        a part of a longer piece (a battle suite's calm, tense or storm part, played in
+//             games): the id of the whole piece, which the stations and the music list play;
 //   gain      decibels that bring it to the library's loudness (-16 LUFS);
 //   bpm/beat  its tempo and the time of its first downbeat: the player changes tracks on a bar
 //             line, so the music never stumbles.
@@ -37,6 +42,7 @@ export const STATIONS = [
   { id: 'opera', name: 'Opera' },
   { id: 'electric', name: 'Electric' },
   { id: 'songs', name: 'Songs' },
+  { id: 'worlds', name: 'Old worlds' },
   { id: 'mix', name: 'Everything' },
   { id: 'liked', name: 'Liked' },
 ];
@@ -74,14 +80,16 @@ export function checkTrack(t) {
   if (t.skin != null && (typeof t.skin !== 'string' || !/^[a-z]{1,20}$/.test(t.skin))) return null;
   if (t.lang != null && (typeof t.lang !== 'string' || !/^[a-z]{2}$/.test(t.lang))) return null;
   if (t.key != null && (typeof t.key !== 'string' || !KEY_NAMES.test(t.key))) return null;
+  if (t.of != null && (typeof t.of !== 'string' || !/^[a-z0-9-]{1,60}$/.test(t.of) || t.of === t.id || !places.includes('game'))) return null;
   const out = { id: t.id, title: t.title.trim(), file: t.file, place: Array.isArray(t.place) ? places : places[0] };
-  for (const k of ['station', 'part', 'theme', 'division', 'kind', 'skin', 'lang', 'key']) if (t[k] != null) out[k] = t[k];
+  for (const k of ['station', 'part', 'theme', 'division', 'kind', 'skin', 'lang', 'key', 'of']) if (t[k] != null) out[k] = t[k];
   const seconds = num(t.seconds, 0.5, 900), start = num(t.start, 0, 900), end = num(t.end, 0.5, 900);
   if (seconds !== undefined) out.seconds = seconds;
   if (start !== undefined) out.start = start;
   if (end !== undefined && end > (start || 0) + 0.5) out.end = end;
-  const gain = num(t.gain, -24, 12), bpm = num(t.bpm, 40, 220), beat = num(t.beat, 0, 60);
+  const gain = num(t.gain, -24, 12), bpm = num(t.bpm, 40, 220), beat = num(t.beat, 0, 60), fade = num(t.fade, 0.1, 10);
   if (gain !== undefined) out.gain = gain;
+  if (fade !== undefined && out.end !== undefined) out.fade = fade;
   if (bpm !== undefined) { out.bpm = bpm; if (beat !== undefined) out.beat = beat; }
   return out;
 }

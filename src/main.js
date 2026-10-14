@@ -67,7 +67,7 @@ import { WallLights, lightReaction, placeLights, wallpaperKey } from './wallpape
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
-import { KEY_FOR_THEME, VantaScore, hideTrack, likeTrack, loadMusic, loadMusicLikes, moodFor, saveMusic, saveMusicLikes } from './music.js';
+import { KEY_FOR_THEME, VantaScore, WORLDS, hideTrack, likeTrack, loadMusic, loadMusicLikes, moodFor, saveMusic, saveMusicLikes } from './music.js';
 import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-library.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
 import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
@@ -178,6 +178,12 @@ reviewWorker.onmessage=variantReviewWorker.onmessage=({data})=>{
   }
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
+// The old worlds (Theme Studio's World: the music's key in a game, the world's theme in the menus).
+// Each world is named for a game of strategy its people played (chess's ancestors and cousins), or for the land
+// in its own people's words (owner, 2026-10-13: "be creative with the names... live with the lore"); the land it
+// stands for comes after it. The stories behind the names: docs/music-check.md (Names).
+const WORLD_KEY='vch.world',WORLD_NAMES={egypt:'Mehen',greece:'Petteia',rome:'Latrunculi',china:'Liubo',japan:'Heian',persia:'Chatrang',babylon:'Etemenanki',benin:'Igodomigodo'},
+  WORLD_LANDS={egypt:'Ancient Egypt',greece:'Ancient Greece',rome:'Ancient Rome',china:'Ancient China',japan:'Old Japan',persia:'Ancient Persia',babylon:'Babylon',benin:'Kingdom of Benin'};
 document.documentElement.dataset.pieceStyle='vanta';
 function pieceAsset(name){return pieceAssetFor(normalizePieceStyle(document.documentElement.dataset.pieceStyle),name)}
 function applyPieceStyle(value){
@@ -393,7 +399,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>World <select id="worldSetting"><option value="">Vanta Chess</option>${WORLDS.map(w=>`<option value="${w}">${WORLD_NAMES[w]} · ${WORLD_LANDS[w]}</option>`).join('')}</select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -5140,7 +5146,10 @@ addEventListener('pointermove',e=>{
 document.addEventListener('visibilitychange',()=>{if(wallLights.el||musicPrefsGet().on)queueAtmosphere()}); // the candles and the music pause in a hidden tab and come back
 addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.resizeTimer=setTimeout(queueAtmosphere,200)},{passive:true});
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
-function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
+// Your world (Theme Studio: World): one of the old worlds plays its own theme in the menus and its
+// battle suite in your games, over your relic set's (a Campaign realm still plays its own).
+function worldGet(){try{const v=localStorage.getItem(WORLD_KEY)||'';return WORLDS.includes(v)?v:''}catch{return ''}}
+function musicKeyNow(){return musicKeyOverride||worldGet()||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
 // The music (src/music.js, the tracks in src/music-library.js): with Music on it plays everywhere
 // and follows you (or plays the station you chose), and every beat it plays reaches the room.
 // The library loads the first time Music is on; until it has tracks the music waits.
@@ -5235,8 +5244,9 @@ function ensureNowPanel(){
   nowPanel.addEventListener('click',e=>{
     const b=e.target.closest('[data-np]'),t=vantaScore?.nowPlaying;if(!b||!t)return;
     if(b.dataset.np==='next'){playUiSound('tap');vantaScore.skip();return}
-    if(b.dataset.np==='like'){const on=!musicLikesGet().liked.includes(t.id);setMusicLikes(likeTrack(musicLikesGet(),t.id,on));playUiSound(on?'toggle-on':'toggle-off');if(on)toast('Added to Liked',{sound:false,duration:1800});return}
-    setMusicLikes(hideTrack(musicLikesGet(),t.id,true));playUiSound('toggle-off');toast("It won't play again for you",{sound:false,duration:2400});
+    const id=t.of||t.id; // a battle suite's part: the like is for the whole suite
+    if(b.dataset.np==='like'){const on=!musicLikesGet().liked.includes(id);setMusicLikes(likeTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-on':'toggle-off');if(on)toast('Added to Liked',{sound:false,duration:1800});return}
+    setMusicLikes(hideTrack(musicLikesGet(),id,true));playUiSound('toggle-off');toast("It won't play again for you",{sound:false,duration:2400});
   });
   document.body.append(nowPanel);
   return nowPanel;
@@ -5245,7 +5255,7 @@ function syncNowPanel(track){
   const corner=nowCorner(),show=!!track&&corner!=='off';
   if(!show){if(nowPanel)nowPanel.hidden=true;return}
   const panel=ensureNowPanel();panel.hidden=false;if(panel.dataset.corner!==corner)panel.dataset.corner=corner;
-  const next=vantaScore?.upcoming,liked=musicLikesGet().liked.includes(track.id);
+  const next=vantaScore?.upcoming,liked=musicLikesGet().liked.includes(track.of||track.id);
   const title=panel.querySelector('.np-title'),nx=panel.querySelector('.np-next'),like=panel.querySelector('[data-np="like"]');
   if(title.textContent!==track.title)title.textContent=track.title;
   const nt=next&&next.id!==track.id?`Next · ${next.title}`:'';if(nx.textContent!==nt)nx.textContent=nt;
@@ -6165,10 +6175,15 @@ $('#uiSoundSetting').checked=sfxPrefs().ui;
 $('#uiSoundSetting').onchange=e=>setSfxPref('ui',e.target.checked);
 $('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderSoundTest();showSidePanel()};
 $('#openMusicList').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()};
+$('#worldSetting').value=worldGet();
+$('#worldSetting').onchange=e=>{const w=e.target.value;try{if(w)localStorage.setItem(WORLD_KEY,w);else localStorage.removeItem(WORLD_KEY)}catch{}
+  // Heard at once in the menus: the world's own theme (the music otherwise changes when a piece ends).
+  const theme=w&&vantaScore?.playing&&musicPlace()==='lobby'&&musicPrefsGet().station==='on'&&(musicLibrary||[]).find(t=>t.theme===w&&t.place==='lobby');
+  queueAtmosphere();if(theme){vantaScore.setKey(w);vantaScore.playNow(theme.id)}};
 $('#nowPlayingSetting').value=nowCorner();
 $('#nowPlayingSetting').onchange=e=>{try{localStorage.setItem(NOW_KEY,e.target.value)}catch{}syncNowPlaying()};
 // The music list (owner, 2026-10-13): every track by station, to play now, like, or put away.
-const MUSIC_GROUPS=['cinematic','focus','opera','electric','songs'];
+const MUSIC_GROUPS=['cinematic','worlds','focus','opera','electric','songs'];
 function renderMusicList(){
   setDynamicView('music','Music list','');drawMusicList();
   if(!musicLibrary)void loadLibrary().then(tracks=>{musicLibrary=tracks;if(vantaScore&&!vantaScore.tracks.length)vantaScore.setTracks(tracks);drawMusicList()});
@@ -6176,7 +6191,7 @@ function renderMusicList(){
 function drawMusicList(){
   const target=$('#dynamicView .view-content');if(!target||currentRightView!=='music')return;
   if(!musicLibrary){target.innerHTML='<p class="trainer-intro">The music library is on its way</p>';return}
-  const likes=musicLikesGet(),now=vantaScore?.nowPlaying?.id,music=musicLibrary.filter(t=>!isSting(t));
+  const likes=musicLikesGet(),np=vantaScore?.nowPlaying,now=np?.of||np?.id,music=musicLibrary.filter(t=>!isSting(t)&&!t.of);
   const row=t=>{const liked=likes.liked.includes(t.id),hidden=likes.hidden.includes(t.id),lang=t.lang&&t.lang!=='en'?`<small>${escapeHtml(LANGUAGES[t.lang]||t.lang.toUpperCase())}</small>`:'';
     return `<li class="music-row${t.id===now?' playing':''}${hidden?' put-away':''}" data-track="${escapeHtml(t.id)}"><button type="button" data-music-play>${t.id===now?'On now':'Listen'}</button><span class="mr-title">${escapeHtml(t.title)} ${lang}</span><button type="button" data-music-like aria-pressed="${liked}">${liked?'Liked':'Like'}</button><button type="button" data-music-hide aria-pressed="${hidden}">${hidden?'Hidden':'Not for me'}</button></li>`};
   const groups=MUSIC_GROUPS.map(id=>[id,music.filter(t=>t.station===id)]).filter(([,list])=>list.length);

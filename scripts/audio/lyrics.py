@@ -41,30 +41,53 @@ def words_of(text, lang):
 
 
 class Models:
+    # The two models never sit in memory together (about 1.6 GB and 3 GB: a machine with 6 GB
+    # holds one at a time): every voice is separated first, then the separator goes and the
+    # transcriber comes.
     def __init__(self, d):
         import sherpa_onnx as so
-        self.so = so
-        self.sep = so.OfflineSourceSeparation(so.OfflineSourceSeparationConfig(model=so.OfflineSourceSeparationModelConfig(
-            uvr=so.OfflineSourceSeparationUvrModelConfig(model=os.path.join(d, 'UVR-MDX-NET-Voc_FT.onnx')), num_threads=2)))
-        w = os.path.join(d, 'sherpa-onnx-whisper-turbo')
-        self.enc, self.dec, self.tok = (os.path.join(w, f) for f in ('turbo-encoder.int8.onnx', 'turbo-decoder.int8.onnx', 'turbo-tokens.txt'))
-        self.lid = so.SpokenLanguageIdentification(so.SpokenLanguageIdentificationConfig(
-            whisper=so.SpokenLanguageIdentificationWhisperConfig(encoder=self.enc, decoder=self.dec), num_threads=2))
-        self.lang, self.rec_ = None, None
+        self.so, self.d, self.sep, self.rec_ = so, d, None, None
 
-    def rec(self, lang):
-        if lang != self.lang:
-            self.rec_ = None
-            self.rec_ = self.so.OfflineRecognizer.from_whisper(encoder=self.enc, decoder=self.dec, tokens=self.tok, language=lang, task='transcribe', num_threads=2)
-            self.lang = lang
+    def separator(self):
+        if self.sep is None:
+            so = self.so
+            self.sep = so.OfflineSourceSeparation(so.OfflineSourceSeparationConfig(model=so.OfflineSourceSeparationModelConfig(
+                uvr=so.OfflineSourceSeparationUvrModelConfig(model=os.path.join(self.d, 'UVR-MDX-NET-Voc_FT.onnx')), num_threads=2)))
+        return self.sep
+
+    def drop_separator(self):
+        import gc
+        self.sep = None; gc.collect()
+
+    def rec(self, lang=None):
+        # One recogniser that hears the language for itself. Whisper hearing the right language
+        # is itself the check that the words are sung clearly in it.
+        if self.rec_ is None:
+            w = os.path.join(self.d, 'sherpa-onnx-whisper-turbo')
+            enc, dec, tok = (os.path.join(w, f) for f in ('turbo-encoder.int8.onnx', 'turbo-decoder.int8.onnx', 'turbo-tokens.txt'))
+            self.rec_ = self.so.OfflineRecognizer.from_whisper(encoder=enc, decoder=dec, tokens=tok, language='', task='transcribe', num_threads=2)
         return self.rec_
 
-    def vocals(self, x):
-        out = self.sep.process(SR, np.ascontiguousarray(x, dtype=np.float32))
-        stems = [np.asarray(s.data, dtype=np.float32) for s in out.stems]
-        # The vocal model's first stem is the voice; keep the stem with the speech-band energy if not.
-        v = stems[0]
-        return v.mean(axis=0) if v.ndim == 2 else v, out.sample_rate
+    def vocals(self, x, piece=4.0, overlap=0.25):
+        # In pieces of four seconds (crossfaded over a quarter of a second): the separator's memory
+        # grows with the piece it is given (about 1.4 GB for three seconds, 5 GB for ten), and
+        # it must share the machine with the transcriber.
+        n, step, ov = x.shape[1], int(piece * SR), int(overlap * SR)
+        out, rate, pos = None, SR, 0
+        while pos < n:
+            a, b = max(0, pos - ov), min(n, pos + step)
+            res = self.separator().process(SR, np.ascontiguousarray(x[:, a:b], dtype=np.float32))
+            rate = res.sample_rate
+            v = np.asarray(res.stems[0].data, dtype=np.float32)  # the vocal model's first stem is the voice
+            v = v.mean(axis=0) if v.ndim == 2 else v
+            if out is None: out = np.zeros(int(n * rate / SR) + rate, dtype=np.float32)
+            o, k = int(a * rate / SR), int((pos - a) * rate / SR)
+            if k:  # crossfade the overlap with what the last piece left
+                ramp = np.linspace(0, 1, k, dtype=np.float32)
+                out[o:o + k] = out[o:o + k] * (1 - ramp) + v[:k] * ramp
+            out[o + k:o + len(v)] = v[k:]
+            pos = b
+        return out[:int(n * rate / SR)], rate
 
 
 def chunks(v16, sr=16000, most=28.0):
@@ -84,13 +107,25 @@ def chunks(v16, sr=16000, most=28.0):
     return out
 
 
-def check(path, name, exp, models, report):
-    kind = exp.get('kind', 'instrumental')
-    want = exp.get('language') or ('en' if kind == 'song' else None)
+def separate(path, models):
+    """The voice of a track at 16 kHz, and how loud it is against the whole (dB)."""
     x = decode(path, SR, 2)
     voice, vsr = models.vocals(x)
     v16 = sps.resample_poly(voice, 16000, vsr).astype(np.float32)
     level = 10 * np.log10(np.mean(voice ** 2) + 1e-12) - 10 * np.log10(np.mean(x.mean(axis=0) ** 2) + 1e-12)
+    return v16, float(level)
+
+
+def voice_level(v16, path):
+    """How loud a voice kept at 16 kHz is against the whole track (dB), as separate() measures it."""
+    x = decode(path, 16000, 1)
+    mix = x.mean(axis=0) if x.ndim > 1 else x
+    return float(10 * np.log10(np.mean(v16.astype(np.float64) ** 2) + 1e-12) - 10 * np.log10(np.mean(mix.astype(np.float64) ** 2) + 1e-12))
+
+
+def check(v16, level, name, exp, models, report):
+    kind = exp.get('kind', 'instrumental')
+    want = exp.get('language') or ('en' if kind == 'song' else None)
     parts = chunks(v16)
     res = {'voiceLevel': round(float(level), 1), 'parts': len(parts)}
     flags = []
@@ -98,25 +133,24 @@ def check(path, name, exp, models, report):
         res['heard'] = []
         if kind == 'song': flags.append({'t': None, 'type': 'lyrics', 'severity': 'fail', 'why': 'no singing found in a song'})
         return res, flags, ''
-    # Which language is sung: ask on the three loudest parts.
-    order = sorted(parts, key=lambda p: -float(np.mean(v16[int(p[0] * 16000):int(p[1] * 16000)] ** 2)))[:3]
-    heard = []
-    for a, b in order:
-        st = models.lid.create_stream()
-        st.accept_waveform(16000, v16[int(a * 16000):int(b * 16000)])
-        heard.append(models.lid.compute(st))
-    res['heard'] = heard
-    lang = want or max(set(heard), key=heard.count)
-    if want and heard.count(want) < 2 and not (want == 'zh' and any(h in ('zh', 'yue') for h in heard)):
-        flags.append({'t': None, 'type': 'language', 'severity': 'fail', 'why': f"sung in {'/'.join(sorted(set(heard)))}, not {want}"})
-    rec = models.rec(lang)
-    lines = []
+    # Transcribe each part, noting the language Whisper hears in it.
+    rec = models.rec()
+    lines, heard = [], []
     for a, b in parts:
         st = rec.create_stream()
         st.accept_waveform(16000, v16[int(a * 16000):int(b * 16000)])
         rec.decode_stream(st)
         txt = st.result.text.strip()
-        if txt: lines.append((a, txt))
+        lg = (getattr(st.result, 'lang', '') or '').strip('<|>').lower()
+        if txt: lines.append((a, txt)); heard.append(lg)
+    heard = [h for h in heard if h]
+    res['heard'] = heard
+    lang = want or (max(set(heard), key=heard.count) if heard else 'en')
+    if want and heard:
+        share = sum(1 for h in heard if h == want or (want == 'zh' and h in ('zh', 'yue'))) / len(heard)
+        res['inLanguage'] = round(share, 2)
+        if share < 0.5: flags.append({'t': None, 'type': 'language', 'severity': 'fail', 'why': f"mostly heard as {'/'.join(sorted(set(heard)))}, not {want} ({int(share * 100)}% of the singing)"})
+        elif share < 0.8: flags.append({'t': None, 'type': 'language', 'severity': 'review', 'why': f"{int(share * 100)}% of the singing is heard as {want}"})
     text = ' '.join(t for _, t in lines)
     ws = words_of(text, lang)
     res['words'] = len(ws)
@@ -164,7 +198,7 @@ def main():
     ap.add_argument('files', nargs='+')
     a = ap.parse_args()
     expect = json.load(open(a.expect)) if a.expect else {}
-    models = None
+    todo = []
     for path in a.files:
         name = re.sub(r'^vch-', '', os.path.splitext(os.path.basename(path))[0])
         exp = expect.get(name, {})
@@ -173,9 +207,30 @@ def main():
         r = json.load(open(jp))
         heard_voice = any(f['type'] == 'voice' for f in r.get('flags', []))
         if exp.get('kind') != 'song' and not (a.all and heard_voice): continue
-        if r.get('lyrics', {}).get('size') == r.get('size'): continue
-        models = models or Models(a.models)
-        res, flags, transcript = check(path, name, exp, models, r)
+        if (r.get('lyrics') or {}).get('size') == r.get('size'): continue
+        todo.append((path, name, exp, jp))
+    if not todo: return
+    models = Models(a.models)
+    # First every voice (kept on disk beside the report), then every transcript.
+    voices = {}
+    for path, name, exp, jp in todo:
+        vp = os.path.join(a.out, f'{name}.voice16k.npy'); lp = vp[:-4] + '.level'
+        if os.path.exists(vp) and os.path.getmtime(vp) >= os.path.getmtime(path):
+            # Separated by a run that was cut short: kept (its level, when that run did not get to save it, from the voice kept).
+            level = float(open(lp).read()) if os.path.exists(lp) else voice_level(np.load(vp), path)
+            voices[name] = (vp, level)
+            print(f'{name:30s} voice kept from an earlier run', flush=True)
+            continue
+        v16, level = separate(path, models)
+        np.save(vp, v16); open(lp, 'w').write(str(level)); voices[name] = (vp, level)
+        print(f'{name:30s} voice separated', flush=True)
+    models.drop_separator()
+    for path, name, exp, jp in todo:
+        vp, level = voices[name]
+        r = json.load(open(jp))
+        res, flags, transcript = check(np.load(vp), level, name, exp, models, r)
+        os.remove(vp)
+        if os.path.exists(vp[:-4] + '.level'): os.remove(vp[:-4] + '.level')
         res['size'] = r.get('size')
         r['lyrics'] = res
         r['flags'] = [f for f in r.get('flags', []) if f['type'] not in ('lyrics', 'language') and not f.get('fromLyrics')] + [dict(f, fromLyrics=True) for f in flags]

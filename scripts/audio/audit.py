@@ -21,7 +21,7 @@ import argparse, json, os, re, subprocess, unicodedata
 import numpy as np
 import scipy.signal as sps
 
-VERSION = 7
+VERSION = 8
 SR = 44100
 FPS = 10  # analysis frames per second
 PC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -293,7 +293,7 @@ class Track:
                 lev = np.r_[lvl1[max(0, i - 10):max(0, i - 1)], lvl1[i + 2:i + 11]]
                 if first + 2 < i < last - 3 and len(around) >= 8 and persec[i] < 0.4 * np.median(around) and lvl1[i] > np.median(lev) - 4:
                     k += 1
-                    if k == 2: self.flag(i - 1, 'muffled', 'review', f'the top end suddenly drops to {persec[i] / 1000:.1f} kHz (around it {np.median(around) / 1000:.1f} kHz): it sounds muffled')
+                    if k == 2: self.flag(i - 1, 'muffled', 'review' if persec[i] < 0.2 * np.median(around) and lvl1[i] > np.median(lev) - 2 else 'info', f'the top end suddenly drops to {persec[i] / 1000:.1f} kHz (around it {np.median(around) / 1000:.1f} kHz): it may sound muffled')
                 else: k = 0
         # Stereo: out-of-phase channels cancel out on a phone speaker.
         cor = []
@@ -303,7 +303,7 @@ class Track:
             cor.append(float((a * b).sum() / den) if den > 1e-9 else 1.0)
         r['stereo'] = {'medianCorr': round(float(np.median(cor)), 2) if cor else None, 'minCorr': round(min(cor), 2) if cor else None}
         neg = [i for i, c in enumerate(cor) if c < -0.2]
-        if len(neg) >= 2: self.flag(neg[0], 'phase', 'review', 'the left and right channels are out of phase (it thins out or vanishes in mono)')
+        if len(neg) >= 3: self.flag(neg[0], 'phase', 'review', 'the left and right channels are out of phase (it thins out or vanishes in mono)')
 
         # Voices and the sound's character every 2.5 s (the AudioSet tagger), when it is here.
         self.tagwin = []
@@ -413,7 +413,7 @@ class Track:
             want = self.expect.get('bpm')
             for i in (1, 2):
                 if tempi[0] and tempi[i] and not same_pulse(tempi[0], tempi[i]):
-                    self.flag(secs[i][0] - 6, 'tempo', 'review', f'section {i + 1} pulses at about {tempi[i]:.0f}, section 1 at {tempi[0]:.0f} (folded to one octave)')
+                    self.flag(secs[i][0] - 6, 'tempo', 'info', f'section {i + 1} pulses at about {tempi[i]:.0f}, section 1 at {tempi[0]:.0f} (folded to one octave)')
                 kf = corr(kvs[0], kvs[i])
                 if kf is not None and kf < 0.6:
                     self.flag(secs[i][0] - 6, 'key', 'fail', f"section {i + 1} is in {r['sections']['key'][i]}, section 1 in {r['sections']['key'][0]} (key fit {kf:.2f}): the parts clash when the game moves between them")
@@ -454,7 +454,7 @@ class Track:
         if gap_before: what.append('straight after a gap')
         if harmonic: what.append(f"the harmony moves to an unrelated key (fit {c['keyFit']:.2f})")
         if style: what.append(f"the sound switches (tags {c['tags']:.2f} apart)")
-        if surge and (harmonic or style or gap_before):
+        if surge and (style or gap_before):
             self.flag(t, 'jump', 'fail', 'a jump cut: ' + ', '.join(what))
         elif c['vanish'] >= 0.5 and c['level'] <= -6:
             self.flag(t, 'cut', 'review', f"{int(c['vanish'] * 100)}% of the sound stops dead (a cut)")

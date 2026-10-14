@@ -48,7 +48,7 @@ test('with Music on the music plays, the board glows with its beat, and a statio
   // The Theme Studio says what is playing; a station plays its own tracks.
   await page.locator('#theme').click();
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Beat');
-  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Everything', 'Liked']);
+  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Old worlds', 'Everything', 'Liked']);
   await page.locator('#musicSetting').selectOption('songs');
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Song');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.music')))).toMatchObject({ on: true, station: 'songs' });
@@ -105,6 +105,31 @@ test('before the library has music, the setting says it is on its way', async ({
   await expect(page.locator('#musicNow')).toHaveText('The music library is on its way');
   await page.locator('#musicSetting').selectOption('off');
   await expect(page.locator('#musicNow')).toHaveText('');
+  expect(errors).toEqual([]);
+});
+
+test('a world from Theme Studio: its own theme in the menus at once, and kept', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Desktop theme dialog');
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const worlds = { tracks: [LIBRARY.tracks[0], { id: 'test-rome', title: 'Latrunculi · Test', file: 'test-rome.mp3', station: 'worlds', place: 'lobby', theme: 'rome' }, LIBRARY.tracks[1]] };
+  await setup(page, { library: worlds });
+  await page.goto('/');
+  await page.locator('.hero h1').click();
+  await page.locator('#theme').click();
+  const now = page.locator('#musicNow');
+  // Vanta (no world): a world's theme is not one of the menus' pieces.
+  await expect(now).toHaveText('Now playing · Test Beat', { timeout: 8000 });
+  await expect(page.locator('#worldSetting option')).toHaveText(['Vanta Chess', 'Mehen · Ancient Egypt', 'Petteia · Ancient Greece', 'Latrunculi · Ancient Rome', 'Liubo · Ancient China', 'Heian · Old Japan', 'Chatrang · Ancient Persia', 'Etemenanki · Babylon', 'Igodomigodo · Kingdom of Benin']);
+  await page.locator('#worldSetting').selectOption('rome');
+  await expect(now).toHaveText('Now playing · Latrunculi · Test');
+  expect(await page.evaluate(() => localStorage.getItem('vch.world'))).toBe('rome');
+  // Kept: VCH opened again plays the world's theme in the menus.
+  await page.reload();
+  await page.locator('.hero h1').click();
+  await page.locator('#theme').click();
+  await expect(page.locator('#worldSetting')).toHaveValue('rome');
+  await expect(now).toHaveText('Now playing · Latrunculi · Test', { timeout: 8000 });
   expect(errors).toEqual([]);
 });
 

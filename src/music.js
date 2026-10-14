@@ -31,9 +31,9 @@
 import { MUSIC_BASE, isSting, placesOf } from './music-library.js';
 
 export const MUSIC_KEY = 'vch.music';
-const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10], harmonic: [0, 2, 3, 5, 7, 8, 11] };
-// Each theme's key (relic sets, campaign realms): its tracks are written in it, and Resonance
-// draws its figures from it.
+const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], ionian: [0, 2, 4, 5, 7, 9, 11], hijaz: [0, 1, 4, 5, 7, 8, 10] };
+// Each theme's key (relic sets, campaign realms, the old worlds): its tracks are written in it,
+// and Resonance draws its figures from it.
 export const MUSIC_KEYS = {
   vanta: { root: 50, scale: 'aeolian' }, // D minor
   ember: { root: 52, scale: 'phrygian' }, // E phrygian
@@ -42,7 +42,20 @@ export const MUSIC_KEYS = {
   mirror: { root: 57, scale: 'dorian' }, // A dorian
   obsidian: { root: 47, scale: 'aeolian' }, // B minor
   rivalry: { root: 55, scale: 'harmonic' }, // G harmonic minor
+  // The old worlds (owner, 2026-10-13: "old civilization type music and themes... like the old
+  // chinese and japanese style, rome and so on"): each has its theme for the menus and a battle
+  // suite for its games.
+  egypt: { root: 52, scale: 'hijaz' }, // E hijaz
+  greece: { root: 50, scale: 'dorian' }, // D dorian
+  rome: { root: 57, scale: 'aeolian' }, // A minor
+  china: { root: 50, scale: 'ionian' }, // D major (pentatonic)
+  japan: { root: 57, scale: 'phrygian' }, // A, the in scale
+  persia: { root: 50, scale: 'phrygian' }, // D, dastgah shur
+  babylon: { root: 50, scale: 'phrygian' }, // D phrygian
+  benin: { root: 48, scale: 'aeolian' }, // C minor
 };
+// The old worlds a player can choose (Theme Studio: World): their music in the menus and in games.
+export const WORLDS = ['egypt', 'greece', 'rome', 'china', 'japan', 'persia', 'babylon', 'benin'];
 // Relic sets and realms each pick a theme.
 export const KEY_FOR_THEME = { umbra: 'umbra', ember: 'ember', ashen: 'ember', mirror: 'mirror', court: 'mirror', gilded: 'gilded', crown: 'gilded', paladin: 'gilded', obsidian: 'obsidian', eclipse: 'obsidian', rivalry: 'rivalry', tidal: 'umbra', oathbound: 'vanta' };
 const PROGRESSION = [0, 5, 2, 6]; // i – VI – III – VII
@@ -127,20 +140,26 @@ const GAME_PARTS = { calm: ['calm', 'tense'], tense: ['tense', 'calm'], storm: [
 // realm's opera; after a game the win or loss music; a relic set its own theme; the rest their
 // own place's music, falling back to the menus'.
 export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'calm', theme = 'vanta', division = null, skin = null, likes = null } = {}) {
-  const music = tracks.filter(t => !isSting(t)), at = p => music.filter(t => placesOf(t).includes(p));
+  // A battle suite plays whole on a station and in the lists, and in its parts in a game (each
+  // part an entry of its own, `of` the whole piece).
+  const all = tracks.filter(t => !isSting(t)), inParts = new Set(all.filter(t => t.of).map(t => t.of));
+  const music = all.filter(t => !t.of), at = p => music.filter(t => placesOf(t).includes(p));
   if (station === 'liked') { const liked = new Set(likes?.liked || []), mine = music.filter(t => liked.has(t.id)); if (mine.length) return mine; station = 'on'; }
   if (station && station !== 'on') return station === 'mix' ? music.filter(t => !placesOf(t).includes('skin')) : music.filter(t => t.station === station);
   const game = () => {
-    const all = at('game');
+    const all = [...at('game').filter(t => !inParts.has(t.id)), ...tracks.filter(t => t.of && placesOf(t).includes('game'))];
     for (const th of [theme, 'vanta']) {
       const mine = all.filter(t => (t.theme || 'vanta') === th);
       for (const p of GAME_PARTS[part] || [part]) { const pool = mine.filter(t => (t.part || 'calm') === p); if (pool.length) return pool; }
     }
     return all;
   };
-  // The menus: your division's hall (Bronze before you have one) and the open themes.
+  // The menus: your world's theme when you chose one, your division's hall (Bronze before you
+  // have one), and the open themes when you have no world. A world's theme plays only for it.
   const lobby = () => {
-    const all = at('lobby').filter(t => t.kind !== 'song'), open = all.filter(t => !t.division), mine = all.filter(t => t.division === (division || 'bronze'));
+    const all = at('lobby').filter(t => t.kind !== 'song' && (!t.theme || t.theme === theme)), world = all.filter(t => t.theme === theme);
+    const open = all.filter(t => !t.division && !t.theme), mine = all.filter(t => t.division === (division || 'bronze'));
+    if (world.length) return [...world, ...mine];
     return mine.length || open.length ? [...mine, ...open] : all;
   };
   let pool;
@@ -159,13 +178,14 @@ export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'cal
 export function pickTrack(tracks, { history = [], after = null, random = Math.random, likes = null, language = null, ...moment } = {}) {
   let pool = tracksFor(tracks, { ...moment, likes });
   if (!pool.length) return null;
-  const hidden = new Set(likes?.hidden || []), liked = new Set(likes?.liked || []);
-  const shown = pool.filter(t => !hidden.has(t.id));
+  // (A suite's part counts as the suite: liking or hiding the piece likes or hides its parts.)
+  const hidden = new Set(likes?.hidden || []), liked = new Set(likes?.liked || []), is = (set, t) => set.has(t.id) || (!!t.of && set.has(t.of));
+  const shown = pool.filter(t => !is(hidden, t));
   if (shown.length) pool = shown;
   const past = after && !history.includes(after) ? [...history, after] : history;
   const recent = new Set(past.slice(-Math.min(3, pool.length - 1)));
   const fresh = pool.filter(t => !recent.has(t.id)), from = fresh.length ? fresh : pool;
-  const weight = t => (liked.has(t.id) ? 3 : 1) * (t.kind === 'song' && language && t.lang === language ? 3 : 1);
+  const weight = t => (is(liked, t) ? 3 : 1) * (t.kind === 'song' && language && t.lang === language ? 3 : 1);
   let x = random() * from.reduce((sum, t) => sum + weight(t), 0);
   for (const t of from) { x -= weight(t); if (x < 0) return t; }
   return from[from.length - 1];
@@ -362,7 +382,7 @@ export class VantaScore {
       const go = () => { if (this.active === to) to.el.play?.()?.catch?.(() => {}); };
       if (delay > 0.02) this.later(go, delay * 1000); else go();
     };
-    this.active = to; to.track = track; to.usedAt = now; to.until = Infinity;
+    this.active = to; to.track = track; to.usedAt = now; to.until = Infinity; to.fading = false;
     if (busy) this.later(launch, busy * 1000); else launch();
     this.curveTo(g, 0, this.levelOf(track), Math.max(at, now + 0.005 + busy), fadeIn);
     if (from && from !== to) {
@@ -432,7 +452,7 @@ export class VantaScore {
   setLikes(likes) {
     this.likes = { liked: [...(likes?.liked || [])], hidden: [...(likes?.hidden || [])] }; this.queued = null;
     const now = this.active?.track;
-    if (this.playing && now && this.likes.hidden.includes(now.id)) this.skip();
+    if (this.playing && now && (this.likes.hidden.includes(now.id) || (now.of && this.likes.hidden.includes(now.of)))) this.skip();
     else if (this.station === 'liked') this.update('now');
   }
   // Your language (a song in it comes round more often on the Songs station).
@@ -457,7 +477,7 @@ export class VantaScore {
     if (!this.playing) return null;
     if (this.next && this.suits(this.next)) return this.next;
     const q = this.queued, hidden = this.likes.hidden;
-    if (!q || !this.suits(q) || hidden.includes(q.id)) this.queued = this.pick({ after: this.active?.track?.id });
+    if (!q || !this.suits(q) || hidden.includes(q.id) || (q.of && hidden.includes(q.of))) this.queued = this.pick({ after: this.active?.track?.id });
     return this.queued;
   }
   // A dialog in front of the board: the music as if behind a door (0 open .. 1 shut).
@@ -479,6 +499,12 @@ export class VantaScore {
     const el = this.active.el, t = this.active.track, d = el.duration, end = Math.min(t.end || Infinity, Number.isFinite(d) ? d : Infinity), left = end - (el.currentTime || 0);
     if (Number.isFinite(left) && end > 10) {
       const bar = barSeconds(t) || 2.5;
+      // A piece cut short of its own ending (its end set before it) fades out over its last
+      // seconds in the menus; in a game the next one crosses it on the bar line anyway.
+      if (this.album && t.fade && left <= t.fade && !this.active.fading) {
+        this.active.fading = true; const g = this.active.gain.gain;
+        this.curveTo(g, this.hold(g), 0, this.ctx.currentTime + 0.005, Math.max(0.05, left - 0.05));
+      }
       // The next track (or the same one again) loads twenty seconds before this one ends...
       if (left < 20 && !this.next && this.now() - this.switchedAt > 6000) this.prepare(this.upcoming);
       // ...and, in the menus, begins once this one has rung out (after a short pause); in a game,
