@@ -118,6 +118,21 @@
    "key": "C major"
   },
   {
+   "id": "boss-ember-warden-2",
+   "title": "The Ember Warden · Ash Psalm",
+   "file": "boss-ember-warden-2.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "ember",
+   "seconds": 177.69,
+   "start": 0.05,
+   "end": 175.89,
+   "gain": -2.3,
+   "bpm": 72.0,
+   "beat": 1.806,
+   "key": "A# major"
+  },
+  {
    "id": "boss-pale-reflection",
    "title": "The Pale Reflection",
    "file": "boss-pale-reflection.m4a",
@@ -131,6 +146,21 @@
    "bpm": 80.0,
    "beat": 1.7,
    "key": "G# minor"
+  },
+  {
+   "id": "boss-pale-reflection-2",
+   "title": "The Pale Reflection · Glass Lament",
+   "file": "boss-pale-reflection-2.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "mirror",
+   "seconds": 178.65,
+   "start": 0.77,
+   "end": 176.17,
+   "gain": -1.0,
+   "bpm": 81.07,
+   "beat": 1.28,
+   "key": "D# major"
   },
   {
    "id": "boss-tidecaller",
@@ -148,6 +178,36 @@
    "key": "E minor"
   },
   {
+   "id": "boss-tidecaller-2",
+   "title": "The Tidecaller · Bells of the Deep",
+   "file": "boss-tidecaller-2.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "umbra",
+   "seconds": 180.37,
+   "start": 1.41,
+   "end": 177.85,
+   "gain": -1.4,
+   "bpm": 70.56,
+   "beat": 2.834,
+   "key": "F minor"
+  },
+  {
+   "id": "boss-tidecaller-3",
+   "title": "The Tidecaller · Bells at Low Tide",
+   "file": "boss-tidecaller-3.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "umbra",
+   "seconds": 179.39,
+   "start": 0.75,
+   "end": 177.17,
+   "gain": -1.4,
+   "bpm": 70.0,
+   "beat": 2.857,
+   "key": "E major"
+  },
+  {
    "id": "boss-usurper",
    "title": "The Usurper",
    "file": "boss-usurper.m4a",
@@ -163,6 +223,36 @@
    "key": "F minor"
   },
   {
+   "id": "boss-usurper-2",
+   "title": "The Usurper · The False Crown",
+   "file": "boss-usurper-2.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "gilded",
+   "seconds": 179.14,
+   "start": 1.73,
+   "end": 176.77,
+   "gain": -1.2,
+   "bpm": 86.18,
+   "beat": 2.408,
+   "key": "A# major"
+  },
+  {
+   "id": "boss-usurper-3",
+   "title": "The Usurper · The Crown Unearned",
+   "file": "boss-usurper-3.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "gilded",
+   "seconds": 181.99,
+   "start": 0.47,
+   "end": 179.59,
+   "gain": -1.1,
+   "bpm": 84.0,
+   "beat": 2.768,
+   "key": "G# minor"
+  },
+  {
    "id": "boss-vanta-king",
    "title": "The Vanta King",
    "file": "boss-vanta-king.m4a",
@@ -176,6 +266,36 @@
    "bpm": 74.94,
    "beat": 0.05,
    "key": "C minor"
+  },
+  {
+   "id": "boss-vanta-king-2",
+   "title": "The Vanta King · Eclipse Requiem",
+   "file": "boss-vanta-king-2.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "obsidian",
+   "seconds": 178.58,
+   "start": 1.25,
+   "end": 175.91,
+   "gain": -2.1,
+   "bpm": 70.56,
+   "beat": 1.258,
+   "key": "D# minor"
+  },
+  {
+   "id": "boss-vanta-king-3",
+   "title": "The Vanta King · Requiem at the Spire",
+   "file": "boss-vanta-king-3.m4a",
+   "station": "opera",
+   "place": "boss",
+   "theme": "obsidian",
+   "seconds": 178.5,
+   "start": 0.0,
+   "end": 176.07,
+   "gain": -1.6,
+   "bpm": 72.94,
+   "beat": 0.069,
+   "key": "A# major"
   },
   {
    "id": "china-calm",

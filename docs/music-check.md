@@ -32,7 +32,7 @@ The owner (2026-10-13): "you cannot just name something ancient Egypt, ancient G
 
 The other battle suites took names from their realms too: *Cinders on the Wind* (Ashen March), *Bells Under Water* (Drowned Keep), *The Other Hand* (Mirror Court), *The Usurper's Feast* (Hollow Crown), *The Last Ascent* (Obsidian Spire), *Old Scores* (Rivalry), and Vanta Chess's own *When the Candles Gutter* and *The Storm Builds*. A suite's parts are its name and the moment: *The Drunken Elephant · Opening*.
 
-## In the library: 110 pieces and 13 stings
+## In the library: 118 pieces and 13 stings
 
 A measured flag is a moment to listen to, not a verdict: each one went back to the Producer for a targeted listen at that time, and its answer is in the Listening column ("musical" clears it). Gaps, dropouts and bad openings or endings are cut out instead (the Notes say where a piece starts or ends).
 
@@ -134,55 +134,67 @@ Under Siege at 2:24.5 to 2:27: about three seconds whose left and right channels
 | Piece | Listening | Measured | Notes |
 |---|---|---|---|
 | The Ember Warden (`boss-ember-warden`) | PASS (opera bar: singing in tune and clear; real Italian/Latin or clean vocalise) | fail: whole piece language; whole piece lyrics · sung in its language: 14% of the passes |  |
+| The Ember Warden · Ash Psalm (`boss-ember-warden-2`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
 | The Pale Reflection (`boss-pale-reflection`) | FAIL targeted: 0:25 abrupt ~12 dB jump mid-phrase, instant ambience change, no preparation | fail: 0:25.6 jump; whole piece language · sung in its language: 17% of the passes | plays from 0:25.7; checked from there: PASS from 0:25.7 (opera bar; clean and complete from the entrance downbeat) |
+| The Pale Reflection · Glass Lament (`boss-pale-reflection-2`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
 | The Tidecaller (`boss-tidecaller`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics; whole piece lyrics · sung in its language: 0% of the passes |  |
+| The Tidecaller · Bells of the Deep (`boss-tidecaller-2`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics; whole piece lyrics · sung in its language: 0% of the passes |  |
+| The Tidecaller · Bells at Low Tide (`boss-tidecaller-3`) | PASS (opera bar); targeted: 2:29.4 a deliberate rest before the piano coda, 2:42.5 a rubato slow-down into the outro (both musical) | fail: 2:29.4 silence; 2:42.5 pulse; whole piece language; whole piece lyrics · sung in its language: 14% of the passes |  |
 | The Usurper (`boss-usurper`) | PASS (opera bar) | fail: whole piece language · sung in its language: 17% of the passes |  |
+| The Usurper · The False Crown (`boss-usurper-2`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
+| The Usurper · The Crown Unearned (`boss-usurper-3`) | PASS (opera bar); targeted: 2:52.1 a subito piano into a soft coda, a V-i cadence with a natural reverb decay (musical) | fail: 2:52.1 switch; whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
 | The Vanta King (`boss-vanta-king`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
-The lyrics check expects words in a language. The bosses sing mostly wordless vocalise, which the opera bar allows (the Ember Warden sings real Italian), so its language flags do not apply to them; the Producer judged the singing with the opera bar.
+| The Vanta King · Eclipse Requiem (`boss-vanta-king-2`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
+| The Vanta King · Requiem at the Spire (`boss-vanta-king-3`) | PASS (opera bar) | fail: whole piece language; whole piece lyrics · sung in its language: 0% of the passes |  |
+The lyrics check expects words it can transcribe. Operatic singing (held vowels, melismas, a choir over an orchestra) defeats the transcriber: it makes out a line or two at most (the Tidecaller's "Sotto il mare, le campane suonano...", the Usurper's Latin) and hears the rest as "oh", so its language flags do not apply to the operas. The Producer judged the singing with the opera bar, the words included.
+
+The second operas of each boss (owner, 2026-10-14: "I kept hearing one, like two or three over and over again") came from nine new takes; eight passed. *The Pale Reflection · Glass Lament*'s other take jumps in after a gap at 0:26 and was left out.
 
 
 ### Songs
 
 | Piece | Listening | Measured | Notes |
 |---|---|---|---|
-| كش ملك (`song-ar-kish-malik`) | PASS | pass |  |
-| قهوة الصباح (`song-ar-qahwat-alsabah`) | PASS | pass |  |
-| Die alte Bäckerei (`song-de-baeckerei`) | PASS | pass |  |
+| كش ملك (`song-ar-kish-malik`) | PASS | review: whole piece lyrics · sung in its language: 100% of the passes |  |
+| قهوة الصباح (`song-ar-qahwat-alsabah`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Die alte Bäckerei (`song-de-baeckerei`) | PASS | pass · sung in its language: 100% of the passes |  |
 | Zug um Zug (`song-de-zug-um-zug`) | PASS | pass · sung in its language: 100% of the passes |  |
-| Endgame (`song-endgame`) | PASS | pass |  |
-| La cocina de mi abuela (`song-es-cocina-abuela`) | PASS | pass |  |
-| Jaque al rey (`song-es-jaque-al-rey`) | PASS | pass |  |
-| Jaque al rey II (`song-es-jaque-al-rey-b`) | PASS | pass |  |
-| Échec et mat (`song-fr-echec-et-mat`) | PASS | pass |  |
-| Mon vieux vélo (`song-fr-vieux-velo`) | PASS | pass |  |
-| Grandpa's Chessboard (`song-grandpas-chessboard`) | PASS | pass |  |
-| चाय की टपरी (`song-hi-chai-ki-tapri`) | PASS | pass |  |
-| शह और मात (`song-hi-shah-aur-maat`) | PASS | pass |  |
-| शह और मात II (`song-hi-shah-aur-maat-b`) | PASS | pass |  |
-| Il caffè della domenica (`song-it-caffe-domenica`) | PASS targeted: 2:46 ritardando into a natural final chord | review: 2:46.5 pulse |  |
-| La regina (`song-it-la-regina`) | PASS | pass |  |
-| 一手ずつ (`song-ja-itte-zutsu`) | PASS | pass |  |
-| 商店街の夕暮れ (`song-ja-shotengai`) | PASS targeted: 0:06 brass pickup into a full-band downbeat | fail: 0:06.7 jump |  |
-| Kitchen Stove (`song-kitchen-stove`) | PASS | pass |  |
-| The Knight's Ride (`song-knights-ride`) | PASS | pass |  |
-| 한 수 한 수 (`song-ko-han-su`) | PASS | pass |  |
-| Life Is a Long Game (`song-long-game`) | PASS | pass |  |
-| Morning Coffee (`song-morning-coffee`) | PASS | pass |  |
-| The Old Chair (`song-old-chair`) | PASS targeted: 2:45 ritardando into a natural final chord | review: 2:45.5 pulse |  |
-| The Pawn's Journey (`song-pawns-journey`) | PASS | pass |  |
-| A varanda (`song-pt-varanda`) | PASS | pass |  |
-| Xeque-mate (`song-pt-xeque-mate`) | PASS targeted: 2:47 ritardando into a natural final chord | review: 2:47 pulse |  |
-| Queen of the Board (`song-queen-of-the-board`) | PASS | pass |  |
-| Rain on the Window (`song-rain-window`) | PASS | pass |  |
-| Дача (`song-ru-dacha`) | PASS | pass |  |
-| Ход конём (`song-ru-hod-konyom`) | PASS | pass |  |
-| Saturday Market (`song-saturday-market`) | PASS | pass |  |
-| Tick Tock (`song-tick-tock`) | PASS | pass |  |
-| Çay Bahçesi (`song-tr-cay-bahcesi`) | PASS | pass |  |
-| Hamle (`song-tr-hamle`) | PASS | pass |  |
-| Hamle II (`song-tr-hamle-b`) | PASS | pass |  |
-| 外婆的小院 (`song-zh-waipo-xiaoyuan`) | PASS | pass |  |
-| 一步一步 (`song-zh-yi-bu-yi-bu`) | PASS | pass |  |
+| Endgame (`song-endgame`) | PASS | pass · sung in its language: 100% of the passes |  |
+| La cocina de mi abuela (`song-es-cocina-abuela`) | PASS | pass · sung in its language: 86% of the passes |  |
+| Jaque al rey (`song-es-jaque-al-rey`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Jaque al rey II (`song-es-jaque-al-rey-b`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Échec et mat (`song-fr-echec-et-mat`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Mon vieux vélo (`song-fr-vieux-velo`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Grandpa's Chessboard (`song-grandpas-chessboard`) | PASS | pass · sung in its language: 100% of the passes |  |
+| चाय की टपरी (`song-hi-chai-ki-tapri`) | PASS; language listen (2026-10-14): sung in Hindi from start to finish, clear real words | review: whole piece language · sung in its language: 67% of the passes |  |
+| शह और मात (`song-hi-shah-aur-maat`) | PASS; language listen (2026-10-14): sung in Hindi from start to finish, clear real words | fail: whole piece language; whole piece lyrics; whole piece lyrics · sung in its language: 17% of the passes |  |
+| शह और मात II (`song-hi-shah-aur-maat-b`) | PASS; language listen (2026-10-14): sung in Hindi from start to finish, clear real words | fail: whole piece language; whole piece lyrics; whole piece lyrics · sung in its language: 14% of the passes |  |
+| Il caffè della domenica (`song-it-caffe-domenica`) | PASS targeted: 2:46 ritardando into a natural final chord | review: 2:46.5 pulse · sung in its language: 100% of the passes |  |
+| La regina (`song-it-la-regina`) | PASS | pass · sung in its language: 86% of the passes |  |
+| 一手ずつ (`song-ja-itte-zutsu`) | PASS | pass · sung in its language: 100% of the passes |  |
+| 商店街の夕暮れ (`song-ja-shotengai`) | PASS targeted: 0:06 brass pickup into a full-band downbeat | fail: 0:06.7 jump · sung in its language: 100% of the passes |  |
+| Kitchen Stove (`song-kitchen-stove`) | PASS | pass · sung in its language: 100% of the passes |  |
+| The Knight's Ride (`song-knights-ride`) | PASS | pass · sung in its language: 100% of the passes |  |
+| 한 수 한 수 (`song-ko-han-su`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Life Is a Long Game (`song-long-game`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Morning Coffee (`song-morning-coffee`) | PASS | pass · sung in its language: 100% of the passes |  |
+| The Old Chair (`song-old-chair`) | PASS targeted: 2:45 ritardando into a natural final chord | review: 2:45.5 pulse · sung in its language: 100% of the passes |  |
+| The Pawn's Journey (`song-pawns-journey`) | PASS | pass · sung in its language: 100% of the passes |  |
+| A varanda (`song-pt-varanda`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Xeque-mate (`song-pt-xeque-mate`) | PASS targeted: 2:47 ritardando into a natural final chord | review: 2:47 pulse · sung in its language: 100% of the passes |  |
+| Queen of the Board (`song-queen-of-the-board`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Rain on the Window (`song-rain-window`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Дача (`song-ru-dacha`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Ход конём (`song-ru-hod-konyom`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Saturday Market (`song-saturday-market`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Tick Tock (`song-tick-tock`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Çay Bahçesi (`song-tr-cay-bahcesi`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Hamle (`song-tr-hamle`) | PASS | pass · sung in its language: 100% of the passes |  |
+| Hamle II (`song-tr-hamle-b`) | PASS | pass · sung in its language: 100% of the passes |  |
+| 外婆的小院 (`song-zh-waipo-xiaoyuan`) | PASS; language listen (2026-10-14): sung in Mandarin from start to finish, clear real words | review: whole piece lyrics · sung in its language: 100% of the passes |  |
+| 一步一步 (`song-zh-yi-bu-yi-bu`) | PASS; language listen (2026-10-14): sung in Mandarin from start to finish, clear real words | review: whole piece lyrics; whole piece lyrics · sung in its language: 100% of the passes |  |
+Where the transcriber could not confirm a song's language, the Producer listened for the language itself (2026-10-14). The transcriber writes sung Hindi in Urdu script, or translates it into English, so its Hindi share is low; it hears Chinese with characters missing, so few lines match. Each of those songs is sung in its own language from start to finish, with clear, real words.
+
 
 ### After a game
 
@@ -218,10 +230,11 @@ The lyrics check expects words in a language. The bosses sing mostly wordless vo
 | Puzzle failed (`sting-failed`) | `sting-puzzle-failed` 0:56–0:59 | PASS | pass |
 | Brilliant move (`sting-brilliant`) | `sting-brilliant` 0:53.5–0:58.1 | PASS (re-cut to its natural ring-out) | pass |
 
-## Left out: 45 pieces
+## Left out: 46 pieces
 
 | Piece | Why |
 |---|---|
+| `boss-pale-reflection-2a` | FAIL measured: 0:26.3 a jump cut straight after a 0.5 s gap (another take kept) |
 | `electric-neon-gambit` | FAIL (upload): 0:14.6 and 1:31.4 abrupt mid-phrase dropouts cut the audio and reverb tail |
 | `electric-overclocked` | FAIL (upload): vocal chops at 0:13, 0:44, 1:28 (the 2:29 ending is musical) |
 | `ember-middlegame` | replaced by its battle suite |

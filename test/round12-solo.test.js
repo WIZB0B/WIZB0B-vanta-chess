@@ -6,7 +6,7 @@ import { RANKS, addGames, armyList, careers, countsForCareer, deeds, emptyCareer
 import { HONOR_RELICS, OATHS, dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from '../src/oaths.js';
 import { atmosphereFor, materialFromFen, tensionFor } from '../src/atmosphere.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, starsFor, totalStars } from '../src/campaign.js';
-import { KEY_FOR_THEME, MAX_LEVEL, MUSIC_KEYS, VantaScore, WORLDS, barSeconds, chordFor, entryOf, equalPower, hideTrack, keysRelated, levelFor, likeTrack, loadMusic, loadMusicLikes, midiHz, moodFor, nextLine, partFor, pickTrack, saveMusic, saveMusicLikes, stingFor, tracksFor } from '../src/music.js';
+import { KEY_FOR_THEME, MAX_LEVEL, MUSIC_KEYS, VantaScore, WORLDS, barSeconds, chordFor, entryOf, equalPower, hideTrack, levelFor, likeTrack, loadMusic, loadMusicLikes, midiHz, moodFor, nextLine, partFor, pickTrack, saveMusic, saveMusicLikes, stingFor, tracksFor } from '../src/music.js';
 import { DIVISIONS, LIBRARY_URL, MUSIC_BASE, PLACES, STATIONS, STINGS, checkTrack, isSting, loadLibrary, placesOf, readLibrary } from '../src/music-library.js';
 import { playMoveSound, soundPlace } from '../src/move-sound.js';
 import { RELICS, relicById } from '../src/relics.js';
@@ -183,9 +183,10 @@ test('music: each theme has its key, chords are triads in that key; the setting 
   saveMusic({ on: true, volume: 2 }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 1, station: 'on' });
   saveMusic({ on: true, volume: 0.3, station: 'opera' }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 0.3, station: 'opera' });
   assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'worlds', 'mix', 'liked']);
-  // The volume has a ceiling (owner: "too loud"), and a curve: full is about 3 dB down.
-  assert.equal(levelFor(1), MAX_LEVEL); assert.equal(levelFor(0), 0); assert.ok(MAX_LEVEL <= 0.71);
-  assert.ok(levelFor(0.5) < 0.3 && levelFor(0.5) > 0.25, 'half way is a quiet bed'); assert.equal(levelFor(7), MAX_LEVEL);
+  // The volume has a ceiling (owner: "too loud"; again 2026-10-14: "Let it not be too loud or too
+  // distracting"), and a curve: full is about 5 dB down, half way about 13 dB.
+  assert.equal(levelFor(1), MAX_LEVEL); assert.equal(levelFor(0), 0); assert.ok(MAX_LEVEL <= 0.55);
+  assert.ok(levelFor(0.5) < 0.25 && levelFor(0.5) > 0.2, 'half way is a quiet bed'); assert.equal(levelFor(7), MAX_LEVEL);
   // The game's part, held a little longer once it turns so the music does not flicker.
   assert.equal(partFor(0.2, 0.5), 'storm'); assert.equal(partFor(0.6, 0), 'tense'); assert.equal(partFor(0, 0), 'calm');
   assert.equal(partFor(0.4, 0, 'calm'), 'calm'); assert.equal(partFor(0.4, 0, 'tense'), 'tense'); assert.equal(partFor(0.3, 0, 'tense'), 'calm');
@@ -305,13 +306,6 @@ test('music: what you like comes round more often; what is not for you never pla
   // The Liked station: your liked tracks, wherever you are; until you like one, it follows the game.
   assert.deepEqual(tracksFor(LIB, { station: 'liked', place: 'game', likes: { liked: ['aria', 'chair', 'win'] } }).map(t => t.id), ['aria', 'chair'], 'no stings');
   assert.deepEqual(tracksFor(LIB, { station: 'liked', place: 'boss', likes: { liked: [] } }).map(t => t.id), ['aria']);
-  // Keys: related ones may overlap as they change (the same, the relative, a fifth away; one piece).
-  const k = key => ({ file: `${key}.m4a`, key });
-  assert.ok(keysRelated(k('A minor'), k('C major')), 'relative'); assert.ok(keysRelated(k('D minor'), k('A minor')), 'a fifth');
-  assert.ok(keysRelated(k('Bb major'), k('F major'))); assert.ok(keysRelated(k('C# minor'), k('E major')));
-  assert.ok(!keysRelated(k('D minor'), k('B major')), 'far apart'); assert.ok(!keysRelated(k('C major'), k('C minor')), 'parallel keys clash');
-  assert.ok(!keysRelated(k('C major'), { file: 'x.m4a' }), 'an unknown key: hand over quickly');
-  assert.ok(keysRelated({ file: 'suite.m4a', key: 'D minor' }, { file: 'suite.m4a', key: 'F# major' }), 'two parts of one piece');
 });
 
 test('music: the library file is read with care', async () => {
@@ -491,11 +485,12 @@ test('music: changes land on the bar line, wait to be sure you are staying, and 
   // in) starts silently 0.25 s before it, so its downbeat lands on the line.
   a.el.currentTime = 3.2; score.setPlace('focus'); assert.equal(later.at(-1).ms, 1200, 'a moment to be sure'); later.pop()();
   assert.equal(score.nowPlaying.id, 'study'); assert.equal(b.el.src, '/m/study.m4a');
-  // Their keys are unknown: a quick handover, the menus fading out in the 0.8 s before the line.
+  // Never two at once: the menus fade out in the 0.8 s before the line, and the study music rises
+  // from the line over a moment.
   const now = score.ctx.currentTime, fadeIn = curve(b.gain.gain), fadeOut = curve(a.gain.gain);
   assert.ok(Math.abs(fadeIn[2] - (now + 1.3)) < 1e-9, 'the study music on the bar line');
   assert.ok(Math.abs(fadeOut[2] - (now + 0.5)) < 1e-9 && fadeOut[3] === 0.8, 'the menus gone by then');
-  assert.equal(fadeIn[3], 0.12, 'in at once'); assert.equal(fadeIn[1][0], 0); assert.equal(b.el.currentTime, 0); assert.equal(b.el.paused, true, 'silent until its lead-in');
+  assert.equal(fadeIn[3], 1.2, 'rising over a moment'); assert.equal(fadeIn[1][0], 0); assert.equal(b.el.currentTime, 0); assert.equal(b.el.paused, true, 'silent until its lead-in');
   assert.ok(later.some(fn => Math.abs(fn.ms - 1050) < 1e-6), 'it starts 0.25 s before the line');
   assert.ok(!a.filter.frequency.events.some(([k]) => k === 'ramp'), 'no sweep: nothing overlaps');
   // Another change at once (before the menus have faded): the third deck, the menus untouched.
@@ -521,7 +516,7 @@ test('music: changes land on the bar line, wait to be sure you are staying, and 
   assert.ok(Math.abs(stormOut[2] + stormOut[3] - (score.ctx.currentTime + 0.4)) < 1e-9 && stormOut[3] <= 0.35, 'the tense part out just before it');
 });
 
-// Tracks with keys: related ones overlap for a bar; the menus play like an album.
+// Tracks with keys: even related ones never overlap; the menus play like an album.
 const KEYED = [
   { id: 'hall-a', title: 'Hall A', file: 'hall-a.m4a', station: 'cinematic', place: 'lobby', bpm: 120, beat: 0.5, start: 0.2, end: 100, key: 'D minor' },
   { id: 'hall-b', title: 'Hall B', file: 'hall-b.m4a', station: 'cinematic', place: 'lobby', bpm: 90, beat: 0, start: 0.4, key: 'F major' },
@@ -530,26 +525,28 @@ const KEYED = [
   { id: 'tense', title: 'Tense', file: 'suite.m4a', station: 'cinematic', place: 'game', part: 'tense', bpm: 120, beat: 60, start: 60, end: 120, key: 'D minor' },
   { id: 'win', title: 'Victory', file: 'win.m4a', place: 'sting', part: 'win', seconds: 6 },
 ];
-test('music: related keys overlap for a bar, a suite\'s parts hand over in place, and the menus play like an album', () => {
+test('music: nothing ever overlaps, a suite\'s parts turn on the downbeat, and the menus play like an album', () => {
   const { score, clock, later, flush } = player({ tracks: KEYED });
   score.start(); const a = score.active;
   assert.equal(score.nowPlaying.id, 'hall-a');
-  // Into the focus music (A minor, a fifth from D minor): one bar's equal-power crossfade, the old
-  // music sinking away as it goes.
+  // Into the focus music (A minor, a fifth from D minor: related keys, still never together, owner
+  // 2026-10-14: "all the tunes are still overlapping"): the hall is gone by the line, the study
+  // music rises from it.
   a.el.currentTime = 3.2; clock.now = 5000; score.setPlace('focus'); later.pop()();
-  const b = score.active, now = score.ctx.currentTime;
+  const b = score.active, now = score.ctx.currentTime, gone = c => c[2] + c[3];
   assert.equal(score.nowPlaying.id, 'study');
-  assert.ok(Math.abs(curve(b.gain.gain)[2] - (now + 1.3)) < 1e-9 && curve(b.gain.gain)[3] === 2, 'in over a bar from the line');
-  assert.ok(Math.abs(curve(a.gain.gain)[2] - (now + 1.3)) < 1e-9 && curve(a.gain.gain)[3] === 2, 'out over the same bar');
-  assert.ok(a.filter.frequency.events.some(([k, v]) => k === 'ramp' && v === 600), 'sinking into the distance');
+  assert.ok(Math.abs(curve(b.gain.gain)[2] - (now + 1.3)) < 1e-9 && curve(b.gain.gain)[3] === 1.2, 'in from the line, over a moment');
+  assert.ok(gone(curve(a.gain.gain)) <= curve(b.gain.gain)[2] + 1e-9, 'the hall gone before it');
+  assert.ok(!a.filter.frequency.events.some(([k]) => k === 'ramp'), 'no sweep under it');
   flush();
-  // A game: its calm part starts on its downbeat; the tense part of the same piece takes over on
-  // the bar line, overlapping for a bar (one piece, one key), and starting where its part begins.
+  // A game: its calm part starts on its downbeat; the tense part of the same piece comes straight
+  // in on the bar line, the calm one gone just before it, starting where its part begins.
   clock.now = 9000; score.setPlace('game', true); flush();
   const calm = score.active; calm.el.currentTime = 10.7;
   clock.now = 30000; score.setTension(0.9);
   assert.equal(score.nowPlaying.id, 'tense'); assert.ok(Math.abs(score.active.el.currentTime - (60 - 1.3)) < 1e-9, 'its part: silently from just before its first downbeat, which lands on the line');
-  assert.equal(curve(score.active.gain.gain)[3], 2, 'a bar\'s overlap');
+  assert.equal(curve(score.active.gain.gain)[3], 0.12, 'straight in on its downbeat');
+  assert.ok(gone(curve(calm.gain.gain)) <= curve(score.active.gain.gain)[2] + 1e-9, 'never two parts at once');
   // In a game the part's end runs straight on into the same part again.
   flush(); const t1 = score.active; t1.el.duration = 180; t1.el.currentTime = 117; clock.now = 60000; score.tick();
   assert.equal(score.active, t1, 'more than a bar left'); t1.el.currentTime = 117.6; score.tick();
@@ -636,21 +633,32 @@ test('music: a piece cut short of its own ending fades out over its last seconds
   won.el.currentTime = 60.5; score.tick(); assert.equal(curves(), n, 'once');
 });
 
-test('music: a dialog muffles the music, and a sting steps it back', () => {
-  const { score, notes } = player({ tracks: GRID });
+test('music: a dialog muffles the music, and a sting plays alone', () => {
+  const { score, notes, later } = player({ tracks: GRID });
   score.start();
   score.muffle(1);
   assert.ok(Math.abs(score.muffleFilter.frequency.value - 900) < 1e-6, 'as if behind a door'); assert.ok(Math.abs(score.muffleGain.gain.value - 0.7) < 1e-9);
   score.muffle(0); assert.equal(score.muffleFilter.frequency.value, 20000); assert.equal(score.muffleGain.gain.value, 1);
-  const before = score.master.gain.events.length;
-  assert.equal(score.sting('win'), true); assert.equal(score.stingDeck.el.src, '/m/win.m4a'); assert.equal(score.stingDeck.el.paused, false);
-  assert.ok(score.stings !== score.master, 'the sting has its own bus, so the music can step back under it');
-  const steps = score.master.gain.events.slice(before);
-  assert.ok(steps.some(([k, v]) => k === 'linear' && v === 0), 'the sting plays alone: the music steps out');
-  assert.ok(steps.some(([k, v]) => k === 'linear' && Math.abs(v - levelFor(0.5)) < 1e-9), 'and comes back after');
+  const before = score.master.gain.events.length, t0 = score.ctx.currentTime;
+  assert.equal(score.sting('win'), true); assert.equal(score.stingDeck.el.src, '/m/win.m4a');
+  assert.ok(score.stings !== score.master, 'the sting has its own bus, so the music can step out for it');
+  // The music fades away first (0.3 s) and the sting starts once it has: never the two together
+  // (owner, 2026-10-14: "the start tune overlaps with the currently playing music").
+  assert.equal(score.stingDeck.el.paused, true, 'not yet'); const go = later.find(fn => fn.ms === 300); assert.ok(go, 'a moment later');
+  go(); assert.equal(score.stingDeck.el.paused, false, 'then the sting');
+  const steps = score.master.gain.events.slice(before), back = t0 + 0.3 + 8;
+  assert.ok(steps.some(([k, v, t]) => k === 'linear' && v === 0 && Math.abs(t - (t0 + 0.3)) < 1e-9), 'the music out in 0.3 s');
+  assert.ok(steps.some(([k, v, t]) => k === 'set' && v === 0 && Math.abs(t - back) < 1e-9), 'and out until the sting (8 s) has rung out');
+  assert.ok(steps.some(([k, v, t]) => k === 'linear' && Math.abs(v - levelFor(0.5)) < 1e-9 && Math.abs(t - (back + 2)) < 1e-9), 'then back softly over 2 s');
   assert.deepEqual([notes.at(-1).kind, notes.at(-1).result], ['sting', 'win']);
   const n = score.master.gain.events.length; score.setVolume(0.5); assert.equal(score.master.gain.events.length, n, 'the same volume again does not cut the step back short');
-  score.setVolume(0.6); assert.ok(score.master.gain.events.length > n);
+  // A new volume while the sting plays: the music still waits for the sting to ring out.
+  score.setVolume(0.6); const more = score.master.gain.events.slice(n);
+  assert.ok(more.length > 0); assert.ok(!more.some(([k, v, t]) => k === 'linear' && v > 0 && t < back), 'not back before the sting is over');
+  assert.ok(more.some(([k, v, t]) => k === 'linear' && Math.abs(v - levelFor(0.6)) < 1e-9 && Math.abs(t - (back + 2)) < 1e-9), 'then at the new volume');
+  // Music turned on while a sting plays waits for it too.
+  score.stop(); const m = score.master.gain.events.length; score.start();
+  assert.ok(!score.master.gain.events.slice(m).some(([k, v, t]) => k === 'linear' && v > 0 && t < back), 'starting: after the sting');
   assert.equal(player({ tracks: LIB.slice(0, 2) }).score.sting('win'), false, 'no sting in the library: nothing');
 });
 

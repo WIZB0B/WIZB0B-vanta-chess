@@ -8,23 +8,26 @@
 //
 // Transitions (owner, 2026-10-13: "the most important part ... how do you naturally flow into
 // that music without distracting or cutting the attention of the player"; then: "the old one does
-// not die down immediately... the overlapping is quite disturbing"):
-// - changes land on the music's own bar line: the incoming track starts silently so that its
-//   first downbeat meets the outgoing track's next bar line;
-// - two tracks only overlap when their keys are related (the same key, its relative, or a fifth
-//   away; a battle suite's parts are one piece): then for one bar, with equal-power curves. Any
-//   other two hand over quickly: the old track fades out in the moment before the line (under a
-//   second) and the new one starts on it, so two keys never sound together;
+// not die down immediately... the overlapping is quite disturbing"; and 2026-10-14: "when a game
+// starts, the start tune overlaps with the currently playing music. The mid-game tune overlaps...
+// Let everything flow naturally"):
+// - nothing ever plays over anything else: two pieces of music never sound together, and a sting
+//   never plays over the music;
+// - changes land on the music's own bar line: the outgoing track fades out in the moment before
+//   the line (under a second) and the incoming one starts on it, its first downbeat on the line.
+//   Going somewhere else, the new music then rises over a moment; the next part of a game's
+//   piece (opening, middlegame, time trouble) comes straight in on its downbeat, as the piece
+//   would turn;
 // - the menus play like an album: a track plays to its natural end, a short pause, then the
 //   next one from its own beginning; in a game the music runs on without a gap;
 // - passing through a menu does not change the music: a change waits a moment to be sure;
 // - the game's part turns at most every ten seconds, and holds a little (no flickering); the
 //   storm comes in on the next beat;
 // - a dialog muffles the music (as if behind a door) instead of stopping it;
-// - stings (a win, a checkmate, a promotion to a higher league) play alone: the music steps
-//   out for them and comes back after;
-// - the volume has a ceiling (owner: "the music are kind of too loud"): at full it stays well
-//   under the game's own sounds;
+// - stings (a game starting, a win, a checkmate, a promotion to a higher league) play alone: the
+//   music fades away first, the sting plays, and the music comes back softly once it has rung out;
+// - the volume has a ceiling (owner: "the music are kind of too loud"; 2026-10-14: "Let it not be
+//   too loud or too distracting"): a quiet bed under the game's own sounds;
 // - liked tracks come round about three times as often, and "Not for me" ones never play.
 // The player listens to itself (an analyser): every beat it hears reaches the room (onNote), so
 // the candles, the board's glow, the clocks and the sand follow the real music.
@@ -87,9 +90,10 @@ export function loadMusic(storage = globalThis.localStorage) {
   catch { return { on: false, volume: 0.5, station: 'on' }; }
 }
 export function saveMusic(v, storage = globalThis.localStorage) { try { storage?.setItem(MUSIC_KEY, JSON.stringify({ on: !!v.on, volume: v.volume, station: v.station || 'on' })); } catch {} return v; }
-// How loud the music is at a volume (0..1): a ceiling (full volume is about -19 LUFS, the
-// library being at -16) and a curve, so the slider's lower half is fine-grained.
-export const MAX_LEVEL = 0.7;
+// How loud the music is at a volume (0..1): a ceiling (full volume is about -21 LUFS, the
+// library being at -16; the default, half way, about -29) and a curve, so the slider's lower half
+// is fine-grained.
+export const MAX_LEVEL = 0.55;
 export const levelFor = volume => MAX_LEVEL * clamp(Number(volume) || 0, 0, 1) ** 1.3;
 
 // ---- Likes (owner, 2026-10-13: "depending on the likes of the person, the music prioritizes
@@ -117,20 +121,6 @@ export function hideTrack(likes, id, on = true) {
   const hidden = (likes?.hidden || []).filter(x => x !== id), liked = (likes?.liked || []).filter(x => !(on && x === id));
   return { liked, hidden: on ? [...hidden, id] : hidden };
 }
-// Two tracks whose keys are related (the same key, its relative, or a fifth away on the circle of
-// fifths) can overlap as they change; any others must not sound together. A battle suite's
-// parts are one piece.
-const PITCH = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
-const fifths = t => { const m = /^(\S+) (major|minor)$/.exec(t?.key || ''); if (!m || PITCH[m[1]] === undefined) return null; return ((PITCH[m[1]] + (m[2] === 'minor' ? 3 : 0)) * 7) % 12; };
-export function keysRelated(a, b) {
-  if (!a || !b) return false;
-  if (a.file === b.file) return true;
-  const x = fifths(a), y = fifths(b);
-  if (x === null || y === null) return false;
-  const d = Math.abs(x - y);
-  return Math.min(d, 12 - d) <= 1;
-}
-
 // ---- The library: what suits a moment ----
 const GAME_PARTS = { calm: ['calm', 'tense'], tense: ['tense', 'calm'], storm: ['storm', 'tense'], ahead: ['ahead', 'tense'], behind: ['behind', 'tense'] };
 // The tracks that suit a moment. A station plays its own tracks (Everything: all of them; Liked:
@@ -233,6 +223,9 @@ const SETTLE_MS = 10000; // in a game, the music follows its part at most this o
 const DEBOUNCE_MS = 1200; // going somewhere: how long the music waits to be sure you are staying
 const ALBUM_GAP = 1.6; // the menus: the pause between one track's end and the next one's beginning
 const CONTINUOUS = ['game', 'boss', 'blitz']; // where the music runs on without a pause
+// A sting: the music fades away over DUCK_OUT, the sting starts STING_WAIT later (once it has),
+// and the music comes back over DUCK_BACK after the sting has rung out.
+const DUCK_OUT = 0.3, STING_WAIT = 0.3, DUCK_BACK = 2;
 export class VantaScore {
   constructor({ AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext, AudioElement = globalThis.Audio, timers = globalThis, tracks = [], base = MUSIC_BASE, random = Math.random, clock = () => globalThis.performance?.now?.() ?? Date.now() } = {}) {
     Object.assign(this, { AC: AudioContextClass, Audio: AudioElement, timers, base, random, clock });
@@ -241,7 +234,7 @@ export class VantaScore {
     this.key = 'vanta'; this.tension = 0; this.storm = 0; this.mood = 'even'; this.partNow = 'calm';
     this.volume = 0.5; this.place = 'lobby'; this.station = 'on'; this.division = null; this.result = 'win'; this.skin = null;
     this.decks = []; this.active = null; this.next = null; this.switchedAt = -1e9; this.pending = false; this.failures = 0; this.gaveUpAt = -1e9;
-    this.debounce = null; this.history = []; this.muffled = 0; this.crossing = null;
+    this.debounce = null; this.history = []; this.muffled = 0; this.crossing = null; this.duckBack = -Infinity;
     this.likes = { liked: [], hidden: [] }; this.language = null; this.pinned = null; this.queued = null;
     this.listeners = new Set(); this.beats = 0; this.bands = { low: { avg: 0, dev: 0 }, mid: { avg: 0, dev: 0 } }; this.lastBeat = -1;
   }
@@ -323,7 +316,7 @@ export class VantaScore {
     if (this.ctx.state === 'suspended') this.ctx.resume?.();
     if (this.playing) return true;
     this.playing = true; this.failures = 0;
-    this.ramp(this.master.gain, this.level, 0.8);
+    this.toLevel(0.8);
     // Back from a pause: the same track carries on where it was, if it still suits the moment.
     const chosen = this.pinned && this.tracks.find(t => t.id === this.pinned);
     if (!chosen && this.active?.track && this.suits(this.active.track)) this.active.el.play?.()?.catch?.(() => {});
@@ -360,12 +353,11 @@ export class VantaScore {
       wait = line === null ? 0.05 : clamp(line - t, 0.05, 4.5);
       this.crossing = { from, line: t + wait };
     } else this.crossing = null;
-    // How: tracks in related keys overlap for a bar; any others hand over quickly, the old one
-    // fading out just before the line and the new one starting on it.
-    const related = !!from && !album && style !== 'storm' && keysRelated(from.track, track);
-    const bar = barSeconds(from?.track) || barSeconds(track) || 2.5;
-    const fadeIn = !from ? (album ? 0.05 : 1.2) : album ? 0.05 : related ? clamp(bar, 1.5, 3) : 0.12;
-    const fadeOut = !from ? 0 : album ? 0.05 : related ? fadeIn : clamp(wait, 0.05, style === 'storm' ? 0.35 : 0.8);
+    // How: never two at once. The old one fades out just before the line and the new one starts
+    // on it: rising over a moment when you went somewhere else, straight in on its downbeat when
+    // the game's piece turns to its next part (or the storm comes).
+    const fadeIn = !from ? (album ? 0.05 : 1.2) : album ? 0.05 : style === 'switch' ? 1.2 : 0.12;
+    const fadeOut = !from ? 0 : album ? 0.05 : clamp(wait, 0.05, style === 'storm' ? 0.35 : 0.8);
     const at = now + wait, entry = album ? track.start || 0 : entryOf(track);
     // A deck still fading out from an earlier change steps back first (a tenth of a second); a
     // silent one starts from nothing.
@@ -386,12 +378,10 @@ export class VantaScore {
     if (busy) this.later(launch, busy * 1000); else launch();
     this.curveTo(g, 0, this.levelOf(track), Math.max(at, now + 0.005 + busy), fadeIn);
     if (from && from !== to) {
-      const v = this.hold(from.gain.gain), outAt = related ? Math.max(at, now + 0.005) : Math.max(now + 0.005, at - fadeOut);
-      const outLen = related ? fadeOut : Math.max(0.01, Math.min(fadeOut, at - outAt));
+      const v = this.hold(from.gain.gain), outAt = Math.max(now + 0.005, at - fadeOut);
+      const outLen = Math.max(0.01, Math.min(fadeOut, at - outAt));
       this.curveTo(from.gain.gain, v, 0, outAt, outLen);
       from.until = outAt + outLen;
-      // Somewhere else, overlapping: the old music also sinks into the distance as it fades.
-      if (style === 'switch' && related) { from.filter.frequency.setValueAtTime(OPEN, at); from.filter.frequency.exponentialRampToValueAtTime?.(600, at + fadeOut); }
       const el = from.el; this.later(() => { if (this.active !== from) el.pause?.(); }, (outAt - now + outLen) * 1000 + 150);
       // Once the incoming plays, line it up again with the outgoing (it is still silent).
       if (!album && track.bpm && from.track?.bpm && wait > 0.3) this.later(() => this.align(to, entry), Math.min(600, wait * 1000 - 200));
@@ -435,7 +425,7 @@ export class VantaScore {
   retune() { const part = partFor(this.tension, this.storm, this.partNow, this.mood); if (part !== this.partNow) { this.partNow = part; this.update(part === 'storm' ? 'storm' : 'part'); } }
   setVolume(v) {
     const volume = Math.max(0, Math.min(1, Number(v) || 0)); if (volume === this.volume) return; // unchanged: a sting's step back carries on
-    this.volume = volume; if (this.master && this.playing) this.ramp(this.master.gain, this.level, 0.2); if (this.stings) this.stings.gain.value = this.level;
+    this.volume = volume; if (this.master && this.playing) this.toLevel(0.2); if (this.stings) this.stings.gain.value = this.level;
   }
   setTension(t) { this.tension = Math.max(0, Math.min(1, Number(t) || 0)); this.retune(); }
   setStorm(s) { this.storm = Math.max(0, Math.min(1, Number(s) || 0)); this.retune(); }
@@ -545,25 +535,33 @@ export class VantaScore {
     band.avg = avg * 0.92 + rise * 0.08; band.dev = dev * 0.92 + Math.abs(rise - avg) * 0.08;
     return loud && over > 0 ? Math.min(1, Math.max(0.05, (rise - avg) / (6 * dev + 30))) : 0;
   }
-  // Steps out for a moment (a sting plays alone), then comes back.
-  duck(seconds = 2.5) {
-    if (!this.master || !this.playing) return;
-    const t = this.ctx.currentTime, g = this.master.gain;
-    this.hold(g); g.linearRampToValueAtTime(0, t + 0.25);
-    g.setValueAtTime(0, t + seconds); g.linearRampToValueAtTime(this.level, t + seconds + 1.5);
+  // The music up to the volume over `seconds`; while a sting plays, only once it has rung out.
+  toLevel(seconds) {
+    const g = this.master.gain, t = this.ctx.currentTime;
+    if (t >= this.duckBack) { this.ramp(g, this.level, seconds); return; }
+    this.hold(g); g.linearRampToValueAtTime(0, Math.min(this.duckBack, t + DUCK_OUT));
+    g.setValueAtTime(0, this.duckBack); g.linearRampToValueAtTime(this.level, this.duckBack + DUCK_BACK);
+  }
+  // Steps out for a sting: the music fades away (a third of a second), stays out while the sting
+  // plays (from `start`, for `seconds`) and comes back softly once it has rung out.
+  duck(start, seconds) {
+    this.duckBack = Math.max(this.duckBack, start + seconds);
+    if (this.master && this.playing) this.toLevel(DUCK_BACK);
   }
   // A short cue, alone: 'win' | 'loss' | 'draw' | 'checkmate' | 'start' | 'rank-up' | ...
+  // With music playing, it waits for the music to fade away first.
   sting(kind) {
     const track = stingFor(this.tracks, kind, this.key, this.random);
     if (!track || !this.ensure()) return false;
     if (this.ctx.state === 'suspended') this.ctx.resume?.();
-    const d = this.stingDeck;
+    const d = this.stingDeck, now = this.ctx.currentTime, wait = this.playing ? STING_WAIT : 0;
     if (d.file !== track.file || d.el.error) { d.track = track; d.file = track.file; d.el.src = this.base + track.file; }
     try { d.el.currentTime = track.start || 0; } catch {}
-    d.gain.gain.cancelScheduledValues?.(this.ctx.currentTime); d.gain.gain.setValueAtTime(this.levelOf(track), this.ctx.currentTime);
-    d.el.play?.()?.catch?.(() => {});
-    this.duck(Math.max(1, (track.end || track.seconds || 6) - (track.start || 0) - 1));
-    this.emit({ kind: 'sting', at: this.ctx.currentTime, result: kind, strength: 1 });
+    d.gain.gain.cancelScheduledValues?.(now); d.gain.gain.setValueAtTime(this.levelOf(track), now);
+    const go = () => d.el.play?.()?.catch?.(() => {});
+    if (wait) this.later(go, wait * 1000); else go();
+    this.duck(now + wait, Math.max(1, (track.end || track.seconds || 6) - (track.start || 0)));
+    this.emit({ kind: 'sting', at: now + wait, result: kind, strength: 1 });
     return true;
   }
 }

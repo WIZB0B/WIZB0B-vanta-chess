@@ -32,6 +32,12 @@ TITLES = {
     'electric-overclocked': 'Overclocked', 'electric-arena-lights': 'Arena Lights',
     'boss-ember-warden': 'The Ember Warden', 'boss-tidecaller': 'The Tidecaller', 'boss-pale-reflection': 'The Pale Reflection',
     'boss-usurper': 'The Usurper', 'boss-vanta-king': 'The Vanta King',
+    # More operas (owner, 2026-10-14: "I kept hearing one, like two or three over and over again"):
+    # each boss's own words, sung in Latin or Italian; a boss's second take gets a name of its own.
+    'boss-ember-warden-2': 'The Ember Warden · Ash Psalm', 'boss-pale-reflection-2': 'The Pale Reflection · Glass Lament',
+    'boss-tidecaller-2': 'The Tidecaller · Bells of the Deep', 'boss-tidecaller-3': 'The Tidecaller · Bells at Low Tide',
+    'boss-usurper-2': 'The Usurper · The False Crown', 'boss-usurper-3': 'The Usurper · The Crown Unearned',
+    'boss-vanta-king-2': 'The Vanta King · Eclipse Requiem', 'boss-vanta-king-3': 'The Vanta King · Requiem at the Spire',
     'song-old-chair': 'The Old Chair', 'song-pawns-journey': "The Pawn's Journey", 'song-tick-tock': 'Tick Tock', 'song-grandpas-chessboard': "Grandpa's Chessboard",
     'song-rain-window': 'Rain on the Window', 'song-morning-coffee': 'Morning Coffee', 'song-long-game': 'Life Is a Long Game', 'song-kitchen-stove': 'Kitchen Stove',
     'song-knights-ride': "The Knight's Ride", 'song-queen-of-the-board': 'Queen of the Board', 'song-saturday-market': 'Saturday Market',

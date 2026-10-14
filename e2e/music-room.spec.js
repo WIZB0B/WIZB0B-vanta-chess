@@ -181,3 +181,71 @@ test('the now-playing panel: dim until hovered, with Like, Next and Not for me; 
   await expect(list.locator('[data-track="test-song"] [data-music-play]')).toHaveText('On now');
   expect(errors).toEqual([]);
 });
+
+// Nothing plays over anything (owner, 2026-10-14: "when a game starts, the start tune overlaps
+// with the currently playing music... Let everything flow naturally"). The test listens to what
+// the page actually sends to the speakers: the music is a steady 220 Hz tone and the game-start
+// sting a 1760 Hz one, so the two can be told apart in the sound itself.
+function toneWav(hz, seconds, rate = 22050) {
+  const n = seconds * rate, wav = Buffer.alloc(44 + n * 2);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + n * 2, 4); wav.write('WAVE', 8); wav.write('fmt ', 12);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+  wav.write('data', 36); wav.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) wav.writeInt16LE(Math.round(0.6 * Math.sin(2 * Math.PI * hz * i / rate) * 32000), 44 + i * 2);
+  return wav;
+}
+test('a sting plays alone: the music fades away first, and comes back once it has rung out', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Desktop: the Sound test from Theme Studio');
+  test.setTimeout(60000);
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => {
+    localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1'); localStorage.setItem('vch.music', JSON.stringify({ on: true, volume: 0.5 }));
+    // Every sound the page sends to the speakers also reaches a listener of the test's own.
+    const connect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (dest, ...rest) {
+      const out = connect.call(this, dest, ...rest);
+      if (dest instanceof AudioDestinationNode) {
+        const ctx = this.context;
+        if (!ctx.__ear) { const a = ctx.createAnalyser(); a.fftSize = 4096; a.smoothingTimeConstant = 0; ctx.__ear = a; (window.__ears ||= []).push(a); }
+        connect.call(this, ctx.__ear);
+      }
+      return out;
+    };
+    // How loud each tone is (dB), twenty times a second.
+    window.__heard = [];
+    const level = (a, hz) => { const bins = new Float32Array(a.frequencyBinCount); a.getFloatFrequencyData(bins); const i = Math.round(hz / (a.context.sampleRate / a.fftSize)); return Math.max(bins[i - 1], bins[i], bins[i + 1]); };
+    setInterval(() => { const ears = window.__ears || []; if (!ears.length) return; window.__heard.push({ t: performance.now(), music: Math.max(...ears.map(a => level(a, 220))), sting: Math.max(...ears.map(a => level(a, 1760))) }); }, 50);
+  });
+  await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', r => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ player: { id: 'me' } }) }));
+  const tracks = [
+    { id: 'test-hall', title: 'Test Hall', file: 'test-hall.mp3', station: 'cinematic', place: 'lobby' },
+    { id: 'test-start', title: 'Test Start', file: 'test-start.mp3', place: 'sting', part: 'start', seconds: 3, start: 0, end: 3 },
+  ];
+  await page.route('**/assets/vch/music/library.json', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ tracks }) }));
+  const hall = toneWav(220, 40), sting = toneWav(1760, 3);
+  await page.route('**/assets/vch/music/test-hall.mp3', r => r.fulfill({ contentType: 'audio/wav', body: hall }));
+  await page.route('**/assets/vch/music/test-start.mp3', r => r.fulfill({ contentType: 'audio/wav', body: sting }));
+  await page.goto('/');
+  await page.locator('.hero h1').click();
+  await page.locator('#theme').click();
+  await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Hall', { timeout: 8000 });
+  await page.locator('#openSoundTest').click();
+  const button = page.locator('#dynamicView .sound-test [data-sting="start"]');
+  await expect(button).toBeVisible();
+  await page.waitForTimeout(2500); // the music settles after the dialog
+  const t0 = await page.evaluate(() => performance.now());
+  await button.click();
+  await page.waitForTimeout(7500);
+  const heard = (await page.evaluate(() => window.__heard)).filter(h => h.t >= t0).map(h => ({ ...h, t: (h.t - t0) / 1000 }));
+  const on = db => db > -70, both = heard.filter(h => on(h.music) && on(h.sting));
+  const stingAt = heard.find(h => on(h.sting))?.t, stingEnd = heard.filter(h => on(h.sting)).at(-1)?.t;
+  expect(stingAt, 'the sting plays').toBeDefined();
+  expect(heard.find(h => h.t < 0.05)?.music, 'the music was playing').toBeGreaterThan(-70);
+  // Never the two together (a sample or two at the very edges, at most).
+  expect(both.length, `heard together at ${both.map(h => h.t.toFixed(2)).join(', ')}`).toBeLessThanOrEqual(2);
+  expect(heard.filter(h => h.t > stingAt + 0.1 && h.t < stingEnd - 0.1).every(h => !on(h.music)), 'no music under the sting').toBe(true);
+  // And the music is back once the sting has rung out.
+  expect(heard.filter(h => h.t > stingEnd + 2.5).some(h => on(h.music)), 'the music comes back').toBe(true);
+  expect(errors).toEqual([]);
+});
