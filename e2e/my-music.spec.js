@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
 // My music (owner, 2026-10-14: players "add their own songs"): a song file added from the device
 // is kept in the browser (never uploaded), played by the service worker from /my-music/<id>, and
@@ -39,6 +40,11 @@ test('my music: a song from your device is kept on it, plays on the My music sta
   await page.addInitScript(() => { localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1'); if (!localStorage.getItem('vch.music')) localStorage.setItem('vch.music', JSON.stringify({ on: true, volume: 0.5 })); });
   await listen(page);
   await page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', r => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ player: { id: 'me' } }) }));
+  // The page runs under the site's own Content-Security-Policy (netlify.toml; the local preview is
+  // plain http, so without upgrade-insecure-requests): the songs must play without loosening it.
+  const csp = /Content-Security-Policy = "([^"]+)"/.exec(readFileSync('netlify.toml', 'utf8'))[1].replace(/;\s*upgrade-insecure-requests/, '');
+  await page.route(url => new URL(url).pathname === '/', async r => { const res = await r.fetch(); await r.fulfill({ response: res, headers: { ...res.headers(), 'content-security-policy': csp } }); });
+  await page.addInitScript(() => { window.__violations = []; addEventListener('securitypolicyviolation', e => window.__violations.push(`${e.violatedDirective} ${e.blockedURI}`)); });
   const tracks = [{ id: 'test-hall', title: 'Test Hall', file: 'test-hall.mp3', station: 'cinematic', place: 'lobby' }];
   await page.route('**/assets/vch/music/library.json', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ tracks }) }));
   const hall = toneWav(220, 60);
@@ -67,6 +73,7 @@ test('my music: a song from your device is kept on it, plays on the My music sta
   await mine.locator('[data-my-station]').click();
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Ocean Drive', { timeout: 8000 });
   await page.waitForTimeout(4000);
+  expect(await page.evaluate(() => window.__violations), "nothing the site's policy blocks").toEqual([]);
   const heard = (await page.evaluate(() => window.__heard)).filter(h => h.t >= t0).map(h => ({ ...h, t: (h.t - t0) / 1000 }));
   const on = db => db > -70;
   expect(heard.find(h => h.t < 0.1)?.hall, 'the hall was playing').toBeGreaterThan(-70);
