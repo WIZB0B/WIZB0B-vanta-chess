@@ -13,8 +13,10 @@ self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).the
   await cache.addAll(SHELL);
   await Promise.all([...ENGINE, ...(await appBundles())].map(url => cache.add(url).catch(() => {})));
 }).then(() => self.skipWaiting())));
-// A new worker takes over the open pages at once (My music needs the worker that knows its route).
+// A new worker takes over the open pages at once (My music needs the worker that knows its route),
+// and a page that opened without one (a hard reload) can ask to be taken over.
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
+self.addEventListener('message', event => { if (event.data === 'claim') event.waitUntil(self.clients.claim()); });
 // My music (src/my-music.js): the player's own song files, kept on this device in IndexedDB and
 // never uploaded, play from /my-music/<id>: the app's own origin, so the page's strict CSP needs
 // no blob: media. A range request gets the slice it asks for (206), so the player can seek.

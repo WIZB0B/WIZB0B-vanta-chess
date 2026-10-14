@@ -178,7 +178,8 @@ export async function myMusicServed({ nav = globalThis.navigator, fetchFn = glob
   try {
     const changed = new Promise(resolve => { sw.addEventListener?.('controllerchange', resolve, { once: true }); setTimeout(resolve, timeout); });
     const reg = await sw.register('/sw.js');
-    reg?.update?.()?.catch?.(() => {});
+    reg?.update?.()?.catch?.(() => {}); // a worker from before My music: fetch the new one
+    if (!sw.controller) reg?.active?.postMessage?.('claim'); // the page opened without its worker (a hard reload)
     await changed;
     return await served();
   } catch { return false; }
