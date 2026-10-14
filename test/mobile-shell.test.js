@@ -38,3 +38,11 @@ test('phone layout is scoped to body.m-app so desktop is untouched', () => {
 test('board keeps one square aspect ratio and 8 equal columns', () => {
   assert.match(css, /\.board\{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat\(8,1fr\)/);
 });
+
+test('a tap never zooms the page on a phone: no double-tap zoom, no zoom into a field', () => {
+  // Owner, 2026-10-13: "when I click... it zooms in... even while playing games".
+  assert.match(css, /html\{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%\}/, 'a double tap (a piece, then its square) does not zoom');
+  assert.match(css, /@media \(hover:none\) and \(pointer:coarse\)\{input,select,textarea\{font-size:16px!important\}\}/, 'iOS zooms into any field under 16px');
+  const viewport = readFileSync(new URL('../index.html', import.meta.url), 'utf8').match(/name="viewport" content="([^"]+)"/)[1];
+  assert.doesNotMatch(viewport, /maximum-scale|user-scalable/, 'two fingers can still zoom, for anyone who needs to');
+});
