@@ -2000,6 +2000,18 @@ export const ROWS = [
   ["Brilliant move", "Parlak hamle"],
   ["Up a division", "Bir üst lige çıktın"],
   ["Down a division", "Bir alt lige düştün"],
+  ["My music", "Müziklerim"],
+  ["Add songs", "Şarkı ekle"],
+  ["Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.", "Eklediğin şarkılar bu cihazda kalır: hiçbir şey yüklenmez. Müziklerim istasyonunda ve Hepsi'nde çalar."],
+  ["Play My music", "Müziklerimi çal"],
+  ["Rename", "Yeniden adlandır"],
+  ["Song title", "Şarkı adı"],
+  ["Removed", "Kaldırıldı"],
+  ["No songs yet", "Henüz şarkı yok"],
+  ["Add your songs in the Music list", "Şarkılarını Müzik listesinden ekle"],
+  ["Not enough space on this device", "Bu cihazda yeterli alan yok"],
+  ["This browser can't play your own songs here", "Bu tarayıcı kendi şarkılarını burada çalamıyor"],
+  ["Saved. Reload the page to play your songs", "Kaydedildi. Şarkılarını çalmak için sayfayı yenile"],
 ];
 
 export const PATTERNS = [
@@ -2199,4 +2211,12 @@ export const PATTERNS = [
   ["^Mode (\\d+)·(\\d+)$", "Mod $1·$2"],
   ["^(.+) (\\d{4})$", "%1 $2"],
   ["^(.+) ·$", "%1 ·"],
+  ["^Adding (\\d+) songs?$", "$1 şarkı ekleniyor"],
+  ["^Added (\\d+) songs?$", "$1 şarkı eklendi"],
+  ["^(\\d+) songs? · ([\\d.]+) MB on this device$", "$1 şarkı · bu cihazda $2 MB"],
+  ["^((?:(?! · ).)+): not a song file$", "$1: şarkı dosyası değil"],
+  ["^((?:(?! · ).)+) is over (\\d+) MB$", "$1, $2 MB sınırını aşıyor"],
+  ["^My music is full \\((\\d+) songs\\)$", "Müziklerim dolu ($1 şarkı)"],
+  ["^((?:(?! · ).)+): this browser can't play it$", "$1: bu tarayıcı bunu çalamıyor"],
+  ["^((?:(?! · ).)+): couldn't be saved on this device$", "$1: bu cihaza kaydedilemedi"],
 ];

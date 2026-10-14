@@ -2000,6 +2000,18 @@ export const ROWS = [
   ["Brilliant move", "妙手"],
   ["Up a division", "昇格"],
   ["Down a division", "降格"],
+  ["My music", "マイミュージック"],
+  ["Add songs", "曲を追加"],
+  ["Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.", "追加した曲はこの端末に保存され、アップロードされません。「マイミュージック」ステーションと「すべて」で再生されます。"],
+  ["Play My music", "マイミュージックを再生"],
+  ["Rename", "名前を変更"],
+  ["Song title", "曲名"],
+  ["Removed", "削除しました"],
+  ["No songs yet", "まだ曲がありません"],
+  ["Add your songs in the Music list", "音楽リストで曲を追加してください"],
+  ["Not enough space on this device", "この端末の空き容量が足りません"],
+  ["This browser can't play your own songs here", "このブラウザではここで自分の曲を再生できません"],
+  ["Saved. Reload the page to play your songs", "保存しました。曲を再生するにはページを再読み込みしてください"],
 ];
 
 export const PATTERNS = [
@@ -2199,4 +2211,12 @@ export const PATTERNS = [
   ["^Mode (\\d+)·(\\d+)$", "モード $1·$2"],
   ["^(.+) (\\d{4})$", "%1 $2"],
   ["^(.+) ·$", "%1 ·"],
+  ["^Adding (\\d+) songs?$", "$1 曲を追加しています"],
+  ["^Added (\\d+) songs?$", "$1 曲を追加しました"],
+  ["^(\\d+) songs? · ([\\d.]+) MB on this device$", "$1 曲 · この端末で $2 MB"],
+  ["^((?:(?! · ).)+): not a song file$", "$1：曲のファイルではありません"],
+  ["^((?:(?! · ).)+) is over (\\d+) MB$", "$1 は $2 MB を超えています"],
+  ["^My music is full \\((\\d+) songs\\)$", "マイミュージックがいっぱいです（$1 曲）"],
+  ["^((?:(?! · ).)+): this browser can't play it$", "$1：このブラウザでは再生できません"],
+  ["^((?:(?! · ).)+): couldn't be saved on this device$", "$1：この端末に保存できませんでした"],
 ];

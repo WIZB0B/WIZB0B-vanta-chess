@@ -2000,6 +2000,18 @@ export const ROWS = [
   ["Brilliant move", "妙着"],
   ["Up a division", "晋级"],
   ["Down a division", "降级"],
+  ["My music", "我的音乐"],
+  ["Add songs", "添加歌曲"],
+  ["Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.", "你添加的歌曲保存在这台设备上，不会上传。它们会在“我的音乐”电台和“全部”中播放。"],
+  ["Play My music", "播放我的音乐"],
+  ["Rename", "重命名"],
+  ["Song title", "歌曲名称"],
+  ["Removed", "已移除"],
+  ["No songs yet", "还没有歌曲"],
+  ["Add your songs in the Music list", "在音乐列表中添加你的歌曲"],
+  ["Not enough space on this device", "此设备空间不足"],
+  ["This browser can't play your own songs here", "此浏览器无法在这里播放你自己的歌曲"],
+  ["Saved. Reload the page to play your songs", "已保存。重新加载页面即可播放你的歌曲"],
 ];
 
 export const PATTERNS = [
@@ -2199,4 +2211,12 @@ export const PATTERNS = [
   ["^Mode (\\d+)·(\\d+)$", "模态 $1·$2"],
   ["^(.+) (\\d{4})$", "%1 $2"],
   ["^(.+) ·$", "%1 ·"],
+  ["^Adding (\\d+) songs?$", "正在添加 $1 首歌曲"],
+  ["^Added (\\d+) songs?$", "已添加 $1 首歌曲"],
+  ["^(\\d+) songs? · ([\\d.]+) MB on this device$", "$1 首歌曲 · 在此设备上占用 $2 MB"],
+  ["^((?:(?! · ).)+): not a song file$", "$1：不是音乐文件"],
+  ["^((?:(?! · ).)+) is over (\\d+) MB$", "$1 超过 $2 MB"],
+  ["^My music is full \\((\\d+) songs\\)$", "我的音乐已满（$1 首）"],
+  ["^((?:(?! · ).)+): this browser can't play it$", "$1：此浏览器无法播放"],
+  ["^((?:(?! · ).)+): couldn't be saved on this device$", "$1：无法保存到此设备"],
 ];

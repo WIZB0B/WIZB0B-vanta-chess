@@ -2000,6 +2000,18 @@ export const ROWS = [
   ["Brilliant move", "शानदार चाल"],
   ["Up a division", "एक डिवीज़न ऊपर"],
   ["Down a division", "एक डिवीज़न नीचे"],
+  ["My music", "मेरा संगीत"],
+  ["Add songs", "गाने जोड़ें"],
+  ["Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.", "आप जो गाने जोड़ते हैं वे इसी डिवाइस पर रहते हैं: कुछ भी अपलोड नहीं होता। वे “मेरा संगीत” स्टेशन और “सब कुछ” में बजते हैं।"],
+  ["Play My music", "मेरा संगीत चलाएँ"],
+  ["Rename", "नाम बदलें"],
+  ["Song title", "गाने का नाम"],
+  ["Removed", "हटा दिया गया"],
+  ["No songs yet", "अभी कोई गाना नहीं"],
+  ["Add your songs in the Music list", "अपने गाने संगीत सूची में जोड़ें"],
+  ["Not enough space on this device", "इस डिवाइस पर पर्याप्त जगह नहीं है"],
+  ["This browser can't play your own songs here", "यह ब्राउज़र यहाँ आपके अपने गाने नहीं चला सकता"],
+  ["Saved. Reload the page to play your songs", "सहेजा गया। अपने गाने चलाने के लिए पेज फिर से लोड करें"],
 ];
 
 export const PATTERNS = [
@@ -2199,4 +2211,12 @@ export const PATTERNS = [
   ["^Mode (\\d+)·(\\d+)$", "मोड $1·$2"],
   ["^(.+) (\\d{4})$", "%1 $2"],
   ["^(.+) ·$", "%1 ·"],
+  ["^Adding (\\d+) songs?$", "$1 गाने जोड़े जा रहे हैं"],
+  ["^Added (\\d+) songs?$", "$1 गाने जोड़े गए"],
+  ["^(\\d+) songs? · ([\\d.]+) MB on this device$", "$1 गाने · इस डिवाइस पर $2 MB"],
+  ["^((?:(?! · ).)+): not a song file$", "$1: यह गाने की फ़ाइल नहीं है"],
+  ["^((?:(?! · ).)+) is over (\\d+) MB$", "$1, $2 MB से बड़ी है"],
+  ["^My music is full \\((\\d+) songs\\)$", "मेरा संगीत भर गया है ($1 गाने)"],
+  ["^((?:(?! · ).)+): this browser can't play it$", "$1: यह ब्राउज़र इसे नहीं चला सकता"],
+  ["^((?:(?! · ).)+): couldn't be saved on this device$", "$1: इस डिवाइस पर सहेजा नहीं जा सका"],
 ];

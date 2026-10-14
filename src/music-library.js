@@ -35,6 +35,8 @@
 //   gain      decibels that bring it to the library's loudness (-16 LUFS);
 //   bpm/beat  its tempo and the time of its first downbeat: the player changes tracks on a bar
 //             line, so the music never stumbles.
+// A player's own songs (src/my-music.js songTrack) are tracks too, made on their device: station
+// 'mine', kind 'mine', and `src` (where the service worker serves the file) in place of `file`.
 export const STATIONS = [
   { id: 'on', name: 'Follows the game' },
   { id: 'cinematic', name: 'Dark cinematic' },
@@ -45,6 +47,7 @@ export const STATIONS = [
   { id: 'worlds', name: 'Old worlds' },
   { id: 'mix', name: 'Everything' },
   { id: 'liked', name: 'Liked' },
+  { id: 'mine', name: 'My music' }, // your own songs (src/my-music.js)
 ];
 export const MUSIC_BASE = '/assets/vch/music/';
 export const LIBRARY_URL = `${MUSIC_BASE}library.json`;
@@ -53,7 +56,9 @@ export const PARTS = ['calm', 'tense', 'storm', 'ahead', 'behind'];
 export const RESULTS = ['win', 'loss', 'draw'];
 export const STINGS = ['win', 'loss', 'draw', 'checkmate', 'start', 'rank-up', 'rank-down', 'relic', 'realm', 'solved', 'failed', 'brilliant'];
 export const DIVISIONS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
-const STATION_IDS = new Set(STATIONS.map(s => s.id).filter(id => !['on', 'mix', 'liked'].includes(id)));
+// The stations a library track can belong to (Follows the game, Everything, Liked and My music
+// gather theirs).
+const STATION_IDS = new Set(STATIONS.map(s => s.id).filter(id => !['on', 'mix', 'liked', 'mine'].includes(id)));
 export const KEY_NAMES = /^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B) (major|minor)$/;
 
 export const placesOf = t => (Array.isArray(t?.place) ? t.place : [t?.place]).filter(p => typeof p === 'string');

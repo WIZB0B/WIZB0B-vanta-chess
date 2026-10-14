@@ -3533,6 +3533,16 @@ body.m-app .now-playing:not([data-corner="tr"]){bottom:calc(var(--m-tabs-h,56px)
 .mr-title{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mr-title small{margin-left:4px;font-size:11px;color:#a9b1b0}
 .music-liked{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:#cfd6d2}
+/* My music: your own songs (src/my-music.js). Drop song files on the section to add them. */
+.my-music{margin:6px 0 4px;padding:2px 8px 8px;border-radius:12px;border:1px dashed transparent;transition:border-color .2s,background .2s}
+.my-music.dropping{border-color:rgba(229,193,124,.6);background:rgba(229,193,124,.07)}
+.my-music [data-my-add]{color:#1b1206;background:linear-gradient(#efd59d,#d5ad64);border-color:transparent}
+.my-music-use{color:#a9b1b0;font-size:12px}
+.my-music-notes{margin:4px 0 8px!important;font-size:12px;color:#e8b3a0}
+/* Your songs' rows: the title beside Listen, then Rename, Like and Remove (the panel is narrow). */
+.music-row.mine{display:flex;flex-wrap:wrap}
+.music-row.mine .mr-title,.music-row.mine .mr-rename{flex:1 1 60%}
+.mr-rename{min-width:0;font:inherit;font-size:13px;padding:3px 8px;color:#ece6d6;background:rgba(0,0,0,.35);border:1px solid rgba(229,193,124,.5);border-radius:8px}
 /* The hero piece turns towards the pointer and dances to the music (main.js heroPiece). */
 .hero-art img{transform-origin:50% 88%;will-change:transform}
 @media(hover:none){.now-playing{opacity:.6;filter:saturate(.7)}}

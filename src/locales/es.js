@@ -2000,6 +2000,18 @@ export const ROWS = [
   ["Brilliant move", "Jugada brillante"],
   ["Up a division", "Ascenso de división"],
   ["Down a division", "Descenso de división"],
+  ["My music", "Mi música"],
+  ["Add songs", "Añadir canciones"],
+  ["Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.", "Las canciones que añadas se quedan en este dispositivo: no se sube nada. Suenan en la emisora Mi música y en Todo."],
+  ["Play My music", "Reproducir Mi música"],
+  ["Rename", "Renombrar"],
+  ["Song title", "Título de la canción"],
+  ["Removed", "Eliminada"],
+  ["No songs yet", "Aún no hay canciones"],
+  ["Add your songs in the Music list", "Añade tus canciones en la Lista de música"],
+  ["Not enough space on this device", "No hay suficiente espacio en este dispositivo"],
+  ["This browser can't play your own songs here", "Este navegador no puede reproducir aquí tus propias canciones"],
+  ["Saved. Reload the page to play your songs", "Guardado. Recarga la página para reproducir tus canciones"],
 ];
 
 export const PATTERNS = [
@@ -2199,4 +2211,12 @@ export const PATTERNS = [
   ["^Mode (\\d+)·(\\d+)$", "Modo $1·$2"],
   ["^(.+) (\\d{4})$", "%1 $2"],
   ["^(.+) ·$", "%1 ·"],
+  ["^Adding (\\d+) songs?$", "Añadiendo $1 canción(es)"],
+  ["^Added (\\d+) songs?$", "Canciones añadidas: $1"],
+  ["^(\\d+) songs? · ([\\d.]+) MB on this device$", "$1 canción(es) · $2 MB en este dispositivo"],
+  ["^((?:(?! · ).)+): not a song file$", "$1: no es un archivo de música"],
+  ["^((?:(?! · ).)+) is over (\\d+) MB$", "$1 supera los $2 MB"],
+  ["^My music is full \\((\\d+) songs\\)$", "Mi música está llena ($1 canciones)"],
+  ["^((?:(?! · ).)+): this browser can't play it$", "$1: este navegador no puede reproducirla"],
+  ["^((?:(?! · ).)+): couldn't be saved on this device$", "$1: no se pudo guardar en este dispositivo"],
 ];

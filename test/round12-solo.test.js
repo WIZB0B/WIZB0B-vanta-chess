@@ -182,7 +182,7 @@ test('music: each theme has its key, chords are triads in that key; the setting 
   const store = memory(); assert.deepEqual(loadMusic(store), { on: false, volume: 0.5, station: 'on' }, 'off unless you turn it on');
   saveMusic({ on: true, volume: 2 }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 1, station: 'on' });
   saveMusic({ on: true, volume: 0.3, station: 'opera' }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 0.3, station: 'opera' });
-  assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'worlds', 'mix', 'liked']);
+  assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'worlds', 'mix', 'liked', 'mine']);
   // The volume has a ceiling (owner: "too loud"; again 2026-10-14: "Let it not be too loud or too
   // distracting"), and a curve: full is about 5 dB down, half way about 13 dB.
   assert.equal(levelFor(1), MAX_LEVEL); assert.equal(levelFor(0), 0); assert.ok(MAX_LEVEL <= 0.55);
@@ -352,7 +352,7 @@ test('music: VCH\'s own library has music for every moment, made with Lyria 3.5'
   for (const d of DIVISIONS) assert.ok(music.filter(t => t.division === d).length >= 1, `${d}: a hall of its own`);
   for (const r of REALMS) assert.ok(music.some(t => placesOf(t).includes('boss') && t.theme === r.music), `${r.id}: its boss's opera`);
   for (const p of ['focus', 'blitz', 'result', 'skin']) assert.ok(music.some(t => placesOf(t).includes(p)), p);
-  for (const st of STATIONS.filter(s => !['on', 'mix', 'liked'].includes(s.id))) assert.ok(music.some(t => t.station === st.id), `${st.id} station`);
+  for (const st of STATIONS.filter(s => !['on', 'mix', 'liked', 'mine'].includes(s.id))) assert.ok(music.some(t => t.station === st.id), `${st.id} station`);
   assert.ok(music.filter(t => t.kind === 'song').length >= 10, 'songs');
   for (const k of STINGS) assert.ok(stings.some(t => t.part === k), `a sting for ${k}`);
   assert.ok(PLACES.includes('sting'));

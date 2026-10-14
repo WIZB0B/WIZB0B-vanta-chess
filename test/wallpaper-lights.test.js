@@ -124,7 +124,7 @@ test('the flames leap with the music and settle; a loss makes them gutter; a plu
 
 test('wired: the music plays everywhere when Music is on, and every beat reaches the room', () => {
   assert.match(main, /vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\);vantaScore\.onNote\(ev=>\{if\(ev\.track\)syncNowPlaying\(\)\}\);/);
-  assert.match(main, /scoreLibrary=loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(tracks\);queueAtmosphere\(\);/, 'the library loads the first time Music is on');
+  assert.match(main, /scoreLibrary=loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(musicTracks\(\)\);queueAtmosphere\(\);/, 'the library loads the first time Music is on (with your own songs)');
   assert.match(main, /async function scoreReady\(\)\{const now=ensureScore\(\);if\(now\)return now;await scoreLibrary;return ensureScore\(\)\}/, 'the Resonance room waits for it');
   assert.match(main, /score\.setVolume\(p\.volume\);score\.setLanguage\(uiLang\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setDivision\(musicDivision\(\)\);/, 'it follows you (songs in your language), or plays your station');
   assert.match(main, /vantaScore\.setLikes\(musicLikesGet\(\)\);vantaScore\.setLanguage\(uiLang\);/, 'your likes and your language from the start');

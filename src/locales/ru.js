@@ -2000,6 +2000,18 @@ export const ROWS = [
   ["Brilliant move", "Блестящий ход"],
   ["Up a division", "Повышение в лиге"],
   ["Down a division", "Понижение в лиге"],
+  ["My music", "Моя музыка"],
+  ["Add songs", "Добавить песни"],
+  ["Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.", "Песни, которые вы добавляете, остаются на этом устройстве: ничего не загружается в сеть. Они звучат на станции «Моя музыка» и в разделе «Всё»."],
+  ["Play My music", "Слушать «Мою музыку»"],
+  ["Rename", "Переименовать"],
+  ["Song title", "Название песни"],
+  ["Removed", "Удалено"],
+  ["No songs yet", "Песен пока нет"],
+  ["Add your songs in the Music list", "Добавьте свои песни в «Списке музыки»"],
+  ["Not enough space on this device", "На этом устройстве недостаточно места"],
+  ["This browser can't play your own songs here", "Этот браузер не может воспроизводить здесь ваши песни"],
+  ["Saved. Reload the page to play your songs", "Сохранено. Перезагрузите страницу, чтобы слушать свои песни"],
 ];
 
 export const PATTERNS = [
@@ -2199,4 +2211,12 @@ export const PATTERNS = [
   ["^Mode (\\d+)·(\\d+)$", "Мода $1·$2"],
   ["^(.+) (\\d{4})$", "%1 $2"],
   ["^(.+) ·$", "%1 ·"],
+  ["^Adding (\\d+) songs?$", "Добавляем песни: $1"],
+  ["^Added (\\d+) songs?$", "Добавлено песен: $1"],
+  ["^(\\d+) songs? · ([\\d.]+) MB on this device$", "Песен: $1 · $2 МБ на этом устройстве"],
+  ["^((?:(?! · ).)+): not a song file$", "$1: это не аудиофайл"],
+  ["^((?:(?! · ).)+) is over (\\d+) MB$", "$1 больше $2 МБ"],
+  ["^My music is full \\((\\d+) songs\\)$", "«Моя музыка» заполнена ($1 песен)"],
+  ["^((?:(?! · ).)+): this browser can't play it$", "$1: этот браузер не может это воспроизвести"],
+  ["^((?:(?! · ).)+): couldn't be saved on this device$", "$1: не удалось сохранить на этом устройстве"],
 ];
