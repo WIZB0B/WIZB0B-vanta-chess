@@ -3458,6 +3458,31 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .view-title .back-view{display:inline-grid;place-items:center;color:inherit}
 @media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
 
+/* ===== RESONANCE: Chladni sand behind the page and in the Resonance room (src/resonance.js) =====
+   The background sits under the living atmosphere (z-index -1) and above the wallpaper (the
+   body's background; the body is its own stacking context). Its own veil quiets the wallpaper
+   so the sand reads as the background. It fades in once its first figure is drawn;
+   --resonance-glow (0.8 to 1.2, set by the music loop) breathes the sand's brightness, and only
+   opacity changes, so the compositor does the work. Nothing of it reaches the board. */
+#resonanceBg{position:fixed;inset:0;z-index:-2;pointer-events:none;background:rgb(4 9 8 / .5);opacity:0;transition:opacity 1.1s ease}
+#resonanceBg[data-ready]{opacity:1}
+#resonanceBg canvas{position:absolute;inset:0;width:100%;height:100%;opacity:calc(.62 * var(--resonance-glow,1));transition:opacity 1.1s ease}
+#resonanceBg .resonance-glow{opacity:calc(.95 * var(--resonance-glow,1))} /* the light of the lines and the rings: low resolution, smoothed up by the browser */
+.resonance-room{display:grid;gap:14px}
+.resonance-stage{position:relative;aspect-ratio:1;width:min(100%,560px);margin:0 auto;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#141b19,#050807 72%);box-shadow:inset 0 0 0 1px #ffffff10,0 18px 50px #0008}
+.resonance-big{position:absolute;inset:0;width:100%;height:100%}
+.resonance-readout{position:absolute;left:12px;bottom:10px;display:grid;gap:1px;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px #000}
+.resonance-readout b{font-size:13px;color:#f1e6c9;letter-spacing:.04em}
+.resonance-readout span{font-size:10px;color:#a9b8b0}
+.resonance-themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:7px}
+.resonance-themes button{display:grid;gap:2px;padding:9px 10px;border:1px solid #293d38;border-radius:9px;background:#091512;text-align:left}
+.resonance-themes button.on{border-color:#e5c17c;background:#1d2117}
+.resonance-themes b{font-size:12px;color:#eef1e9}.resonance-themes small{font-size:9px;color:#83938e}
+.resonance-controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.resonance-controls label{display:flex;align-items:center;gap:8px;font-size:11px;color:#b8c5be}
+.resonance-controls input[type=range]{width:130px}
+@media (prefers-reduced-motion:reduce){#resonanceBg,#resonanceBg canvas{transition:none}}
+
 /* ===== LIVING WALLPAPER: the candles and lamps in the wallpaper flicker and answer the game =====
    (src/wallpaper-lights.js; main.js syncWallLights). One canvas just above the wallpaper and
    under the living atmosphere's glows, drawn at half resolution about 15 times a second and

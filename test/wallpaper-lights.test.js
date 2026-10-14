@@ -49,7 +49,7 @@ test('the room answers a move without giving away what fog hides', () => {
 });
 
 test('wired: a layer under the atmosphere, set by the Living atmosphere setting, and glass that clears', () => {
-  assert.match(main, /syncWallLights\(mood\);syncMusic\(mood\);syncOathLine\(\);/);
+  assert.match(main, /syncWallLights\(mood\);syncResonanceGame\(mood\);syncMusic\(mood\);syncOathLine\(\);/);
   assert.match(main, /if\(level==='off'\)return drop\(\);/);
   assert.match(main, /fog:darkActive\(\)\|\|fogOnline\(\)\|\|blackoutActive\(\)/);
   assert.match(main, /type="range" min="15" max="100" value="94"/);
@@ -124,7 +124,8 @@ test('the flames leap with the music and settle; a loss makes them gutter; a plu
 
 test('wired: the music plays everywhere when Music is on, and every beat reaches the room', () => {
   assert.match(main, /vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\);vantaScore\.onNote\(ev=>\{if\(ev\.track\)syncNowPlaying\(\)\}\);/);
-  assert.match(main, /void loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(tracks\);queueAtmosphere\(\);/, 'the library loads the first time Music is on');
+  assert.match(main, /scoreLibrary=loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(tracks\);queueAtmosphere\(\);/, 'the library loads the first time Music is on');
+  assert.match(main, /async function scoreReady\(\)\{const now=ensureScore\(\);if\(now\)return now;await scoreLibrary;return ensureScore\(\)\}/, 'the Resonance room waits for it');
   assert.match(main, /score\.setVolume\(p\.volume\);score\.setLanguage\(uiLang\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setDivision\(musicDivision\(\)\);/, 'it follows you (songs in your language), or plays your station');
   assert.match(main, /vantaScore\.setLikes\(musicLikesGet\(\)\);vantaScore\.setLanguage\(uiLang\);/, 'your likes and your language from the start');
   assert.match(main, /if\(k==='beat'\|\|k==='drum'\|\|k==='heartbeat'\|\|k==='chord'\)\{nowPanelBeat\(k,s\);if\(k!=='chord'\)heroKick\(s\)\}/, 'the now-playing panel and the hero piece keep the beat');
