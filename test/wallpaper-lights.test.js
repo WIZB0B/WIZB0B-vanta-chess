@@ -125,7 +125,10 @@ test('the flames leap with the music and settle; a loss makes them gutter; a plu
 test('wired: the music plays everywhere when Music is on, and every beat reaches the room', () => {
   assert.match(main, /vantaScore=new VantaScore\(\);vantaScore\.onNote\(musicPulse\);vantaScore\.onNote\(ev=>\{if\(ev\.track\)syncNowPlaying\(\)\}\);/);
   assert.match(main, /void loadLibrary\(\)\.then\(tracks=>\{musicLibrary=tracks;vantaScore\.setTracks\(tracks\);queueAtmosphere\(\);/, 'the library loads the first time Music is on');
-  assert.match(main, /score\.setVolume\(p\.volume\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setDivision\(musicDivision\(\)\);/, 'it follows you, or plays your station');
+  assert.match(main, /score\.setVolume\(p\.volume\);score\.setLanguage\(uiLang\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setDivision\(musicDivision\(\)\);/, 'it follows you (songs in your language), or plays your station');
+  assert.match(main, /vantaScore\.setLikes\(musicLikesGet\(\)\);vantaScore\.setLanguage\(uiLang\);/, 'your likes and your language from the start');
+  assert.match(main, /if\(k==='beat'\|\|k==='drum'\|\|k==='heartbeat'\|\|k==='chord'\)\{nowPanelBeat\(k,s\);if\(k!=='chord'\)heroKick\(s\)\}/, 'the now-playing panel and the hero piece keep the beat');
+  assert.match(css, /\.now-playing:hover,\.now-playing:focus-within\{opacity:1;filter:none;/, 'the panel is dim until you hover it');
   assert.match(main, /score\.setPlace\(place,urgent\);/, 'into a game and out of it on the next bar line');
   assert.match(main, /const wait=\(ev\.at-ctx\.currentTime\+\(ctx\.outputLatency\|\|ctx\.baseLatency\|\|0\)\)\*1000;/, 'in time with the sound');
   assert.match(main, /if\(!ctx\|\|prefersReducedMotion\(\)\|\|document\.visibilityState!=='visible'\)return;/);

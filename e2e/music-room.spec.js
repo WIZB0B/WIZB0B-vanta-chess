@@ -48,7 +48,7 @@ test('with Music on the music plays, the board glows with its beat, and a statio
   // The Theme Studio says what is playing; a station plays its own tracks.
   await page.locator('#theme').click();
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Beat');
-  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Everything']);
+  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Everything', 'Liked']);
   await page.locator('#musicSetting').selectOption('songs');
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Song');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.music')))).toMatchObject({ on: true, station: 'songs' });
@@ -105,5 +105,54 @@ test('before the library has music, the setting says it is on its way', async ({
   await expect(page.locator('#musicNow')).toHaveText('The music library is on its way');
   await page.locator('#musicSetting').selectOption('off');
   await expect(page.locator('#musicNow')).toHaveText('');
+  expect(errors).toEqual([]);
+});
+
+test('the now-playing panel: dim until hovered, with Like, Next and Not for me; and the music list', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Desktop: hover');
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const two = { tracks: [LIBRARY.tracks[0], { id: 'test-hall', title: 'Test Hall', file: 'test-hall.mp3', station: 'cinematic', place: 'lobby' }, LIBRARY.tracks[1]] };
+  await setup(page, { library: two });
+  await page.goto('/');
+  await page.locator('.hero h1').click();
+  const panel = page.locator('#nowPlaying');
+  await expect(panel).toBeVisible({ timeout: 8000 });
+  const first = await panel.locator('.np-title').textContent();
+  expect(['Test Beat', 'Test Hall']).toContain(first);
+  const other = first === 'Test Beat' ? 'Test Hall' : 'Test Beat';
+  await expect(panel.locator('.np-next')).toHaveText(`Next · ${other}`);
+  // Dim in its corner until the pointer comes to it.
+  await page.mouse.move(700, 300);
+  await expect.poll(() => panel.evaluate(el => Number(getComputedStyle(el).opacity))).toBeLessThan(0.5);
+  await panel.hover();
+  await expect.poll(() => panel.evaluate(el => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95);
+  // Like: kept on this device.
+  await panel.locator('[data-np="like"]').click();
+  await expect(panel.locator('[data-np="like"]')).toHaveAttribute('aria-pressed', 'true');
+  const firstId = first === 'Test Beat' ? 'test-beat' : 'test-hall', otherId = firstId === 'test-beat' ? 'test-hall' : 'test-beat';
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.music.likes')))).toEqual({ liked: [firstId], hidden: [] });
+  // Next: the other track. Not for me: it gives way and is remembered.
+  await panel.locator('[data-np="next"]').click();
+  await expect(panel.locator('.np-title')).toHaveText(other);
+  await panel.locator('[data-np="hide"]').click();
+  await expect(panel.locator('.np-title')).toHaveText(first);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.music.likes')))).toEqual({ liked: [firstId], hidden: [otherId] });
+  // The corner is yours; Off hides the panel.
+  await page.locator('#theme').click();
+  await page.locator('#nowPlayingSetting').selectOption('tr');
+  await expect(panel).toHaveAttribute('data-corner', 'tr');
+  await page.locator('#nowPlayingSetting').selectOption('off');
+  await expect(panel).toBeHidden();
+  await page.locator('#nowPlayingSetting').selectOption('bl');
+  // The music list: every track, with its like and its Not for me; Listen plays it now.
+  await page.locator('#openMusicList').click();
+  const list = page.locator('#dynamicView .music-list');
+  await expect(list.locator('.music-row')).toHaveCount(3);
+  await expect(list.locator(`[data-track="${firstId}"] [data-music-like]`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(list.locator(`[data-track="${otherId}"]`)).toHaveClass(/put-away/);
+  await list.locator('[data-track="test-song"] [data-music-play]').click();
+  await expect(panel.locator('.np-title')).toHaveText('Test Song');
+  await expect(list.locator('[data-track="test-song"] [data-music-play]')).toHaveText('On now');
   expect(errors).toEqual([]);
 });

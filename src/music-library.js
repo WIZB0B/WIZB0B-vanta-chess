@@ -2,7 +2,7 @@
 // instead of music synthesized in the browser). The tracks are data: public/assets/vch/music/
 // library.json lists them and their files sit beside it, so new music needs no new code. The page
 // loads the list the first time Music is on. Each track:
-//   {id, title, file, station, place, part?, theme?, division?, kind?, skin?,
+//   {id, title, file, station, place, part?, theme?, division?, kind?, skin?, lang?, key?,
 //    seconds?, start?, end?, gain?, bpm?, beat?}
 //   id        unique, lower-case letters, digits and dashes;
 //   title     its name, shown under the Music setting while it plays;
@@ -19,9 +19,14 @@
 //   theme     the relic set or realm whose music it is (a game's three parts share one key and
 //             one tempo, so one can hand over to the next on the beat);
 //   division  the league division whose menus it plays in (bronze ... diamond; none: everyone);
-//   kind      'song' for a song with vocals (the menus play one now and then, between themes);
+//   kind      'song' for a song with vocals (the Songs station plays them, not the menus);
 //   skin      the piece set it was made for;
-//   seconds   its length; start/end: where its sound begins and ends (silence trimmed);
+//   lang      a song's language (ISO 639-1): the Songs station favours the player's own;
+//   key       its key, measured ("D minor"): tracks in related keys may overlap as they change,
+//             others hand over quickly so two keys never clash;
+//   seconds   its length; start/end: where its sound begins and ends (silence trimmed), or the
+//             section of a longer piece (a battle suite's calm, tense and storm parts share one
+//             file);
 //   gain      decibels that bring it to the library's loudness (-16 LUFS);
 //   bpm/beat  its tempo and the time of its first downbeat: the player changes tracks on a bar
 //             line, so the music never stumbles.
@@ -33,6 +38,7 @@ export const STATIONS = [
   { id: 'electric', name: 'Electric' },
   { id: 'songs', name: 'Songs' },
   { id: 'mix', name: 'Everything' },
+  { id: 'liked', name: 'Liked' },
 ];
 export const MUSIC_BASE = '/assets/vch/music/';
 export const LIBRARY_URL = `${MUSIC_BASE}library.json`;
@@ -41,7 +47,8 @@ export const PARTS = ['calm', 'tense', 'storm', 'ahead', 'behind'];
 export const RESULTS = ['win', 'loss', 'draw'];
 export const STINGS = ['win', 'loss', 'draw', 'checkmate', 'start', 'rank-up', 'rank-down', 'relic', 'realm', 'solved', 'failed', 'brilliant'];
 export const DIVISIONS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
-const STATION_IDS = new Set(STATIONS.map(s => s.id).filter(id => id !== 'on' && id !== 'mix'));
+const STATION_IDS = new Set(STATIONS.map(s => s.id).filter(id => !['on', 'mix', 'liked'].includes(id)));
+export const KEY_NAMES = /^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B) (major|minor)$/;
 
 export const placesOf = t => (Array.isArray(t?.place) ? t.place : [t?.place]).filter(p => typeof p === 'string');
 export const isSting = t => placesOf(t).includes('sting');
@@ -65,9 +72,11 @@ export function checkTrack(t) {
   if (t.division != null && !DIVISIONS.includes(t.division)) return null;
   if (t.kind != null && t.kind !== 'song') return null;
   if (t.skin != null && (typeof t.skin !== 'string' || !/^[a-z]{1,20}$/.test(t.skin))) return null;
+  if (t.lang != null && (typeof t.lang !== 'string' || !/^[a-z]{2}$/.test(t.lang))) return null;
+  if (t.key != null && (typeof t.key !== 'string' || !KEY_NAMES.test(t.key))) return null;
   const out = { id: t.id, title: t.title.trim(), file: t.file, place: Array.isArray(t.place) ? places : places[0] };
-  for (const k of ['station', 'part', 'theme', 'division', 'kind', 'skin']) if (t[k] != null) out[k] = t[k];
-  const seconds = num(t.seconds, 0.5, 900), start = num(t.start, 0, 60), end = num(t.end, 0.5, 900);
+  for (const k of ['station', 'part', 'theme', 'division', 'kind', 'skin', 'lang', 'key']) if (t[k] != null) out[k] = t[k];
+  const seconds = num(t.seconds, 0.5, 900), start = num(t.start, 0, 900), end = num(t.end, 0.5, 900);
   if (seconds !== undefined) out.seconds = seconds;
   if (start !== undefined) out.start = start;
   if (end !== undefined && end > (start || 0) + 0.5) out.end = end;

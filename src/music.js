@@ -7,18 +7,25 @@
 // storm when your clock runs low). A station plays its own tracks instead.
 //
 // Transitions (owner, 2026-10-13: "the most important part ... how do you naturally flow into
-// that music without distracting or cutting the attention of the player"):
-// - nothing ever stops dead: two decks crossfade with equal-power curves (no dip in the middle);
+// that music without distracting or cutting the attention of the player"; then: "the old one does
+// not die down immediately... the overlapping is quite disturbing"):
 // - changes land on the music's own bar line: the incoming track starts silently so that its
-//   first downbeat meets the outgoing track's next bar line, then fades in over two bars (a
-//   game's parts share one key and one tempo, so they hand over like one piece);
-// - leaving somewhere, the old track also sinks into the distance (a low-pass sweep);
+//   first downbeat meets the outgoing track's next bar line;
+// - two tracks only overlap when their keys are related (the same key, its relative, or a fifth
+//   away; a battle suite's parts are one piece): then for one bar, with equal-power curves. Any
+//   other two hand over quickly: the old track fades out in the moment before the line (under a
+//   second) and the new one starts on it, so two keys never sound together;
+// - the menus play like an album: a track plays to its natural end, a short pause, then the
+//   next one from its own beginning; in a game the music runs on without a gap;
 // - passing through a menu does not change the music: a change waits a moment to be sure;
 // - the game's part turns at most every ten seconds, and holds a little (no flickering); the
 //   storm comes in on the next beat;
 // - a dialog muffles the music (as if behind a door) instead of stopping it;
-// - stings (a win, a checkmate, a promotion to a higher league) play over the music, which
-//   steps back for them.
+// - stings (a win, a checkmate, a promotion to a higher league) play alone: the music steps
+//   out for them and comes back after;
+// - the volume has a ceiling (owner: "the music are kind of too loud"): at full it stays well
+//   under the game's own sounds;
+// - liked tracks come round about three times as often, and "Not for me" ones never play.
 // The player listens to itself (an analyser): every beat it hears reaches the room (onNote), so
 // the candles, the board's glow, the clocks and the sand follow the real music.
 import { MUSIC_BASE, isSting, placesOf } from './music-library.js';
@@ -67,16 +74,61 @@ export function loadMusic(storage = globalThis.localStorage) {
   catch { return { on: false, volume: 0.5, station: 'on' }; }
 }
 export function saveMusic(v, storage = globalThis.localStorage) { try { storage?.setItem(MUSIC_KEY, JSON.stringify({ on: !!v.on, volume: v.volume, station: v.station || 'on' })); } catch {} return v; }
+// How loud the music is at a volume (0..1): a ceiling (full volume is about -19 LUFS, the
+// library being at -16) and a curve, so the slider's lower half is fine-grained.
+export const MAX_LEVEL = 0.7;
+export const levelFor = volume => MAX_LEVEL * clamp(Number(volume) || 0, 0, 1) ** 1.3;
+
+// ---- Likes (owner, 2026-10-13: "depending on the likes of the person, the music prioritizes
+// their liked music") ----
+// Each player's likes stay on their device: the tracks they liked, and the ones they asked never
+// to hear again ("Not for me").
+export const LIKES_KEY = 'vch.music.likes';
+const trackIds = a => [...new Set((Array.isArray(a) ? a : []).filter(x => typeof x === 'string' && /^[a-z0-9-]{1,60}$/.test(x)))].slice(0, 500);
+export function loadMusicLikes(storage = globalThis.localStorage) {
+  try { const v = JSON.parse(storage?.getItem(LIKES_KEY) || '{}'), liked = trackIds(v?.liked); return { liked, hidden: trackIds(v?.hidden).filter(id => !liked.includes(id)) }; }
+  catch { return { liked: [], hidden: [] }; }
+}
+export function saveMusicLikes(v, storage = globalThis.localStorage) {
+  const out = { liked: trackIds(v?.liked), hidden: trackIds(v?.hidden) };
+  out.hidden = out.hidden.filter(id => !out.liked.includes(id));
+  try { storage?.setItem(LIKES_KEY, JSON.stringify(out)); } catch {}
+  return out;
+}
+// A like, or a "Not for me", for one track (each undoes the other).
+export function likeTrack(likes, id, on = true) {
+  const liked = (likes?.liked || []).filter(x => x !== id), hidden = (likes?.hidden || []).filter(x => !(on && x === id));
+  return { liked: on ? [...liked, id] : liked, hidden };
+}
+export function hideTrack(likes, id, on = true) {
+  const hidden = (likes?.hidden || []).filter(x => x !== id), liked = (likes?.liked || []).filter(x => !(on && x === id));
+  return { liked, hidden: on ? [...hidden, id] : hidden };
+}
+// Two tracks whose keys are related (the same key, its relative, or a fifth away on the circle of
+// fifths) can overlap as they change; any others must not sound together. A battle suite's
+// parts are one piece.
+const PITCH = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+const fifths = t => { const m = /^(\S+) (major|minor)$/.exec(t?.key || ''); if (!m || PITCH[m[1]] === undefined) return null; return ((PITCH[m[1]] + (m[2] === 'minor' ? 3 : 0)) * 7) % 12; };
+export function keysRelated(a, b) {
+  if (!a || !b) return false;
+  if (a.file === b.file) return true;
+  const x = fifths(a), y = fifths(b);
+  if (x === null || y === null) return false;
+  const d = Math.abs(x - y);
+  return Math.min(d, 12 - d) <= 1;
+}
 
 // ---- The library: what suits a moment ----
 const GAME_PARTS = { calm: ['calm', 'tense'], tense: ['tense', 'calm'], storm: ['storm', 'tense'], ahead: ['ahead', 'tense'], behind: ['behind', 'tense'] };
-// The tracks that suit a moment. A station plays its own tracks (Everything: all of them). Following
-// the game: the menus play your division's hall and the open themes and songs; a game plays its
-// theme's part (the theme's nearest part when it has not that one, then Vanta's); a boss its
+// The tracks that suit a moment. A station plays its own tracks (Everything: all of them; Liked:
+// the ones you liked, or follows the game until you like one). Following the game: the menus
+// play your division's hall and the open themes (songs only on the Songs station); a game plays
+// its theme's part (the theme's nearest part when it has not that one, then Vanta's); a boss its
 // realm's opera; after a game the win or loss music; a relic set its own theme; the rest their
 // own place's music, falling back to the menus'.
-export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'calm', theme = 'vanta', division = null, skin = null } = {}) {
+export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'calm', theme = 'vanta', division = null, skin = null, likes = null } = {}) {
   const music = tracks.filter(t => !isSting(t)), at = p => music.filter(t => placesOf(t).includes(p));
+  if (station === 'liked') { const liked = new Set(likes?.liked || []), mine = music.filter(t => liked.has(t.id)); if (mine.length) return mine; station = 'on'; }
   if (station && station !== 'on') return station === 'mix' ? music.filter(t => !placesOf(t).includes('skin')) : music.filter(t => t.station === station);
   const game = () => {
     const all = at('game');
@@ -86,9 +138,9 @@ export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'cal
     }
     return all;
   };
-  // The menus: your division's hall (Bronze before you have one) and the open themes and songs.
+  // The menus: your division's hall (Bronze before you have one) and the open themes.
   const lobby = () => {
-    const all = at('lobby'), open = all.filter(t => !t.division), mine = all.filter(t => t.division === (division || 'bronze'));
+    const all = at('lobby').filter(t => t.kind !== 'song'), open = all.filter(t => !t.division), mine = all.filter(t => t.division === (division || 'bronze'));
     return mine.length || open.length ? [...mine, ...open] : all;
   };
   let pool;
@@ -101,22 +153,22 @@ export function tracksFor(tracks, { station = 'on', place = 'lobby', part = 'cal
   else pool = at(place);
   return pool.length ? pool : lobby().length ? lobby() : music;
 }
-// The next track for a moment: not one of the last few again when there is another; in the menus
-// a song now and then (about one in three), never two songs in a row.
-export function pickTrack(tracks, { history = [], after = null, random = Math.random, ...moment } = {}) {
-  let pool = tracksFor(tracks, moment);
+// The next track for a moment: not one of the last few again when there is another, never one
+// you said is not for you (unless nothing else suits), a liked one about three times as often as
+// another, and a song in your own language three times as often as one in another.
+export function pickTrack(tracks, { history = [], after = null, random = Math.random, likes = null, language = null, ...moment } = {}) {
+  let pool = tracksFor(tracks, { ...moment, likes });
   if (!pool.length) return null;
+  const hidden = new Set(likes?.hidden || []), liked = new Set(likes?.liked || []);
+  const shown = pool.filter(t => !hidden.has(t.id));
+  if (shown.length) pool = shown;
   const past = after && !history.includes(after) ? [...history, after] : history;
-  if ((moment.station || 'on') === 'on') {
-    const songs = pool.filter(t => t.kind === 'song'), themes = pool.filter(t => t.kind !== 'song');
-    if (songs.length && themes.length) {
-      const last = tracks.find(t => t.id === past[past.length - 1]);
-      pool = last?.kind === 'song' || random() >= 0.35 ? themes : songs;
-    }
-  }
   const recent = new Set(past.slice(-Math.min(3, pool.length - 1)));
   const fresh = pool.filter(t => !recent.has(t.id)), from = fresh.length ? fresh : pool;
-  return from[Math.floor(random() * from.length) % from.length];
+  const weight = t => (liked.has(t.id) ? 3 : 1) * (t.kind === 'song' && language && t.lang === language ? 3 : 1);
+  let x = random() * from.reduce((sum, t) => sum + weight(t), 0);
+  for (const t of from) { x -= weight(t); if (x < 0) return t; }
+  return from[from.length - 1];
 }
 // A sting for a moment (win, loss, draw, checkmate, start, rank-up, ...): the theme's own if it
 // has one, otherwise one of the open ones (any one, when there are several). A moment without
@@ -159,6 +211,8 @@ const OPEN = 20000; // a filter that lets everything through
 
 const SETTLE_MS = 10000; // in a game, the music follows its part at most this often (the storm at once)
 const DEBOUNCE_MS = 1200; // going somewhere: how long the music waits to be sure you are staying
+const ALBUM_GAP = 1.6; // the menus: the pause between one track's end and the next one's beginning
+const CONTINUOUS = ['game', 'boss', 'blitz']; // where the music runs on without a pause
 export class VantaScore {
   constructor({ AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext, AudioElement = globalThis.Audio, timers = globalThis, tracks = [], base = MUSIC_BASE, random = Math.random, clock = () => globalThis.performance?.now?.() ?? Date.now() } = {}) {
     Object.assign(this, { AC: AudioContextClass, Audio: AudioElement, timers, base, random, clock });
@@ -168,12 +222,15 @@ export class VantaScore {
     this.volume = 0.5; this.place = 'lobby'; this.station = 'on'; this.division = null; this.result = 'win'; this.skin = null;
     this.decks = []; this.active = null; this.next = null; this.switchedAt = -1e9; this.pending = false; this.failures = 0; this.gaveUpAt = -1e9;
     this.debounce = null; this.history = []; this.muffled = 0; this.crossing = null;
+    this.likes = { liked: [], hidden: [] }; this.language = null; this.pinned = null; this.queued = null;
     this.listeners = new Set(); this.beats = 0; this.bands = { low: { avg: 0, dev: 0 }, mid: { avg: 0, dev: 0 } }; this.lastBeat = -1;
   }
   get available() { return !!(this.AC && this.Audio && this.tracks.some(t => !isSting(t))); }
   get part() { return this.partNow; }
-  get moment() { return { station: this.station, place: this.place, part: this.place === 'result' ? this.result : this.part, theme: this.key, division: this.division, skin: this.skin }; }
-  get level() { return this.volume; }
+  get moment() { return { station: this.station, place: this.place, part: this.place === 'result' ? this.result : this.part, theme: this.key, division: this.division, skin: this.skin, likes: this.likes, language: this.language }; }
+  get level() { return levelFor(this.volume); }
+  // The menus (and any station) play like an album; a game's music runs on.
+  get album() { return this.station !== 'on' || !CONTINUOUS.includes(this.place); }
   levelOf(t) { return dbToGain(t?.gain); }
   // A browser that cannot play a file's format never tries it (AAC in .m4a, MP3).
   playable(t) {
@@ -248,8 +305,9 @@ export class VantaScore {
     this.playing = true; this.failures = 0;
     this.ramp(this.master.gain, this.level, 0.8);
     // Back from a pause: the same track carries on where it was, if it still suits the moment.
-    if (this.active?.track && this.suits(this.active.track)) this.active.el.play?.()?.catch?.(() => {});
-    else this.transition(this.pick(), 'start');
+    const chosen = this.pinned && this.tracks.find(t => t.id === this.pinned);
+    if (!chosen && this.active?.track && this.suits(this.active.track)) this.active.el.play?.()?.catch?.(() => {});
+    else this.transition(chosen || this.pick(), 'start');
     this.timer = this.timers.setInterval(() => this.tick(), 40);
     return true;
   }
@@ -268,30 +326,36 @@ export class VantaScore {
   transition(track, style = 'switch') {
     if (!track || !this.ctx) return false;
     const from = this.active?.track && !this.active.el.paused ? this.active : null, to = this.spare();
-    const now = this.ctx.currentTime;
-    // When: the outgoing track's next bar line (its next beat, into the storm), at least a moment
-    // ahead so the incoming one can get ready; a beat line when the bar line is far off (a slow
-    // track); at once from silence or without a beat grid.
+    const now = this.ctx.currentTime, album = style === 'next' && this.album;
+    // When: the menus' next track after a pause; otherwise the outgoing track's next bar line (its
+    // next beat, into the storm), at least a moment ahead so the incoming one can get ready; a
+    // beat line when the bar line is far off (a slow track); at once from silence or without a
+    // beat grid.
     let wait = 0;
-    if (from && style !== 'start') {
+    if (album) { wait = from ? ALBUM_GAP : 0; this.crossing = null; }
+    else if (from && style !== 'start') {
       const ft = from.track, beat = ft.bpm ? 60 / ft.bpm : 0, t = from.el.currentTime || 0;
       let line = nextLine(ft, t, style === 'storm' ? beat : barSeconds(ft), 0.35);
       if (line !== null && line - t > 4.5) line = nextLine(ft, t, beat, 0.35);
       wait = line === null ? 0.05 : clamp(line - t, 0.05, 4.5);
       this.crossing = { from, line: t + wait };
     } else this.crossing = null;
+    // How: tracks in related keys overlap for a bar; any others hand over quickly, the old one
+    // fading out just before the line and the new one starting on it.
+    const related = !!from && !album && style !== 'storm' && keysRelated(from.track, track);
     const bar = barSeconds(from?.track) || barSeconds(track) || 2.5;
-    const len = style === 'start' ? (from ? 1.5 : 1.2) : style === 'storm' ? clamp(bar, 1, 2.5) : clamp(2 * bar, style === 'switch' ? 2.5 : 3, style === 'switch' ? 6 : 8);
-    const at = now + wait, entry = entryOf(track);
+    const fadeIn = !from ? (album ? 0.05 : 1.2) : album ? 0.05 : related ? clamp(bar, 1.5, 3) : 0.12;
+    const fadeOut = !from ? 0 : album ? 0.05 : related ? fadeIn : clamp(wait, 0.05, style === 'storm' ? 0.35 : 0.8);
+    const at = now + wait, entry = album ? track.start || 0 : entryOf(track);
     // A deck still fading out from an earlier change steps back first (a tenth of a second); a
     // silent one starts from nothing.
     const busy = to.track && !to.el.paused && to.until > now ? 0.09 : 0, g = to.gain.gain;
     if (busy) this.ramp(g, 0, 0.08); else { g.cancelScheduledValues?.(now); g.setValueAtTime(0, now); }
     // Where: the incoming track starts so that its first downbeat lands on that line; it plays
-    // silently until then.
+    // silently until then (the menus' next track simply starts from its beginning).
     const launch = () => {
       if (this.active !== to) return;
-      const ahead = Math.max(0, at - this.ctx.currentTime), lead = Math.min(entry, ahead), delay = ahead - lead;
+      const ahead = Math.max(0, at - this.ctx.currentTime), lead = album ? 0 : Math.min(entry, ahead), delay = ahead - lead;
       if (to.file !== track.file || to.el.error) { to.file = track.file; to.el.src = this.base + track.file; }
       to.filter.frequency.cancelScheduledValues?.(this.ctx.currentTime); to.filter.frequency.setValueAtTime(OPEN, this.ctx.currentTime);
       try { to.el.currentTime = entry - lead; } catch {}
@@ -300,17 +364,19 @@ export class VantaScore {
     };
     this.active = to; to.track = track; to.usedAt = now; to.until = Infinity;
     if (busy) this.later(launch, busy * 1000); else launch();
-    this.curveTo(g, 0, this.levelOf(track), Math.max(at, now + 0.005 + busy), len);
+    this.curveTo(g, 0, this.levelOf(track), Math.max(at, now + 0.005 + busy), fadeIn);
     if (from && from !== to) {
-      const v = this.hold(from.gain.gain); this.curveTo(from.gain.gain, v, 0, Math.max(at, now + 0.005), len);
-      from.until = at + len;
-      // Somewhere else: the old music also sinks into the distance as it fades.
-      if (style === 'switch') { from.filter.frequency.setValueAtTime(OPEN, at); from.filter.frequency.exponentialRampToValueAtTime?.(600, at + len); }
-      const el = from.el; this.later(() => { if (this.active !== from) el.pause?.(); }, (wait + len) * 1000 + 150);
+      const v = this.hold(from.gain.gain), outAt = related ? Math.max(at, now + 0.005) : Math.max(now + 0.005, at - fadeOut);
+      const outLen = related ? fadeOut : Math.max(0.01, Math.min(fadeOut, at - outAt));
+      this.curveTo(from.gain.gain, v, 0, outAt, outLen);
+      from.until = outAt + outLen;
+      // Somewhere else, overlapping: the old music also sinks into the distance as it fades.
+      if (style === 'switch' && related) { from.filter.frequency.setValueAtTime(OPEN, at); from.filter.frequency.exponentialRampToValueAtTime?.(600, at + fadeOut); }
+      const el = from.el; this.later(() => { if (this.active !== from) el.pause?.(); }, (outAt - now + outLen) * 1000 + 150);
       // Once the incoming plays, line it up again with the outgoing (it is still silent).
-      if (track.bpm && from.track?.bpm && wait > 0.3) this.later(() => this.align(to, entry), Math.min(600, wait * 1000 - 200));
+      if (!album && track.bpm && from.track?.bpm && wait > 0.3) this.later(() => this.align(to, entry), Math.min(600, wait * 1000 - 200));
     }
-    this.next = null; this.switchedAt = this.now(); this.pending = false;
+    this.next = null; this.queued = null; this.switchedAt = this.now(); this.pending = false;
     this.history.push(track.id); if (this.history.length > 8) this.history.shift();
     this.emit({ kind: 'chord', at, track: track.id, strength: 0.8 });
     return true;
@@ -331,7 +397,7 @@ export class VantaScore {
     this.next = track;
     if (deck.file !== track.file || deck.el.error) { deck.file = track.file; deck.el.src = this.base + track.file; deck.el.load?.(); }
   }
-  suits(track) { return tracksFor(this.tracks, this.moment).some(t => t.id === track.id); }
+  suits(track) { return track.id === this.pinned || tracksFor(this.tracks, this.moment).some(t => t.id === track.id); }
   clearDebounce() { if (this.debounce) { this.timers.clearTimeout?.(this.debounce); this.debounce = null; } }
   // The moment changed. A track that still suits it stays. Otherwise: 'storm' changes on the next
   // beat; 'part' (the game's part turned) once the music has played ten seconds; 'now' (a game
@@ -355,12 +421,45 @@ export class VantaScore {
   setStorm(s) { this.storm = Math.max(0, Math.min(1, Number(s) || 0)); this.retune(); }
   setMood(m) { this.mood = m === 'ahead' || m === 'behind' ? m : 'even'; this.retune(); }
   setKey(id, urgent = false) { const key = MUSIC_KEYS[id] ? id : 'vanta'; if (key !== this.key) { this.key = key; this.update(urgent ? 'now' : 'switch'); } }
-  setPlace(place, urgent = false) { if (place !== this.place) { this.place = place; if (place !== 'game') { this.partNow = 'calm'; } this.update(urgent ? 'now' : 'switch'); } }
+  setPlace(place, urgent = false) { if (place !== this.place) { this.place = place; this.pinned = null; if (place !== 'game') { this.partNow = 'calm'; } this.update(urgent ? 'now' : 'switch'); } }
   setLobby(on) { this.setPlace(on ? 'lobby' : 'game', true); }
   setResult(result) { const r = result === 'loss' || result === 'draw' ? result : 'win'; if (r !== this.result) { this.result = r; if (this.place === 'result') this.update('now'); } }
   setDivision(d) { const division = d || null; if (division !== this.division) { this.division = division; this.update('switch'); } }
   setSkin(s) { const skin = s || null; if (skin !== this.skin) { this.skin = skin; if (this.place === 'skin') this.update('switch'); } }
-  setStation(id) { const station = id || 'on'; if (station !== this.station) { this.station = station; this.update('now'); } }
+  setStation(id) { const station = id || 'on'; if (station !== this.station) { this.station = station; this.pinned = null; this.update('now'); } }
+  // Your likes (src/music.js loadMusicLikes): a track you just said is not for you gives way at
+  // once; the Liked station follows what you like.
+  setLikes(likes) {
+    this.likes = { liked: [...(likes?.liked || [])], hidden: [...(likes?.hidden || [])] }; this.queued = null;
+    const now = this.active?.track;
+    if (this.playing && now && this.likes.hidden.includes(now.id)) this.skip();
+    else if (this.station === 'liked') this.update('now');
+  }
+  // Your language (a song in it comes round more often on the Songs station).
+  setLanguage(lang) { const l = typeof lang === 'string' && /^[a-z]{2}/.test(lang) ? lang.slice(0, 2) : null; if (l !== this.language) { this.language = l; this.queued = null; } }
+  // The next track now (Next, or Not for me), handed over quickly on the bar line.
+  skip() {
+    if (!this.playing || !this.ctx) return false;
+    this.pinned = null; this.clearDebounce();
+    const id = this.active?.track?.id, pool = this.pick({ after: id });
+    return this.transition(pool && pool.id === id ? this.pick({ after: id, history: [...this.history, id] }) || pool : pool, 'switch');
+  }
+  // Plays a chosen track (from the music list) now; it stays until it ends or you go elsewhere.
+  playNow(id) {
+    const track = this.tracks.find(t => t.id === id && !isSting(t));
+    if (!track) return false;
+    this.pinned = id; this.clearDebounce();
+    if (!this.playing) return this.start();
+    return this.transition(track, 'switch');
+  }
+  // What comes next, for the now-playing panel: chosen ahead and kept until it plays.
+  get upcoming() {
+    if (!this.playing) return null;
+    if (this.next && this.suits(this.next)) return this.next;
+    const q = this.queued, hidden = this.likes.hidden;
+    if (!q || !this.suits(q) || hidden.includes(q.id)) this.queued = this.pick({ after: this.active?.track?.id });
+    return this.queued;
+  }
   // A dialog in front of the board: the music as if behind a door (0 open .. 1 shut).
   muffle(amount = 1) {
     const a = clamp(Number(amount) || 0, 0, 1); this.muffled = a;
@@ -379,11 +478,16 @@ export class VantaScore {
     if (!this.playing || !this.active?.track) return;
     const el = this.active.el, t = this.active.track, d = el.duration, end = Math.min(t.end || Infinity, Number.isFinite(d) ? d : Infinity), left = end - (el.currentTime || 0);
     if (Number.isFinite(left) && end > 10) {
-      const bar = barSeconds(t) || 2.5, need = clamp(2 * bar, 3, 8) + bar + 0.5;
+      const bar = barSeconds(t) || 2.5;
       // The next track (or the same one again) loads twenty seconds before this one ends...
-      if (left < 20 && !this.next && this.now() - this.switchedAt > 6000) this.prepare(this.pick({ after: t.id }));
-      // ...and comes in on a bar line before its last chord fades.
-      if (left < need && this.now() - this.switchedAt > 4000) { this.transition(this.next && this.suits(this.next) ? this.next : this.pick({ after: t.id }), 'next'); return; }
+      if (left < 20 && !this.next && this.now() - this.switchedAt > 6000) this.prepare(this.upcoming);
+      // ...and, in the menus, begins once this one has rung out (after a short pause); in a game,
+      // it comes in on the bar line before this one's last bar, so the music never stops.
+      const due = this.album ? left <= 0.08 || el.ended : left < bar + 0.5;
+      if (due && this.now() - this.switchedAt > 4000) {
+        if (t.id === this.pinned) this.pinned = null;
+        this.transition(this.next && this.suits(this.next) ? this.next : this.pick({ after: t.id }), 'next'); return;
+      }
     }
     if (this.pending && this.now() - this.switchedAt >= SETTLE_MS) this.update('part');
     this.listen();
@@ -415,14 +519,14 @@ export class VantaScore {
     band.avg = avg * 0.92 + rise * 0.08; band.dev = dev * 0.92 + Math.abs(rise - avg) * 0.08;
     return loud && over > 0 ? Math.min(1, Math.max(0.05, (rise - avg) / (6 * dev + 30))) : 0;
   }
-  // Steps back for a moment (a sting plays over it), then comes back up.
+  // Steps out for a moment (a sting plays alone), then comes back.
   duck(seconds = 2.5) {
     if (!this.master || !this.playing) return;
     const t = this.ctx.currentTime, g = this.master.gain;
-    this.hold(g); g.linearRampToValueAtTime(this.level * 0.35, t + 0.25);
-    g.setValueAtTime(this.level * 0.35, t + seconds); g.linearRampToValueAtTime(this.level, t + seconds + 1.5);
+    this.hold(g); g.linearRampToValueAtTime(0, t + 0.25);
+    g.setValueAtTime(0, t + seconds); g.linearRampToValueAtTime(this.level, t + seconds + 1.5);
   }
-  // A short cue over the music: 'win' | 'loss' | 'draw' | 'checkmate' | 'start' | 'rank-up' | ...
+  // A short cue, alone: 'win' | 'loss' | 'draw' | 'checkmate' | 'start' | 'rank-up' | ...
   sting(kind) {
     const track = stingFor(this.tracks, kind, this.key, this.random);
     if (!track || !this.ensure()) return false;

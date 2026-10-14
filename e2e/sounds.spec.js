@@ -30,7 +30,7 @@ test('every sound in the Sound test is a real recording that plays', async ({ pa
   await page.locator('#theme').click();
   await expect(page.locator('#pieceSoundSetting option')).toHaveText(['Wood', 'Crystal', 'Tidal', 'Gilded', 'Ember', 'Match my relic set', 'Classic']);
   await expect(page.locator('#uiSoundSetting')).toBeChecked();
-  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Everything']);
+  await expect(page.locator('#musicSetting option')).toHaveText(['Off', 'Follows the game', 'Dark cinematic', 'Focus', 'Opera', 'Electric', 'Songs', 'Everything', 'Liked']);
   await page.locator('#openSoundTest').click();
   const view = page.locator('#dynamicView .sound-test');
   await expect(view.locator('[data-ui-sound]')).toHaveCount(17);

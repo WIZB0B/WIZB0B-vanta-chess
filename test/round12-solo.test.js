@@ -6,7 +6,7 @@ import { RANKS, addGames, armyList, careers, countsForCareer, deeds, emptyCareer
 import { HONOR_RELICS, OATHS, dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from '../src/oaths.js';
 import { atmosphereFor, materialFromFen, tensionFor } from '../src/atmosphere.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, starsFor, totalStars } from '../src/campaign.js';
-import { KEY_FOR_THEME, MUSIC_KEYS, VantaScore, barSeconds, chordFor, entryOf, equalPower, loadMusic, midiHz, moodFor, nextLine, partFor, pickTrack, saveMusic, stingFor, tracksFor } from '../src/music.js';
+import { KEY_FOR_THEME, MAX_LEVEL, MUSIC_KEYS, VantaScore, barSeconds, chordFor, entryOf, equalPower, hideTrack, keysRelated, levelFor, likeTrack, loadMusic, loadMusicLikes, midiHz, moodFor, nextLine, partFor, pickTrack, saveMusic, saveMusicLikes, stingFor, tracksFor } from '../src/music.js';
 import { DIVISIONS, LIBRARY_URL, MUSIC_BASE, PLACES, STATIONS, STINGS, checkTrack, isSting, loadLibrary, placesOf, readLibrary } from '../src/music-library.js';
 import { playMoveSound, soundPlace } from '../src/move-sound.js';
 import { RELICS, relicById } from '../src/relics.js';
@@ -182,7 +182,10 @@ test('music: each theme has its key, chords are triads in that key; the setting 
   const store = memory(); assert.deepEqual(loadMusic(store), { on: false, volume: 0.5, station: 'on' }, 'off unless you turn it on');
   saveMusic({ on: true, volume: 2 }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 1, station: 'on' });
   saveMusic({ on: true, volume: 0.3, station: 'opera' }, store); assert.deepEqual(loadMusic(store), { on: true, volume: 0.3, station: 'opera' });
-  assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'mix']);
+  assert.deepEqual(STATIONS.map(s => s.id), ['on', 'cinematic', 'focus', 'opera', 'electric', 'songs', 'mix', 'liked']);
+  // The volume has a ceiling (owner: "too loud"), and a curve: full is about 3 dB down.
+  assert.equal(levelFor(1), MAX_LEVEL); assert.equal(levelFor(0), 0); assert.ok(MAX_LEVEL <= 0.71);
+  assert.ok(levelFor(0.5) < 0.3 && levelFor(0.5) > 0.25, 'half way is a quiet bed'); assert.equal(levelFor(7), MAX_LEVEL);
   // The game's part, held a little longer once it turns so the music does not flicker.
   assert.equal(partFor(0.2, 0.5), 'storm'); assert.equal(partFor(0.6, 0), 'tense'); assert.equal(partFor(0, 0), 'calm');
   assert.equal(partFor(0.4, 0, 'calm'), 'calm'); assert.equal(partFor(0.4, 0, 'tense'), 'tense'); assert.equal(partFor(0.3, 0, 'tense'), 'calm');
@@ -261,24 +264,54 @@ const HALLS = [
 test('music: your division\'s hall, songs between the themes, the music after a game and each relic set\'s', () => {
   assert.equal(readLibrary({ tracks: HALLS }).length, HALLS.length, 'every field is one the library takes');
   const ids = moment => tracksFor(HALLS, moment).map(t => t.id);
-  assert.deepEqual(ids({ place: 'lobby', division: 'gold' }), ['hall-gold', 'hall', 'song-a', 'song-b'], 'your hall, the open themes and the songs');
-  assert.deepEqual(ids({ place: 'lobby' }), ['hall-bronze', 'hall', 'song-a', 'song-b'], 'Bronze before you have a division');
-  assert.deepEqual(ids({ place: 'lobby', division: 'diamond' }), ['hall', 'song-a', 'song-b'], 'a division without a hall yet: the open ones');
+  assert.deepEqual(ids({ place: 'lobby', division: 'gold' }), ['hall-gold', 'hall'], 'your hall and the open themes (songs only on the Songs station)');
+  assert.deepEqual(ids({ place: 'lobby' }), ['hall-bronze', 'hall'], 'Bronze before you have a division');
+  assert.deepEqual(ids({ place: 'lobby', division: 'diamond' }), ['hall'], 'a division without a hall yet: the open ones');
   assert.deepEqual(ids({ place: 'result', part: 'win' }), ['won']); assert.deepEqual(ids({ place: 'result', part: 'loss' }), ['lost']);
   assert.deepEqual(ids({ place: 'result', part: 'draw' }), ['lost'], 'a draw: the quieter one');
   assert.deepEqual(ids({ place: 'skin', skin: 'tidal' }), ['relic-tidal']); assert.deepEqual(ids({ place: 'skin', skin: 'mirror' }), ['relic-ember', 'relic-tidal']);
   assert.deepEqual(ids({ place: 'game', part: 'ahead' }), ['ahead']); assert.deepEqual(ids({ place: 'game', part: 'behind' }), ['tense'], 'behind, without its own: tense');
   assert.ok(!ids({ station: 'mix' }).some(id => id.startsWith('relic-')), 'Everything leaves the relic themes to the Relic sets');
-  // In the menus a song now and then (about one in three), never two in a row; a station is its own.
-  const gold = { place: 'lobby', division: 'gold' };
-  assert.equal(pickTrack(HALLS, { ...gold, random: () => 0.2 }).kind, 'song');
-  assert.equal(pickTrack(HALLS, { ...gold, random: () => 0.5 }).kind, undefined, 'mostly the themes');
-  assert.equal(pickTrack(HALLS, { ...gold, after: 'song-a', random: () => 0.2 }).kind, undefined, 'after a song, a theme');
+  // The menus never play a song; the Songs station plays them, one after another, and a song in
+  // your language comes round three times as often as one in another.
+  for (const r of [0, 0.2, 0.5, 0.99]) assert.notEqual(pickTrack(HALLS, { place: 'lobby', division: 'gold', random: () => r }).kind, 'song');
   assert.equal(pickTrack(HALLS, { station: 'songs', after: 'song-a', random: () => 0.9 }).id, 'song-b', 'the Songs station: songs, one after another');
+  const sung = [...HALLS, { id: 'song-ko', title: '편의점 불빛', file: 'song-ko.m4a', station: 'songs', place: 'lobby', kind: 'song', lang: 'ko' }, { id: 'song-fr', title: 'Mon vieux vélo', file: 'song-fr.m4a', station: 'songs', place: 'lobby', kind: 'song', lang: 'fr' }];
+  const share = (lang, id) => { let n = 0; for (let i = 0; i < 400; i++) if (pickTrack(sung, { station: 'songs', language: lang, random: () => (i + 0.5) / 400 }).id === id) n++; return n / 400; };
+  assert.ok(Math.abs(share('ko', 'song-ko') - 3 / 6) < 0.01, 'Korean chosen: the Korean song half the time (3 of 6 shares)');
+  assert.ok(Math.abs(share('de', 'song-ko') - 1 / 4) < 0.01, 'no song in your language: all alike');
   // A theme's own sting first; several for a moment: any one of them.
   assert.equal(stingFor(HALLS, 'win', 'ember').id, 'win-ember'); assert.equal(stingFor(HALLS, 'win', 'umbra').id, 'win');
   assert.equal(stingFor(HALLS, 'rank-down', 'vanta', () => 0).id, 'down'); assert.equal(stingFor(HALLS, 'rank-down', 'vanta', () => 0.9).id, 'down-2');
   assert.equal(stingFor(HALLS, 'rank-up').id, 'win', 'rank up borrows the win\'s');
+});
+
+test('music: what you like comes round more often; what is not for you never plays', () => {
+  const store = memory();
+  assert.deepEqual(loadMusicLikes(store), { liked: [], hidden: [] });
+  let likes = likeTrack({ liked: [], hidden: [] }, 'menus'); likes = hideTrack(likes, 'funk'); likes = likeTrack(likes, 'funk');
+  assert.deepEqual(likes, { liked: ['menus', 'funk'], hidden: [] }, 'a like undoes a Not for me');
+  likes = hideTrack(likes, 'menus'); assert.deepEqual(likes, { liked: ['funk'], hidden: ['menus'] }, 'and the other way round');
+  assert.deepEqual(likeTrack(likes, 'funk', false), { liked: [], hidden: ['menus'] }, 'unliked');
+  saveMusicLikes({ liked: ['funk', 'funk', '../x', 7], hidden: ['menus', 'funk'] }, store);
+  assert.deepEqual(loadMusicLikes(store), { liked: ['funk'], hidden: ['menus'] }, 'kept clean: no repeats, no junk, a liked track is not also hidden');
+  store.setItem('vch.music.likes', '{nope'); assert.deepEqual(loadMusicLikes(store), { liked: [], hidden: [] });
+  // Not for you: never chosen while anything else suits; still played when nothing else does.
+  for (const r of [0, 0.3, 0.6, 0.99]) assert.notEqual(pickTrack(LIB, { place: 'lobby', likes: { hidden: ['menus'] }, random: () => r }).id, 'menus');
+  assert.equal(pickTrack(LIB, { place: 'boss', likes: { hidden: ['aria'] } }).id, 'aria', 'the only one: it plays rather than silence');
+  // Liked: three shares to one.
+  const shares = id => { let n = 0; for (let i = 0; i < 600; i++) if (pickTrack(LIB, { place: 'lobby', likes: { liked: ['chair'] }, random: () => (i + 0.5) / 600 }).id === id) n++; return n / 600; };
+  assert.ok(Math.abs(shares('chair') - 3 / 6) < 0.01, `liked: half the picks among four (${shares('chair')})`); assert.ok(Math.abs(shares('menus') - 1 / 6) < 0.01);
+  // The Liked station: your liked tracks, wherever you are; until you like one, it follows the game.
+  assert.deepEqual(tracksFor(LIB, { station: 'liked', place: 'game', likes: { liked: ['aria', 'chair', 'win'] } }).map(t => t.id), ['aria', 'chair'], 'no stings');
+  assert.deepEqual(tracksFor(LIB, { station: 'liked', place: 'boss', likes: { liked: [] } }).map(t => t.id), ['aria']);
+  // Keys: related ones may overlap as they change (the same, the relative, a fifth away; one piece).
+  const k = key => ({ file: `${key}.m4a`, key });
+  assert.ok(keysRelated(k('A minor'), k('C major')), 'relative'); assert.ok(keysRelated(k('D minor'), k('A minor')), 'a fifth');
+  assert.ok(keysRelated(k('Bb major'), k('F major'))); assert.ok(keysRelated(k('C# minor'), k('E major')));
+  assert.ok(!keysRelated(k('D minor'), k('B major')), 'far apart'); assert.ok(!keysRelated(k('C major'), k('C minor')), 'parallel keys clash');
+  assert.ok(!keysRelated(k('C major'), { file: 'x.m4a' }), 'an unknown key: hand over quickly');
+  assert.ok(keysRelated({ file: 'suite.m4a', key: 'D minor' }, { file: 'suite.m4a', key: 'F# major' }), 'two parts of one piece');
 });
 
 test('music: the library file is read with care', async () => {
@@ -288,6 +321,7 @@ test('music: the library file is read with care', async () => {
     { ...LIB[0], file: '../secret.mp3' }, { ...LIB[0], file: 'https://elsewhere.example/a.mp3' }, { ...LIB[0], file: 'menus.wav' }, { ...LIB[0], id: 'Menus!' },
     { ...LIB[0], title: '' }, { ...LIB[0], station: 'polka' }, { ...LIB[0], station: 'mix' }, { ...LIB[0], place: 'kitchen' }, { ...LIB[1], part: 'furious' }, { ...LIB[10], part: 'calm' },
     { ...LIB[0], theme: 'Ember' }, { ...LIB[0], division: 'wood' }, { ...LIB[0], kind: 'album' }, { ...LIB[0], skin: 'Ember' },
+    { ...LIB[0], lang: 'kor' }, { ...LIB[0], key: 'H minor' }, { ...LIB[0], key: 'D' }, { ...LIB[0], station: 'liked' },
     { ...HALLS[5], part: 'calm' }, { ...LIB[0], place: 'result', part: 'storm' }, null, 'menus.mp3',
   ]) assert.equal(checkTrack(bad), null, JSON.stringify(bad));
   assert.deepEqual(readLibrary({ tracks: [LIB[0], LIB[0], { nope: 1 }] }).map(t => t.id), ['menus'], 'one of each, junk left out');
@@ -299,6 +333,8 @@ test('music: the library file is read with care', async () => {
   assert.equal(checkTrack({ ...LIB[0], beat: 0.25 }).beat, undefined, 'a downbeat needs a tempo');
   assert.equal(checkTrack({ ...LIB[0], bpm: 300 }).bpm, undefined); assert.equal(checkTrack({ ...LIB[0], gain: 30 }).gain, undefined);
   assert.equal(checkTrack({ ...LIB[0], start: 10, end: 10.2 }).end, undefined, 'an end before its start is no end');
+  const part = checkTrack({ ...LIB[0], file: 'suite.m4a', start: 61.2, end: 121.4, key: 'D minor', lang: 'ko' });
+  assert.deepEqual([part.start, part.end, part.key, part.lang], [61.2, 121.4, 'D minor', 'ko'], 'a section of a longer piece, its key, a song\'s language');
   const served = body => async url => { assert.equal(url, LIBRARY_URL); return { ok: true, json: async () => body }; };
   assert.deepEqual((await loadLibrary(served({ tracks: LIB.slice(0, 2) }))).map(t => t.id), ['menus', 'calm']);
   assert.deepEqual(await loadLibrary(async () => ({ ok: false })), [], 'no library yet: the music waits');
@@ -321,7 +357,7 @@ test('music: VCH\'s own library has music for every moment, made with Lyria 3.5'
   for (const d of DIVISIONS) assert.ok(music.filter(t => t.division === d).length >= 2, `${d}: a hall of its own`);
   for (const r of REALMS) assert.ok(music.some(t => placesOf(t).includes('boss') && t.theme === r.music), `${r.id}: its boss's opera`);
   for (const p of ['focus', 'blitz', 'result', 'skin']) assert.ok(music.some(t => placesOf(t).includes(p)), p);
-  for (const st of STATIONS.filter(s => !['on', 'mix'].includes(s.id))) assert.ok(music.some(t => t.station === st.id), `${st.id} station`);
+  for (const st of STATIONS.filter(s => !['on', 'mix', 'liked'].includes(s.id))) assert.ok(music.some(t => t.station === st.id), `${st.id} station`);
   assert.ok(music.filter(t => t.kind === 'song').length >= 10, 'songs');
   for (const k of STINGS) assert.ok(stings.some(t => t.part === k), `a sting for ${k}`);
   assert.ok(PLACES.includes('sting'));
@@ -378,11 +414,14 @@ test('music: the player crossfades real tracks and follows you, the game\'s part
   assert.equal(score.decks.length, 3, 'three decks: a quick second change never cuts a fading track');
   const [a, b] = score.decks;
   assert.equal(score.nowPlaying.id, 'menus', 'the menus\' music'); assert.equal(a.el.src, '/m/menus.mp3'); assert.equal(a.el.paused, false);
-  assert.equal(target(a.gain.gain), 1); assert.equal(target(score.master.gain), 0.5, 'up to the volume');
+  assert.equal(target(a.gain.gain), 1); assert.equal(target(score.master.gain), levelFor(0.5), 'up to the volume, under its ceiling');
+  assert.equal(curve(a.gain.gain)[3], 1.2, 'from silence it fades in');
   assert.deepEqual([notes.at(-1).kind, notes.at(-1).track], ['chord', 'menus'], 'the room hears each new track');
-  // A game begins: its calm part on the next bar line, the menus fading out under it.
+  // A game begins: its calm part on the next bar line, the menus fading out just before it (their
+  // keys are unknown, so the two never overlap).
   clock.now = 1000; score.setPlace('game', true);
   assert.equal(score.nowPlaying.id, 'calm'); assert.equal(b.el.src, '/m/calm.mp3'); assert.equal(target(a.gain.gain), 0); assert.equal(target(b.gain.gain), 1);
+  assert.ok(curve(a.gain.gain)[2] + curve(a.gain.gain)[3] <= curve(b.gain.gain)[2] + 1e-9, 'the old one is gone when the new one starts');
   flush(); assert.equal(a.el.paused, true, 'the faded deck stops'); assert.equal(b.el.paused, false);
   // The game grows tense: the music follows once the calm part has played ten seconds.
   clock.now = 2000; score.setTension(0.9);
@@ -393,13 +432,15 @@ test('music: the player crossfades real tracks and follows you, the game\'s part
   // The storm (your clock running out) comes in at once.
   clock.now = 12000; score.setStorm(1); assert.equal(score.nowPlaying.id, 'storm');
   flush();
-  // The next track loads twenty seconds before the end and comes in under the last bars.
+  // In a game the next track loads twenty seconds before the end and comes in on the bar line
+  // before the last one, so the music runs on.
   clock.now = 40000;
   const deck = score.active, other = score.spare();
   deck.el.duration = 100; deck.el.currentTime = 70; score.tick(); assert.equal(score.next, null, 'not yet');
   deck.el.currentTime = 85; score.tick();
   assert.equal(score.next.id, 'storm', 'the only storm, again'); assert.equal(other.el.src, '/m/storm.mp3'); assert.equal(other.el.loads, 1);
-  other.el.currentTime = 3; deck.el.currentTime = 97; score.tick();
+  other.el.currentTime = 3; deck.el.currentTime = 97; score.tick(); assert.equal(score.active, deck, 'not yet: more than a bar left');
+  deck.el.currentTime = 97.6; score.tick();
   assert.equal(score.active, other); assert.equal(other.el.currentTime, 0, 'from the top'); assert.equal(target(deck.gain.gain), 0);
   flush();
   // A station plays its own tracks wherever you are; a track that will not load is skipped.
@@ -441,11 +482,13 @@ test('music: changes land on the bar line, wait to be sure you are staying, and 
   // in) starts silently 0.25 s before it, so its downbeat lands on the line.
   a.el.currentTime = 3.2; score.setPlace('focus'); assert.equal(later.at(-1).ms, 1200, 'a moment to be sure'); later.pop()();
   assert.equal(score.nowPlaying.id, 'study'); assert.equal(b.el.src, '/m/study.m4a');
+  // Their keys are unknown: a quick handover, the menus fading out in the 0.8 s before the line.
   const now = score.ctx.currentTime, fadeIn = curve(b.gain.gain), fadeOut = curve(a.gain.gain);
-  assert.ok(Math.abs(fadeIn[2] - (now + 1.3)) < 1e-9 && Math.abs(fadeOut[2] - (now + 1.3)) < 1e-9, 'both on the bar line');
-  assert.equal(fadeIn[3], 4, 'over two bars'); assert.equal(fadeIn[1][0], 0); assert.equal(b.el.currentTime, 0); assert.equal(b.el.paused, true, 'silent until its lead-in');
+  assert.ok(Math.abs(fadeIn[2] - (now + 1.3)) < 1e-9, 'the study music on the bar line');
+  assert.ok(Math.abs(fadeOut[2] - (now + 0.5)) < 1e-9 && fadeOut[3] === 0.8, 'the menus gone by then');
+  assert.equal(fadeIn[3], 0.12, 'in at once'); assert.equal(fadeIn[1][0], 0); assert.equal(b.el.currentTime, 0); assert.equal(b.el.paused, true, 'silent until its lead-in');
   assert.ok(later.some(fn => Math.abs(fn.ms - 1050) < 1e-6), 'it starts 0.25 s before the line');
-  assert.ok(a.filter.frequency.events.some(([k, v, t]) => k === 'ramp' && v === 600 && Math.abs(t - (now + 5.3)) < 1e-9), 'and the menus sink into the distance');
+  assert.ok(!a.filter.frequency.events.some(([k]) => k === 'ramp'), 'no sweep: nothing overlaps');
   // Another change at once (before the menus have faded): the third deck, the menus untouched.
   score.setPlace('game', true);
   assert.equal(score.nowPlaying.id, 'calm'); assert.equal(score.active, c); assert.equal(a.el.src, '/m/menus.m4a', 'still fading');
@@ -464,8 +507,70 @@ test('music: changes land on the bar line, wait to be sure you are staying, and 
   assert.ok(Math.abs(curve(score.active.gain.gain)[2] - (score.ctx.currentTime + 1.3)) < 1e-9, 'the next bar line (2 s) of the calm part');
   flush(); const tense = score.active; tense.el.currentTime = 4.1;
   clock.now = 31000; score.setStorm(1); assert.equal(score.nowPlaying.id, 'storm');
-  const stormIn = curve(score.active.gain.gain);
-  assert.ok(Math.abs(stormIn[2] - (score.ctx.currentTime + 0.4)) < 1e-9, 'on the next beat (beats at 4.0, 4.5 ...: 4.5 s)'); assert.equal(stormIn[3], 2, 'over a bar');
+  const stormIn = curve(score.active.gain.gain), stormOut = curve(tense.gain.gain);
+  assert.ok(Math.abs(stormIn[2] - (score.ctx.currentTime + 0.4)) < 1e-9, 'on the next beat (beats at 4.0, 4.5 ...: 4.5 s)'); assert.equal(stormIn[3], 0.12, 'at once');
+  assert.ok(Math.abs(stormOut[2] + stormOut[3] - (score.ctx.currentTime + 0.4)) < 1e-9 && stormOut[3] <= 0.35, 'the tense part out just before it');
+});
+
+// Tracks with keys: related ones overlap for a bar; the menus play like an album.
+const KEYED = [
+  { id: 'hall-a', title: 'Hall A', file: 'hall-a.m4a', station: 'cinematic', place: 'lobby', bpm: 120, beat: 0.5, start: 0.2, end: 100, key: 'D minor' },
+  { id: 'hall-b', title: 'Hall B', file: 'hall-b.m4a', station: 'cinematic', place: 'lobby', bpm: 90, beat: 0, start: 0.4, key: 'F major' },
+  { id: 'study', title: 'Study', file: 'study.m4a', station: 'focus', place: 'focus', bpm: 120, beat: 0, key: 'A minor' },
+  { id: 'calm', title: 'Calm', file: 'suite.m4a', station: 'cinematic', place: 'game', part: 'calm', bpm: 120, beat: 0, start: 0, end: 60, key: 'D minor' },
+  { id: 'tense', title: 'Tense', file: 'suite.m4a', station: 'cinematic', place: 'game', part: 'tense', bpm: 120, beat: 60, start: 60, end: 120, key: 'D minor' },
+  { id: 'win', title: 'Victory', file: 'win.m4a', place: 'sting', part: 'win', seconds: 6 },
+];
+test('music: related keys overlap for a bar, a suite\'s parts hand over in place, and the menus play like an album', () => {
+  const { score, clock, later, flush } = player({ tracks: KEYED });
+  score.start(); const a = score.active;
+  assert.equal(score.nowPlaying.id, 'hall-a');
+  // Into the focus music (A minor, a fifth from D minor): one bar's equal-power crossfade, the old
+  // music sinking away as it goes.
+  a.el.currentTime = 3.2; clock.now = 5000; score.setPlace('focus'); later.pop()();
+  const b = score.active, now = score.ctx.currentTime;
+  assert.equal(score.nowPlaying.id, 'study');
+  assert.ok(Math.abs(curve(b.gain.gain)[2] - (now + 1.3)) < 1e-9 && curve(b.gain.gain)[3] === 2, 'in over a bar from the line');
+  assert.ok(Math.abs(curve(a.gain.gain)[2] - (now + 1.3)) < 1e-9 && curve(a.gain.gain)[3] === 2, 'out over the same bar');
+  assert.ok(a.filter.frequency.events.some(([k, v]) => k === 'ramp' && v === 600), 'sinking into the distance');
+  flush();
+  // A game: its calm part starts on its downbeat; the tense part of the same piece takes over on
+  // the bar line, overlapping for a bar (one piece, one key), and starting where its part begins.
+  clock.now = 9000; score.setPlace('game', true); flush();
+  const calm = score.active; calm.el.currentTime = 10.7;
+  clock.now = 30000; score.setTension(0.9);
+  assert.equal(score.nowPlaying.id, 'tense'); assert.ok(Math.abs(score.active.el.currentTime - (60 - 1.3)) < 1e-9, 'its part: silently from just before its first downbeat, which lands on the line');
+  assert.equal(curve(score.active.gain.gain)[3], 2, 'a bar\'s overlap');
+  // In a game the part's end runs straight on into the same part again.
+  flush(); const t1 = score.active; t1.el.duration = 180; t1.el.currentTime = 117; clock.now = 60000; score.tick();
+  assert.equal(score.active, t1, 'more than a bar left'); t1.el.currentTime = 117.6; score.tick();
+  assert.notEqual(score.active, t1); assert.equal(score.nowPlaying.id, 'tense', 'again, on the bar line');
+  // The menus play like an album: to the very end, a pause, then the next from its beginning.
+  clock.now = 90000; score.setPlace('lobby', true); flush();
+  const hall = score.active, hallId = score.nowPlaying.id; hall.el.duration = 200;
+  hall.el.currentTime = (hall.track.end || 200) - 1; clock.now = 120000; score.tick();
+  assert.equal(score.active, hall, 'it plays to its end');
+  hall.el.currentTime = (hall.track.end || 200) - 0.05; score.tick();
+  const next = score.active; assert.notEqual(next, hall); assert.notEqual(score.nowPlaying.id, hallId, 'the other hall');
+  assert.equal(next.el.currentTime, next.track.start, 'from its own beginning'); assert.equal(next.el.paused, true, 'after a pause');
+  assert.ok(later.some(fn => Math.abs(fn.ms - 1600) < 1), 'a pause of 1.6 s');
+});
+
+test('music: Next, Not for me, a chosen track, and what comes next', () => {
+  const { score, clock, flush } = player({ tracks: KEYED });
+  score.start(); flush(); clock.now = 5000;
+  assert.equal(score.nowPlaying.id, 'hall-a'); assert.equal(score.upcoming.id, 'hall-b', 'what comes next'); assert.equal(score.upcoming, score.upcoming, 'kept until it plays');
+  assert.equal(score.skip(), true); assert.equal(score.nowPlaying.id, 'hall-b', 'Next'); flush();
+  // Not for me: that track gives way at once and is not chosen again.
+  score.setLikes({ liked: [], hidden: ['hall-b'] }); assert.equal(score.nowPlaying.id, 'hall-a'); flush();
+  assert.equal(score.upcoming.id, 'hall-a', 'only the other one comes round');
+  // A track chosen from the list plays now, wherever you are, until you go somewhere else.
+  assert.equal(score.playNow('study'), true); assert.equal(score.nowPlaying.id, 'study'); flush();
+  score.setTension(0.1); score.update('switch'); assert.equal(score.nowPlaying.id, 'study', 'it stays');
+  score.setPlace('game', true); assert.equal(score.nowPlaying.id, 'calm', 'a game: the game\'s music');
+  assert.equal(score.playNow('nope'), false); assert.equal(score.playNow('win'), false, 'not a sting');
+  // The Liked station: what you liked, and nothing else.
+  score.setLikes({ liked: ['study'], hidden: [] }); score.setStation('liked'); assert.equal(score.nowPlaying.id, 'study');
 });
 
 test('music: a dialog muffles the music, and a sting steps it back', () => {
@@ -478,7 +583,8 @@ test('music: a dialog muffles the music, and a sting steps it back', () => {
   assert.equal(score.sting('win'), true); assert.equal(score.stingDeck.el.src, '/m/win.m4a'); assert.equal(score.stingDeck.el.paused, false);
   assert.ok(score.stings !== score.master, 'the sting has its own bus, so the music can step back under it');
   const steps = score.master.gain.events.slice(before);
-  assert.ok(steps.some(([k, v]) => k === 'linear' && Math.abs(v - 0.5 * 0.35) < 1e-9), 'the music steps back');
+  assert.ok(steps.some(([k, v]) => k === 'linear' && v === 0), 'the sting plays alone: the music steps out');
+  assert.ok(steps.some(([k, v]) => k === 'linear' && Math.abs(v - levelFor(0.5)) < 1e-9), 'and comes back after');
   assert.deepEqual([notes.at(-1).kind, notes.at(-1).result], ['sting', 'win']);
   const n = score.master.gain.events.length; score.setVolume(0.5); assert.equal(score.master.gain.events.length, n, 'the same volume again does not cut the step back short');
   score.setVolume(0.6); assert.ok(score.master.gain.events.length > n);

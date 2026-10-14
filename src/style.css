@@ -3481,3 +3481,33 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 :root[data-glass="clear"] :is(.analysis,#moves,.private-card,.modes,.tabs,.variant-field,.settings label,.oath-row,.oath-row select,.join input,.tools button,.computer-view .bot-card,.computer-side button,.computer-variant button,.room-created,.match-view button:not(.gold),.rated-switch button){
   background:rgb(6 15 16 / var(--glass-inner))!important}
 :root[data-glass="clear"] :is(.panel,.game,.topbar) :is(h1,h2,h3,h4,p,b,strong,small,label,span,time){text-shadow:0 1px 3px rgb(0 0 0 / .6)}
+/* The now-playing panel (owner, 2026-10-13: "grayed out... only mouse hover brings the section back
+   active"): what plays and what comes next, dim in its corner until you hover or tab into it. */
+.now-playing{position:fixed;z-index:180;left:16px;bottom:16px;display:flex;align-items:center;gap:10px;max-width:min(380px,calc(100vw - 32px));padding:8px 10px 8px 12px;color:#ece6d6;background:rgba(8,16,17,.72);border:1px solid rgba(229,193,124,.22);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.34;filter:saturate(.4);transition:opacity .25s ease,filter .25s ease,border-color .25s ease}
+.now-playing[hidden]{display:none}
+.now-playing:hover,.now-playing:focus-within{opacity:1;filter:none;border-color:rgba(229,193,124,.5)}
+.now-playing[data-corner="br"]{left:auto;right:16px}
+.now-playing[data-corner="tr"]{left:auto;right:16px;bottom:auto;top:84px}
+body.m-app .now-playing:not([data-corner="tr"]){bottom:calc(var(--m-tabs-h,56px) + 10px)}
+.np-bars{display:flex;align-items:flex-end;gap:2px;height:18px;flex:none}
+.np-bars i{display:block;width:3px;height:100%;border-radius:2px;background:linear-gradient(var(--gold,#e5c17c),var(--mint,#82edba));transform:scaleY(.35);transform-origin:50% 100%}
+.np-text{display:grid;min-width:0;line-height:1.2}
+.np-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-next{font-size:11px;color:#a9b1b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-actions{display:flex;gap:4px;flex:none}
+.np-actions button,.music-row button,.music-liked button{min-height:28px;padding:3px 9px;font-size:12px;color:#ece6d6;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:999px;text-transform:none}
+.np-actions button:hover,.music-row button:hover,.music-liked button:hover{border-color:rgba(229,193,124,.55);background:rgba(229,193,124,.12)}
+.np-actions [aria-pressed="true"],.music-row [data-music-like][aria-pressed="true"]{color:#1b1206;background:linear-gradient(#efd59d,#d5ad64);border-color:transparent}
+@media(max-width:560px){.now-playing{gap:8px;padding:6px 8px}.np-actions button{padding:3px 7px;font-size:11px}.np-next{display:none}}
+/* The music list: every track, to play, like or put away. */
+.music-list h4{margin:16px 0 6px}
+.music-list ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.music-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:8px;padding:5px 6px;border-radius:9px;background:rgba(255,255,255,.03)}
+.music-row.playing{background:rgba(130,237,186,.1);outline:1px solid rgba(130,237,186,.35)}
+.music-row.put-away .mr-title{opacity:.45;text-decoration:line-through}
+.mr-title{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-title small{margin-left:4px;font-size:11px;color:#a9b1b0}
+.music-liked{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:#cfd6d2}
+/* The hero piece turns towards the pointer and dances to the music (main.js heroPiece). */
+.hero-art img{transform-origin:50% 88%;will-change:transform}
+@media(hover:none){.now-playing{opacity:.6;filter:saturate(.7)}}

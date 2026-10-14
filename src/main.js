@@ -67,8 +67,8 @@ import { WallLights, lightReaction, placeLights, wallpaperKey } from './wallpape
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
-import { KEY_FOR_THEME, VantaScore, loadMusic, moodFor, saveMusic } from './music.js';
-import { DIVISIONS, STATIONS, STINGS, loadLibrary } from './music-library.js';
+import { KEY_FOR_THEME, VantaScore, hideTrack, likeTrack, loadMusic, loadMusicLikes, moodFor, saveMusic, saveMusicLikes } from './music.js';
+import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-library.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
 import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
@@ -393,7 +393,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -5148,6 +5148,7 @@ let musicLibrary=null;
 function ensureScore(){
   if(!vantaScore){
     vantaScore=new VantaScore();vantaScore.onNote(musicPulse);vantaScore.onNote(ev=>{if(ev.track)syncNowPlaying()});
+    vantaScore.setLikes(musicLikesGet());vantaScore.setLanguage(uiLang);
     void loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore.setTracks(tracks);queueAtmosphere();syncNowPlaying()});
   }
   return vantaScore.available?vantaScore:null;
@@ -5184,7 +5185,7 @@ function syncMusic(mood){
   // Into a game and out of it the music turns on its next bar line; anywhere else it waits a
   // moment first, in case you are only passing through.
   const urgent=musicPlaceWas!==null&&place!==musicPlaceWas&&(games.includes(place)||games.includes(musicPlaceWas));musicPlaceWas=place;
-  score.setVolume(p.volume);score.setStation(p.station);score.setKey(musicKeyNow());score.setDivision(musicDivision());
+  score.setVolume(p.volume);score.setLanguage(uiLang);score.setStation(p.station);score.setKey(musicKeyNow());score.setDivision(musicDivision());
   score.setSkin(SKIN_FOR_RELIC[loadRelics().equipped]||null);if(musicResult)score.setResult(musicResult.result);
   score.setPlace(place,urgent);
   if(liveGameOn()){
@@ -5207,13 +5208,74 @@ function noticeDivision(){
   const stung=cue(up?'rank-up':'rank-down',null);
   toast(`${up?'Up a division':'Down a division'} · ${name}`,{duration:3200,sound:stung?false:up?'success':'notify'});
 }
-// The track playing now, under the Music setting.
+// The track playing now: under the Music setting, and on the now-playing panel.
 function syncNowPlaying(){
-  const el=$('#musicNow');if(!el)return;
-  const on=musicPrefsGet().on;if(on&&!vantaScore)ensureScore();
+  const el=$('#musicNow'),on=musicPrefsGet().on;if(on&&!vantaScore)ensureScore();
   const track=vantaScore?.nowPlaying,text=track?`Now playing · ${track.title}`:on&&musicLibrary&&!vantaScore?.available?'The music library is on its way':'';
-  if(el.textContent!==text)el.textContent=text;
+  if(el&&el.textContent!==text)el.textContent=text;
+  syncNowPanel(track);
 }
+// ---- Likes and the now-playing panel (owner, 2026-10-13: "always put a section that is grayed
+// out... where players can see current music playing... or like next... only mouse hover brings
+// the section back active"; "depending on the likes of the person, the music prioritizes their
+// liked music") ----
+// A small panel in a corner you choose (Theme Studio: Now playing), dim until you hover it: what
+// plays, what comes next, and Like, Next and Not for me. Its bars move with the music's beats.
+// Likes stay on this device (src/music.js loadMusicLikes): liked tracks come round about three
+// times as often, the Liked station plays them, and a Not for me track never plays for you.
+let musicLikes=null,nowPanel=null;
+function musicLikesGet(){if(!musicLikes)musicLikes=loadMusicLikes();return musicLikes}
+function setMusicLikes(next){musicLikes=saveMusicLikes(next);vantaScore?.setLikes(musicLikes);syncNowPlaying();if(currentRightView==='music')drawMusicList()}
+const NOW_KEY='vch.nowPlaying',NOW_CORNERS=['bl','br','tr','off'];
+function nowCorner(){try{const v=localStorage.getItem(NOW_KEY);return NOW_CORNERS.includes(v)?v:'bl'}catch{return 'bl'}}
+function ensureNowPanel(){
+  if(nowPanel?.isConnected)return nowPanel;
+  nowPanel=document.createElement('aside');nowPanel.id='nowPlaying';nowPanel.className='now-playing';nowPanel.hidden=true;nowPanel.dataset.quiet='';nowPanel.setAttribute('aria-label','Music');
+  nowPanel.innerHTML='<span class="np-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="np-text"><b class="np-title"></b><small class="np-next"></small></span><span class="np-actions"><button type="button" data-np="like" aria-pressed="false">Like</button><button type="button" data-np="next">Next</button><button type="button" data-np="hide">Not for me</button></span>';
+  nowPanel.addEventListener('click',e=>{
+    const b=e.target.closest('[data-np]'),t=vantaScore?.nowPlaying;if(!b||!t)return;
+    if(b.dataset.np==='next'){playUiSound('tap');vantaScore.skip();return}
+    if(b.dataset.np==='like'){const on=!musicLikesGet().liked.includes(t.id);setMusicLikes(likeTrack(musicLikesGet(),t.id,on));playUiSound(on?'toggle-on':'toggle-off');if(on)toast('Added to Liked',{sound:false,duration:1800});return}
+    setMusicLikes(hideTrack(musicLikesGet(),t.id,true));playUiSound('toggle-off');toast("It won't play again for you",{sound:false,duration:2400});
+  });
+  document.body.append(nowPanel);
+  return nowPanel;
+}
+function syncNowPanel(track){
+  const corner=nowCorner(),show=!!track&&corner!=='off';
+  if(!show){if(nowPanel)nowPanel.hidden=true;return}
+  const panel=ensureNowPanel();panel.hidden=false;if(panel.dataset.corner!==corner)panel.dataset.corner=corner;
+  const next=vantaScore?.upcoming,liked=musicLikesGet().liked.includes(track.id);
+  const title=panel.querySelector('.np-title'),nx=panel.querySelector('.np-next'),like=panel.querySelector('[data-np="like"]');
+  if(title.textContent!==track.title)title.textContent=track.title;
+  const nt=next&&next.id!==track.id?`Next · ${next.title}`:'';if(nx.textContent!==nt)nx.textContent=nt;
+  if(like.getAttribute('aria-pressed')!==String(liked)){like.setAttribute('aria-pressed',String(liked));like.textContent=liked?'Liked':'Like'}
+}
+// The panel's bars and the hero piece move with the beats.
+function nowPanelBeat(k,s){
+  if(!nowPanel||nowPanel.hidden)return;
+  nowPanel.querySelectorAll('.np-bars i').forEach((bar,i)=>bar.animate?.([{transform:'scaleY(.35)'},{transform:`scaleY(${(.55+s*.45*(k==='drum'||k==='heartbeat'?1:.75)*(1-((i*37)%5)/9)).toFixed(2)})`,offset:.18},{transform:'scaleY(.35)'}],{duration:k==='chord'?900:360,delay:i*28,easing:'ease-out'}));
+}
+// The hero piece on the home screen (owner, 2026-10-13: "reacting to mouse movement, also reacting
+// to the music, see if it's dancing to the music"): it turns a little towards the pointer and
+// sways and lifts with each beat. Still with reduced motion or Motion at zero.
+let heroKick=()=>{};
+(function heroPiece(){
+  let tx=0,ty=0,x=0,y=0,kick=0,sway=1,raf=0;
+  const art=()=>document.querySelector('.hero-art img'),still=()=>prefersReducedMotion()||motionScale()<=0;
+  const step=()=>{
+    raf=0;const img=art();if(!img||img.offsetParent===null)return;
+    x+=(tx-x)*.08;y+=(ty-y)*.08;kick*=.88;
+    img.style.transform=`perspective(800px) rotateY(${(x*9).toFixed(2)}deg) rotateX(${(-y*6).toFixed(2)}deg) translate3d(${(x*7).toFixed(1)}px,${(y*4-kick*7).toFixed(1)}px,0) rotate(${(sway*kick*2.4).toFixed(2)}deg) scale(${(1+kick*.03).toFixed(3)})`;
+    if(Math.abs(tx-x)>.002||Math.abs(ty-y)>.002||kick>.01)raf=requestAnimationFrame(step);
+  };
+  const go=()=>{if(!raf)raf=requestAnimationFrame(step)};
+  addEventListener('pointermove',e=>{
+    if(still())return;const img=art();if(!img||img.offsetParent===null)return;
+    const r=img.getBoundingClientRect();tx=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/(innerWidth/2)));ty=Math.max(-1,Math.min(1,(e.clientY-(r.top+r.height/2))/(innerHeight/2)));go();
+  },{passive:true});
+  heroKick=s=>{if(still())return;const img=art();if(!img||img.offsetParent===null)return;sway=-sway;kick=Math.min(1,kick+.55*s);go()};
+})();
 // ---- The room follows the music (owner, 2026-10-13: "each wallpaper and everything is supposed
 // to react to music") ----
 // The player hears every beat of the music (src/music.js listen()); as it sounds the candles in
@@ -5236,6 +5298,7 @@ function ensureBoardAura(){
 }
 function roomPulse(ev){
   const k=ev.kind,s=Math.max(0,Math.min(1,Number(ev.strength??.6))),glow=wallLights.glow;
+  if(k==='beat'||k==='drum'||k==='heartbeat'||k==='chord'){nowPanelBeat(k,s);if(k!=='chord')heroKick(s)}
   if(glow&&glow.running&&!glow.held){
     if(k==='chord')glow.pulse(.22+.2*s,1500);
     else if(k==='beat')glow.pulse(.1+.12*s,260,.3);
@@ -6101,6 +6164,37 @@ $('#pieceSoundSetting').onchange=e=>{setSfxPref('pieces',e.target.value);const s
 $('#uiSoundSetting').checked=sfxPrefs().ui;
 $('#uiSoundSetting').onchange=e=>setSfxPref('ui',e.target.checked);
 $('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderSoundTest();showSidePanel()};
+$('#openMusicList').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()};
+$('#nowPlayingSetting').value=nowCorner();
+$('#nowPlayingSetting').onchange=e=>{try{localStorage.setItem(NOW_KEY,e.target.value)}catch{}syncNowPlaying()};
+// The music list (owner, 2026-10-13): every track by station, to play now, like, or put away.
+const MUSIC_GROUPS=['cinematic','focus','opera','electric','songs'];
+function renderMusicList(){
+  setDynamicView('music','Music list','');drawMusicList();
+  if(!musicLibrary)void loadLibrary().then(tracks=>{musicLibrary=tracks;if(vantaScore&&!vantaScore.tracks.length)vantaScore.setTracks(tracks);drawMusicList()});
+}
+function drawMusicList(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='music')return;
+  if(!musicLibrary){target.innerHTML='<p class="trainer-intro">The music library is on its way</p>';return}
+  const likes=musicLikesGet(),now=vantaScore?.nowPlaying?.id,music=musicLibrary.filter(t=>!isSting(t));
+  const row=t=>{const liked=likes.liked.includes(t.id),hidden=likes.hidden.includes(t.id),lang=t.lang&&t.lang!=='en'?`<small>${escapeHtml(LANGUAGES[t.lang]||t.lang.toUpperCase())}</small>`:'';
+    return `<li class="music-row${t.id===now?' playing':''}${hidden?' put-away':''}" data-track="${escapeHtml(t.id)}"><button type="button" data-music-play>${t.id===now?'On now':'Listen'}</button><span class="mr-title">${escapeHtml(t.title)} ${lang}</span><button type="button" data-music-like aria-pressed="${liked}">${liked?'Liked':'Like'}</button><button type="button" data-music-hide aria-pressed="${hidden}">${hidden?'Hidden':'Not for me'}</button></li>`};
+  const groups=MUSIC_GROUPS.map(id=>[id,music.filter(t=>t.station===id)]).filter(([,list])=>list.length);
+  target.innerHTML=`<article class="music-list" data-quiet><p class="trainer-intro">Like the music you love: it comes round more often. Not for me: it won't play for you. Listen: hear it now.</p>
+    <p class="music-liked">${likes.liked.length?`Liked · ${likes.liked.length} <button type="button" data-music-station>Play the Liked station</button>`:'Nothing liked yet'}</p>
+    ${groups.map(([id,list])=>`<h4>${escapeHtml(STATIONS.find(x=>x.id===id)?.name||id)}</h4><ul>${list.map(row).join('')}</ul>`).join('')}</article>`;
+  target.querySelectorAll('[data-music-play]').forEach(b=>b.onclick=()=>playFromList(b.closest('[data-track]').dataset.track));
+  target.querySelectorAll('[data-music-like]').forEach(b=>b.onclick=()=>{const id=b.closest('[data-track]').dataset.track,on=b.getAttribute('aria-pressed')!=='true';setMusicLikes(likeTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-on':'toggle-off')});
+  target.querySelectorAll('[data-music-hide]').forEach(b=>b.onclick=()=>{const id=b.closest('[data-track]').dataset.track,on=b.getAttribute('aria-pressed')!=='true';setMusicLikes(hideTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-off':'toggle-on')});
+  target.querySelector('[data-music-station]')?.addEventListener('click',()=>{setMusicOn(true,'liked');queueAtmosphere();setTimeout(drawMusicList,60)});
+}
+// Plays a track from the list now (turning the music on if it was off).
+function playFromList(id){
+  if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
+  const score=ensureScore();if(!score)return toast('The music library is on its way',{sound:false});
+  if(!musicPrefsGet().on){musicPrefs=saveMusic({...musicPrefsGet(),on:true});syncMusicUi()}
+  score.setVolume(musicPrefsGet().volume);score.playNow(id);syncNowPlaying();setTimeout(drawMusicList,50);
+}
 // The Sound test (owner, 2026-10-13): every sound in VCH, to hear and to judge. The interface,
 // each piece set, and the stings over the music.
 const SOUND_LABEL={tap:'Tap',page:'Page',back:'Back',open:'Open',close:'Close','toggle-on':'Switch on','toggle-off':'Switch off',notify:'Message',error:'Error',success:'Success',match:'Match found',warning:'Warning',start:'Game start',win:'Win',lose:'Loss',draw:'Draw',tick:'Clock tick',pawn:'Pawn',knight:'Knight',bishop:'Bishop',rook:'Rook',queen:'Queen',king:'King',capture:'Capture',castle:'Castle',promote:'Promotion',check:'Check',mate:'Checkmate',illegal:'Illegal move'};

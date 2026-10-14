@@ -127,7 +127,7 @@ test('wired: every screen, dialog, switch, message and move is heard', () => {
   assert.match(main, /if\(set!=='classic'\)try\{if\(soundBankNow\(\)\.play\(set,'illegal',\{volume:\.5\}\)\)return\}catch\{\}/);
   assert.match(main, /try\{if\(soundBankNow\(\)\.play\('ui','tick',\{volume:\.4\}\)\)return\}catch\{\}/, 'the clock ticks under ten seconds');
   assert.match(main, /if\(\$\('#sound'\)\?\.dataset\.off\|\|\(menuSound\(kind\)&&!sfxPrefs\(\)\.ui\)\)return;/, 'Sound off silences everything; interface sounds can go on their own');
-  assert.match(main, /<label>Piece sounds <select id="pieceSoundSetting">\$\{pieceSoundOptions\(\)\}<\/select><\/label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked><\/label><button id="openSoundTest" type="button" class="theme-relics">Sound test<\/button>/);
+  assert.match(main, /<label>Piece sounds <select id="pieceSoundSetting">\$\{pieceSoundOptions\(\)\}<\/select><\/label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked><\/label><button id="openMusicList" type="button" class="theme-relics">Music list<\/button><button id="openSoundTest" type="button" class="theme-relics">Sound test<\/button>/);
   assert.match(main, /function renderSoundTest\(\)\{setDynamicView\('sounds','Sound test',''\);drawSoundTest\(\)\}/);
   assert.match(main, /document\.addEventListener\('pointerdown',warmSounds,\{once:true,capture:true,passive:true\}\);/, 'the sounds load after the first touch');
   // The moments with stings: a game's start and end, puzzles, relics, realms, a brilliant move, a new division.
