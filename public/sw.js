@@ -13,9 +13,11 @@ self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).the
   await cache.addAll(SHELL);
   await Promise.all([...ENGINE, ...(await appBundles())].map(url => cache.add(url).catch(() => {})));
 }).then(() => self.skipWaiting())));
-// A new worker takes over the open pages at once (My music needs the worker that knows its route),
-// and a page that opened without one (a hard reload) can ask to be taken over.
-self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
+self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))));
+// A new worker takes over at once (skipWaiting above), so the pages an older one controlled have
+// My music's route; a page the worker does not control yet (a first visit, a hard reload) asks to
+// be taken over when it needs My music. (Not every page on activation: taking over a page in the
+// middle of a game would cost it a frame.)
 self.addEventListener('message', event => { if (event.data === 'claim') event.waitUntil(self.clients.claim()); });
 // My music (src/my-music.js): the player's own song files, kept on this device in IndexedDB and
 // never uploaded, play from /my-music/<id>: the app's own origin, so the page's strict CSP needs

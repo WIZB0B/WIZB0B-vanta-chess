@@ -51,7 +51,7 @@ test('my music: a song from your device is kept on it, plays on the My music sta
   await page.route('**/assets/vch/music/test-hall.mp3', r => r.fulfill({ contentType: 'audio/wav', body: hall }));
   await page.goto('/');
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
-  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller), { timeout: 20000 }).toBe(true);
+  expect(await page.evaluate(() => !!navigator.serviceWorker.controller), 'a first visit: the worker does not take the page on its own').toBe(false);
   await page.locator('.hero h1').click();
   await page.locator('#theme').click();
   await expect(page.locator('#musicNow')).toHaveText('Now playing · Test Hall', { timeout: 8000 });

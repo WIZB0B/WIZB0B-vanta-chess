@@ -230,13 +230,14 @@ test('my music: the service worker plays your songs from the device, a slice at 
   assert.equal(await (await ask(at('../mine-0a0b0c0d'))).text(), 'from the network');
   assert.equal(await ask('https://elsewhere.test/my-music/mine-0a0b0c0d'), null);
   assert.equal(await ask(at('mine-0a0b0c0d'), { method: 'POST', body: 'x' }), null);
-  // A new worker takes over at once, so a page open from before My music can play your songs.
+  // A new worker takes over at once (an older one's pages switch to it); a page no worker controls
+  // asks to be taken over.
   let installed = null, activated = null;
   handlers.install({ waitUntil: p => { installed = p; } }); await installed;
   handlers.activate({ waitUntil: p => { activated = p; } }); await activated;
-  assert.deepEqual(calls, ['skipWaiting', 'claim']);
+  assert.deepEqual(calls, ['skipWaiting'], 'not every page on activation: taking over a page mid-game would cost it a frame');
   let claimed = null; handlers.message({ data: 'claim', waitUntil: p => { claimed = p; } }); await claimed;
-  assert.deepEqual(calls, ['skipWaiting', 'claim', 'claim'], 'a page opened without its worker asks to be taken over');
+  assert.deepEqual(calls, ['skipWaiting', 'claim'], 'a page no worker controls asks to be taken over');
   handlers.message({ data: 'anything else', waitUntil: () => { throw new Error('no'); } });
 });
 
@@ -248,8 +249,9 @@ test('my music: the page checks that its service worker plays your songs, and wa
   const listeners = {}, sw = { controller: {}, addEventListener: (type, fn) => { listeners[type] = fn; }, register: async () => ({ update: async () => { setTimeout(() => { ok = true; listeners.controllerchange?.(); }, 5); } }) };
   let ok = false;
   assert.equal(await myMusicServed({ nav: { serviceWorker: sw }, fetchFn: async (...a) => pinged(ok)(...a), timeout: 1000 }), true);
-  // A hard reload opens the page without its worker: the page asks the worker to take it over.
-  const posted = [], bare = { controller: null, addEventListener: (type, fn) => { listeners[type] = fn; }, register: async () => ({ update: async () => {}, active: { postMessage: m => { posted.push(m); bare.controller = {}; setTimeout(() => listeners.controllerchange?.(), 5); } } }) };
+  // A first visit or a hard reload: no worker controls the page, so it asks the active one to take it.
+  const posted = [], active = { postMessage: m => { posted.push(m); bare.controller = {}; setTimeout(() => listeners.controllerchange?.(), 5); } };
+  const bare = { controller: null, ready: Promise.resolve({ active }), addEventListener: (type, fn) => { listeners[type] = fn; }, register: async () => ({ update: async () => {} }) };
   assert.equal(await myMusicServed({ nav: { serviceWorker: bare }, fetchFn: pinged(), timeout: 1000 }), true);
   assert.deepEqual(posted, ['claim']);
   // No worker takes control in time: no My music (yet).

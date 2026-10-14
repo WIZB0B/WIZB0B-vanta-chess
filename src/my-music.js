@@ -164,8 +164,8 @@ export async function addSongs(files, { have = 0, measure = measureSong, idb, no
 }
 
 // Whether this page's service worker plays My music: it must control the page and know the
-// /my-music/ route. A worker from before My music is updated (it takes over at once), and a
-// first visit waits for the worker to take control.
+// /my-music/ route. A worker from before My music is updated (the new one takes over its pages at
+// once); a page no worker controls yet (a first visit, a hard reload) asks the worker to take it.
 export async function myMusicServed({ nav = globalThis.navigator, fetchFn = globalThis.fetch, timeout = 10000 } = {}) {
   const sw = nav?.serviceWorker;
   if (!sw || !fetchFn) return false;
@@ -179,7 +179,10 @@ export async function myMusicServed({ nav = globalThis.navigator, fetchFn = glob
     const changed = new Promise(resolve => { sw.addEventListener?.('controllerchange', resolve, { once: true }); setTimeout(resolve, timeout); });
     const reg = await sw.register('/sw.js');
     reg?.update?.()?.catch?.(() => {}); // a worker from before My music: fetch the new one
-    if (!sw.controller) reg?.active?.postMessage?.('claim'); // the page opened without its worker (a hard reload)
+    if (!sw.controller) { // no worker controls the page: once one is active, ask it to take the page
+      const ready = await Promise.race([sw.ready || Promise.resolve(reg), new Promise(resolve => setTimeout(resolve, timeout))]);
+      (ready?.active || reg?.active)?.postMessage?.('claim');
+    }
     await changed;
     return await served();
   } catch { return false; }
