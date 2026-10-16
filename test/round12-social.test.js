@@ -49,7 +49,7 @@ test('round 12 social features are wired into the app', () => {
   assert.match(main, /function handleRealtimeMessage\(message\)\{\n  mergeBughousePockets\(message\);/);
   assert.match(main, /if\(reason==='partner'\)return 'on the partner board';/);
   assert.match(main, /if\(entry\.variant==='bughouse'\)return toast/);
-  assert.match(main, /\$\('#create'\)\.onclick=async\(\)=>\{if\(\$\('#variant'\)\.value==='bughouse'\)return void createBughouse\(\);if\(\$\('#variant'\)\.value==='twin'\)return renderFates\(\);/);
+  assert.match(main, /\$\('#create'\)\.onclick=async\(\)=>\{if\(onlineGameBusy\(\)\)return;if\(\$\('#variant'\)\.value==='bughouse'\)return void createBughouse\(\);if\(\$\('#variant'\)\.value==='twin'\)return renderFates\(\);/);
   // Team calls go on a channel named by the server for that team only, never a guessable one.
   assert.match(main, /channel\(`bughouse-team:\$\{out\.team_key\}`/);
   assert.ok(!/bughouse:\$\{b\.id\}:team/.test(main));
