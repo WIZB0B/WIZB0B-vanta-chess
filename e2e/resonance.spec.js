@@ -2,6 +2,23 @@ import { test, expect } from '@playwright/test';
 
 // Resonance (src/resonance.js): Chladni figures in sand behind the page, never on the board, that
 // answer the game, the pointer and the music; and big in the Resonance room (the music library).
+// The room plays the music library; the browsers Playwright runs cannot play its AAC files, so
+// the test serves a small library of its own: a tone with a beat, as WAV under an .mp3 name.
+function toneTrack(seconds = 20, rate = 22050) {
+  const n = seconds * rate, wav = Buffer.alloc(44 + n * 2);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + n * 2, 4); wav.write('WAVE', 8); wav.write('fmt ', 12);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+  wav.write('data', 36); wav.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) { const t = i / rate, beat = t % 0.5; wav.writeInt16LE(Math.round((0.5 * Math.sin(2 * Math.PI * 110 * t) * Math.exp(-beat * 6) + 0.15 * Math.sin(2 * Math.PI * 330 * t)) * 30000), 44 + i * 2); }
+  return wav;
+}
+const mockLibrary = async page => {
+  const tracks = ['calm', 'tense', 'storm'].map(part => ({ id: `test-ember-${part}`, title: `Test Ember ${part}`, file: `test-ember-${part}.mp3`, station: 'cinematic', place: 'game', part, theme: 'ember', bpm: 120, beat: 0 }));
+  tracks.push({ id: 'test-hall', title: 'Test Hall', file: 'test-hall.mp3', station: 'cinematic', place: 'lobby', bpm: 120, beat: 0 });
+  await page.route('**/assets/vch/music/library.json', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ tracks }) }));
+  const wav = toneTrack();
+  await page.route('**/assets/vch/music/*.mp3', r => r.fulfill({ contentType: 'audio/wav', body: wav }));
+};
 const mockSupabase = page => page.route('https://ubjldcfiwrwiouwgmduo.supabase.co/**', r => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ player: { id: 'me' } }) }));
 const sandPixels = page => page.evaluate(() => { const c = document.querySelector('#resonanceBg .resonance-sand'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let lit = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) lit++; return lit; });
 const sandImage = page => page.evaluate(() => document.querySelector('#resonanceBg .resonance-sand').toDataURL());
@@ -25,6 +42,7 @@ test('Resonance: a living background behind the page that rings with each move a
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => { localStorage.setItem('vch.intro-seen', '1'); localStorage.setItem('vanta.flagPrompt', '1') });
   await mockSupabase(page);
+  await mockLibrary(page);
   await page.goto('/');
   await expect(page.locator('#resonanceBg')).toHaveCount(0);
   await page.locator('#theme').click();

@@ -1,0 +1,342 @@
+{
+ "sets": {
+  "ui": {
+   "name": "Interface",
+   "sounds": {
+    "tap": {
+     "file": "ui/tap.mp3",
+     "seconds": 0.147
+    },
+    "page": {
+     "file": "ui/page.mp3",
+     "seconds": 0.426
+    },
+    "back": {
+     "file": "ui/back.mp3",
+     "seconds": 0.488
+    },
+    "open": {
+     "file": "ui/open.mp3",
+     "seconds": 0.475
+    },
+    "close": {
+     "file": "ui/close.mp3",
+     "seconds": 0.497
+    },
+    "toggle-on": {
+     "file": "ui/toggle-on.mp3",
+     "seconds": 0.11
+    },
+    "toggle-off": {
+     "file": "ui/toggle-off.mp3",
+     "seconds": 0.122
+    },
+    "notify": {
+     "file": "ui/notify.mp3",
+     "seconds": 0.54
+    },
+    "error": {
+     "file": "ui/error.mp3",
+     "seconds": 0.483
+    },
+    "success": {
+     "file": "ui/success.mp3",
+     "seconds": 0.487
+    },
+    "match": {
+     "file": "ui/match.mp3",
+     "seconds": 1.584
+    },
+    "warning": {
+     "file": "ui/warning.mp3",
+     "seconds": 0.518
+    },
+    "start": {
+     "file": "ui/start.mp3",
+     "seconds": 1.507
+    },
+    "win": {
+     "file": "ui/win.mp3",
+     "seconds": 0.505
+    },
+    "lose": {
+     "file": "ui/lose.mp3",
+     "seconds": 0.93
+    },
+    "draw": {
+     "file": "ui/draw.mp3",
+     "seconds": 0.435
+    },
+    "tick": {
+     "file": "ui/tick.mp3",
+     "seconds": 0.196
+    }
+   }
+  },
+  "wood": {
+   "name": "Wood",
+   "sounds": {
+    "pawn": {
+     "file": "wood/pawn.mp3",
+     "seconds": 0.183
+    },
+    "knight": {
+     "file": "wood/knight.mp3",
+     "seconds": 0.196
+    },
+    "bishop": {
+     "file": "wood/bishop.mp3",
+     "seconds": 0.216
+    },
+    "rook": {
+     "file": "wood/rook.mp3",
+     "seconds": 0.238
+    },
+    "queen": {
+     "file": "wood/queen.mp3",
+     "seconds": 0.271
+    },
+    "king": {
+     "file": "wood/king.mp3",
+     "seconds": 0.315
+    },
+    "capture": {
+     "file": "wood/capture.mp3",
+     "seconds": 0.236
+    },
+    "castle": {
+     "file": "wood/castle.mp3",
+     "seconds": 0.365
+    },
+    "promote": {
+     "file": "wood/promote.mp3",
+     "seconds": 0.547
+    },
+    "check": {
+     "file": "wood/check.mp3",
+     "seconds": 0.36
+    },
+    "mate": {
+     "file": "wood/mate.mp3",
+     "seconds": 1.054
+    },
+    "illegal": {
+     "file": "wood/illegal.mp3",
+     "seconds": 0.374
+    }
+   }
+  },
+  "crystal": {
+   "name": "Crystal",
+   "sounds": {
+    "pawn": {
+     "file": "crystal/pawn.mp3",
+     "seconds": 0.242
+    },
+    "knight": {
+     "file": "crystal/knight.mp3",
+     "seconds": 0.271
+    },
+    "bishop": {
+     "file": "crystal/bishop.mp3",
+     "seconds": 0.259
+    },
+    "rook": {
+     "file": "crystal/rook.mp3",
+     "seconds": 0.497
+    },
+    "queen": {
+     "file": "crystal/queen.mp3",
+     "seconds": 0.489
+    },
+    "king": {
+     "file": "crystal/king.mp3",
+     "seconds": 0.894
+    },
+    "capture": {
+     "file": "crystal/capture.mp3",
+     "seconds": 0.248
+    },
+    "castle": {
+     "file": "crystal/castle.mp3",
+     "seconds": 0.59
+    },
+    "promote": {
+     "file": "crystal/promote.mp3",
+     "seconds": 1.584
+    },
+    "check": {
+     "file": "crystal/check.mp3",
+     "seconds": 0.824
+    },
+    "mate": {
+     "file": "crystal/mate.mp3",
+     "seconds": 1.557
+    },
+    "illegal": {
+     "file": "crystal/illegal.mp3",
+     "seconds": 0.235
+    }
+   }
+  },
+  "tidal": {
+   "name": "Tidal",
+   "sounds": {
+    "pawn": {
+     "file": "tidal/pawn.mp3",
+     "seconds": 0.19
+    },
+    "knight": {
+     "file": "tidal/knight.mp3",
+     "seconds": 0.319
+    },
+    "bishop": {
+     "file": "tidal/bishop.mp3",
+     "seconds": 0.171
+    },
+    "rook": {
+     "file": "tidal/rook.mp3",
+     "seconds": 0.416
+    },
+    "queen": {
+     "file": "tidal/queen.mp3",
+     "seconds": 0.468
+    },
+    "king": {
+     "file": "tidal/king.mp3",
+     "seconds": 0.443
+    },
+    "capture": {
+     "file": "tidal/capture.mp3",
+     "seconds": 0.416
+    },
+    "castle": {
+     "file": "tidal/castle.mp3",
+     "seconds": 0.325
+    },
+    "promote": {
+     "file": "tidal/promote.mp3",
+     "seconds": 0.447
+    },
+    "check": {
+     "file": "tidal/check.mp3",
+     "seconds": 0.478
+    },
+    "mate": {
+     "file": "tidal/mate.mp3",
+     "seconds": 1.744
+    },
+    "illegal": {
+     "file": "tidal/illegal.mp3",
+     "seconds": 0.405
+    }
+   }
+  },
+  "gilded": {
+   "name": "Gilded",
+   "sounds": {
+    "pawn": {
+     "file": "gilded/pawn.mp3",
+     "seconds": 0.224
+    },
+    "knight": {
+     "file": "gilded/knight.mp3",
+     "seconds": 0.183
+    },
+    "bishop": {
+     "file": "gilded/bishop.mp3",
+     "seconds": 0.241
+    },
+    "rook": {
+     "file": "gilded/rook.mp3",
+     "seconds": 0.236
+    },
+    "queen": {
+     "file": "gilded/queen.mp3",
+     "seconds": 0.503
+    },
+    "king": {
+     "file": "gilded/king.mp3",
+     "seconds": 0.823
+    },
+    "capture": {
+     "file": "gilded/capture.mp3",
+     "seconds": 0.244
+    },
+    "castle": {
+     "file": "gilded/castle.mp3",
+     "seconds": 0.993
+    },
+    "promote": {
+     "file": "gilded/promote.mp3",
+     "seconds": 1.084
+    },
+    "check": {
+     "file": "gilded/check.mp3",
+     "seconds": 0.492
+    },
+    "mate": {
+     "file": "gilded/mate.mp3",
+     "seconds": 0.988
+    },
+    "illegal": {
+     "file": "gilded/illegal.mp3",
+     "seconds": 0.352
+    }
+   }
+  },
+  "ember": {
+   "name": "Ember",
+   "sounds": {
+    "pawn": {
+     "file": "ember/pawn.mp3",
+     "seconds": 0.241
+    },
+    "knight": {
+     "file": "ember/knight.mp3",
+     "seconds": 0.246
+    },
+    "bishop": {
+     "file": "ember/bishop.mp3",
+     "seconds": 0.258
+    },
+    "rook": {
+     "file": "ember/rook.mp3",
+     "seconds": 0.445
+    },
+    "queen": {
+     "file": "ember/queen.mp3",
+     "seconds": 0.504
+    },
+    "king": {
+     "file": "ember/king.mp3",
+     "seconds": 0.48
+    },
+    "capture": {
+     "file": "ember/capture.mp3",
+     "seconds": 0.491
+    },
+    "castle": {
+     "file": "ember/castle.mp3",
+     "seconds": 0.585
+    },
+    "promote": {
+     "file": "ember/promote.mp3",
+     "seconds": 0.367
+    },
+    "check": {
+     "file": "ember/check.mp3",
+     "seconds": 0.491
+    },
+    "mate": {
+     "file": "ember/mate.mp3",
+     "seconds": 0.657
+    },
+    "illegal": {
+     "file": "ember/illegal.mp3",
+     "seconds": 0.453
+    }
+   }
+  }
+ }
+}
