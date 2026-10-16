@@ -87,3 +87,15 @@ test.describe('phone', () => {
     await expect(page.locator('#mGameTitle')).toHaveText('Waiting for opponent');
   });
 });
+
+// Owner, 2026-10-13: "when I click... it zooms in... even while playing games". A double tap
+// (a piece, then its square) never zooms the page, and no field zooms in when it opens.
+test('phone: a tap never zooms the page', async ({ page }) => {
+  test.skip(test.info().project.name!=='mobile','phones only');
+  await setup(page);await page.goto('/');
+  expect(await page.evaluate(()=>getComputedStyle(document.documentElement).touchAction)).toBe('manipulation');
+  await page.locator('[data-mode="room"]').click();
+  const sizes=await page.evaluate(()=>[...document.querySelectorAll('input,select,textarea')].filter(e=>e.offsetParent).map(e=>parseFloat(getComputedStyle(e).fontSize)));
+  expect(sizes.length).toBeGreaterThan(2);
+  expect(Math.min(...sizes)).toBeGreaterThanOrEqual(16);
+});
