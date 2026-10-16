@@ -7,7 +7,10 @@
 // src/main.js decides the view; this file holds the pure parts.
 
 export const MOBILE_MAX_WIDTH = 760;
-export const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH}px)`;
+// Touch tablets and the inner screen of a foldable, held upright, get the same app layout
+// (bottom tabs, the board alone in a game): the desktop header was built for a mouse.
+export const TABLET_MAX_WIDTH = 1100;
+export const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH}px), (pointer: coarse) and (orientation: portrait) and (max-width: ${TABLET_MAX_WIDTH}px)`;
 export const VIEWS = ['home', 'panel', 'game', 'review'];
 export const TABS = ['play', 'puzzles', 'learn', 'famous', 'more'];
 
