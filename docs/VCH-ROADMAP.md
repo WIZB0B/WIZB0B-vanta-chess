@@ -21,7 +21,9 @@ the server region.
   - last-move highlight;
   - legal-move dots and capture rings;
   - check glow on the king.
-- **Sounds:** move, capture, check, castle, promote, game start, game end, low time.
+- **Sounds:** move, capture, check, castle, promote, game start, game end, low time. (Done in
+  R12.5: recorded sounds for each piece and moment in five sets, interface sounds on every
+  press and screen, stings over the music.)
 - **Game over modal:**
   - every result reason, including "abandoned by opponent";
   - a mini analysis summary (accuracy for both sides, best/blunder counts);
@@ -45,7 +47,8 @@ the server region.
   - always play as White/Black/random, and show the rating range when matching;
   - magnify piece while dragging.
 - **Notifications:** messages, friend requests, game invites, your turn (correspondence).
-- **Sound:** on/off and volume.
+- **Sound:** on/off and volume. (Piece sounds, Interface sounds and a Sound test are in Theme
+  Studio since R12.5; a sound-effects volume of its own is still to do.)
 - All settings are saved per account (and in the browser for guests).
 
 ## Phase D: Accounts and social
@@ -99,3 +102,15 @@ the server region.
 - Each one is checked on a real board before shipping, then delivered as optimized
   WebP/sprites.
 - Splash screen and home page hero art get redesigned in the same pass.
+
+## Phase R: Redesign and launch polish (owner concept 2026-10-12)
+- Home page and brand: "Vanta Chess" / VCH, the direction in the design canvas, then
+  Higgsfield art for realms and the trailer once the art direction is agreed.
+- Full-page sections and search; the puzzle section redesign; mode marks with hover
+  descriptions everywhere (hover descriptions done in round 13).
+- Resonance (cymatics) as VCH's signature visual: a living background behind the page that
+  answers every move, the pointer and the music (never on the board), the music library, and
+  the home page hero (PR #59).
+- Living Armies view and the trailer.
+- Security items before go-live (backlog R13, open list).
+

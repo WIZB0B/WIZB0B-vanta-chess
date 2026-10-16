@@ -1,4 +1,4 @@
-:root{--bg:#07100f;--panel:#0b1516eF;--line:#ffffff18;--mint:#82edba;--gold:#e5c17c;--light:#d9cfb2;--dark:#29463b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 10%,#44351f 0,transparent 28%),linear-gradient(110deg,#0d1714,#08100f 55%,#172018);color:#eef1ed;font:14px 'DM Sans',sans-serif;min-height:100vh}body:before{content:"";position:fixed;inset:0;background:repeating-linear-gradient(90deg,transparent 0 115px,#fff1 116px,transparent 118px);opacity:.25;pointer-events:none}.shell{max-width:1600px;margin:auto;padding:22px}header{height:66px;background:#0b1517ed;border:1px solid var(--line);border-radius:16px;display:flex;align-items:center;padding:8px 15px;box-shadow:0 18px 50px #0008}.brand{display:flex;gap:14px;align-items:center;width:290px;letter-spacing:4px}.mark{display:grid;place-items:center;width:48px;height:48px;border-radius:10px;background:#e9eee6;color:#101a17;font:bold 28px Georgia}.brand b{line-height:1.5}nav{display:flex;gap:8px;flex:1}button,select,input{font:inherit}button{color:#d8dfdd;background:none;border:0;cursor:pointer}nav button{padding:13px 20px;border-radius:8px}nav button.active{border:1px solid #65bb8b;background:#173026;box-shadow:0 0 20px #56dd8640}.user{display:grid;grid-template-columns:35px 1fr;column-gap:8px}.user i{grid-row:1/3;width:35px;height:35px;border-radius:50%;border:1px solid #66857c}.user i:after{content:'GU';font-style:normal;font-size:11px;display:grid;place-items:center;height:100%}.user small,.player small{display:block;color:#899694}main{display:grid;grid-template-columns:410px minmax(500px,660px) 430px;gap:20px;margin-top:16px}.panel,.game{background:#081315e8;border:1px solid #40504e;border-radius:16px;box-shadow:0 20px 50px #0009}.lpanel{padding:18px}.hero{padding:12px 10px 14px;background:radial-gradient(circle at 85% 30%,#826f4b55,transparent 37%)}.hero label,.status small{font-size:11px;letter-spacing:2px;color:#86e8b6}.hero h1{font:700 54px/1.02 'Playfair Display';margin:12px 0}.hero p,section p,.cards p{color:#a9b1b0;line-height:1.45}.modes{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:10px;padding:6px}.modes button{display:flex;flex-direction:column;gap:5px;align-items:center;padding:10px}.modes .on{background:#223b34;border:1px solid var(--mint);border-radius:8px;box-shadow:0 0 14px #65d49c55}.lpanel section,.room{margin-top:12px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#ffffff08}.lpanel h3{margin:0 0 5px}.lpanel p{margin:0}.tiny{font-size:10px;display:block;margin:14px 0 6px}.settings{display:grid;grid-template-columns:1fr 1fr;gap:8px}.settings select,.join input,.room input,.chat input{min-width:0;background:#091416;color:#e9ece9;border:1px solid #3b4848;border-radius:8px;padding:12px}.gold{width:100%;margin-top:12px;padding:14px;color:#10120e;font-weight:700;border-radius:9px;background:linear-gradient(#efd59d,#d5ad64);display:flex;justify-content:center;gap:90px}.divider{text-align:center;color:#84908f;margin:12px}.join{display:flex;gap:8px}.join input{flex:1}.join button,.chat button{background:#39413f;border:1px solid #65706e;border-radius:8px;padding:0 17px}.room{position:relative}.room strong{display:block;font-size:23px;letter-spacing:2px}.room em{position:absolute;right:12px;top:15px;color:var(--mint);font-style:normal}.room div{display:flex}.room input{flex:1}.game{padding:10px;align-self:start}.player{height:55px;display:flex;align-items:center;gap:10px;padding:0 4px}.avatar{width:42px;height:42px;border-radius:50%;border:1px solid #78cda5;display:grid;place-items:center}.avatar.light{background:#e8eee6;color:#15221e}.player b{font-size:17px}.signal{margin-left:auto;color:#84d9a9;font-size:12px;font-style:normal}.player time{font:bold 34px monospace;background:#060b0c;border:1px solid #aaa;border-radius:10px;padding:7px 17px}.board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);overflow:hidden;border:3px solid #52645d;border-radius:10px}.square{position:relative;padding:0;display:grid;place-items:center;aspect-ratio:1}.square.light{background:var(--light)}.square.dark{background:var(--dark)}.square.selected{box-shadow:inset 0 0 0 5px #eaf274aa}.square.legal:after{content:"";position:absolute;width:22%;aspect-ratio:1;border-radius:50%;background:#c5d954aa}.piece.w{color:#fff0cc;-webkit-text-stroke:1px #a87134}.piece.b{color:#211a19;-webkit-text-stroke:1px #b59b75}.rank,.file{position:absolute;color:#21372f;font-weight:bold;font-size:10px}.rank{left:3px;top:2px}.file{right:4px;bottom:2px}.tools{height:46px;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding-top:7px}.tools button{background:#172020;border-radius:8px}.tools .danger{color:#ff7777}.rpanel{padding:14px}.tabs{display:flex;border:1px solid var(--line);border-radius:9px}.tabs button{flex:1;padding:12px}.tabs .on{border:1px solid var(--gold);border-radius:8px;background:#293a34}.status{margin-top:12px;padding:14px;background:linear-gradient(90deg,#101918,#20201a);border:1px solid var(--line);border-radius:8px}.status h2{margin:10px 0 4px}.status p{margin:0;color:#99a3a1}.moves{height:150px;border:1px solid var(--line);border-radius:8px;margin-top:0;overflow:auto;color:#9ca6a4}.moves>span{display:block;padding:17px}.moves div{display:grid;grid-template-columns:38px 1fr 1fr;padding:9px;border-bottom:1px solid var(--line)}.analysis,.chat{border:1px solid var(--line);border-radius:10px;margin-top:14px;padding:14px}.analysis header{height:auto;padding:0;background:none;border:0;box-shadow:none}.analysis header small{margin-left:auto}.analysis h2{font-size:32px;margin:14px 0 4px}.meter{height:12px;background:#24302e;border-radius:4px;overflow:hidden}.meter i{display:block;width:55%;height:100%;background:#8be2b4}.chat h3{margin-top:0}.chat #messages{height:72px;overflow:auto}.chat #messages p{background:#27332f;padding:6px 9px;border-radius:8px;width:max-content;margin:4px}.chat #messages p.mine{margin-left:auto;background:#345c4b}.chat form{display:flex;gap:6px}.chat input{flex:1}.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.cards article{min-height:105px;padding:15px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(135deg,#26312c,#0c1515)}.cards b{font-size:16px}#toast{position:fixed;left:50%;bottom:-50px;transform:translateX(-50%);background:#e7cf98;color:#172019;padding:12px 20px;border-radius:9px;transition:.2s}#toast.show{bottom:25px}dialog{background:#13201d;color:white;border:1px solid #7aa88f;border-radius:14px}dialog button{font-size:50px}body.violet{--light:#d8d1df;--dark:#514568}
+:root{--bg:#07100f;--panel:#0b1516eF;--line:#ffffff18;--mint:#82edba;--gold:#e5c17c;--light:#d9cfb2;--dark:#29463b}*{box-sizing:border-box}html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}body{margin:0;background:radial-gradient(circle at 80% 10%,#44351f 0,transparent 28%),linear-gradient(110deg,#0d1714,#08100f 55%,#172018);color:#eef1ed;font:14px 'DM Sans',sans-serif;min-height:100vh}body:before{content:"";position:fixed;inset:0;background:repeating-linear-gradient(90deg,transparent 0 115px,#fff1 116px,transparent 118px);opacity:.25;pointer-events:none}.shell{max-width:1600px;margin:auto;padding:22px}header{height:66px;background:#0b1517ed;border:1px solid var(--line);border-radius:16px;display:flex;align-items:center;padding:8px 15px;box-shadow:0 18px 50px #0008}.brand{display:flex;gap:14px;align-items:center;width:290px;letter-spacing:4px}.mark{display:grid;place-items:center;width:48px;height:48px;border-radius:10px;background:#e9eee6;color:#101a17;font:bold 28px Georgia}.brand b{line-height:1.5}nav{display:flex;gap:8px;flex:1}button,select,input{font:inherit}button{color:#d8dfdd;background:none;border:0;cursor:pointer}nav button{padding:13px 20px;border-radius:8px}nav button.active{border:1px solid #65bb8b;background:#173026;box-shadow:0 0 20px #56dd8640}.user{display:grid;grid-template-columns:35px 1fr;column-gap:8px}.user i{grid-row:1/3;width:35px;height:35px;border-radius:50%;border:1px solid #66857c}.user i:after{content:'GU';font-style:normal;font-size:11px;display:grid;place-items:center;height:100%}.user small,.player small{display:block;color:#899694}main{display:grid;grid-template-columns:410px minmax(500px,660px) 430px;gap:20px;margin-top:16px}.panel,.game{background:#081315e8;border:1px solid #40504e;border-radius:16px;box-shadow:0 20px 50px #0009}.lpanel{padding:18px}.hero{padding:12px 10px 14px;background:radial-gradient(circle at 85% 30%,#826f4b55,transparent 37%)}.hero label,.status small{font-size:11px;letter-spacing:2px;color:#86e8b6}.hero h1{font:700 54px/1.02 'Playfair Display';margin:12px 0}.hero p,section p,.cards p{color:#a9b1b0;line-height:1.45}.modes{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:10px;padding:6px}.modes button{display:flex;flex-direction:column;gap:5px;align-items:center;padding:10px}.modes .on{background:#223b34;border:1px solid var(--mint);border-radius:8px;box-shadow:0 0 14px #65d49c55}.lpanel section,.room{margin-top:12px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#ffffff08}.lpanel h3{margin:0 0 5px}.lpanel p{margin:0}.tiny{font-size:10px;display:block;margin:14px 0 6px}.settings{display:grid;grid-template-columns:1fr 1fr;gap:8px}.settings select,.join input,.room input,.chat input{min-width:0;background:#091416;color:#e9ece9;border:1px solid #3b4848;border-radius:8px;padding:12px}.gold{width:100%;margin-top:12px;padding:14px;color:#10120e;font-weight:700;border-radius:9px;background:linear-gradient(#efd59d,#d5ad64);display:flex;justify-content:center;gap:90px}.divider{text-align:center;color:#84908f;margin:12px}.join{display:flex;gap:8px}.join input{flex:1}.join button,.chat button{background:#39413f;border:1px solid #65706e;border-radius:8px;padding:0 17px}.room{position:relative}.room strong{display:block;font-size:23px;letter-spacing:2px}.room em{position:absolute;right:12px;top:15px;color:var(--mint);font-style:normal}.room div{display:flex}.room input{flex:1}.game{padding:10px;align-self:start}.player{height:55px;display:flex;align-items:center;gap:10px;padding:0 4px}.avatar{width:42px;height:42px;border-radius:50%;border:1px solid #78cda5;display:grid;place-items:center}.avatar.light{background:#e8eee6;color:#15221e}.player b{font-size:17px}.signal{margin-left:auto;color:#84d9a9;font-size:12px;font-style:normal}.player time{font:bold 34px monospace;background:#060b0c;border:1px solid #aaa;border-radius:10px;padding:7px 17px}.board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);overflow:hidden;border:3px solid #52645d;border-radius:10px}.square{position:relative;padding:0;display:grid;place-items:center;aspect-ratio:1}.square.light{background:var(--light)}.square.dark{background:var(--dark)}.square.selected{box-shadow:inset 0 0 0 5px #eaf274aa}.square.legal:after{content:"";position:absolute;width:22%;aspect-ratio:1;border-radius:50%;background:#c5d954aa}.piece.w{color:#fff0cc;-webkit-text-stroke:1px #a87134}.piece.b{color:#211a19;-webkit-text-stroke:1px #b59b75}.rank,.file{position:absolute;color:#21372f;font-weight:bold;font-size:10px}.rank{left:3px;top:2px}.file{right:4px;bottom:2px}.tools{height:46px;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding-top:7px}.tools button{background:#172020;border-radius:8px}.tools .danger{color:#ff7777}.rpanel{padding:14px}.tabs{display:flex;border:1px solid var(--line);border-radius:9px}.tabs button{flex:1;padding:12px}.tabs .on{border:1px solid var(--gold);border-radius:8px;background:#293a34}.status{margin-top:12px;padding:14px;background:linear-gradient(90deg,#101918,#20201a);border:1px solid var(--line);border-radius:8px}.status h2{margin:10px 0 4px}.status p{margin:0;color:#99a3a1}.moves{height:150px;border:1px solid var(--line);border-radius:8px;margin-top:0;overflow:auto;color:#9ca6a4}.moves>span{display:block;padding:17px}.moves div{display:grid;grid-template-columns:38px 1fr 1fr;padding:9px;border-bottom:1px solid var(--line)}.analysis,.chat{border:1px solid var(--line);border-radius:10px;margin-top:14px;padding:14px}.analysis header{height:auto;padding:0;background:none;border:0;box-shadow:none}.analysis header small{margin-left:auto}.analysis h2{font-size:32px;margin:14px 0 4px}.meter{height:12px;background:#24302e;border-radius:4px;overflow:hidden}.meter i{display:block;width:55%;height:100%;background:#8be2b4}.chat h3{margin-top:0}.chat #messages{height:72px;overflow:auto}.chat #messages p{background:#27332f;padding:6px 9px;border-radius:8px;width:max-content;margin:4px}.chat #messages p.mine{margin-left:auto;background:#345c4b}.chat form{display:flex;gap:6px}.chat input{flex:1}.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.cards article{min-height:105px;padding:15px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(135deg,#26312c,#0c1515)}.cards b{font-size:16px}#toast{position:fixed;left:50%;bottom:-50px;transform:translateX(-50%);background:#e7cf98;color:#172019;padding:12px 20px;border-radius:9px;transition:.2s}#toast.show{bottom:25px}dialog{background:#13201d;color:white;border:1px solid #7aa88f;border-radius:14px}dialog button{font-size:50px}body.violet{--light:#d8d1df;--dark:#514568}
 @media(max-width:1200px){main{grid-template-columns:310px minmax(480px,1fr)}.rpanel{grid-column:1/-1}.hero h1{font-size:44px}}@media(max-width:800px){.shell{padding:8px}header{height:56px}.brand{width:auto}.brand b,nav span,.user{display:none}nav{justify-content:flex-end}nav button{padding:10px}main{display:flex;flex-direction:column}.game{order:-1}.lpanel,.rpanel{width:100%}.player time{font-size:24px}.piece{font-size:11vw}.tools button{font-size:11px}.hero{display:none}}
 :root{--glass:.94;--motion:400ms}.panel,.game,.topbar{background:linear-gradient(180deg,rgb(8 19 21 / var(--glass)),rgb(5 15 17 / calc(var(--glass) - .04)))}body[data-wallpaper="forest"]{background:radial-gradient(circle at 60% 10%,#31543b,#07100f 65%)}body[data-wallpaper="midnight"]{background:radial-gradient(circle at 70% 10%,#293553,#05070d 65%)}#themeStudio{width:min(420px,90vw)}#themeStudio label{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:14px 0}#themeStudio select{padding:8px;background:#0a1514;color:white;border:1px solid #53605d;border-radius:6px}#themeStudio>button{width:100%;padding:12px;color:#10120e;border-radius:9px}
 
@@ -166,7 +166,7 @@ main{
 }
 @media(max-width:1180px){
   .shell{width:calc(100vw - 18px);padding-top:10px}
-  .topbar{position:sticky;top:6px;z-index:50}.brand{width:auto}.brand b{display:none}.main-nav button{font-size:0;padding:10px}.main-nav button span{font-size:15px}.header-actions .user{display:none}
+  .topbar{position:sticky;top:6px;z-index:50}.brand{width:auto}.brand b{display:none}.main-nav button{font-size:0;padding:10px}.main-nav button span{font-size:15px}.header-actions .user{min-width:0;grid-template-columns:38px;column-gap:0}.header-actions .user>span,.header-actions .user>small,.header-actions .user .account-chevron{display:none}
   main{grid-template-columns:minmax(320px,38%) minmax(500px,1fr)}.rpanel{grid-column:1/-1;min-height:auto}.lpanel{min-height:auto}
 }
 @media(max-width:800px){
@@ -296,6 +296,11 @@ main{
   #searchBtn{display:grid;flex:0 0 34px;width:34px;height:34px}
   #notifyBtn{display:none}
 }
+
+/* Settings stay one tap away wherever the full account menu doesn't fit. */
+#settingsBtn{display:none}
+@media(max-width:1180px){#settingsBtn{display:grid}}
+@media(max-width:800px){#settingsBtn{display:grid;flex:0 0 34px;width:34px;height:34px}}
 
 
 /* Account / rated-play surface */
@@ -1811,6 +1816,26 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 
 
 /* Urgent clock mapping fix: clocks follow the color assigned to each player bar. */
+/* The track playing now, under the Music setting in the Theme Studio. */
+.music-now{display:block;min-height:1em;margin:-4px 0 6px;color:var(--gold,#e5c17c);font-size:12px;letter-spacing:.2px}
+.music-now:empty{display:none}
+/* The Sound test (src/main.js drawSoundTest): every sound, a button each. */
+.sound-test h4{margin:14px 0 6px}
+.sound-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px}
+.sound-grid button{min-height:36px;padding:6px 8px;font-size:13px;text-transform:none;color:#ece6d6;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:9px}
+.sound-grid button:hover{background:rgba(229,193,124,.14);border-color:rgba(229,193,124,.45)}
+.sound-grid button:active{transform:scale(.97)}
+.sound-set{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 8px;font-size:13px}
+.sound-set select{padding:6px 8px;background:#0a1514;color:#ece6d6;border:1px solid #53605d;border-radius:6px}
+/* The room follows the music (src/main.js roomPulse): a glow breathes round the board with each
+   phrase and drum, red with the storm's heartbeat, gold for a win; the running clock keeps the
+   beat. Opacity only, played by the compositor. */
+.board-aura{grid-column:2;grid-row:1;align-self:stretch;justify-self:stretch;border-radius:12px;pointer-events:none;opacity:0;box-shadow:0 0 34px 8px rgb(229 193 124 / .5),0 0 80px 18px rgb(229 193 124 / .18)}
+.board-aura[data-tone="heartbeat"],.board-aura[data-tone="loss"]{box-shadow:0 0 30px 8px rgb(255 96 80 / .45),0 0 70px 16px rgb(255 70 60 / .16)}
+.board-shell.with-aura>.board{position:relative;z-index:1} /* only once the music has made the glow */
+.player time{position:relative}
+.player time::after{content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;opacity:0;box-shadow:0 0 12px 2px rgb(229 193 124 / .6)}
+.player time[data-pulse="heartbeat"]::after{box-shadow:0 0 16px 3px rgb(255 110 90 / .65)}
 .player time.running{
   border-color:#7bd8aa;
   color:#f4fff9;
@@ -1838,7 +1863,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .board .square.premove-selecting{
   box-shadow:inset 0 0 0 5px rgba(226,58,151,.88);
 }
-/* Reusable VCH glass dialog, game-over presentation, and game-start banner. */
+/* Reusable VCH glass dialog, game-over presentation, and game-start card. */
 .vch-dialog-layer{
   position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:20px;
   background:rgba(1,7,8,.66);backdrop-filter:blur(10px);opacity:0;transition:opacity 180ms ease;
@@ -1872,24 +1897,48 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .game-over-players span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8fa09a}
 .game-over-players b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eef2ef}
 .game-over-players em{font-style:normal;color:#d6bd83;font-variant-numeric:tabular-nums}
-.game-start-banner{
-  position:fixed;left:50%;top:88px;z-index:220;max-width:calc(100vw - 28px);padding:12px 18px;
-  border:1px solid rgba(229,193,124,.5);border-radius:999px;
-  background:linear-gradient(180deg,rgba(19,34,31,.96),rgba(8,18,18,.96));color:#f1eadb;font-weight:700;letter-spacing:.01em;
-  box-shadow:0 14px 38px rgba(0,0,0,.45);transform:translate(-50%,-16px) scale(.97);opacity:0;pointer-events:none;
-  transition:opacity 180ms ease,transform 180ms ease;
+/* The game-start card: who plays whom, your colour and the clock, over the board for under two
+   seconds. It never takes a click (the board under it plays on). */
+.game-start-card{
+  position:absolute;inset:0;z-index:40;display:grid;place-items:center;padding:12px;pointer-events:none;opacity:0;visibility:hidden;
+  background:radial-gradient(ellipse 70% 60% at 50% 50%,rgba(2,8,8,.5),rgba(2,8,8,0) 75%);
+  transition:opacity 260ms ease,visibility 0s linear 260ms;
 }
-.game-start-banner.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.game-start-card.floating{position:fixed;z-index:220}
+.game-start-card.show{opacity:1;visibility:visible;transition:opacity 200ms ease,visibility 0s}
+.gs-panel{
+  width:min(330px,92%);display:grid;gap:10px;padding:16px 18px 14px;
+  border:1px solid rgba(229,193,124,.55);border-radius:16px;
+  background:linear-gradient(180deg,rgba(14,28,27,.96),rgba(6,15,16,.97));
+  box-shadow:0 24px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);
+  transform:translateY(10px) scale(.95);transition:transform 260ms cubic-bezier(.2,.8,.2,1);
+}
+.game-start-card.show .gs-panel{transform:none}
+.gs-title{margin:0;text-align:center;font:800 12px/1 var(--ui-font);letter-spacing:.26em;text-transform:uppercase;color:var(--gold)}
+.gs-title::after{content:"";display:block;height:1px;margin:10px auto 0;background:linear-gradient(90deg,transparent,rgba(229,193,124,.8),transparent);transform:scaleX(.2);transition:transform 420ms ease 80ms}
+.game-start-card.show .gs-title::after{transform:scaleX(1)}
+.gs-player{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:10px}
+.gs-avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;overflow:hidden;border:1px solid rgba(124,215,174,.6);background:radial-gradient(circle at 34% 26%,#294b40,#0b1715 68%);color:#e7efe9;font-size:12px;font-weight:750;letter-spacing:.04em}
+.gs-who{display:grid;min-width:0}
+.gs-who b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;line-height:1.25;color:#f3f1e8}
+.gs-who small{font-size:12px;color:#9fb0aa;font-variant-numeric:tabular-nums}
+.gs-vs{margin:0;display:flex;align-items:center;gap:10px;font:italic 600 14px/1 'Playfair Display',Georgia,serif;color:#d8c08a}
+.gs-vs::before,.gs-vs::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12)}
+.gs-meta{margin:2px 0 0;display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+.gs-meta span{padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);font-size:12px;font-weight:700;color:#e9ede8;font-variant-numeric:tabular-nums}
+.game-start-card[data-side="w"] .gs-side{background:#efe9da;border-color:#efe9da;color:#1a2420}
+.game-start-card[data-side="b"] .gs-side{background:#101817;border-color:rgba(255,255,255,.32);color:#f0ece2}
 .board .square.mated-king,.board .square.mated-king.last-move{
   box-shadow:inset 0 0 0 999px rgba(177,28,45,.62),inset 0 0 0 4px rgba(255,90,102,.96)!important;
 }
 @media(max-width:600px){
   .vch-dialog-actions{display:grid;grid-template-columns:1fr}.vch-dialog-action{width:100%}
   .game-over-players>div{grid-template-columns:46px minmax(0,1fr)}.game-over-players em{grid-column:2}
-  .game-start-banner{top:68px;font-size:12px;text-align:center}
+  .gs-panel{padding:12px 14px;gap:8px}.gs-player{grid-template-columns:34px minmax(0,1fr) auto}.gs-avatar{width:34px;height:34px}.gs-who b{font-size:14px}
 }
 @media(prefers-reduced-motion:reduce){
-  .vch-dialog-layer,.vch-dialog-panel,.game-start-banner{transition-duration:0ms!important}
+  .vch-dialog-layer,.vch-dialog-panel,.game-start-card,.game-start-card.show,.gs-panel,.gs-title::after{transition-duration:0ms!important}
+  .gs-panel,.gs-title::after{transform:none!important}
 }
 /* Task 10 interaction polish: draw offers, chat badges/toasts, avatars and time pressure. */
 .draw-offer-card{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px;padding:10px 12px;border:1px solid rgba(229,193,124,.4);border-radius:11px;background:linear-gradient(180deg,rgba(20,34,31,.96),rgba(8,18,18,.96));box-shadow:0 10px 28px rgba(0,0,0,.28)}
@@ -2229,9 +2278,12 @@ body.board-dragging,body.board-dragging *{cursor:grabbing!important}
 .captured-tray{display:inline-flex;align-items:center;gap:5px;margin-left:8px;min-height:18px}
 .captured-tray:empty{display:none}
 .tray-group{display:inline-flex}
-.tray-group img{width:18px;height:18px;object-fit:contain;margin-left:-9px}
+.tray-group img{position:relative;width:18px;height:18px;object-fit:contain;margin-left:-9px;transition:transform .18s ease}
 .tray-group img:first-child{margin-left:0}
-.tray-lead{font-size:11px;font-weight:700;color:#c9d3cf;letter-spacing:.3px}
+.tray-group img:hover{z-index:1;transform:translateY(-3px) scale(1.3)}
+.tray-lead{display:inline-block;font-size:11px;font-weight:700;color:#c9d3cf;letter-spacing:.3px}
+.tray-lead.big{color:var(--gold,#e5c17c);text-shadow:0 0 8px rgb(229 193 124 / .45)}
+@media (min-width:901px){.tray-group img{width:22px;height:22px;margin-left:-10px}}
 /* Game end: --wave staggers the cheer across the winner's pieces. */
 .board-piece[data-ending="cheer"] .piece{animation:vch-cheer .62s cubic-bezier(.3,.7,.3,1) var(--wave,0ms) 3 both}
 .board-piece[data-ending="topple"] .piece{transform-origin:50% 95%;animation:vch-topple .9s cubic-bezier(.5,0,.75,.2) .25s forwards}
@@ -2383,7 +2435,6 @@ body.m-app .shell[data-mview="home"] .hero h1{font-size:34px;margin:6px 0 4px}
 body.m-app .shell[data-mview="panel"] .rpanel .live-card,body.m-app .shell[data-mview="panel"] .rpanel>.tabs{display:none}
 body.m-app .m-return{display:block;position:fixed;left:50%;bottom:calc(var(--m-tabs-h) + 10px);z-index:55;translate:-50% 0;padding:11px 20px;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-weight:800;box-shadow:0 12px 28px rgba(0,0,0,.45)}
 body.m-app .m-return.hidden{display:none}
-
 /* Game: the board fills the screen; nothing scrolls. */
 body.m-app .shell[data-mview="game"]{padding:0!important}
 body.m-app .shell[data-mview="game"] .topbar,body.m-app .shell[data-mview="game"] .m-tabs,
@@ -2453,6 +2504,18 @@ body.m-app .vch-dialog-panel{max-height:calc(100dvh - 24px);overflow-y:auto;over
 body.m-app .shell[data-mview="review"] .feature-card{display:none!important}
 
 /* === END PHONE APP SHELL === */
+/* Your online game while you look at something else (src/live-game.js): back to it, from anywhere. */
+.return-game{position:fixed;top:calc(74px + env(safe-area-inset-top));left:50%;translate:-50% 0;z-index:56;display:flex;align-items:center;gap:10px;padding:10px 20px;border:0;border-radius:999px;background:linear-gradient(#efd59d,#d5ad64);color:#14130f;font-family:inherit;font-size:14px;font-weight:800;line-height:1.2;letter-spacing:.01em;box-shadow:0 12px 28px rgba(0,0,0,.45);cursor:pointer;animation:return-game-in .35s ease-out}
+.return-game.hidden{display:none}
+body.m-app .return-game{display:none}
+.return-game .rg-turn{padding:3px 9px;border-radius:999px;background:#14130f;color:#efd59d;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.return-game .rg-turn.hidden{display:none}
+.return-game.your-move{animation:return-game-in .35s ease-out,return-game-call 1.6s ease-in-out .35s infinite}
+.return-game:hover{filter:brightness(1.06)}
+.return-game:focus-visible{outline:3px solid #fff;outline-offset:3px}
+@keyframes return-game-in{from{opacity:0;translate:-50% -10px}}
+@keyframes return-game-call{50%{box-shadow:0 12px 28px rgba(0,0,0,.45),0 0 0 6px rgba(239,213,157,.28)}}
+@media (prefers-reduced-motion:reduce){.return-game,.return-game.your-move{animation:none}}
 
 /* Looking back through the game (src/move-browse.js). */
 .move-nav{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:6px;margin-top:8px}
@@ -2952,8 +3015,19 @@ body.m-app .offline-bar{bottom:calc(72px + env(safe-area-inset-bottom))}
 .zh-piece{position:relative;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:#0b1715}
 .zh-piece img{width:26px;height:26px}
 .zh-piece b{position:absolute;right:-4px;bottom:-4px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#e5c17c;color:#10120e;font:700 10px/15px ui-sans-serif,system-ui,sans-serif;text-align:center}
-button.zh-piece{cursor:pointer}button.zh-piece:hover:not([disabled]){border-color:rgba(130,237,186,.6)}
-button.zh-piece.on{border-color:var(--mint,#82edba);box-shadow:0 0 0 2px rgba(130,237,186,.35)}
+button.zh-piece{cursor:pointer;transition:transform .18s ease}button.zh-piece:hover:not([disabled]){border-color:rgba(130,237,186,.6)}
+button.zh-piece.on{border-color:var(--mint,#82edba);box-shadow:0 0 0 2px rgba(130,237,186,.35);transform:translateY(-3px)}
+/* Your pocket glows while you can drop (opacity only: the compositor plays it). */
+button.zh-piece::after{content:'';position:absolute;inset:-3px;border-radius:9px;box-shadow:0 0 12px 2px rgb(229 193 124 / .5);opacity:0;pointer-events:none}
+button.zh-piece:not([disabled])::after{animation:zh-ready 2.4s ease-in-out infinite}
+button.zh-piece.on::after{animation:none;opacity:1}
+@keyframes zh-ready{50%{opacity:.85}}
+/* Captured pieces, alive (src/capture-tray.js): a piece in flight, its place waiting for it, a
+   dropped piece waiting on its square for its flight from the pocket. */
+.capture-flight{position:fixed;left:0;top:0;z-index:60;pointer-events:none;object-fit:contain;will-change:transform;filter:drop-shadow(0 8px 10px rgb(0 0 0 / .45))}
+.captured-tray img.arriving{opacity:0}
+.board-piece.dropping{opacity:0}
+@media (prefers-reduced-motion:reduce){button.zh-piece:not([disabled])::after{animation:none;opacity:.5}.tray-group img,button.zh-piece{transition:none}}
 button.zh-piece[disabled]{opacity:.55;cursor:default}
 .zh-empty{color:var(--muted);font-size:10px}
 
@@ -3004,6 +3078,9 @@ button.zh-piece[disabled]{opacity:.55;cursor:default}
 .relic-swatch{display:grid;grid-template-columns:repeat(2,14px);grid-template-rows:repeat(2,14px);border-radius:4px;overflow:hidden}
 .relic-swatch i{display:block}
 .theme-relics{margin-top:6px}
+/* Theme Studio's own pages (Sound test, Relic sets): quiet buttons that read on the dark glass. */
+#themeStudio>.theme-relics{color:#ece6d6;background:rgba(255,255,255,.06);border:1px solid rgba(229,193,124,.35)}
+#themeStudio>.theme-relics:hover{background:rgba(229,193,124,.14)}
 /* Rivals (Community) */
 .rival-list{display:grid;gap:8px;margin-top:10px}
 .rival{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:#0b1715;border:1px solid var(--line)}
@@ -3435,6 +3512,31 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .view-title .back-view{display:inline-grid;place-items:center;color:inherit}
 @media(max-width:800px){.tools .tool-ico{width:13px;height:13px}}
 
+/* ===== RESONANCE: Chladni sand behind the page and in the Resonance room (src/resonance.js) =====
+   The background sits under the living atmosphere (z-index -1) and above the wallpaper (the
+   body's background; the body is its own stacking context). Its own veil quiets the wallpaper
+   so the sand reads as the background. It fades in once its first figure is drawn;
+   --resonance-glow (0.8 to 1.2, set by the music loop) breathes the sand's brightness, and only
+   opacity changes, so the compositor does the work. Nothing of it reaches the board. */
+#resonanceBg{position:fixed;inset:0;z-index:-2;pointer-events:none;background:rgb(4 9 8 / .5);opacity:0;transition:opacity 1.1s ease}
+#resonanceBg[data-ready]{opacity:1}
+#resonanceBg canvas{position:absolute;inset:0;width:100%;height:100%;opacity:calc(.62 * var(--resonance-glow,1));transition:opacity 1.1s ease}
+#resonanceBg .resonance-glow{opacity:calc(.95 * var(--resonance-glow,1))} /* the light of the lines and the rings: low resolution, smoothed up by the browser */
+.resonance-room{display:grid;gap:14px}
+.resonance-stage{position:relative;aspect-ratio:1;width:min(100%,560px);margin:0 auto;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#141b19,#050807 72%);box-shadow:inset 0 0 0 1px #ffffff10,0 18px 50px #0008}
+.resonance-big{position:absolute;inset:0;width:100%;height:100%}
+.resonance-readout{position:absolute;left:12px;bottom:10px;display:grid;gap:1px;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px #000}
+.resonance-readout b{font-size:13px;color:#f1e6c9;letter-spacing:.04em}
+.resonance-readout span{font-size:10px;color:#a9b8b0}
+.resonance-themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:7px}
+.resonance-themes button{display:grid;gap:2px;padding:9px 10px;border:1px solid #293d38;border-radius:9px;background:#091512;text-align:left}
+.resonance-themes button.on{border-color:#e5c17c;background:#1d2117}
+.resonance-themes b{font-size:12px;color:#eef1e9}.resonance-themes small{font-size:9px;color:#83938e}
+.resonance-controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.resonance-controls label{display:flex;align-items:center;gap:8px;font-size:11px;color:#b8c5be}
+.resonance-controls input[type=range]{width:130px}
+@media (prefers-reduced-motion:reduce){#resonanceBg,#resonanceBg canvas{transition:none}}
+
 /* ===== LIVING WALLPAPER: the candles and lamps in the wallpaper flicker and answer the game =====
    (src/wallpaper-lights.js; main.js syncWallLights). One canvas just above the wallpaper and
    under the living atmosphere's glows, drawn at half resolution about 15 times a second and
@@ -3458,3 +3560,49 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 :root[data-glass="clear"] :is(.analysis,#moves,.private-card,.modes,.tabs,.variant-field,.settings label,.oath-row,.oath-row select,.join input,.tools button,.computer-view .bot-card,.computer-side button,.computer-variant button,.room-created,.match-view button:not(.gold),.rated-switch button){
   background:rgb(6 15 16 / var(--glass-inner))!important}
 :root[data-glass="clear"] :is(.panel,.game,.topbar) :is(h1,h2,h3,h4,p,b,strong,small,label,span,time){text-shadow:0 1px 3px rgb(0 0 0 / .6)}
+/* Phones and tablets: tapping never zooms the page (owner, 2026-10-13: "when I click... it zooms
+   in... even while playing games"). A double tap (tap a piece, tap its square) no longer zooms
+   (html: touch-action manipulation, above; two fingers still can, for anyone who needs it), and
+   a field or a menu no longer zooms in when it opens: iOS zooms into any field whose text is
+   under 16px. */
+@media (hover:none) and (pointer:coarse){input,select,textarea{font-size:16px!important}}
+/* The now-playing panel (owner, 2026-10-13: "grayed out... only mouse hover brings the section back
+   active"): what plays and what comes next, dim in its corner until you hover or tab into it. */
+.now-playing{position:fixed;z-index:180;left:16px;bottom:16px;display:flex;align-items:center;gap:10px;max-width:min(380px,calc(100vw - 32px));padding:8px 10px 8px 12px;color:#ece6d6;background:rgba(8,16,17,.72);border:1px solid rgba(229,193,124,.22);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.34;filter:saturate(.4);transition:opacity .25s ease,filter .25s ease,border-color .25s ease}
+.now-playing[hidden]{display:none}
+.now-playing:hover,.now-playing:focus-within{opacity:1;filter:none;border-color:rgba(229,193,124,.5)}
+.now-playing[data-corner="br"]{left:auto;right:16px}
+.now-playing[data-corner="tr"]{left:auto;right:16px;bottom:auto;top:84px}
+body.m-app .now-playing:not([data-corner="tr"]){bottom:calc(var(--m-tabs-h,56px) + 10px)}
+.np-bars{display:flex;align-items:flex-end;gap:2px;height:18px;flex:none}
+.np-bars i{display:block;width:3px;height:100%;border-radius:2px;background:linear-gradient(var(--gold,#e5c17c),var(--mint,#82edba));transform:scaleY(.35);transform-origin:50% 100%}
+.np-text{display:grid;min-width:0;line-height:1.2}
+.np-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-next{font-size:11px;color:#a9b1b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-actions{display:flex;gap:4px;flex:none}
+.np-actions button,.music-row button,.music-liked button{min-height:28px;padding:3px 9px;font-size:12px;color:#ece6d6;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:999px;text-transform:none}
+.np-actions button:hover,.music-row button:hover,.music-liked button:hover{border-color:rgba(229,193,124,.55);background:rgba(229,193,124,.12)}
+.np-actions [aria-pressed="true"],.music-row [data-music-like][aria-pressed="true"]{color:#1b1206;background:linear-gradient(#efd59d,#d5ad64);border-color:transparent}
+@media(max-width:560px){.now-playing{gap:8px;padding:6px 8px}.np-actions button{padding:3px 7px;font-size:11px}.np-next{display:none}}
+/* The music list: every track, to play, like or put away. */
+.music-list h4{margin:16px 0 6px}
+.music-list ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.music-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:8px;padding:5px 6px;border-radius:9px;background:rgba(255,255,255,.03)}
+.music-row.playing{background:rgba(130,237,186,.1);outline:1px solid rgba(130,237,186,.35)}
+.music-row.put-away .mr-title{opacity:.45;text-decoration:line-through}
+.mr-title{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-title small{margin-left:4px;font-size:11px;color:#a9b1b0}
+.music-liked{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:#cfd6d2}
+/* My music: your own songs (src/my-music.js). Drop song files on the section to add them. */
+.my-music{margin:6px 0 4px;padding:2px 8px 8px;border-radius:12px;border:1px dashed transparent;transition:border-color .2s,background .2s}
+.my-music.dropping{border-color:rgba(229,193,124,.6);background:rgba(229,193,124,.07)}
+.my-music [data-my-add]{color:#1b1206;background:linear-gradient(#efd59d,#d5ad64);border-color:transparent}
+.my-music-use{color:#a9b1b0;font-size:12px}
+.my-music-notes{margin:4px 0 8px!important;font-size:12px;color:#e8b3a0}
+/* Your songs' rows: the title beside Listen, then Rename, Like and Remove (the panel is narrow). */
+.music-row.mine{display:flex;flex-wrap:wrap}
+.music-row.mine .mr-title,.music-row.mine .mr-rename{flex:1 1 60%}
+.mr-rename{min-width:0;font:inherit;font-size:13px;padding:3px 8px;color:#ece6d6;background:rgba(0,0,0,.35);border:1px solid rgba(229,193,124,.5);border-radius:8px}
+/* The hero piece turns towards the pointer and dances to the music (main.js heroPiece). */
+.hero-art img{transform-origin:50% 88%;will-change:transform}
+@media(hover:none){.now-playing{opacity:.6;filter:saturate(.7)}}

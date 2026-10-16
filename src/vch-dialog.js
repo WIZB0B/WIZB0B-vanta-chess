@@ -17,6 +17,7 @@ export function vchDialog({title,body,actions=[],dismissible=true}){
     let settled=false;
     const finish=value=>{
       if(settled)return;settled=true;layer.classList.add('closing');layer.classList.remove('open');layer.setAttribute('aria-hidden','true');
+      document.dispatchEvent(new CustomEvent('vch-dialog',{detail:{open:false}})); // the interface's sounds hear it close
       const delay=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?0:180;
       setTimeout(()=>{layer.remove();if(previous instanceof HTMLElement&&previous.isConnected)previous.focus();resolve(value)},delay);
     };
@@ -27,6 +28,7 @@ export function vchDialog({title,body,actions=[],dismissible=true}){
       footer.append(button);
     }
     panel.append(footer);layer.append(panel);document.body.append(layer);
+    document.dispatchEvent(new CustomEvent('vch-dialog',{detail:{open:true}}));
     const focusables=()=>[...panel.querySelectorAll(focusableSelector)].filter(el=>!el.disabled&&el.getAttribute('aria-hidden')!=='true');
     layer.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&dismissible){event.preventDefault();finish(null);return}

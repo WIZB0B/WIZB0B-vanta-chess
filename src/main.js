@@ -19,12 +19,14 @@ import { PieceLayer } from './piece-layer.js';
 import { PieceReactions } from './piece-reactions.js';
 import { analyzeMoods, bearing, fairMoods, landingImpact } from './piece-expressions.js';
 import { REVIEW_REACTION, HAPTICS, capturedPieces, endingCast, hapticFor } from './game-feel.js';
+import { TRAY_KINDS, bump, captureSquare, countKinds, flightKeyframes, flightMs, isCapture, leave, popIn, settle, trayChange } from './capture-tray.js';
 import { FLAG_URL, countryList, countryName } from './flags.js';
 import { BIO_MAX, PORTRAIT_PRESETS, avatarFromFile, cleanBio, cleanDisplayName, isDisplayName, isPortraitPreset, presetLabel, presetMarkup, setPortrait } from './portrait.js';
 import { moderateText } from './moderation.js';
 import { EMOJI_SET, REACTIONS as CHAT_REACTIONS, REACTION_CSS, parseReaction, reactionMarkup, reactionMessage } from './reactions.js';
 import { flashSquareFor, illegalReason } from './illegal-move.js';
 import { abandonState, firstMoveOfLine, tabTitle, tickSecond } from './game-moments.js';
+import { endedFor, liveFrom, loadLive, saveLive, sideToMove } from './live-game.js';
 import { MOBILE_QUERY, moveStripHtml, viewForTab } from './mobile-shell.js';
 import { browseLine, browseStep, browseTo, undoPlies } from './move-browse.js';
 import { arenaPhase, isWeeklyArena, sortArenas, standingsRows } from './arena.js';
@@ -45,6 +47,7 @@ import { FOG_REVIEW_VARIANTS, beliefAfter, fogBeliefs, isAmbush } from './fog-re
 import { ENGINES, engineFor, lozzaBudget } from './engine-roster.js';
 import { COMPUTER_LEVELS, DEFAULT_LEVEL, LEVEL_TIERS, OLD_BOT_NAMES, beginnerMove, levelBot } from './computer-levels.js';
 import { guideFor } from './hover-guide.js';
+import { MODES, ResonancePlate, SandBackdrop, modeForChord, modeForMoment, spectrumEnergy } from './resonance.js';
 import { RUN_MODES, SKIP_MAX, SKIP_TOKEN_SVG, clockLabel as runClock, earnMilestone, loadBestSurvival, loadSkips, saveBestSurvival, spendSkip, survivalLeft, survivalSeconds } from './puzzle-modes.js';
 import { beliefFen, blackoutBelief, capturedBy, engineBlind, lookAround, sharedMoves, startMemory } from './blind-engine.js';
 import { ZH_PIECES, zhDrops, zhPlay, zhState, zhStatus } from './crazyhouse.js';
@@ -62,12 +65,16 @@ import { rivalLine, rivalsFrom } from './rivals.js';
 import { RELICS, equipRelic, loadRelics, relicById, saveRelics, unlockRelic } from './relics.js';
 import { addGames, armyList, identitiesAfter, loadVeterans, rankOf, saveVeterans, totalsMap } from './veterans.js';
 import { dailyOaths, loadOaths, oathById, oathStatus, oathSummary, recordOath, saveOaths } from './oaths.js';
-import { atmosphereFor, tensionFor } from './atmosphere.js';
+import { atmosphereFor, materialFromFen, tensionFor } from './atmosphere.js';
 import { WallLights, lightReaction, placeLights, wallpaperKey } from './wallpaper-lights.js';
 import { BUGHOUSE_SEATS, bughouseStatus, other, otherBoard, partnerSeat, teamOfSeat } from './bughouse.js';
 import { CHARGE_NAMES, CREST_CHARGES, CREST_DIVISIONS, CREST_SHIELDS, CREST_TINCTURES, DEFAULT_CREST, DIVISION_NAMES, SHIELD_NAMES, TINCTURE_NAMES, cleanCrest, crestSvg, crestText } from './heraldry.js';
 import { FATES, points as twinPoints } from './twin-fates.js';
-import { KEY_FOR_THEME, VantaScore, loadMusic, saveMusic } from './music.js';
+import { KEY_FOR_THEME, VantaScore, WORLDS, chordFor, hideTrack, likeTrack, loadMusic, loadMusicLikes, moodFor, saveMusic, saveMusicLikes } from './music.js';
+import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-library.js';
+import { ACCEPT as MY_MUSIC_ACCEPT, MAX_SONG_MB, MAX_SONGS, addSongs, listSongs, myMusicServed, putSong, removeSong, renameSong, songTrack } from './my-music.js';
+import { playMoveSound, soundPlace } from './move-sound.js';
+import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
 import { insightSummary, poolsPlayed as insightPools, ratingChartSvg, ratingSeries } from './insights.js';
@@ -110,11 +117,13 @@ let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back 
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
 let uiLang='en'; // the interface language; set from the saved choice in the language section below
 let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
-let r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
+let resonance=null,resonanceLevel='off',resonanceRoom=null; // Resonance (src/resonance.js): the page background and the room
+let soundBank=null,sfxPrefsCache=null,uiVoiceFn=null,musicResult=null,musicMood='even',r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
 let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
 let runTimer=0; // ticks the run clock while a run puzzle is on the board
 let archiveSession=null,retrySession=null,storyTimer=null,lastLocalArchiveId=null; // Game Story (src/game-story.js)
 let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMode}
+let liveGame=loadLive(),liveState=null,liveSeenAt=0,liveBeating=false,liveReturning=null; // your online game, wherever you are (src/live-game.js)
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
 let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
@@ -175,6 +184,12 @@ reviewWorker.onmessage=variantReviewWorker.onmessage=({data})=>{
   }
 };
 const pieceNames={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
+// The old worlds (Theme Studio's World: the music's key in a game, the world's theme in the menus).
+// Each world is named for a game of strategy its people played (chess's ancestors and cousins), or for the land
+// in its own people's words (owner, 2026-10-13: "be creative with the names... live with the lore"); the land it
+// stands for comes after it. The stories behind the names: docs/music-check.md (Names).
+const WORLD_KEY='vch.world',WORLD_NAMES={egypt:'Mehen',greece:'Petteia',rome:'Latrunculi',china:'Liubo',japan:'Heian',persia:'Chatrang',babylon:'Etemenanki',benin:'Igodomigodo'},
+  WORLD_LANDS={egypt:'Ancient Egypt',greece:'Ancient Greece',rome:'Ancient Rome',china:'Ancient China',japan:'Old Japan',persia:'Ancient Persia',babylon:'Babylon',benin:'Kingdom of Benin'};
 document.documentElement.dataset.pieceStyle='vanta';
 function pieceAsset(name){return pieceAssetFor(normalizePieceStyle(document.documentElement.dataset.pieceStyle),name)}
 function applyPieceStyle(value){
@@ -208,6 +223,7 @@ ${splashMarkup(splash)}
     </nav>
     <div class="header-actions">
       <button id="searchBtn" class="icon-btn search-btn" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.7" cy="10.7" r="6.3"/><path d="m16 16 4.2 4.2"/></svg></button>
+      <button id="settingsBtn" class="icon-btn settings-btn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.07 2.9 13.93 2.9 14.19 5.25 15.22 5.67 17.07 4.2 19.8 6.93 18.33 8.78 18.75 9.81 21.1 10.07 21.1 13.93 18.75 14.19 18.33 15.22 19.8 17.07 17.07 19.8 15.22 18.33 14.19 18.75 13.93 21.1 10.07 21.1 9.81 18.75 8.78 18.33 6.93 19.8 4.2 17.07 5.67 15.22 5.25 14.19 2.9 13.93 2.9 10.07 5.25 9.81 5.67 8.78 4.2 6.93 6.93 4.2 8.78 5.67 9.81 5.25Z"/><circle cx="12" cy="12" r="3.1"/></svg></button>
       <button id="installBtn" class="install-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M5 18v2h14v-2"/></svg><span>Install App</span></button>
       <button id="notifyBtn" class="icon-btn bell-btn" type="button" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifyMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 5-2 6.5-3 8h18c-1-1.5-3-3-3-8M10 21h4"/></svg><i id="notifyCount" class="notify-count hidden" aria-hidden="true"></i></button>
       <button id="accountBtn" class="user" type="button" aria-label="Account" aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu">
@@ -374,6 +390,7 @@ ${splashMarkup(splash)}
     </aside>
   </main>
   <button id="mReturnGame" class="m-return hidden" type="button">Back to your game</button>
+  <button id="returnGame" class="return-game hidden" type="button"><b class="rg-turn hidden">Your move</b><span>Back to your game</span></button>
   <nav class="m-tabs" aria-label="Sections"><button type="button" data-m-tab="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18 17 6M8 5l2.4 2.4M5 8l2.4 2.4M14.5 14.5 19 19M16.5 16.5 19 14"/></svg><span>Play</span></button><button type="button" data-m-tab="puzzles"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v4.2a2.8 2.8 0 1 0 4 0V4h6v6h-4.2a2.8 2.8 0 1 0 0 4H20v6h-6v-4.2a2.8 2.8 0 1 0-4 0V20H4v-6h4.2a2.8 2.8 0 1 0 0-4H4V4Z"/></svg><span>Puzzles</span></button><button type="button" data-m-tab="learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A3.5 3.5 0 0 1 7 2h4v18H7a3.5 3.5 0 0 0-3.5 3V5.5ZM20.5 5.5A3.5 3.5 0 0 0 17 2h-4v18h4a3.5 3.5 0 0 1 3.5 3V5.5Z"/></svg><span>Learn</span></button><button type="button" data-m-tab="watch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Watch</span></button><button type="button" data-m-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>More</span></button></nav>
   <div id="mSheet" class="m-sheet" hidden><div class="m-sheet-backdrop" data-m-close></div><section class="m-sheet-card" role="dialog" aria-modal="true" aria-labelledby="mSheetTitle"><header><b id="mSheetTitle">More</b><button type="button" data-m-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><div id="mSheetItems" class="m-sheet-items"></div></section></div>
 </div>
@@ -390,7 +407,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Music <select id="musicSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>World <select id="worldSetting"><option value="">Vanta Chess</option>${WORLDS.map(w=>`<option value="${w}">${WORLD_NAMES[w]} · ${WORLD_LANDS[w]}</option>`).join('')}</select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Resonance background <select id="resonanceSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openResonance" type="button" class="theme-relics">Resonance room</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -559,19 +576,83 @@ function landingFx(made){
   }
 }
 // ---- Game feel (src/game-feel.js) ----
-// Captured-pieces trays: each player bar lists the pieces that player has taken, smallest
-// last, with the material lead (+N) for the side ahead.
+// Captured-pieces trays: each player bar keeps the pieces that player has taken, biggest first,
+// each kind in its own place, with the material lead (+N) for the side ahead. Alive (owner,
+// 2026-10-13, src/capture-tray.js): a captured piece is knocked off its square as the capturing
+// piece lands and flies to its place, where it settles; the lead counts up; pieces taken back
+// leave. A jump (a loaded game, many plies at once) pops pieces in without flights. In Vanta Dark
+// and Blackout the hidden opponent's captures (and any you step back to) arrive without a flight,
+// so no square is given away.
+const trayMemory={frame:'',counts:{},lead:{},pockets:{}};
+function trayFlightsHidden(){
+  const color=premovePlayerColor(),mine=!color||game.turn()!==color;
+  return (darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
+}
+// A piece flies between two boxes of the window (measured when it sets off, after `delay` ms):
+// a picture of it is tossed in an arc and lands at the size of the box it flies to.
+function pieceFlight(fromBox,toBox,key,style,{delay=0,spin=null}={}){
+  return new Promise(resolve=>setTimeout(()=>{
+    const from=fromBox(),to=toBox();
+    if(!from?.width||!to?.width||!document.body.animate)return resolve(false);
+    const fly=document.createElement('img');fly.className='capture-flight';fly.src=pieceAssetFor(style,key);fly.alt='';fly.setAttribute('aria-hidden','true');
+    fly.style.width=`${from.width}px`;fly.style.height=`${from.height}px`;document.body.append(fly);
+    const dx=to.left+to.width/2-from.left-from.width/2,dy=to.top+to.height/2-from.top-from.height/2;
+    const flight=fly.animate(flightKeyframes(from,to,{spin:spin??(dx<0?-1:1)}),{duration:flightMs(Math.hypot(dx,dy),motionScale()),easing:'cubic-bezier(.3,.62,.34,1)',fill:'forwards'});
+    flight.finished.then(()=>{fly.remove();resolve(true)},()=>{fly.remove();resolve(false)});
+  },delay));
+}
+// The capture in a tray: hidden in its place until the piece, knocked off `sq`, lands there
+// (then `landed()` runs: the lead counts up as it lands).
+function flyIntoPlace(target,sq,key,style,landed=null){
+  target.classList.add('arriving');
+  const reveal=ok=>{target.classList.remove('arriving');if(ok&&target.isConnected)settle(target);landed?.()};
+  pieceFlight(()=>document.querySelector(`#board .square[data-sq="${sq}"]`)?.getBoundingClientRect(),()=>target.isConnected?target.getBoundingClientRect():null,key,style,{delay:Math.max(0,boardMotionUntil-performance.now())}).then(reveal);
+}
+// The material lead on a tray (+N): it counts up with a pop.
+function drawLead(tray,lead,animate){
+  let badge=tray.querySelector('.tray-lead');
+  if(!lead){badge?.remove();return}
+  if(!badge){badge=document.createElement('b');badge.className='tray-lead';tray.append(badge)}
+  const text=`+${lead}`;if(badge.textContent!==text){badge.textContent=text;if(animate)bump(badge)}
+  badge.classList.toggle('big',lead>=3);
+}
+// Puts a tray's pieces right: adds and removes only what changed. Returns the pictures added.
+function drawTray(tray,color,counts,style,animate){
+  const enemy=color==='w'?'b':'w',added=[];
+  for(const type of TRAY_KINDS){
+    const n=counts[type]||0;let group=tray.querySelector(`.tray-group[data-type="${type}"]`);
+    if(!n&&!group)continue;
+    if(!group){
+      group=document.createElement('span');group.className='tray-group';group.dataset.type=type;
+      const later=[...tray.children].find(el=>el.classList.contains('tray-lead')||TRAY_KINDS.indexOf(el.dataset.type)>TRAY_KINDS.indexOf(type));
+      tray.insertBefore(group,later||null);
+    }
+    const imgs=[...group.querySelectorAll('img:not(.leaving)')];
+    for(let i=imgs.length;i<n;i++){const img=document.createElement('img');img.src=pieceAssetFor(style,enemy+type);img.alt='';group.append(img);added.push({type,img})}
+    for(let i=n;i<imgs.length;i++){if(animate){imgs[i].classList.add('leaving');leave(imgs[i])}else imgs[i].remove()}
+    if(!n){if(animate)setTimeout(()=>{if(!group.querySelector('img:not(.leaving)'))group.remove()},260);else group.remove()}
+  }
+  return added;
+}
 function syncCapturedTrays(boardGame,placement){
   const style=document.documentElement.dataset.pieceStyle||'vanta',bars=playerBarClockColors();
   if(isZhGame()&&!reviewState.viewing&&!browse)return drawPockets(style,bars);
-  for(const id of ['#topCaptured','#bottomCaptured'])$(id)?.classList.remove('zh-pocket');
-  const key=`${placement}|${style}|${bars.top}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
-  const caps=capturedPieces(boardGame.board());
-  for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
-    const tray=$(id);if(!tray)continue;
-    const enemy=color==='w'?'b':'w',groups=[];
-    for(const type of caps[color]){const last=groups.at(-1);if(last?.type===type)last.n++;else groups.push({type,n:1})}
-    tray.innerHTML=groups.map(g=>`<span class="tray-group" data-type="${g.type}">${Array(g.n).fill(`<img src="${pieceAssetFor(style,enemy+g.type)}" alt="">`).join('')}</span>`).join('')+(caps.lead[color]?`<b class="tray-lead">+${caps.lead[color]}</b>`:'');
+  const frame=`${style}|${bars.top}`,key=`${placement}|${frame}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  // A new piece style, the board turned round, or the trays were pockets: drawn afresh, still.
+  const trays=[['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]].map(([id,color])=>[$(id),color]).filter(([tray])=>tray);
+  const fresh=trayMemory.frame!==frame||trays.some(([tray])=>tray.classList.contains('zh-pocket'));trayMemory.frame=frame;
+  const caps=capturedPieces(boardGame.board()),animate=!fresh&&motionScale()>0,move=boardLastMove();
+  const plans=trays.map(([tray,color])=>{const counts=countKinds(caps[color]);return {tray,color,counts,change:trayChange(fresh?{}:trayMemory.counts[color]||{},counts)}});
+  // One new piece, taken by the last move: it flies there from its square. Anything else pops in.
+  const sq=animate&&plans.reduce((n,p)=>n+p.change.added.length,0)===1&&isCapture(move)&&!trayFlightsHidden()?captureSquare(move):null;
+  const flyer=sq?plans.find(p=>p.change.added.length===1&&(!move.color||move.color===p.color)&&(!move.captured||move.captured===p.change.added[0])):null;
+  for(const p of plans){
+    const {tray,color,counts}=p;
+    if(fresh){tray.classList.remove('zh-pocket');tray.replaceChildren()}
+    const added=drawTray(tray,color,counts,style,animate);
+    trayMemory.counts[color]=counts;trayMemory.lead[color]=caps.lead[color];
+    if(p===flyer)flyIntoPlace(added[0].img,sq,(color==='w'?'b':'w')+added[0].type,style,()=>drawLead(tray,trayMemory.lead[color],true));
+    else{drawLead(tray,caps.lead[color],animate);if(animate)added.forEach((a,i)=>popIn(a.img,i*60))}
     tray.setAttribute('aria-label',caps[color].length?`Captured: ${caps[color].map(t=>pieceNames[t]).join(', ')}${caps.lead[color]?`, ahead by ${caps.lead[color]}`:''}`:'No captures yet');
   }
 }
@@ -654,6 +735,7 @@ function renderBoard({hint=null,instant=false}={}){
     const reaction=badgeKey&&expressionsEnabled()?REVIEW_REACTION[boardReview.classification]:null;
     const moved=reaction?dom.pieces.element(lastMove.to):null;
     if(moved)moved.dataset.react=reaction;
+    if(badgeKey&&boardReview.classification==='brilliant'&&reviewState.viewing)cue('brilliant','success'); // stepping onto a brilliant move
   }
   renderArrows(dom);
   dom.board.classList.toggle('mate',game.isCheckmate());
@@ -706,22 +788,79 @@ function formatTimeControl(seconds,increment=0){
   const base=Math.max(0,Number(seconds)||0),label=base%60===0?String(base/60):`${base}s`;
   return `${label}+${Math.max(0,Number(increment)||0)}`;
 }
-function playUiSound(kind){
-  if($('#sound')?.dataset.off)return;
-  const AudioEngine=window.AudioContext||window.webkitAudioContext;if(!AudioEngine)return;
-  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440],warning:[760,620]},notes=patterns[kind]||[420],audio=new AudioEngine(),gain=audio.createGain();
-  gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.055,audio.currentTime+.015);gain.connect(audio.destination);
-  notes.forEach((frequency,index)=>{const oscillator=audio.createOscillator(),at=audio.currentTime+index*.12;oscillator.frequency.value=frequency;oscillator.connect(gain);oscillator.start(at);oscillator.stop(at+.11)});
-  const end=audio.currentTime+notes.length*.12+.04;gain.gain.exponentialRampToValueAtTime(.0001,end);setTimeout(()=>audio.close().catch(()=>{}),Math.ceil((notes.length*.12+.15)*1000));
+// ---- Sound effects (src/sfx.js; owner, 2026-10-13: "When you go to a next menu page, a sound
+// must play. When you do anything, sound must play") ----
+// Recorded sounds: the interface (a tap, a page turning forward and back, a dialog opening and
+// closing, a switch, a message, a game's start and end) and each piece's own sound in the set you
+// choose in Theme Studio. One sound per action: a tap that opens a page is heard as the page.
+// Until a sound has loaded (or where it cannot be decoded) the game's own synthesized sounds play.
+// Interface sounds can be turned off on their own; the board's Sound button silences everything.
+function menuSound(kind){return ['tap','page','back','open','close','toggle-on','toggle-off','notify'].includes(kind)}
+function sfxPrefs(){
+  if(!sfxPrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem('vch.sfx')||'')}catch{}
+    sfxPrefsCache={pieces:[...PIECE_SETS,'relic','classic'].includes(v?.pieces)?v.pieces:'wood',ui:v?.ui!==false}}
+  return sfxPrefsCache;
 }
+function setSfxPref(key,value){sfxPrefsCache={...sfxPrefs(),[key]:value};try{localStorage.setItem('vch.sfx',JSON.stringify(sfxPrefsCache))}catch{}}
+function soundBankNow(){if(!soundBank){soundBank=new SoundBank({context:audioContext});void soundBank.load()}return soundBank}
+// The set your pieces sound like: your choice, or (Match my relic set) the equipped relic's.
+function pieceSoundSet(){const p=sfxPrefs().pieces;return p==='relic'?SET_FOR_RELIC[loadRelics().equipped]||'wood':p}
+function playUiSound(kind){
+  if($('#sound')?.dataset.off||(menuSound(kind)&&!sfxPrefs().ui))return;
+  uiVoiceFn??=uiGate(k=>{
+    if($('#sound')?.dataset.off)return;
+    try{if(soundBankNow().play('ui',k,{volume:.5}))return}catch{}
+    synthUiSound(k);
+  });
+  uiVoiceFn(kind);
+}
+// The game's own sounds, for the moments that had one before the recordings.
+function synthUiSound(kind){
+  const patterns={start:[520,720],win:[523,659,784],lose:[392,330,262],draw:[440,494,440],warning:[760,620],success:[659,784],error:[330,262]},notes=patterns[kind];if(!notes)return;
+  try{
+    const audio=audioContext(),gain=audio.createGain(),t=audio.currentTime;
+    gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.055,t+.015);gain.connect(audio.destination);
+    notes.forEach((frequency,index)=>{const oscillator=audio.createOscillator(),at=t+index*.12;oscillator.frequency.value=frequency;oscillator.connect(gain);oscillator.start(at);oscillator.stop(at+.11)});
+    gain.gain.exponentialRampToValueAtTime(.0001,t+notes.length*.12+.04);
+  }catch{}
+}
+function pieceSoundNames(){return {wood:'Wood',crystal:'Crystal',tidal:'Tidal',gilded:'Gilded',ember:'Ember',relic:'Match my relic set',classic:'Classic'}}
+function pieceSoundOptions(){const names=pieceSoundNames();return [...PIECE_SETS,'relic','classic'].map(id=>`<option value="${id}">${names[id]}</option>`).join('')}
+// A moment with its own sting (src/music-library.js STINGS) when the music is playing, over it;
+// otherwise the interface's sound for it.
+function cue(sting,sound){if(vantaScore?.playing&&vantaScore.sting(sting))return true;if(sound)playUiSound(sound);return false}
+// The game-start card (owner, 2026-10-14: not a tune; "just make a sound ... the trumpet sound
+// that blows when the game starts ... brief with a notification panel telling you that game has
+// started ... something that is very obvious"): a short trumpet call (the start sting with the
+// music on, the interface's start sound without) and, over the board for under two seconds, who
+// plays whom, your colour and the clock. It never takes a click: you can move at once.
 function showGameStartBanner(color,seconds,increment,key){
   if(!color||!key||lastGameStartKey===key)return;
   lastGameStartKey=key;
-  let banner=$('#gameStartBanner');
-  if(!banner){banner=document.createElement('div');banner.id='gameStartBanner';banner.className='game-start-banner';banner.setAttribute('role','status');banner.setAttribute('aria-live','polite');document.body.append(banner)}
-  banner.textContent=`Game started · You play ${color==='w'?'White':'Black'} · ${formatTimeControl(seconds,increment)}`;
-  banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');playUiSound('start');
-  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>banner.classList.remove('show'),2100);
+  let card=$('#gameStartCard');
+  if(!card){
+    card=document.createElement('div');card.id='gameStartCard';card.className='game-start-card';card.setAttribute('role','status');card.setAttribute('aria-live','polite');
+    const row=side=>`<div class="gs-player" data-gs="${side}"><span class="avatar gs-avatar"></span><span class="gs-who"><b></b><small></small></span><span class="player-flag hidden" aria-hidden="true"></span></div>`;
+    card.innerHTML=`<div class="gs-panel"><p class="gs-title">Game started</p>${row('top')}<p class="gs-vs"><span>vs</span></p>${row('bottom')}<p class="gs-meta"><span class="gs-side"></span><span class="gs-clock"></span></p></div>`;
+  }
+  const shell=$('.game .board-shell');(shell||document.body).append(card);card.classList.toggle('floating',!shell); // over the board
+  card.dataset.side=color;
+  card.querySelector('.gs-side').textContent=color==='w'?'You play White':'You play Black';
+  card.querySelector('.gs-clock').textContent=formatTimeControl(seconds,increment);
+  card.classList.remove('show');cue('start','start');queueAtmosphere(); // the music turns to the game on its next bar line, after the start sting
+  queueMicrotask(()=>{fillGameStartPlayers(card);void card.offsetWidth;card.classList.add('show')}); // once the player bars show this game
+  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>card.classList.remove('show'),1900);
+}
+// The two players as their bars show them: portrait, name, rating and flag.
+function fillGameStartPlayers(card){
+  for(const side of ['top','bottom']){
+    const row=card.querySelector(`[data-gs="${side}"]`),avatar=$(`#${side}Avatar`),flag=$(`#${side}Flag`),pic=row.querySelector('.gs-avatar'),mark=row.querySelector('.player-flag');
+    row.querySelector('b').textContent=side==='bottom'?ownPlayerName():$('#topPlayerName')?.textContent||'';
+    row.querySelector('small').textContent=$(`#${side}Rating`)?.textContent||'';
+    pic.replaceChildren(...[...(avatar?.childNodes||[])].map(n=>n.cloneNode(true)));
+    for(const c of ['has-picture','is-empty'])pic.classList.toggle(c,!!avatar?.classList.contains(c));
+    const shown=!!flag&&!flag.classList.contains('hidden');mark.classList.toggle('hidden',!shown);mark.replaceChildren(...(shown?[...flag.childNodes].map(n=>n.cloneNode(true)):[]));
+  }
 }
 function normalizedEndReason(value=''){
   const reason=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ');
@@ -826,15 +965,15 @@ function syncRematch(g){
   if(!g||!serverGameId||g.id!==serverGameId||['active','waiting'].includes(g.status))return;
   if(g.rematch_game_id)return void openRematchGame(g.rematch_game_id);
   const offer=g.rematch_offer_by&&g.rematch_offer_by!==currentPlayerId?`${g.id}:${g.rematch_offer_by}`:null;
-  if(offer&&offer!==rematchOfferSeen){rematchOfferSeen=offer;toast('Rematch offered',{duration:10000,actionLabel:'Accept',onAction:()=>acceptRematchOffer()})}
+  if(offer&&offer!==rematchOfferSeen){rematchOfferSeen=offer;toast('Rematch offered',{duration:10000,actionLabel:'Accept',onAction:()=>acceptRematchOffer(),sound:'match'})}
 }
 async function maybeShowGameOver(){
   const info=gameOverInfo();if(!info||info.key===lastGameOverKey)return;
-  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);roundTwelveGameOver(info);
+  lastGameOverKey=info.key;const title=gameOverTitle(info),won=title==='You won';if(info.result!=='*')markPlan('game');roundElevenGameOver(info);const stung=roundTwelveGameOver(info);
   if(!info.online&&mode==='computer'){
     lastLocalArchiveId=`local-${Date.now()}`;
     saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason,variant:computerRules||'standard'});
-  }playUiSound(title==='Draw'?'draw':won?'win':'lose');
+  }if(!stung)playUiSound(title==='Draw'?'draw':won?'win':'lose'); // with the music on, its sting instead
   await playEnding(info);
   const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
   const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
@@ -946,6 +1085,7 @@ async function cancelMatchSearch({announce=true}={}){
 }
 async function beginMatchSearch(){
   if(searching){await cancelMatchSearch();return}
+  if(onlineGameBusy())return;
   if(matchSelection.rated&&!authSession?.access_token){openAccount();return toast('Sign in to start rated matchmaking')}
   stopOnlineSync();
   serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
@@ -999,6 +1139,7 @@ let computerVariant='standard',computerRules='standard';
 // opts (round 11): {bot, side, variant} for Your Shadow and the Vanta Gauntlet.
 function startComputerGame(opts={}){
   if(!opts||opts instanceof Event)opts={};
+  if(onlineGameBusy())return; // your online game stays yours: back to it, or resign it there
   if(typeof hideCoach==='function')hideCoach();
   if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
   const selectedBot=opts.bot||computerBots.find(bot=>bot.slug===selectedComputerBotSlug)||computerBots[0]||DEFAULT_COMPUTER_BOTS[2];
@@ -1228,16 +1369,34 @@ async function findEngineMove(){
 async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
 function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
+// A move is heard where it lands: placed around you by its square (HRTF, src/move-sound.js
+// soundPlace), in your piece set's sound for that piece (src/sfx.js): each piece its own, a
+// capture, castling, a promotion, a check, a mate. Classic (or before the sounds load): the
+// synthesized wooden knock, a heavier double knock for a capture, a ring for a check. In the dark
+// the hidden opponent's moves (and any you step back to) are heard straight ahead, as plain knocks.
+function moveHiddenInDark(){
+  const color=premovePlayerColor(),mine=!color||game.turn()!==color;
+  return (darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
+}
+function moveSoundPlace(sq){
+  const board=document.getElementById('board')?.getBoundingClientRect(),el=sq?document.querySelector(`#board .square[data-sq="${sq}"]`)?.getBoundingClientRect():null;
+  if(!board?.width||!el?.width)return null;
+  return soundPlace((el.left+el.width/2-board.left)/board.width*2-1,1-(el.top+el.height/2-board.top)/board.height*2);
+}
 function playTone(){
   if($('#sound').dataset.off)return;
   try{
-    const a=audioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=420;g.gain.setValueAtTime(.05,a.currentTime);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.09);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.1);
+    const move=boardLastMove(),hidden=moveHiddenInDark(),san=String(move?.san||''),place=hidden?null:moveSoundPlace(move?.to),set=pieceSoundSet();
+    if(set!=='classic'&&soundBankNow().play(set,hidden?'pawn':moveSoundName(move),{place,volume:.6,vary:.02}))return;
+    playMoveSound(audioContext(),{place,capture:!hidden&&(!!move?.captured||san.includes('x')),check:!hidden&&/[+#]/.test(san)});
   }catch{}
 }
 // An illegal try: a low double knock (and a short buzz on phones). When the king is the
 // reason (check, a pin, an attacked square) its square flashes red, like a warning light.
 function playIllegalTone(){
   if($('#sound').dataset.off)return;
+  const set=pieceSoundSet();
+  if(set!=='classic')try{if(soundBankNow().play(set,'illegal',{volume:.5}))return}catch{}
   try{
     const a=audioContext(),t=a.currentTime;
     for(const at of [0,.11]){
@@ -1313,6 +1472,7 @@ function syncLowTimeWarning(values,active){
 let lastTickSecond=null;
 function playTick(){
   if($('#sound')?.dataset.off)return;
+  try{if(soundBankNow().play('ui','tick',{volume:.4}))return}catch{}
   try{
     const a=audioContext(),t=a.currentTime,o=a.createOscillator(),g=a.createGain();
     o.type='square';o.frequency.setValueAtTime(1650,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.035,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+.035);
@@ -1326,8 +1486,9 @@ function checkLocalTimeout(){
 }
 // Clock text is left alone while a piece slides, so the slide's frames carry no other paint.
 function startClock(){clearInterval(ticking);ticking=setInterval(()=>{if(!boardIsMoving())syncClockBars();checkLocalTimeout()},250)}
-function toast(s,{duration=1800,onClick=null,actionLabel='',onAction=null}={}){
-  const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.replaceChildren();el.className='show';
+// A message: a soft chime with it (sound: another interface sound, or false for none).
+function toast(s,{duration=1800,onClick=null,actionLabel='',onAction=null,sound='notify'}={}){
+  const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.replaceChildren();el.className='show';if(sound)playUiSound(sound);
   const text=document.createElement('span');text.className='toast-text';text.textContent=String(s);el.append(text);
   if(actionLabel&&onAction){const action=document.createElement('button');action.type='button';action.className='toast-action';action.textContent=actionLabel;action.onclick=event=>{event.stopPropagation();el.className='';onAction()};el.append(action)}
   if(onClick){el.classList.add('actionable');el.onclick=()=>{el.className='';onClick()}}else el.onclick=null;
@@ -1499,6 +1660,7 @@ function applyServerState(payload,{animateMove=true}={}){
   syncRoomUi();render({hint:lastServerMove,instant:!animateMove});afterBoardPaint(updateMoves);syncOpponentConnectionToast(state);
   if(isOnlineGame())syncOnlineTransport();else if(serverGameId&&mode!=='computer')stopPolling();else stopOnlineSync();
   playQueuedPremove();afterBoardPaint(()=>void maybePlayBot());
+  keepLiveGame(state);
 }
 async function refreshServerState(){if(!serverGameId)return;try{applyServerState(await api.state(serverGameId));await loadChat()}catch(error){toast(error.message)}}
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(move===undefined)return;if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
@@ -1652,7 +1814,14 @@ async function loadProfile(){
   }
 }
 function openAccount(){syncIdentityUI();menus.open('account')}
-async function connect(){try{await loadProfile();if(params.get('game')){let state;try{state=await api.join(room,guestName)}catch(error){if(error.status===404&&await openBughouse(room,{quiet:true}))return;throw error}applyServerState(state);await loadChat();toast(`Joined room ${room}`)}else if(params.get('bughouse'))await openBughouse(String(params.get('bughouse')).slice(0,12))}catch(error){toast(error.message)}}
+async function connect(){try{await loadProfile();if(params.get('game')){let state;try{state=await api.join(room,guestName)}catch(error){if(error.status===404&&await openBughouse(room,{quiet:true}))return;throw error}applyServerState(state);await loadChat();toast(`Joined room ${room}`)}else if(params.get('bughouse'))await openBughouse(String(params.get('bughouse')).slice(0,12));else if(liveGame&&!location.search)await resumeLiveGame()}catch(error){toast(error.message)}}
+// VCH opened again (a reload, a tab closed by mistake) while your game is still on: straight back
+// into it. A game that ended meanwhile is let go.
+async function resumeLiveGame(){
+  const live=liveGame;if(!live)return;
+  try{const payload=await api.state(live.id),state=payload?.game||payload;if(liveGame?.id!==live.id)return;if(state?.status!=='active'){forgetLiveGame();return}liveState=state;liveSeenAt=Date.now();await returnToLiveGame(live)}
+  catch(error){if(error?.status===403||error?.status===404)forgetLiveGame()}
+}
 function stopPolling(){
   if(pollTimer){clearInterval(pollTimer);pollTimer=null}
   pollCount=0;
@@ -1912,7 +2081,7 @@ async function recordPuzzle(success,move=null){
 }
 function puzzleMiss(move){
   playIllegalTone();buzz(HAPTICS.illegal);
-  if(!puzzleSession.failed){puzzleSession.failed=true;void recordPuzzle(false,move);toast('Not the move · this one counts as missed. Keep trying.')}
+  if(!puzzleSession.failed){puzzleSession.failed=true;void recordPuzzle(false,move);if(vantaScore?.playing)vantaScore.sting('failed');toast('Not the move · this one counts as missed. Keep trying.',{sound:false})}
   else toast('Try another move');
 }
 async function renderPuzzleStats(){
@@ -1960,7 +2129,8 @@ function skipRunPuzzle(){
 function puzzleSolved(){
   const session=puzzleSession;puzzleSession=null;markPlan('puzzles');
   renderStatus();syncPlayerBars(); // "Puzzle complete", not the solving labels
-  if(!streakSession){toast('Puzzle solved');return}
+  if(!streakSession){const stung=cue('solved','success');toast('Puzzle solved',{sound:stung?false:'success'});return}
+  playUiSound('success'); // a run: the short chime (a sting for every puzzle would be too much)
   stopRunTimer();
   streakSession.count++;streakSession.best=streakSession.mode==='survival'?saveBestSurvival(streakSession.count):saveBestStreak(streakSession.count);
   if(earnMilestone(streakSession.count))setTimeout(()=>toast(`${streakSession?.count||''} solved · a skip token earned`,{duration:1600}),700);
@@ -1971,6 +2141,7 @@ function endStreak(move,{timeout=false}={}){
   const session=streakSession;if(!session)return;streakSession=null;stopRunTimer();
   const survival=session.mode==='survival',runName=survival?'Survival':'Streak';
   if(move){playIllegalTone();buzz(HAPTICS.illegal)}
+  if(vantaScore?.playing)vantaScore.sting('failed');
   const solution=puzzleSession?.solution?.[puzzleSession.index];
   if(puzzleSession&&move)void recordPuzzle(false,move);
   if(session.count>0&&!survival)void api.puzzleStreakRecord(session.count).then(out=>{if(currentProfile&&out?.best)currentProfile={...currentProfile,puzzle_best_streak:out.best}}).catch(()=>{});
@@ -2806,14 +2977,49 @@ function zhGameStatus(){const st=zhClientState();return (watchSession?.state||se
 function zhClientState(){const g=watchSession?.state||serverGame||{};return zhState(g.zh_pockets,g.zh_promoted)}
 function boardOver(){return isZhGame()?zhGameStatus().over:game.isGameOver()}
 function zhDropTargets(type){if(!isZhGame())return [];return zhDrops(Chess,game,zhClientState()).filter(d=>d.drop===type).map(d=>d.to)}
+// The pockets (Crazyhouse, Bughouse): the pieces waiting to be dropped. Yours glow while you can
+// drop them; a capture flies into the pocket and its number counts up; a dropped piece flies
+// from the pocket to its square (src/capture-tray.js).
 function drawPockets(style,bars){
   const st=zhClientState(),mine=myColor&&isOnlineGame()&&serverGame?.status==='active'&&game.turn()===myColor;
   const key=`zh|${style}|${bars.top}|${JSON.stringify(st.pockets)}|${zhDropSelected}|${mine}`;if(syncCapturedTrays.key===key)return;syncCapturedTrays.key=key;
+  const frame=`zh|${style}|${bars.top}`,fresh=trayMemory.frame!==frame;trayMemory.frame=frame;
+  // In Bughouse a capture goes to the partner's pocket on the other board, so captures never fly here.
+  // Your own drop is on the board before the server has it: the move just made comes first.
+  const animate=!fresh&&motionScale()>0,move=(lastMoveCache.fen===game.fen()&&lastMoveCache.move)||boardLastMove(),bughouse=(watchSession?.state||serverGame)?.variant==='bughouse',dropped=animate&&move?.to&&(move.drop||/@/.test(String(move.san||'')))?String(move.drop||move.san.split('@')[0]).toLowerCase().slice(-1):null;
+  const flights=[];
   for(const [id,color] of [['#topCaptured',bars.top],['#bottomCaptured',bars.bottom]]){
-    const tray=$(id);if(!tray)continue;const pocket=st.pockets[color]||{},own=color===myColor;
-    tray.classList.add('zh-pocket');
-    tray.innerHTML=ZH_PIECES.filter(t=>pocket[t]>0).map(t=>own?`<button type="button" class="zh-piece${zhDropSelected===t?' on':''}" data-drop="${t}"${mine?'':' disabled'} aria-label="Drop ${pieceNames[t]} (${pocket[t]} in pocket)"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></button>`:`<span class="zh-piece"><img src="${pieceAssetFor(style,color+t)}" alt=""><b>${pocket[t]}</b></span>`).join('')||'<small class="zh-empty">Pocket empty</small>';
+    const tray=$(id);if(!tray)continue;const pocket=st.pockets[color]||{},own=color===myColor,before=fresh?{}:trayMemory.pockets[color]||{};
+    if(fresh||!tray.classList.contains('zh-pocket')){tray.classList.add('zh-pocket');tray.replaceChildren()}
+    tray.querySelector('.zh-empty')?.remove();
+    for(const t of ZH_PIECES){
+      const n=pocket[t]||0,had=before[t]||0,caught=animate&&!bughouse&&n>had&&isCapture(move)&&!!move.to;let el=tray.querySelector(`.zh-piece[data-kind="${t}"]:not(.leaving)`);
+      // The dropped piece sets off from where it waited.
+      if(dropped===t&&n<had&&color===(move.color||color)&&el)flights.push({drop:true,from:el.getBoundingClientRect(),sq:move.to,key:color+t});
+      if(!n){if(el){if(animate){el.classList.add('leaving');leave(el)}else el.remove()}continue}
+      if(!el){
+        el=document.createElement(own?'button':'span');el.className='zh-piece';el.dataset.kind=t;
+        if(own){el.type='button';el.dataset.drop=t}
+        el.innerHTML=`<img src="${pieceAssetFor(style,color+t)}" alt=""><b></b>`;
+        const later=[...tray.children].find(x=>ZH_PIECES.indexOf(x.dataset.kind)>ZH_PIECES.indexOf(t));
+        tray.insertBefore(el,later||null);
+        if(animate&&!caught)popIn(el);
+      }
+      const badge=el.querySelector('b');if(badge.textContent!==String(n)){if(animate&&had&&n!==had)bump(badge);badge.textContent=String(n)}
+      if(own){el.disabled=!mine;el.classList.toggle('on',zhDropSelected===t);el.setAttribute('aria-label',`Drop ${pieceNames[t]} (${n} in pocket)`)}
+      // A capture lands in the pocket.
+      if(caught)flights.push({into:el,sq:captureSquare(move),key:color+t});
+    }
+    if(!ZH_PIECES.some(t=>pocket[t]>0))tray.insertAdjacentHTML('beforeend','<small class="zh-empty">Pocket empty</small>');
     tray.setAttribute('aria-label',`Pocket: ${ZH_PIECES.filter(t=>pocket[t]>0).map(t=>`${pocket[t]} ${pieceNames[t]}`).join(', ')||'empty'}`);
+    trayMemory.pockets[color]={...pocket};
+  }
+  for(const f of flights){
+    if(f.into){flyIntoPlace(f.into.querySelector('img')||f.into,f.sq,f.key,style);continue}
+    // A drop: the piece on its square waits, hidden, until its flight from the pocket lands.
+    const piece=boardDom?.pieces.element(f.sq);if(!piece)continue;
+    piece.classList.add('dropping');
+    pieceFlight(()=>f.from,()=>document.querySelector(`#board .square[data-sq="${f.sq}"]`)?.getBoundingClientRect(),f.key,style).then(landed=>{piece.classList.remove('dropping');if(landed&&piece.isConnected)piece.firstChild?.animate?.([{transform:'scale(1.14)'},{transform:'scale(.95)',offset:.5},{transform:'scale(1)'}],{duration:300,easing:'ease-out'})});
   }
 }
 document.addEventListener('click',e=>{
@@ -3122,7 +3328,10 @@ async function renderWatch(){
   }catch(error){toast(error.message)}
 }
 // An online game in progress keeps its board: views that would replace it wait until it ends.
-function onlineGameBusy(){if(isOnlineGame()&&liveGameOn()){toast('Finish your game first');return true}return false}
+function onlineGameBusy(){
+  const here=isOnlineGame()&&liveGameOn(),away=liveAway();if(!here&&!away)return false;
+  toast('Finish your game first',away?{duration:3600,actionLabel:'Back to your game',onAction:()=>void returnToLiveGame()}:{});return true;
+}
 async function startWatching(id){
   if(onlineGameBusy())return;
   try{
@@ -3289,7 +3498,7 @@ function syncMobileShell(){
     const t=puzzleSession&&streakSession?`Best ${streakSession.best} · ${streakDifficulty(streakSession.count)}`:archiveSession?`${archiveSession.entry.white} vs ${archiveSession.entry.black}`:watchSession?`${watchSession.state?.white_name||'White'} vs ${watchSession.state?.black_name||'Black'}`:over?'Game over':puzzleSession?'Find the best move':serverGame?.status==='waiting'?`Room ${serverGame.invite_code||''}`:tc;
     if(sub.textContent!==t)sub.textContent=t;
   }
-  $('#mReturnGame')?.classList.toggle('hidden',!(live&&mView!=='game'&&mView!=='review'));
+  $('#mReturnGame')?.classList.toggle('hidden',!((live&&mView!=='game'&&mView!=='review')||liveAway()));
 }
 function openSheet(title,items){
   const sheet=$('#mSheet'),list=$('#mSheetItems');if(!sheet||!list)return;
@@ -3304,6 +3513,7 @@ function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return fa
 function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
 function openMoreSheet(){
   openSheet('More',[
+    {label:'Settings',run:()=>menus.open('theme')},
     {label:'Friends & challenges',run:()=>openSection('friends')},
     {label:'Clubs',run:()=>{openSection('friends');void renderClubs()}},
     {label:'League',run:()=>{openSection('friends');void renderLeague()}},
@@ -3312,7 +3522,6 @@ function openMoreSheet(){
     {label:'Studies',run:()=>{openSection('learn');void renderStudies()}},
     {label:'Famous games',run:()=>openSection('famous')},
     {label:'My games & Game Story',run:()=>openSection('review')},
-    {label:'Board & pieces',run:()=>$('#theme').click()},
     {label:'Edit profile',run:()=>void openProfileEditor()},
     {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
     {label:'Notifications',run:()=>void openNotifications()},
@@ -3324,7 +3533,7 @@ function openGameOptions(){
   openSheet('Game options',[
     {label:'Flip board',run:()=>$('#flip').click()},
     {label:soundOff?'Sound: off (turn on)':'Sound: on (turn off)',run:()=>$('#sound').click()},
-    {label:'Board & pieces',run:()=>$('#theme').click()},
+    {label:'Settings',run:()=>menus.open('theme')},
     mode!=='computer'&&serverGameId?{label:'Share room link',run:()=>$('#copy').click()}:null,
   ]);
 }
@@ -3354,8 +3563,9 @@ $$('[data-m-tab]').forEach(button=>button.onclick=()=>{
   if(tab==='play'){mTab='play';activateNav('play');setMView(viewForTab('play',{gameLive:liveGameOn()}));return}
   openSection(tab);
 });
-$('#mBack').onclick=()=>{if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
-$('#mReturnGame').onclick=()=>setMView('game');
+$('#mBack').onclick=()=>{playUiSound('back');if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
+$('#mReturnGame').onclick=()=>liveAway()?void returnToLiveGame():setMView('game');
+$('#returnGame').onclick=()=>void returnToLiveGame();
 $$('#mSheet [data-m-close]').forEach(el=>el.onclick=closeSheet);
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheet()});
 isMobileApp();mobileMedia.addEventListener?.('change',syncMobileShell);syncMobileShell();
@@ -3395,6 +3605,78 @@ function startPolling(){
 function syncOnlineTransport(){
   if(!isOnlineGame()){stopOnlineSync();return}
   startRealtime();startPolling();
+}
+// ---- Your game, wherever you are (owner, 2026-10-13: "if a person leave the play section, the
+// person is unable to return to the game ... the win was handed to my opponent, which is not
+// fair"). See src/live-game.js. While the board shows something else (the Computer tab, a
+// puzzle, a lesson, analysis...) your online game keeps beating here, so your opponent sees you
+// are still with us and cannot claim it (your clock still runs); "Back to your game" brings it
+// back, and VCH opened again (a closed tab, a reload) takes you straight back to it.
+function liveOnBoard(){return !!liveGame&&isOnlineGame()&&serverGameId===liveGame.id}
+// Your game is on and the board shows something else (its last news under a minute old: one
+// the server stopped answering about does not hold you back).
+function liveAway(){return !!liveGame&&!liveOnBoard()&&liveState?.status==='active'&&Date.now()-liveSeenAt<60000}
+function keepLiveGame(state){
+  if(!state?.id||state.id!==serverGameId||watchSession)return;
+  if(liveGame?.id===state.id&&state.status!=='active'&&state.status!=='waiting'){forgetLiveGame();return}
+  const live=isOnlineGame()&&myColor?liveFrom(state,{seat:myColor,mode}):null;
+  if(live){if(liveGame?.id!==live.id||liveGame.room!==live.room||liveGame.mode!==live.mode)liveGame=saveLive(live);liveState=state;liveSeenAt=Date.now()}
+  syncLiveReturn();
+}
+function forgetLiveGame(){liveGame=saveLive(null);liveState=null;liveSeenAt=0;syncLiveReturn()}
+// Every five seconds while the board shows something else: your game's heartbeat (the board's
+// own polling beats while it shows the game), its news (your opponent moved, it ended).
+async function liveBeat(){
+  if(!liveGame||liveOnBoard()||liveBeating||liveReturning)return syncLiveReturn();
+  const live=liveGame;liveBeating=true;
+  try{
+    const payload=await api.heartbeat(live.id),state=payload?.game||payload;
+    if(liveGame?.id!==live.id||!state)return;
+    const before=liveState;liveState=state;liveSeenAt=Date.now();
+    const ended=endedFor(live,state);
+    if(ended){forgetLiveGame();toast(ended==='won'?'Your game ended · you won':ended==='lost'?'Your game ended · you lost':ended==='draw'?'Your game ended · drawn':'Your game ended',{duration:5200,actionLabel:'Back to your game',onAction:()=>void returnToLiveGame(live)});return}
+    if(before?.status==='active'&&sideToMove(before)!==live.seat&&sideToMove(state)===live.seat)toast('Your move',{duration:3600,actionLabel:'Back to your game',onAction:()=>void returnToLiveGame()});
+  }catch(error){if(error?.status===403||error?.status===404)forgetLiveGame()}
+  finally{liveBeating=false;syncLiveReturn()}
+}
+setInterval(()=>void liveBeat(),5000);
+// Whatever the board shows (a puzzle, a lesson, analysis, a review...) steps aside for your game.
+function leaveBoardActivity(){
+  if(watchSession)stopWatching({reset:false});
+  if(archiveSession)leaveArchive({reset:false});
+  if(retrySession)endRetry();
+  endStudy({restore:false});endExplore({restore:false});leaveAnalysis({restore:false});leaveLesson({restore:false});
+  endEndgame({restore:false});endPrep({restore:false});endRepEdit({restore:false});
+  if(puzzleSession?.kind==='battle')stopBattle();
+  if(streakSession){streakSession=null;stopRunTimer()}
+  puzzleSession=null;planSession=null;browse=null;boardShapes=[];selected=null;
+}
+// Back to your game (target: a game that just ended while you were away, to see how).
+async function returnToLiveGame(target=liveGame){
+  if(!target)return;
+  if(serverGameId===target.id&&isOnlineGame()){showLiveBoard();return}
+  if(liveReturning)return;liveReturning=target.id;
+  try{
+    const payload=await api.state(target.id);
+    leaveBoardActivity();
+    if(searching)await cancelMatchSearch({announce:false});
+    await activateLeftMode(target.mode); // a computer game on the board ends here
+    orientationSet=false;
+    applyServerState(payload,{animateMove:false});
+    if(target.room){room=target.room;roomCreated=false;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`)}
+    syncRoomUi();showLiveBoard();await loadChat();
+  }catch(error){if(error?.status===403||error?.status===404){if(liveGame?.id===target.id)forgetLiveGame()}toast(error.message)}
+  finally{liveReturning=null;syncLiveReturn()}
+}
+function showLiveBoard(){setPrimaryScreen('game');activateNav('play');if(isMobileApp())setMView('game');syncLiveReturn()}
+// The button that brings it back: on a computer at the top of the page, on a phone above the tabs.
+function syncLiveReturn(){
+  const away=liveAway(),pill=$('#returnGame');
+  if(pill){
+    pill.classList.toggle('hidden',!away||isMobileApp());
+    const mine=away&&sideToMove(liveState)===liveGame.seat;pill.classList.toggle('your-move',mine);pill.querySelector('.rg-turn')?.classList.toggle('hidden',!mine);
+  }
+  if(isMobileApp())syncMobileShell();
 }
 // A chat line: text, or one of VCH's animated reactions (":r:<id>", src/reactions.js).
 function addMessage(text,mine=true){
@@ -3471,7 +3753,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -4196,7 +4478,7 @@ function showMovesView(){
   currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
   if(reviewState.viewing){reviewState.viewing=false;renderReviewDashboard();render()}
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
-  updateMoves();scheduleAnalysis({force:true});
+  updateMoves();scheduleAnalysis({force:true});queueAtmosphere();
 }
 function setDynamicView(kind,title,html){
   if(kind!=='study'&&studySession)endStudy();
@@ -4209,8 +4491,9 @@ function setDynamicView(kind,title,html){
   currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view" aria-label="Back"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
-  target.querySelector('.back-view').onclick=showMovesView;
+  target.querySelector('.back-view').onclick=()=>{playUiSound('back');showMovesView()};
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
+  queueAtmosphere(); // the music follows you here (src/music.js waits a moment, in case you are only passing through)
 }
 function studyBoardHtml(fen){
   const position=new Chess(fen),pieces=position.board().flat();
@@ -4788,7 +5071,7 @@ function shadowMove(){
 const scoreOf=(result,color)=>result==='1/2-1/2'?.5:!['1-0','0-1'].includes(result)?null:(result==='1-0')===(color==='w')?1:0;
 function earnRelic(id){
   const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;
-  saveRelics(out.state);setTimeout(()=>{toast(`Relic earned: ${out.unlocked.name}`,{duration:2600});playUiSound('win')},900);
+  saveRelics(out.state);setTimeout(()=>{const stung=cue('relic','win');toast(`Relic earned: ${out.unlocked.name}`,{duration:2600,sound:stung?false:'notify'})},900);
 }
 function roundElevenGameOver(info){
   if(info.online){void rivalRelicCheck(info);return}
@@ -4880,12 +5163,12 @@ function r12Prefs(){
 }
 function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStorage.setItem('vch.r12',JSON.stringify(r12PrefsCache))}catch{}}
 // Messages after a game come one after another instead of replacing each other.
-function queueToast(text,{sound=null,delay=1200}={}){
-  r12ToastQueue.push({text,sound});if(r12ToastTimer)return;
-  const next=()=>{const item=r12ToastQueue.shift();if(!item){r12ToastTimer=null;return}toast(item.text,{duration:2500});if(item.sound)playUiSound(item.sound);r12ToastTimer=setTimeout(next,2700)};
+function queueToast(text,{sound=null,sting=null,delay=1200}={}){
+  r12ToastQueue.push({text,sound,sting});if(r12ToastTimer)return;
+  const next=()=>{const item=r12ToastQueue.shift();if(!item){r12ToastTimer=null;return}const stung=item.sting&&cue(item.sting,null);toast(item.text,{duration:2500,sound:stung?false:item.sound||'notify'});r12ToastTimer=setTimeout(next,2700)};
   r12ToastTimer=setTimeout(next,delay);
 }
-function earnRelicQueued(id){const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;saveRelics(out.state);queueToast(`Relic earned: ${out.unlocked.name}`,{sound:'win'})}
+function earnRelicQueued(id){const out=unlockRelic(loadRelics(),id);if(!out.unlocked)return;saveRelics(out.state);queueToast(`Relic earned: ${out.unlocked.name}`,{sound:'win',sting:'relic'})}
 
 // Veteran pieces: your own pieces wear the ranks their careers have earned.
 function veteranTotals(){if(!veteranState)veteranState=loadVeterans();return veteranState.totals}
@@ -5020,7 +5303,7 @@ function syncAtmosphere(){
   if(el.dataset.mood!==mood.mood)el.dataset.mood=mood.mood;
   const realm=atmosphereRealm||'';if((el.dataset.realm||'')!==realm){if(realm)el.dataset.realm=realm;else delete el.dataset.realm}
   const strength=String(mood.strength);if(el.style.getPropertyValue('--atmo')!==strength)el.style.setProperty('--atmo',strength);
-  syncWallLights(mood);syncMusic(mood);syncOathLine();
+  syncWallLights(mood);syncResonanceGame(mood);syncMusic(mood);syncOathLine();noticeDivision();
 }
 // Living wallpaper (src/wallpaper-lights.js): a soft glow over every candle and lamp in the
 // wallpaper, flickering on its own. With the living atmosphere on Full, the room answers the
@@ -5077,28 +5360,223 @@ addEventListener('pointermove',e=>{
   const scroll=el.classList.contains('scroll'),n=glow.stir(scroll?e.pageX:e.clientX,scroll?e.pageY:e.clientY);
   if(n)el.dataset.stirred=String((Number(el.dataset.stirred)||0)+n);
 },{passive:true});
-document.addEventListener('visibilitychange',()=>{if(wallLights.el)queueAtmosphere()});
+document.addEventListener('visibilitychange',()=>{if(wallLights.el||musicPrefsGet().on)queueAtmosphere()}); // the candles and the music pause in a hidden tab and come back
 addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.resizeTimer=setTimeout(queueAtmosphere,200)},{passive:true});
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
-function musicKeyNow(){return musicKeyOverride||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
+// Your world (Theme Studio: World): one of the old worlds plays its own theme in the menus and its
+// battle suite in your games, over your relic set's (a Campaign realm still plays its own).
+function worldGet(){try{const v=localStorage.getItem(WORLD_KEY)||'';return WORLDS.includes(v)?v:''}catch{return ''}}
+function musicKeyNow(){return musicKeyOverride||worldGet()||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
+// The music (src/music.js, the tracks in src/music-library.js): with Music on it plays everywhere
+// and follows you (or plays the station you chose), and every beat it plays reaches the room.
+// The library loads the first time Music is on; until it has tracks the music waits.
+let musicLibrary=null;
+let scoreLibrary=null; // the music library on its way to the score (a promise of its tracks)
+function ensureScore(){
+  if(!vantaScore){
+    vantaScore=new VantaScore();vantaScore.onNote(musicPulse);vantaScore.onNote(ev=>{if(ev.track)syncNowPlaying()});
+    vantaScore.setLikes(musicLikesGet());vantaScore.setLanguage(uiLang);
+    scoreLibrary=loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore.setTracks(musicTracks());queueAtmosphere();syncNowPlaying();return tracks});
+    void loadMySongs();
+  }
+  return vantaScore.available?vantaScore:null;
+}
+// My music (src/my-music.js; owner, 2026-10-14: players "add their own songs"): song files you
+// add from your device. They stay on it (the browser's own storage) and are never uploaded; the
+// service worker plays them, on the My music station and in Everything, and they can be liked.
+// Each is measured as it is added and brought to the library's loudness.
+let mySongs=null,mySongsLoading=null,mySongsSettled=false,myMusicOn=false,myMusicNotes=[];
+const MY_MUSIC_WORKS='serviceWorker' in navigator&&'indexedDB' in window;
+function musicTracks(){return [...(musicLibrary||[]),...(myMusicOn?(mySongs||[]).map(songTrack):[])]}
+// Your songs (once), and whether the service worker plays them.
+function loadMySongs(fresh=false){
+  if(!MY_MUSIC_WORKS)return Promise.resolve([]);
+  if(fresh||!mySongsLoading)mySongsLoading=listSongs().catch(()=>[]).then(async songs=>{
+    mySongs=songs;if(songs.length&&!myMusicOn)myMusicOn=await myMusicServed();
+    if(vantaScore&&(musicLibrary||myMusicOn))vantaScore.setTracks(musicTracks());
+    mySongsSettled=true;if(currentRightView==='music')drawMusicList();syncNowPlaying();return songs});
+  return mySongsLoading;
+}
+// The score once its library has come (null if there is no music to play).
+async function scoreReady(){const now=ensureScore();if(now)return now;await scoreLibrary;return ensureScore()}
+// Where you are, for the music that follows the game: a Campaign boss, a fast game (three
+// minutes or less, Blackout Blitz), any other game (yours, or one you watch), puzzles, lessons,
+// study and analysis, the Relic sets (each set's own theme), the moments after a game (until you
+// go somewhere else, or for two and a half minutes), or the menus.
+const FOCUS_MODES=new Set(['puzzle','survival','lesson','study','analysis','endgame','explore','prep','repertoire','archive']);
+function musicPlace(){
+  if(liveGameOn()){
+    const c=currentBot?.campaign;if(c&&REALMS.find(r=>r.id===c.realm)?.battles?.[c.i]?.boss)return 'boss';
+    if(mode==='computer'?computerRules==='blackout':serverGame?.variant==='blackout')return 'blitz';
+    const seconds=mode==='computer'?600:Number(serverGame?.time_control_seconds||serverGame?.base_seconds||600);
+    return seconds<=180?'blitz':'game';
+  }
+  if(mode==='watch')return 'game';
+  if(FOCUS_MODES.has(mode)||reviewState.viewing||!!analysis||currentRightView==='review')return 'focus';
+  if(currentRightView==='relics')return 'skin';
+  if(musicResult&&Date.now()-musicResult.at<150000)return 'result';
+  return 'lobby';
+}
+// Your league division, for the menus' music (Bronze until you have one).
+function musicDivision(){return currentProfile?.account?DIVISIONS[Math.max(0,Math.min(DIVISIONS.length-1,Number(currentProfile.league_division)||0))]:null}
+// The relic set whose theme plays in the Relic sets (the one you wear).
+const SKIN_FOR_RELIC={ember:'ember',ashen:'ember',rivalry:'ember',tidal:'tidal',umbra:'shadow',mirror:'crystal',court:'crystal',gilded:'gilded',crown:'gilded',paladin:'gilded',obsidian:'shadow',eclipse:'shadow',oathbound:'celestial'};
+let musicPlaceWas=null;
 function syncMusic(mood){
-  const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&liveGameOn()&&document.visibilityState==='visible';
-  if(!want){if(vantaScore?.playing)vantaScore.stop();return}
+  if(resonanceRoom?.playing)return; // the Resonance room plays its own score
+  const p=musicPrefsGet(),want=p.on&&!$('#sound')?.dataset.off&&document.visibilityState==='visible';
+  if(!want){if(vantaScore?.playing)vantaScore.stop();return syncNowPlaying()}
   if(navigator.userActivation&&!navigator.userActivation.hasBeenActive)return; // browsers start sound only after a tap
-  if(!vantaScore)vantaScore=new VantaScore();if(!vantaScore.available)return;
-  const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
-  vantaScore.setVolume(p.volume);vantaScore.setKey(musicKeyNow());vantaScore.setStorm(storm);
-  vantaScore.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
-  if(!vantaScore.playing)vantaScore.start();
+  const score=ensureScore();if(!score)return syncNowPlaying();
+  if(p.station==='mine'&&MY_MUSIC_WORKS&&!mySongsSettled){void loadMySongs();return syncNowPlaying()} // your songs first
+  const place=musicPlace(),games=['game','boss','blitz','result'];
+  // Into a game and out of it the music turns on its next bar line; anywhere else it waits a
+  // moment first, in case you are only passing through.
+  const urgent=musicPlaceWas!==null&&place!==musicPlaceWas&&(games.includes(place)||games.includes(musicPlaceWas));musicPlaceWas=place;
+  score.setVolume(p.volume);score.setLanguage(uiLang);score.setStation(p.station);score.setKey(musicKeyNow());score.setDivision(musicDivision());
+  score.setSkin(SKIN_FOR_RELIC[loadRelics().equipped]||null);if(musicResult)score.setResult(musicResult.result);
+  score.setPlace(place,urgent);
+  if(liveGameOn()){
+    const storm=mood.mood==='storm'?mood.strength:0,records=moveRecords(),recent=blackoutActive()?0:records.slice(-6).filter(r=>r.captured).length;
+    // How the game is going: ahead or behind on material (hidden in the dark, where you cannot see it).
+    const color=premovePlayerColor(),hidden=blackoutActive()||darkActive()||fogOnline(),m=hidden||!color?null:materialFromFen(game.fen());
+    musicMood=m?moodFor(color==='b'?m.b-m.w:m.w-m.b,musicMood):'even';
+    score.setStorm(storm);score.setMood(musicMood);score.setTension(tensionFor({plies:records.length,inCheck:mood.mood==='check',recentCaptures:recent,storm}));
+  }else{musicMood='even';score.setStorm(0);score.setMood('even');score.setTension(0)}
+  if(!score.playing)score.start();
+  syncNowPlaying();
+}
+// A new league division (signed-in players): a sting up or down, and a message.
+function noticeDivision(){
+  const div=musicDivision(),id=currentProfile?.id;if(!div||!id)return;
+  const key=`vch.division.${id}`;let was=null;try{was=localStorage.getItem(key)}catch{}
+  if(was===div)return;try{localStorage.setItem(key,div)}catch{}
+  if(!was||!DIVISIONS.includes(was))return; // the first time: nothing to compare with
+  const up=DIVISIONS.indexOf(div)>DIVISIONS.indexOf(was),name=div[0].toUpperCase()+div.slice(1);
+  const stung=cue(up?'rank-up':'rank-down',null);
+  toast(`${up?'Up a division':'Down a division'} · ${name}`,{duration:3200,sound:stung?false:up?'success':'notify'});
+}
+// The track playing now: under the Music setting, and on the now-playing panel.
+function syncNowPlaying(){
+  const el=$('#musicNow'),on=musicPrefsGet().on;if(on&&!vantaScore)ensureScore();
+  const track=vantaScore?.nowPlaying,text=track?`Now playing · ${track.title}`:on&&musicLibrary&&!vantaScore?.available?'The music library is on its way':'';
+  if(el&&el.textContent!==text)el.textContent=text;
+  syncNowPanel(track);
+}
+// ---- Likes and the now-playing panel (owner, 2026-10-13: "always put a section that is grayed
+// out... where players can see current music playing... or like next... only mouse hover brings
+// the section back active"; "depending on the likes of the person, the music prioritizes their
+// liked music") ----
+// A small panel in a corner you choose (Theme Studio: Now playing), dim until you hover it: what
+// plays, what comes next, and Like, Next and Not for me. Its bars move with the music's beats.
+// Likes stay on this device (src/music.js loadMusicLikes): liked tracks come round about three
+// times as often, the Liked station plays them, and a Not for me track never plays for you.
+let musicLikes=null,nowPanel=null;
+function musicLikesGet(){if(!musicLikes)musicLikes=loadMusicLikes();return musicLikes}
+function setMusicLikes(next){musicLikes=saveMusicLikes(next);vantaScore?.setLikes(musicLikes);syncNowPlaying();if(currentRightView==='music')drawMusicList()}
+const NOW_KEY='vch.nowPlaying',NOW_CORNERS=['bl','br','tr','off'];
+function nowCorner(){try{const v=localStorage.getItem(NOW_KEY);return NOW_CORNERS.includes(v)?v:'bl'}catch{return 'bl'}}
+function ensureNowPanel(){
+  if(nowPanel?.isConnected)return nowPanel;
+  nowPanel=document.createElement('aside');nowPanel.id='nowPlaying';nowPanel.className='now-playing';nowPanel.hidden=true;nowPanel.dataset.quiet='';nowPanel.setAttribute('aria-label','Music');
+  nowPanel.innerHTML='<span class="np-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="np-text"><b class="np-title"></b><small class="np-next"></small></span><span class="np-actions"><button type="button" data-np="like" aria-pressed="false">Like</button><button type="button" data-np="next">Next</button><button type="button" data-np="hide">Not for me</button></span>';
+  nowPanel.addEventListener('click',e=>{
+    const b=e.target.closest('[data-np]'),t=vantaScore?.nowPlaying;if(!b||!t)return;
+    if(b.dataset.np==='next'){playUiSound('tap');vantaScore.skip();return}
+    const id=t.of||t.id; // a battle suite's part: the like is for the whole suite
+    if(b.dataset.np==='like'){const on=!musicLikesGet().liked.includes(id);setMusicLikes(likeTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-on':'toggle-off');if(on)toast('Added to Liked',{sound:false,duration:1800});return}
+    setMusicLikes(hideTrack(musicLikesGet(),id,true));playUiSound('toggle-off');toast("It won't play again for you",{sound:false,duration:2400});
+  });
+  document.body.append(nowPanel);
+  return nowPanel;
+}
+function syncNowPanel(track){
+  const corner=nowCorner(),show=!!track&&corner!=='off';
+  if(!show){if(nowPanel)nowPanel.hidden=true;return}
+  const panel=ensureNowPanel();panel.hidden=false;if(panel.dataset.corner!==corner)panel.dataset.corner=corner;
+  const next=vantaScore?.upcoming,liked=musicLikesGet().liked.includes(track.of||track.id);
+  const title=panel.querySelector('.np-title'),nx=panel.querySelector('.np-next'),like=panel.querySelector('[data-np="like"]');
+  if(title.textContent!==track.title)title.textContent=track.title;
+  const nt=next&&next.id!==track.id?`Next · ${next.title}`:'';if(nx.textContent!==nt)nx.textContent=nt;
+  if(like.getAttribute('aria-pressed')!==String(liked)){like.setAttribute('aria-pressed',String(liked));like.textContent=liked?'Liked':'Like'}
+}
+// The panel's bars and the hero piece move with the beats.
+function nowPanelBeat(k,s){
+  if(!nowPanel||nowPanel.hidden)return;
+  nowPanel.querySelectorAll('.np-bars i').forEach((bar,i)=>bar.animate?.([{transform:'scaleY(.35)'},{transform:`scaleY(${(.55+s*.45*(k==='drum'||k==='heartbeat'?1:.75)*(1-((i*37)%5)/9)).toFixed(2)})`,offset:.18},{transform:'scaleY(.35)'}],{duration:k==='chord'?900:360,delay:i*28,easing:'ease-out'}));
+}
+// The hero piece on the home screen (owner, 2026-10-13: "reacting to mouse movement, also reacting
+// to the music, see if it's dancing to the music"): it turns a little towards the pointer and
+// sways and lifts with each beat. Still with reduced motion or Motion at zero.
+let heroKick=()=>{};
+(function heroPiece(){
+  let tx=0,ty=0,x=0,y=0,kick=0,sway=1,raf=0;
+  const art=()=>document.querySelector('.hero-art img'),still=()=>prefersReducedMotion()||motionScale()<=0;
+  const step=()=>{
+    raf=0;const img=art();if(!img||img.offsetParent===null)return;
+    x+=(tx-x)*.08;y+=(ty-y)*.08;kick*=.88;
+    img.style.transform=`perspective(800px) rotateY(${(x*9).toFixed(2)}deg) rotateX(${(-y*6).toFixed(2)}deg) translate3d(${(x*7).toFixed(1)}px,${(y*4-kick*7).toFixed(1)}px,0) rotate(${(sway*kick*2.4).toFixed(2)}deg) scale(${(1+kick*.03).toFixed(3)})`;
+    if(Math.abs(tx-x)>.002||Math.abs(ty-y)>.002||kick>.01)raf=requestAnimationFrame(step);
+  };
+  const go=()=>{if(!raf)raf=requestAnimationFrame(step)};
+  addEventListener('pointermove',e=>{
+    if(still())return;const img=art();if(!img||img.offsetParent===null)return;
+    const r=img.getBoundingClientRect();tx=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/(innerWidth/2)));ty=Math.max(-1,Math.min(1,(e.clientY-(r.top+r.height/2))/(innerHeight/2)));go();
+  },{passive:true});
+  heroKick=s=>{if(still())return;const img=art();if(!img||img.offsetParent===null)return;sway=-sway;kick=Math.min(1,kick+.55*s);go()};
+})();
+// ---- The room follows the music (owner, 2026-10-13: "each wallpaper and everything is supposed
+// to react to music") ----
+// The player hears every beat of the music (src/music.js listen()); as it sounds the candles in
+// the wallpaper leap, a glow breathes round the board, the running clock keeps the beat and the
+// captured pieces nod with each new phrase. A win flares the room, a loss makes it gutter.
+// Nothing moves with reduced motion or in a hidden tab, and only the candles while a piece
+// travels (the board gets every frame).
+let boardAura=null;
+function musicPulse(ev){
+  const ctx=vantaScore?.ctx;if(!ctx||prefersReducedMotion()||document.visibilityState!=='visible')return;
+  const wait=(ev.at-ctx.currentTime+(ctx.outputLatency||ctx.baseLatency||0))*1000;
+  if(wait<-150)return; // too late to be in time: let it go
+  setTimeout(()=>roomPulse(ev),Math.max(0,wait));
+}
+function ensureBoardAura(){
+  if(boardAura?.isConnected)return boardAura;
+  const shell=document.querySelector('.board-shell');if(!shell)return null;
+  boardAura=document.createElement('div');boardAura.className='board-aura';boardAura.setAttribute('aria-hidden','true');shell.prepend(boardAura);shell.classList.add('with-aura');
+  return boardAura;
+}
+function roomPulse(ev){
+  const k=ev.kind,s=Math.max(0,Math.min(1,Number(ev.strength??.6))),glow=wallLights.glow;
+  if(k==='beat'||k==='drum'||k==='heartbeat'||k==='chord'){nowPanelBeat(k,s);if(k!=='chord')heroKick(s)}
+  if(glow&&glow.running&&!glow.held){
+    if(k==='chord')glow.pulse(.22+.2*s,1500);
+    else if(k==='beat')glow.pulse(.1+.12*s,260,.3);
+    else if(k==='drum')glow.pulse(.18+.24*s,380);
+    else if(k==='heartbeat')glow.pulse(.28+.25*s,320);
+    else if(k==='motif')glow.pulse(.25,1200,.6);
+    else if(k==='sting')glow.pulse(['win','checkmate','rank-up','relic','realm','solved','brilliant'].includes(ev.result)?.7:['loss','rank-down','failed'].includes(ev.result)?-.45:.3,2400);
+  }
+  if(boardIsMoving())return;
+  const aura=ensureBoardAura(),tone=k==='heartbeat'?'heartbeat':k==='sting'?String(ev.result||''):'';
+  const frames=k==='chord'?[{opacity:0},{opacity:.3+.35*s,offset:.3},{opacity:0}]:k==='drum'||k==='heartbeat'?[{opacity:0},{opacity:.25+.4*s,offset:.12},{opacity:0}]:k==='sting'?[{opacity:0},{opacity:.9,offset:.2},{opacity:0}]:null;
+  if(aura&&frames){if(aura.dataset.tone!==tone)aura.dataset.tone=tone;aura.getAnimations?.().forEach(a=>a.cancel());aura.animate?.(frames,{duration:k==='chord'?1800:k==='sting'?2600:420,easing:'ease-out'})}
+  if(k==='beat'||k==='heartbeat'){
+    const clock=document.querySelector('.player time.running:not(.low-time)');
+    if(clock&&'pseudoElement' in (globalThis.KeyframeEffect?.prototype||{})){clock.dataset.pulse=k;clock.animate([{opacity:0},{opacity:.35+.5*s,offset:.15},{opacity:0}],{duration:k==='heartbeat'?380:300,easing:'ease-out',pseudoElement:'::after'})} // browsers that cannot animate a ::after would dim the whole clock
+  }
+  if(k==='chord')document.querySelectorAll('.captured-tray img:not(.arriving),.captured-tray .zh-piece').forEach((el,i)=>el.animate?.([{translate:'0 0'},{translate:'0 -3px',offset:.35},{translate:'0 0'}],{duration:520,delay:i*45,easing:'ease-out'}));
 }
 function syncMusicUi(){
-  const on=musicPrefsGet().on,t=$('#musicToggle'),s=$('#musicSetting');
-  if(t){t.textContent=on?'Music: on':'Music: off';t.setAttribute('aria-pressed',String(on))}
-  if(s)s.value=on?'on':'off';
+  const p=musicPrefsGet(),t=$('#musicToggle'),s=$('#musicSetting');
+  if(t){t.textContent=p.on?'Music: on':'Music: off';t.setAttribute('aria-pressed',String(p.on))}
+  if(s)s.value=p.on?(STATIONS.some(x=>x.id===p.station)?p.station:'on'):'off';
+  syncNowPlaying();
 }
-function setMusicOn(on){
-  musicPrefs=saveMusic({...musicPrefsGet(),on});syncMusicUi();
-  if(on&&!liveGameOn())toast('Music plays during your games');
+// Off, or on: following the game ('on') or playing one station (kept while the music is off).
+function setMusicOn(on,station=musicPrefsGet().station){
+  musicPrefs=saveMusic({...musicPrefsGet(),on,station:station==='off'?musicPrefsGet().station:station});syncMusicUi();
+  // My music with no songs yet follows the game; the Music list is where songs are added.
+  if(on&&station==='mine')void loadMySongs().then(songs=>{if(!songs.length)toast('Add your songs in the Music list',{duration:4200,onClick:()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()}})});
   if(!on)vantaScore?.stop();else syncAtmosphere();
 }
 
@@ -5151,24 +5629,29 @@ function campaignGameOver(info,score,oath){
   const st=loadCampaign();if(score===null){saveCampaign({...st,pending:null});return}
   const out=recordBattle(st,c.realm,c.i,{score,plies:game.history().length,oath});saveCampaign(out.state);
   if(out.stars)queueToast(`Victory · ${out.stars} of 3 stars`,{delay:600});else queueToast('Defeat · try the battle again',{delay:600});
-  if(out.freed){queueToast(`${out.freed.name} is free`,{sound:'win'});earnRelicQueued(out.freed.relic)}
+  if(out.freed){queueToast(`${out.freed.name} is free`,{sound:'win',sting:'realm'});earnRelicQueued(out.freed.relic)}
   if(currentRightView==='campaign')drawCampaign();
 }
 
+// A game ended: with the music on, its sting plays over it (a checkmate you gave has its own),
+// the music steps back for it, then turns to the win or loss music while you stay at the board.
+// Returns whether a sting played (the interface's own end sound plays otherwise).
 function roundTwelveGameOver(info){
-  const score=scoreOf(info.result,info.myColor);
-  atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};queueAtmosphere();
-  if(vantaScore?.playing){vantaScore.sting(score===1?'win':score===0?'loss':'draw');vantaScore.stop()}
+  const score=scoreOf(info.result,info.myColor),result=score===1?'win':score===0?'loss':'draw';
+  atmoEnd={at:Date.now(),won:score===1?true:score===0?false:null};
+  musicResult=score===null?null:{at:Date.now(),result};queueAtmosphere();
+  const stung=!!vantaScore?.playing&&score!==null&&vantaScore.sting(result==='win'&&/checkmate/.test(String(info.reason||''))?'checkmate':result);
   const oath=settleOath(info,score);
   campaignGameOver(info,score,oath);
   void twinGameOver(info);
   setTimeout(()=>void refreshVeterans(true),info.online?2500:400);
+  return stung;
 }
 function initRoundTwelve(){
   const prefs=r12Prefs(),vs=$('#veteranSetting'),as=$('#atmosphereSetting'),ms=$('#musicSetting'),mv=$('#musicVolume');
   if(vs){vs.value=prefs.veterans;vs.onchange=e=>{setR12Pref('veterans',e.target.value);hideVeteranCard();render()}}
   if(as){as.value=prefs.atmosphere;as.onchange=e=>{setR12Pref('atmosphere',e.target.value);syncAtmosphere()}}
-  if(ms)ms.onchange=e=>setMusicOn(e.target.value==='on');
+  if(ms)ms.onchange=e=>setMusicOn(e.target.value!=='off',e.target.value);
   if(mv){mv.value=String(Math.round(musicPrefsGet().volume*100));mv.oninput=e=>{musicPrefs=saveMusic({...musicPrefsGet(),volume:Number(e.target.value)/100});vantaScore?.setVolume(musicPrefs.volume)}}
   $('#musicToggle')?.addEventListener('click',()=>setMusicOn(!musicPrefsGet().on));
   syncMusicUi();
@@ -5186,7 +5669,7 @@ function initRoundTwelve(){
   $('.computer-campaign')?.addEventListener('click',()=>{renderCampaign();showSidePanel()});
   ensureAtmosphere();setInterval(syncAtmosphere,1000);
   document.addEventListener('visibilitychange',syncAtmosphere);
-  document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
+  document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(musicPrefsGet().on&&!vantaScore?.playing)queueAtmosphere();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
   document.addEventListener('pointerover',e=>{
     if(e.pointerType!=='mouse')return;const el=e.target.closest?.('.board-piece[data-veteran]');if(!el)return;
     clearTimeout(vetHoverTimer);vetHoverTimer=setTimeout(()=>showVeteranCard(el),420);
@@ -5528,7 +6011,7 @@ function nextBattlePuzzle(){
   setPrimaryScreen('game');render();
   const st=$('#dynamicView .battle-status');if(st)st.textContent=`Puzzle ${l.index+1} · ${game.turn()==='w'?'White':'Black'} to move`;
 }
-function battleSolved(){if(!battle)return;battle.local.score++;battle.local.index++;playUiSound('start');reportBattle();nextBattlePuzzle()}
+function battleSolved(){if(!battle)return;battle.local.score++;battle.local.index++;playUiSound('success');reportBattle();nextBattlePuzzle()}
 function battleMiss(move){if(!battle)return;battle.local.misses++;battle.local.index++;rejectMove(move.from,move.to,{quietRule:true});reportBattle();setTimeout(nextBattlePuzzle,350)}
 function reportBattle(){if(!battle)return;drawBattleScore();void api.battleProgress(battle.id,battle.local.score,battle.local.misses).then(out=>{if(battle){battle={...out.battle,local:battle.local};drawBattleScore()}}).catch(()=>{})}
 function drawBattleScore(){
@@ -5760,11 +6243,12 @@ function recordNav(nav){
     navPending=false;const snap=navSnapshot();if(sameNav(snap,navCurrent))return;
     const first=!navCurrent;navCurrent=snap;
     try{if(first)history.replaceState({...(history.state||{}),vchNav:snap},'',location.href);else history.pushState({vchNav:snap},'',location.href)}catch{}
+    if(!first){playUiSound('page');musicResult=null;queueAtmosphere()} // a new screen: a page turns, and the music follows you there
   });
 }
 window.addEventListener('popstate',event=>{
   const snap=event.state?.vchNav;if(!snap)return;
-  navRestoring=true;
+  navRestoring=true;playUiSound('back');musicResult=null;queueAtmosphere();
   try{if(snap.mTab)mTab=snap.mTab;activateNav(snap.nav);if(snap.mView&&isMobileApp())setMView(snap.mView)}
   finally{navRestoring=false;navCurrent=navSnapshot()}
 });
@@ -5799,6 +6283,16 @@ registerModal('theme',$('#themeStudio'));
 registerModal('account',$('#accountDialog'));
 registerModal('search',$('#searchDialog'));
 registerModal('promotion',$('#promotion'));
+// The interface is heard (src/sfx.js): a press is a tap, a switch clicks, a dialog or menu opens
+// and closes; behind a settings dialog the music is muffled, as if behind a door. The board has
+// its own sounds (moves), and a [data-quiet] area (the Sound test) plays only what it plays.
+menus.onChange((name,open)=>{if(name!=='promotion')playUiSound(open?'open':'close');if(['theme','account','search'].includes(name))vantaScore?.muffle(open?1:0)});
+document.addEventListener('vch-dialog',e=>playUiSound(e.detail?.open?'open':'close'));
+document.addEventListener('click',e=>{const el=e.target.closest?.('button,[role="button"],a[href],summary,.feature-card');if(el&&!el.disabled&&!el.closest('#board,[data-quiet]'))playUiSound('tap')},{capture:true,passive:true});
+document.addEventListener('change',e=>{const t=e.target;if(!t||t.closest?.('[data-quiet]'))return;if(t.type==='checkbox')playUiSound(t.checked?'toggle-on':'toggle-off');else if(t.tagName==='SELECT')playUiSound('tap')},{capture:true,passive:true});
+const warmSounds=()=>{const later=window.requestIdleCallback||(fn=>setTimeout(fn,300));later(()=>{const bank=soundBankNow();void bank.warm('ui').then(()=>{const set=pieceSoundSet();if(set!=='classic')return bank.warm(set)})})};
+document.addEventListener('pointerdown',warmSounds,{once:true,capture:true,passive:true});
+document.addEventListener('keydown',warmSounds,{once:true,capture:true,passive:true});
 document.addEventListener('pointerdown',event=>{menus.handleOutside(event.target)},true);
 $('#closeProfileMenu').onclick=()=>menus.close('profile');
 $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
@@ -5806,6 +6300,7 @@ $('#profileMenuProfile').onclick=openAccount;
 $('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
 $('#profileMenuInsights').onclick=()=>{menus.close('profile');void renderInsights()};
 $('#profileMenuSettings').onclick=()=>menus.open('theme');
+$('#settingsBtn').onclick=()=>menus.open('theme');
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
 $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};
@@ -5914,6 +6409,140 @@ $('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.val
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
+// Theme Studio: the piece sounds (a set, your relic set's, or the classic synthesized ones), the
+// interface sounds on or off, and the Sound test.
+$('#pieceSoundSetting').value=sfxPrefs().pieces;
+$('#pieceSoundSetting').onchange=e=>{setSfxPref('pieces',e.target.value);const set=pieceSoundSet();if(set!=='classic')void soundBankNow().warm(set,['knight']).then(()=>soundBankNow().play(set,'knight',{volume:.6}))};
+$('#uiSoundSetting').checked=sfxPrefs().ui;
+$('#uiSoundSetting').onchange=e=>setSfxPref('ui',e.target.checked);
+$('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderSoundTest();showSidePanel()};
+$('#openMusicList').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()};
+$('#worldSetting').value=worldGet();
+$('#worldSetting').onchange=e=>{const w=e.target.value;try{if(w)localStorage.setItem(WORLD_KEY,w);else localStorage.removeItem(WORLD_KEY)}catch{}
+  // Heard at once in the menus: the world's own theme (the music otherwise changes when a piece ends).
+  const theme=w&&vantaScore?.playing&&musicPlace()==='lobby'&&musicPrefsGet().station==='on'&&(musicLibrary||[]).find(t=>t.theme===w&&t.place==='lobby');
+  queueAtmosphere();if(theme){vantaScore.setKey(w);vantaScore.playNow(theme.id)}};
+$('#nowPlayingSetting').value=nowCorner();
+$('#nowPlayingSetting').onchange=e=>{try{localStorage.setItem(NOW_KEY,e.target.value)}catch{}syncNowPlaying()};
+// The music list (owner, 2026-10-13): every track by station, to play now, like, or put away.
+const MUSIC_GROUPS=['cinematic','worlds','focus','opera','electric','songs'];
+function renderMusicList(){
+  setDynamicView('music','Music list','');drawMusicList();
+  if(!musicLibrary)void loadLibrary().then(tracks=>{musicLibrary=tracks;vantaScore?.setTracks(musicTracks());drawMusicList()});
+  void loadMySongs();
+}
+// My music in the list: add songs (or drop them here), and each song to play, rename, like or remove.
+function myMusicHtml(likes,now){
+  if(!MY_MUSIC_WORKS)return `<section class="my-music"><h4>My music</h4><p class="trainer-intro">This browser can't play your own songs here</p></section>`;
+  const songs=mySongs||[],mb=songs.reduce((sum,x)=>sum+(x.size||0),0)/1048576;
+  const use=songs.length?`${songs.length} ${songs.length===1?'song':'songs'} · ${mb<10?mb.toFixed(1):Math.round(mb)} MB on this device`:'No songs yet';
+  const row=t=>{const liked=likes.liked.includes(t.id);
+    return `<li class="music-row mine${t.id===now?' playing':''}" data-track="${escapeHtml(t.id)}"><button type="button" data-music-play>${t.id===now?'On now':'Listen'}</button><span class="mr-title" data-no-i18n>${escapeHtml(t.title)}</span><button type="button" data-my-rename>Rename</button><button type="button" data-music-like aria-pressed="${liked}">${liked?'Liked':'Like'}</button><button type="button" data-my-remove>Remove</button></li>`};
+  return `<section class="my-music" data-my-music><h4>My music</h4>
+    <p class="trainer-intro">Songs you add stay on this device: nothing is uploaded. They play on the My music station and in Everything.</p>
+    <p class="music-liked"><button type="button" data-my-add>Add songs</button><input type="file" data-my-file accept="${MY_MUSIC_ACCEPT}" multiple hidden><span class="my-music-use">${use}</span>${songs.length?'<button type="button" data-my-station>Play My music</button>':''}</p>
+    ${myMusicNotes.length?`<ul class="my-music-notes">${myMusicNotes.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>`:''}
+    ${songs.length?`<ul>${songs.map(row).join('')}</ul>`:''}</section>`;
+}
+function drawMusicList(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='music')return;
+  const likes=musicLikesGet(),np=vantaScore?.nowPlaying,now=np?.of||np?.id,mine=myMusicHtml(likes,now);
+  if(!musicLibrary){target.innerHTML=`<article class="music-list" data-quiet>${mine}<p class="trainer-intro">The music library is on its way</p></article>`;wireMusicList(target);return}
+  const music=musicLibrary.filter(t=>!isSting(t)&&!t.of);
+  const row=t=>{const liked=likes.liked.includes(t.id),hidden=likes.hidden.includes(t.id),lang=t.lang&&t.lang!=='en'?`<small>${escapeHtml(LANGUAGES[t.lang]||t.lang.toUpperCase())}</small>`:'';
+    return `<li class="music-row${t.id===now?' playing':''}${hidden?' put-away':''}" data-track="${escapeHtml(t.id)}"><button type="button" data-music-play>${t.id===now?'On now':'Listen'}</button><span class="mr-title">${escapeHtml(t.title)} ${lang}</span><button type="button" data-music-like aria-pressed="${liked}">${liked?'Liked':'Like'}</button><button type="button" data-music-hide aria-pressed="${hidden}">${hidden?'Hidden':'Not for me'}</button></li>`};
+  const groups=MUSIC_GROUPS.map(id=>[id,music.filter(t=>t.station===id)]).filter(([,list])=>list.length);
+  target.innerHTML=`<article class="music-list" data-quiet><p class="trainer-intro">Like the music you love: it comes round more often. Not for me: it won't play for you. Listen: hear it now.</p>
+    <p class="music-liked">${likes.liked.length?`Liked · ${likes.liked.length} <button type="button" data-music-station>Play the Liked station</button>`:'Nothing liked yet'}</p>
+    ${mine}
+    ${groups.map(([id,list])=>`<h4>${escapeHtml(STATIONS.find(x=>x.id===id)?.name||id)}</h4><ul>${list.map(row).join('')}</ul>`).join('')}</article>`;
+  wireMusicList(target);
+}
+function wireMusicList(target){
+  target.querySelectorAll('[data-music-play]').forEach(b=>b.onclick=()=>playFromList(b.closest('[data-track]').dataset.track));
+  target.querySelectorAll('[data-music-like]').forEach(b=>b.onclick=()=>{const id=b.closest('[data-track]').dataset.track,on=b.getAttribute('aria-pressed')!=='true';setMusicLikes(likeTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-on':'toggle-off')});
+  target.querySelectorAll('[data-music-hide]').forEach(b=>b.onclick=()=>{const id=b.closest('[data-track]').dataset.track,on=b.getAttribute('aria-pressed')!=='true';setMusicLikes(hideTrack(musicLikesGet(),id,on));playUiSound(on?'toggle-off':'toggle-on')});
+  target.querySelector('[data-music-station]')?.addEventListener('click',()=>{setMusicOn(true,'liked');queueAtmosphere();setTimeout(drawMusicList,60)});
+  // My music
+  const box=target.querySelector('[data-my-music]'),file=target.querySelector('[data-my-file]');
+  if(!box)return;
+  target.querySelector('[data-my-add]')?.addEventListener('click',()=>file?.click());
+  file?.addEventListener('change',()=>{const files=[...(file.files||[])];file.value='';void addMyMusic(files)});
+  box.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();box.classList.add('dropping')}});
+  box.addEventListener('dragleave',e=>{if(!box.contains(e.relatedTarget))box.classList.remove('dropping')});
+  box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dropping');void addMyMusic([...(e.dataTransfer?.files||[])])});
+  target.querySelector('[data-my-station]')?.addEventListener('click',()=>{setMusicOn(true,'mine');queueAtmosphere();setTimeout(drawMusicList,60)});
+  box.querySelectorAll('[data-my-rename]').forEach(b=>b.onclick=()=>renameMySong(b.closest('[data-track]')));
+  box.querySelectorAll('[data-my-remove]').forEach(b=>b.onclick=()=>void removeMySong(b.closest('[data-track]').dataset.track));
+}
+// Adds song files from your device (measured first; anything that cannot be added is listed).
+async function addMyMusic(files){
+  if(!files.length||!MY_MUSIC_WORKS)return;
+  toast(files.length===1?'Adding 1 song':`Adding ${files.length} songs`,{sound:false,duration:60000});
+  let added=[],skipped=[];
+  try{({added,skipped}=await addSongs(files,{have:(await loadMySongs()).length}))}
+  catch{skipped=files.map(f=>({name:String(f?.name||''),why:'store'}))}
+  if(added.length)try{await navigator.storage?.persist?.()}catch{} // so the browser keeps them when space runs low
+  const why=({name,why})=>why==='type'?`${name}: not a song file`:why==='size'?`${name} is over ${MAX_SONG_MB} MB`:why==='full'?`My music is full (${MAX_SONGS} songs)`:why==='space'?'Not enough space on this device':why==='store'?`${name}: couldn't be saved on this device`:`${name}: this browser can't play it`;
+  myMusicNotes=[...new Set(skipped.map(why))];
+  await loadMySongs(true);
+  const said=[added.length?(added.length===1?'Added 1 song':`Added ${added.length} songs`):'',...myMusicNotes.slice(0,1)].filter(Boolean).join(' · ');
+  if(added.length&&!myMusicOn)toast('Saved. Reload the page to play your songs',{sound:false,duration:4000});
+  else toast(said,{sound:added.length?'success':'error',duration:3200});
+}
+function renameMySong(li){
+  const id=li?.dataset.track,span=li?.querySelector('.mr-title'),song=(mySongs||[]).find(x=>x.id===id);if(!span||!song)return;
+  const input=document.createElement('input');input.type='text';input.className='mr-rename';input.maxLength=80;input.value=song.title;input.setAttribute('aria-label','Song title');
+  span.replaceWith(input);input.focus();input.select();
+  let done=false;
+  const finish=async save=>{if(done)return;done=true;const title=input.value.trim();
+    if(save&&title&&title!==song.title){await renameSong(id,title).catch(()=>null);await loadMySongs(true)}else drawMusicList()};
+  input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();void finish(true)}else if(e.key==='Escape'){e.preventDefault();void finish(false)}};
+  input.onblur=()=>void finish(true);
+}
+async function removeMySong(id){
+  const song=await removeSong(id).catch(()=>null);if(!song)return;
+  const likes=musicLikesGet();if(likes.liked.includes(id))setMusicLikes(likeTrack(likes,id,false));
+  await loadMySongs(true);playUiSound('toggle-off');
+  toast('Removed',{sound:false,duration:5000,actionLabel:'Undo',onAction:async()=>{await putSong(song).catch(()=>{});await loadMySongs(true)}});
+}
+// Plays a track from the list now (turning the music on if it was off).
+function playFromList(id){
+  if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
+  const score=ensureScore();if(!score)return toast('The music library is on its way',{sound:false});
+  if(!musicPrefsGet().on){musicPrefs=saveMusic({...musicPrefsGet(),on:true});syncMusicUi()}
+  score.setVolume(musicPrefsGet().volume);score.playNow(id);syncNowPlaying();setTimeout(drawMusicList,50);
+}
+// The Sound test (owner, 2026-10-13): every sound in VCH, to hear and to judge. The interface,
+// each piece set, and the stings over the music.
+const SOUND_LABEL={tap:'Tap',page:'Page',back:'Back',open:'Open',close:'Close','toggle-on':'Switch on','toggle-off':'Switch off',notify:'Message',error:'Error',success:'Success',match:'Match found',warning:'Warning',start:'Game start',win:'Win',lose:'Loss',draw:'Draw',tick:'Clock tick',pawn:'Pawn',knight:'Knight',bishop:'Bishop',rook:'Rook',queen:'Queen',king:'King',capture:'Capture',castle:'Castle',promote:'Promotion',check:'Check',mate:'Checkmate',illegal:'Illegal move'};
+const STING_LABEL={win:'Victory',loss:'Defeat',draw:'Draw',checkmate:'Checkmate',start:'Game start','rank-up':'Up a division','rank-down':'Down a division',relic:'Relic earned',realm:'Realm freed',solved:'Puzzle solved',failed:'Puzzle failed',brilliant:'Brilliant move'};
+function renderSoundTest(){setDynamicView('sounds','Sound test','');drawSoundTest()}
+function drawSoundTest(){
+  const target=$('#dynamicView .view-content');if(!target||currentRightView!=='sounds')return;
+  const mine=pieceSoundSet(),set=PIECE_SETS.includes(mine)?mine:'wood',names=pieceSoundNames();
+  const grid=(items,attr)=>`<div class="sound-grid">${items.map(([k,l])=>`<button type="button" ${attr}="${k}">${escapeHtml(l)}</button>`).join('')}</div>`;
+  target.innerHTML=`<article class="sound-test" data-quiet><p class="trainer-intro">Every sound in VCH. Tap one to hear it.</p>
+    <h4>Interface</h4>${grid(UI_SOUNDS.map(k=>[k,SOUND_LABEL[k]||k]),'data-ui-sound')}
+    <h4>Pieces</h4><label class="sound-set">Piece sounds <select data-sound-set>${PIECE_SETS.map(id=>`<option value="${id}"${id===set?' selected':''}>${names[id]}</option>`).join('')}</select></label>${grid(PIECE_SOUNDS.map(k=>[k,SOUND_LABEL[k]||k]),'data-piece-sound')}
+    <h4>Stings</h4>${grid(STINGS.map(k=>[k,STING_LABEL[k]||k]),'data-sting')}</article>`;
+  const pick=()=>target.querySelector('[data-sound-set]')?.value||'wood';
+  target.querySelectorAll('[data-ui-sound]').forEach(b=>b.onclick=()=>void auditionSound('ui',b.dataset.uiSound));
+  target.querySelectorAll('[data-piece-sound]').forEach(b=>b.onclick=()=>void auditionSound(pick(),b.dataset.pieceSound));
+  target.querySelectorAll('[data-sting]').forEach(b=>b.onclick=()=>void auditionSting(b.dataset.sting));
+}
+async function auditionSound(set,name){
+  if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
+  const bank=soundBankNow();await bank.load();await bank.buffer(set,name);
+  if(bank.play(set,name,{volume:set==='ui'?.5:.6}))return;
+  if(set==='ui')synthUiSound(name);else playMoveSound(audioContext(),{capture:name==='capture',check:name==='check'||name==='mate'});
+}
+async function auditionSting(kind){
+  if($('#sound')?.dataset.off)return toast('Sound off',{sound:false});
+  ensureScore();if(!musicLibrary)musicLibrary=await loadLibrary();
+  if(vantaScore&&!vantaScore.tracks.some(t=>!t.src))vantaScore.setTracks(musicTracks());
+  if(!vantaScore?.sting(kind))toast('The music library is on its way',{sound:false});
+}
 initRoundTwelve();
 // ---- Hover guide (src/hover-guide.js): what each section, tab and mode is, on hover or focus ----
 (function hoverGuide(){
@@ -5958,4 +6587,193 @@ initRoundTwelve();
   window.addEventListener('pointerdown',hide,{capture:true,passive:true});
   for(const type of ['scroll','resize'])window.addEventListener(type,()=>{if(shown)hide()},{capture:true,passive:true});
   document.addEventListener('keydown',event=>{if(event.key==='Escape')hide()});
+})();
+// ---- Resonance (src/resonance.js): Chladni figures in sand behind the page, drawn by the music ----
+// A background (owner request 2026-10-13: never on the board, never in the way) that answers the
+// game, the pointer and the music (owner, 2026-10-13: "make it come to life... more responsive and
+// reactive"). It shows the figure of the theme you play under, gathering out of scattered sand.
+// Every move sends a ring of light out from the square the piece lands on (a capture a stronger
+// ring and its echo; a check makes the plate shiver and rings from the king; in Vanta Dark and
+// Blackout the opponent's moves ring from the middle of the board and say nothing else). Captures
+// re-tune the plate to a new figure; the end of a game brings an intricate figure and more light
+// for a win, a simple one and less for a loss; time trouble shivers it. The pointer parts the sand
+// where it shows, a tap rings it, and a slow swell crosses it now and then. While the music plays,
+// the sand trembles with every note and swells with the bass, and drifts to a new figure every
+// other chord (finer as the game gets tenser). With reduced motion it never moves.
+const RESONANCE_KEY='vch.resonance';
+const prefersStill=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const resonanceThemeMode=key=>modeForMoment(chordFor(key,0),0);
+let resonanceBeat={step:-1,at:0,key:'',glow:''};
+let resonanceGame={key:null,timer:0,echo:0,mood:'calm',strength:0,captures:0,retunedAt:0,endAt:0,glow:1,shiverAt:0,rings:0};
+function syncResonance(){
+  let layer=document.getElementById('resonanceBg');
+  if(resonanceLevel==='off'){resonance?.stop();resonance=null;layer?.remove();return}
+  if(!layer){layer=document.createElement('div');layer.id='resonanceBg';layer.setAttribute('aria-hidden','true');layer.innerHTML='<canvas class="resonance-glow"></canvas><canvas class="resonance-sand"></canvas>';document.body.prepend(layer)}
+  const canvas=layer.querySelector('.resonance-sand'),still=prefersStill();
+  if(resonance?.canvas!==canvas){
+    resonance?.stop();
+    resonance=new SandBackdrop(canvas,{glow:layer.querySelector('.resonance-glow'),spread:matchMedia('(max-width: 800px)').matches?2.2:3,motion:!still,onReady:()=>{layer.dataset.ready='1'}});
+    resonance.listen(()=>vantaScore?.playing?vantaScore.readSpectrum():null); // the room's score too
+    resonanceBeat={step:-1,at:0,key:'',glow:''};
+  }
+  resonance.setMotion(!still);
+  if(!resonance.mode){resonanceBeat.key=musicKeyNow();resonance.show(resonanceThemeMode(resonanceBeat.key),{flow:!still})}
+}
+// Where on the window a square of the board is (its middle), or the board's middle, and how far
+// it is to the board's nearest edge (`under`: a ring that wide is still hidden by the board).
+function resonancePoint(sq){
+  const board=document.getElementById('board')?.getBoundingClientRect(),el=sq?document.querySelector(`#board .square[data-sq="${sq}"]`):null,r=el?.getBoundingClientRect()||board;
+  if(!r?.width)return sq?null:{x:innerWidth/2,y:innerHeight/2,under:0}; // no board on screen: the middle of the window
+  const x=r.left+r.width/2,y=r.top+r.height/2,under=board?.width?Math.max(0,Math.min(x-board.left,board.right-x,y-board.top,board.bottom-y)-30):0;
+  return {x,y,under};
+}
+// The game's answers, from the living-atmosphere pass (syncAtmosphere): each new move, the mood.
+function syncResonanceGame(mood){
+  const g=resonanceGame;
+  if(mood.mood!==g.mood){
+    const was=g.mood;g.mood=mood.mood;
+    if(resonance&&(mood.mood==='dawn'||mood.mood==='dusk'))resonanceEnding(mood.mood==='dawn');
+    else if(was==='dawn'||was==='dusk')resonanceAfterEnding();
+  }
+  g.strength=mood.strength;
+  const move=boardLastMove(),key=move?.to?`${move.from||''}${move.to}${move.san||''}:${moveRecords().length}`:'';
+  if(key===g.key)return;
+  const first=g.key===null;g.key=key;
+  if(!key){if(g.captures){g.captures=0;resonanceBeat.key=''}return} // a new game: the theme's figure comes back
+  if(first||!resonance)return;
+  // Still while the piece travels; the ring goes out as it lands.
+  const travel=Math.max(0,boardMotionUntil-performance.now());
+  resonance.pause(travel+40);clearTimeout(g.timer);clearTimeout(g.echo);
+  if(!resonance.motion)return;
+  // In the dark the opponent's moves (and any move you step back to) ring from the middle of the board.
+  const color=premovePlayerColor(),mine=!color||game.turn()!==color,hidden=(darkActive()||fogOnline()||blackoutActive())&&(!mine||!!browse||reviewState.viewing);
+  const san=String(move.san||''),captured=!hidden&&(!!move.captured||san.includes('x')),check=!hidden&&/[+#]/.test(san),mate=!hidden&&san.includes('#');
+  g.timer=setTimeout(()=>{
+    const b=resonance,layer=b?.canvas.parentElement,at=resonancePoint(hidden?null:move.to);if(!b||!at)return;
+    if(hidden)b.ripple(at.x,at.y,{amp:7,light:.8,speed:520,from:at.under});
+    else if(captured){b.ripple(at.x,at.y,{amp:15,light:1.7,speed:620,width:30,from:at.under});g.echo=setTimeout(()=>{if(resonance===b)b.ripple(at.x,at.y,{amp:8,light:1,speed:480,from:at.under})},240)}
+    else b.ripple(at.x,at.y,{amp:9,light:1.05,speed:560,from:at.under});
+    if(check){const king=document.querySelector('#board .square.check'),k=king?resonancePoint(king.dataset.sq):null;b.tremble(mate?3.4:2.4,mate?1500:850);if(k)b.ripple(k.x,k.y,{amp:12,light:1.5,speed:760,width:22,from:k.under})}
+    if(captured){g.captures++;resonanceRetune()}
+    g.rings++;if(layer){layer.dataset.react=hidden?'hidden':mate?'mate':check?'check':captured?'capture':'move';layer.dataset.rings=String(g.rings)}
+  },travel+20);
+}
+// A capture re-tunes the plate (at most once in six seconds, and only while the music is off;
+// with music the chords choose the figures): finer as the game goes on.
+function resonanceRetune(){
+  if(!resonance||vantaScore?.playing||resonanceGame.endAt)return;
+  const now=Date.now();if(now-resonanceGame.retunedAt<6000)return;resonanceGame.retunedAt=now;
+  resonance.show(modeForMoment(chordFor(musicKeyNow(),resonanceGame.captures),tensionFor({plies:moveRecords().length})));
+}
+// The end of a game: a richer figure and more light for a win, a simpler one and less for a loss;
+// after fifteen seconds (or the next game) the theme's own figure comes back.
+function resonanceEnding(won){
+  const g=resonanceGame,base=MODES.indexOf(resonanceThemeMode(musicKeyNow()));
+  g.endAt=Date.now();g.glow=won?1.3:.72;
+  if(!resonance?.motion)return;
+  resonance.show(MODES[Math.max(0,Math.min(MODES.length-1,base+(won?14:-12)))]);
+  const at=resonancePoint(null);if(at)resonance.ripple(at.x,at.y,{amp:won?14:8,light:won?1.8:.7,speed:won?460:340,width:won?40:60,life:3600,from:at.under});
+}
+function resonanceAfterEnding(){const g=resonanceGame;if(!g.endAt)return;g.endAt=0;g.glow=1;resonanceBeat.key=''} // the loop below brings back the theme's figure
+// The music drives both: the room's big plate follows every chord live; the background takes
+// every other chord (at most one figure per nine seconds), hears every note, and rests on the
+// theme's figure when the music stops. The same beat keeps the game's slow answers going.
+(function resonanceMusicLoop(){
+  let ticks=0;
+  setInterval(()=>{
+    ticks++;
+    const playing=!!vantaScore?.playing;
+    if(resonanceRoom&&playing){const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());resonanceRoom.plate.setMode(mode);resonanceRoom.plate.setTarget(0.25+energy*0.75);resonanceRoom.show?.(mode,energy)}
+    if(!resonance)return;
+    const still=prefersStill(),beat=resonanceBeat,g=resonanceGame,layer=resonance.canvas.parentElement,now=Date.now();
+    const glow=v=>{if(v!==beat.glow){beat.glow=v;layer?.style.setProperty('--resonance-glow',v)}};
+    resonance.setMotion(!still);
+    if(g.endAt&&now-g.endAt>15000)resonanceAfterEnding();
+    // Time trouble: the plate shivers every couple of seconds, harder as the clock runs out (with
+    // the music, on its heartbeat instead: below).
+    if(!still&&!playing&&g.mood==='storm'&&now-g.shiverAt>2400){g.shiverAt=now;resonance.tremble(.8+1.6*g.strength,520)}
+    if(layer){const active=resonance.busy||resonance.lively()||resonance.dirty;if(active!==(layer.dataset.active==='1')){if(active)layer.dataset.active='1';else delete layer.dataset.active}}
+    if(playing&&!still){
+      resonance.wake();
+      // Every chord rings the plate from the board, slow and wide; every other one (at most one
+      // in nine seconds) moves the sand to a new figure. The storm's heartbeat shakes it.
+      const step=Math.floor(Math.max(0,vantaScore.eighth-1)/16),e=vantaScore.eighth;
+      if(step!==beat.step){
+        beat.step=step;
+        const at=resonancePoint(null);if(at)resonance.ripple(at.x,at.y,{amp:5,light:.75,speed:300,width:70,from:at.under,life:4200,slow:true});
+        if(now-beat.at>=9000&&!g.endAt){beat.at=now;resonance.show(modeForMoment(vantaScore.chord,vantaScore.tension))}
+      }
+      if(vantaScore.storm>0&&e!==beat.eighth&&e%4===1){resonance.tremble(1+1.6*vantaScore.storm,320)}
+      beat.eighth=e;
+      glow((g.glow*(0.8+0.4*spectrumEnergy(vantaScore.readSpectrum()))).toFixed(2));
+      return;
+    }
+    glow(String(g.glow));
+    if(ticks%8||g.endAt)return;
+    const key=musicKeyNow();
+    if(key!==beat.key||beat.step!==-1){beat.key=key;beat.step=-1;beat.at=0;resonance.show(resonanceThemeMode(key),{flow:!still})}
+  },120);
+})();
+function setResonanceLevel(level){
+  resonanceLevel=level==='off'?'off':'on';
+  try{localStorage.setItem(RESONANCE_KEY,resonanceLevel)}catch{}
+  const select=$('#resonanceSetting');if(select)select.value=resonanceLevel;
+  syncResonance();
+}
+// The Resonance room: the music library seen as sand. Pick a theme, play its score, push the
+// tension and the storm, and watch the figures change.
+const RESONANCE_THEMES=[['vanta','Vanta','D minor'],['ember','Ember','E phrygian'],['umbra','Umbra','C minor, low'],['gilded','Gilded','F lydian'],['mirror','Mirror','A dorian'],['obsidian','Obsidian','B minor'],['rivalry','Rivalry','G harmonic minor']];
+function renderResonanceRoom(){
+  setDynamicView('resonance','Resonance',`<article class="resonance-room">
+    <p class="trainer-intro">Sand on a ringing plate gathers where the plate stays still and draws the figures Ernst Chladni found in 1787. A chessboard is a square plate: here every VCH theme draws its own, live, from its music. Nothing is a picture; each figure is computed as you listen.</p>
+    <div class="resonance-stage"><canvas class="resonance-big" aria-label="Chladni figure drawn by the music" role="img"></canvas><div class="resonance-readout" aria-live="polite"><b>—</b><span>Press play</span></div></div>
+    <div class="resonance-themes" role="group" aria-label="Themes">${RESONANCE_THEMES.map(([id,name,scale])=>`<button type="button" data-resonance-theme="${id}"><b>${name}</b><small>${scale}</small></button>`).join('')}</div>
+    <div class="resonance-controls"><button type="button" class="gold resonance-play">Play</button><label>Tension <input type="range" class="resonance-tension" min="0" max="100" value="35"></label><label>Storm <input type="range" class="resonance-storm" min="0" max="100" value="0"></label></div>
+    <p class="computer-note">Turn on the Resonance background in the Theme Studio to keep the music's figures behind your games, dim and slow.</p>
+  </article>`);
+  const root=$('#dynamicView .resonance-room');if(!root)return;
+  const canvas=root.querySelector('.resonance-big'),plate=new ResonancePlate(canvas,{count:matchMedia('(max-width: 800px)').matches?7000:14000,color:'#f1e6c9',size:1.2});
+  plate.ctx.globalCompositeOperation='lighter';plate.setMode(MODES[18]);
+  let theme='vanta';
+  const room={plate,playing:false,show(mode,energy){const r=root.querySelector('.resonance-readout');if(r){r.querySelector('b').textContent=`Mode ${mode.n}·${mode.m}`;r.querySelector('span').textContent=`${Math.round(energy*100)}% · ${RESONANCE_THEMES.find(t=>t[0]===theme)[1]}`}}};
+  resonanceRoom=room;
+  const pick=id=>{theme=id;root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.classList.toggle('on',b.dataset.resonanceTheme===id));if(vantaScore)vantaScore.setKey(id)};
+  root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.onclick=()=>pick(b.dataset.resonanceTheme));pick(theme);
+  const play=root.querySelector('.resonance-play');
+  play.onclick=async()=>{
+    if(room.playing){room.playing=false;vantaScore?.stop();play.textContent='Play';return}
+    const score=await scoreReady();if(!canvas.isConnected||room.playing)return; // left the room, or a second tap, while the library came
+    if(!score)return toast('The music library is on its way');
+    // The library's game music for the theme: Tension and Storm choose its part, as in a game.
+    score.setVolume(musicPrefsGet().volume||0.5);score.setKey(theme);score.setPlace('game',true);score.setTension(Number(root.querySelector('.resonance-tension').value)/100);score.setStorm(Number(root.querySelector('.resonance-storm').value)/100);
+    room.playing=score.start();play.textContent=room.playing?'Stop':'Play';
+  };
+  root.querySelector('.resonance-tension').oninput=e=>vantaScore?.setTension(Number(e.target.value)/100);
+  root.querySelector('.resonance-storm').oninput=e=>vantaScore?.setStorm(Number(e.target.value)/100);
+  if(prefersStill()){plate.resize();plate.settle(200)}else plate.start();
+  // Leaving the room stops its score and its sand.
+  const watch=new MutationObserver(()=>{if(!canvas.isConnected){watch.disconnect();plate.stop();if(room.playing)vantaScore?.stop();if(resonanceRoom===room)resonanceRoom=null}});
+  watch.observe($('#dynamicView'),{childList:true});
+}
+(function initResonance(){
+  let saved=null;try{saved=localStorage.getItem(RESONANCE_KEY)}catch{}
+  resonanceLevel=['on','subtle','vivid'].includes(saved)?'on':'off'; // subtle and vivid: the board layer of an earlier build
+  const select=$('#resonanceSetting');if(select){select.value=resonanceLevel;select.onchange=e=>setResonanceLevel(e.target.value)}
+  $('#openResonance')?.addEventListener('click',()=>{menus.close('theme');setPrimaryScreen('game');renderResonanceRoom();showSidePanel()});
+  let resizeTimer=0;window.addEventListener('resize',()=>{if(!resonance)return;clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>resonance?.layout(),180)},{passive:true});
+  // The pointer parts the sand and a tap rings it, wherever the sand shows: around the panels,
+  // and through them when the glass is clear. Never over the board, a dialog or a menu.
+  const hidesSand=t=>!!t?.closest?.('.board,#board,dialog,.main-menu')||(document.documentElement.dataset.glass!=='clear'&&!!t?.closest?.('.panel,.game,.topbar,.rpanel'));
+  addEventListener('pointermove',e=>{
+    if(!resonance?.motion||(e.pointerType==='mouse'&&e.buttons))return;
+    if(hidesSand(e.target)){resonance.lift();return}
+    resonance.touch(e.clientX,e.clientY,e.pointerType==='mouse'?34:44);
+  },{passive:true});
+  addEventListener('pointerdown',e=>{
+    if(!resonance?.motion||hidesSand(e.target)||e.target?.closest?.('button,a,input,select,textarea,label,summary,[role="button"],[contenteditable]'))return;
+    resonance.ripple(e.clientX,e.clientY,{amp:6,light:.85,speed:520,width:22});
+  },{passive:true});
+  for(const type of ['pointerup','pointercancel'])addEventListener(type,e=>{if(e.pointerType!=='mouse')resonance?.lift()},{passive:true});
+  addEventListener('mouseout',e=>{if(!e.relatedTarget)resonance?.lift()},{passive:true});
+  if(resonanceLevel==='on')syncResonance();
 })();

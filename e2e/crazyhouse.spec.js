@@ -17,11 +17,17 @@ test('Crazyhouse: the pocket shows your captures; tap it, tap a square, the serv
   await page.locator('#create').click();
   await expect(page.locator('#bottomCaptured .zh-piece[data-drop="p"] b')).toHaveText('1');
   await expect(page.locator('#topCaptured .zh-piece b')).toHaveText('1');
+  // Yours glow while you can drop them.
+  expect(await page.locator('#bottomCaptured [data-drop="p"]').evaluate(el => getComputedStyle(el, '::after').animationName)).toBe('zh-ready');
   await page.locator('#bottomCaptured [data-drop="p"]').click();
   await expect(page.locator('[data-sq="e4"].legal')).toHaveCount(1);
+  // The dropped piece flies from the pocket to its square (it waits there, hidden, until it lands).
+  await page.evaluate(() => { window.__flown = 0; new MutationObserver(l => { for (const m of l) for (const n of m.addedNodes) if (n.classList?.contains('capture-flight')) window.__flown++; }).observe(document.body, { childList: true }); });
   await expect(page.locator('[data-sq="e1"].legal')).toHaveCount(0);
   const b = await page.locator('[data-sq="e4"]').boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await expect.poll(() => sent && [sent.drop, sent.to]).toEqual(['p', 'e4']);
   await expect(page.locator('.board-piece[data-square="e4"]')).toHaveCount(1);
   await expect(page.locator('#bottomCaptured .zh-empty')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__flown)).toBeGreaterThan(0);
+  await expect(page.locator('.board-piece[data-square="e4"]')).not.toHaveClass(/dropping/, { timeout: 4000 });
 });

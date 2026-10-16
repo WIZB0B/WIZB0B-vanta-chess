@@ -42,11 +42,20 @@ test('game over modal covers results, reasons, players, ratings and actions',()=
   assert.ok(main.includes('class="game-over-avatar"'));
 });
 
-test('game start banner covers computer and online starts for about two seconds',()=>{
-  assert.match(main,/Game started · You play \$\{color==='w'\?'White':'Black'\} · \$\{formatTimeControl\(seconds,increment\)\}/);
-  assert.match(main,/gameStartBannerTimer=setTimeout\(\(\)=>banner\.classList\.remove\('show'\),2100\)/);
+test('game start card: who plays whom, your colour and the clock, over the board for under two seconds',()=>{
+  // Owner, 2026-10-14: not a tune, a brief trumpet call and an obvious "game started" panel.
+  assert.ok(main.includes('<p class="gs-title">Game started</p>${row(\'top\')}<p class="gs-vs"><span>vs</span></p>${row(\'bottom\')}'),'both players, opponent above you, with vs between');
+  assert.ok(main.includes("card.querySelector('.gs-side').textContent=color==='w'?'You play White':'You play Black';"));
+  assert.ok(main.includes("card.querySelector('.gs-clock').textContent=formatTimeControl(seconds,increment);"));
+  assert.ok(main.includes("const shell=$('.game .board-shell');(shell||document.body).append(card);"),'over the board');
+  assert.ok(main.includes("queueMicrotask(()=>{fillGameStartPlayers(card);void card.offsetWidth;card.classList.add('show')});"),'filled once the player bars show this game');
+  assert.match(main,/gameStartBannerTimer=setTimeout\(\(\)=>card\.classList\.remove\('show'\),1900\)/);
+  assert.match(main,/row\.querySelector\('b'\)\.textContent=side==='bottom'\?ownPlayerName\(\):\$\('#topPlayerName'\)\?\.textContent\|\|''/);
   assert.match(main,/showGameStartBanner\(computerSide,computerRules==='blackout'\?BLACKOUT_SECONDS:600,0,/);
   assert.match(main,/showGameStartBanner\(myColor,state\.time_control_seconds\|\|state\.base_seconds\|\|600,state\.increment_seconds\|\|0,/);
-  assert.match(main,/playUiSound\('start'\)/);
-  assert.match(css,/\.game-start-banner\.show/);
+  assert.match(main,/cue\('start','start'\)/,'the start sting with the music on, or the start sound');
+  const rule=css.slice(css.indexOf('.game-start-card{'),css.indexOf('}',css.indexOf('.game-start-card{')));
+  assert.match(rule,/position:absolute;inset:0/);assert.match(rule,/pointer-events:none/,'it never takes a click');
+  assert.match(css,/\.game-start-card\.show\{opacity:1;visibility:visible/);
+  assert.match(css,/\.game-start-card,\.game-start-card\.show,\.gs-panel,\.gs-title::after\{transition-duration:0ms!important\}/,'reduced motion: no movement');
 });

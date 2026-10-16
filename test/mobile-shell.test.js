@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { MOBILE_MAX_WIDTH, MOBILE_QUERY, moveStripHtml, moveStripItems, viewForTab } from '../src/mobile-shell.js';
+import { MOBILE_MAX_WIDTH, MOBILE_QUERY, TABLET_MAX_WIDTH, moveStripHtml, moveStripItems, viewForTab } from '../src/mobile-shell.js';
 
 const main = readFileSync('src/main.js', 'utf8');
 const css = readFileSync('src/style.css', 'utf8');
@@ -11,7 +11,15 @@ test('tabs map to views; Play returns to a game in progress', () => {
   assert.equal(viewForTab('play', { gameLive: true }), 'game');
   assert.equal(viewForTab('learn'), 'panel');
   assert.equal(viewForTab('more'), null);
-  assert.equal(MOBILE_QUERY, `(max-width: ${MOBILE_MAX_WIDTH}px)`);
+  assert.equal(MOBILE_QUERY, `(max-width: ${MOBILE_MAX_WIDTH}px), (pointer: coarse) and (orientation: portrait) and (max-width: ${TABLET_MAX_WIDTH}px)`);
+});
+
+test('settings are one tap away on phones and tablets, not only in the desktop account menu', () => {
+  assert.match(main, /<button id="settingsBtn"[^>]*aria-label="Settings"/, 'a settings button in the header');
+  assert.match(main, /\$\('#settingsBtn'\)\.onclick=\(\)=>menus\.open\('theme'\)/, 'it opens the same settings as desktop');
+  assert.match(main, /openSheet\('More',\[\s*\{label:'Settings',run:\(\)=>menus\.open\('theme'\)\}/, 'Settings leads the More sheet');
+  assert.match(main, /openSheet\('Game options',\[[\s\S]*?\{label:'Settings',run:\(\)=>menus\.open\('theme'\)\}/, 'and the in-game options');
+  assert.doesNotMatch(css, /\.header-actions \.user\{display:none\}/, 'the account button never disappears on narrower screens');
 });
 
 test('move strip numbers moves and marks the newest', () => {
@@ -37,4 +45,12 @@ test('phone layout is scoped to body.m-app so desktop is untouched', () => {
 
 test('board keeps one square aspect ratio and 8 equal columns', () => {
   assert.match(css, /\.board\{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat\(8,1fr\)/);
+});
+
+test('a tap never zooms the page on a phone: no double-tap zoom, no zoom into a field', () => {
+  // Owner, 2026-10-13: "when I click... it zooms in... even while playing games".
+  assert.match(css, /html\{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%\}/, 'a double tap (a piece, then its square) does not zoom');
+  assert.match(css, /@media \(hover:none\) and \(pointer:coarse\)\{input,select,textarea\{font-size:16px!important\}\}/, 'iOS zooms into any field under 16px');
+  const viewport = readFileSync(new URL('../index.html', import.meta.url), 'utf8').match(/name="viewport" content="([^"]+)"/)[1];
+  assert.doesNotMatch(viewport, /maximum-scale|user-scalable/, 'two fingers can still zoom, for anyone who needs to');
 });
