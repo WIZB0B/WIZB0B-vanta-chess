@@ -203,14 +203,18 @@ def suite_entries(i, a, key_of, grid):
 # loudness and onsets (tools/sting_end.py). An ending runs on until the piece's own decay is below
 # -60 dB, the fade only taking away what is left under about -48 dB (the music check, 2026-10-13:
 # cut sooner, the realm sting's "reverb tail cut off abruptly before natural decay completes").
-# Solved, failed and start fade out music that goes on, by design.
+# Solved and failed fade out music that goes on, by design. The start sting is not cut from a
+# piece (owner, 2026-10-14: not a tune, "just make a sound ... the trumpet sound that blows when
+# the game starts ... something that is brief"): it is a short trumpet call, a phrase from a Flow
+# Music clip finished by hand, so its row has no source and the build keeps the file as it is
+# (the interface's start sound is the same call: sets()).
 STINGS = [
     # id, source, moment, title, start, end, fade in, fade out
     ('sting-win', 'sting-victory', 'win', 'Victory', 50.40, 59.15, 0.006, 0.85),
     ('sting-loss', 'sting-defeat', 'loss', 'Defeat', 52.00, 56.90, 0.006, 0.9),
     ('sting-draw', 'sting-draw', 'draw', 'Draw', 47.95, 54.90, 0.006, 1.1),
     ('sting-checkmate', 'sting-checkmate', 'checkmate', 'Checkmate', 57.57, 63.15, 0.006, 0.65),
-    ('sting-start', 'sting-game-start', 'start', 'Game start', 0.00, 4.00, 0.006, 1.4),
+    ('sting-start', None, 'start', 'Game start', 0.00, 2.47, 0, 0),
     ('sting-rank-up', 'sting-rank-up', 'rank-up', 'Rank up', 56.87, 63.95, 0.006, 0.8),
     ('sting-rank-down', 'sting-rank-down', 'rank-down', 'Rank down', 50.00, 56.95, 0.25, 1.3),
     ('sting-rank-down-2', 'sting-rank-down-2', 'rank-down', 'Rank down II', 50.84, 59.85, 0.006, 0.8),
@@ -281,7 +285,7 @@ def build_music():
         tracks.extend(entries)
     for sid, src, part, title, a, b, fi, fo in STINGS:
         out = os.path.join(MUSIC, f'{sid}.m4a'); d = round(b - a, 3)
-        run(['ffmpeg', '-v', 'error', '-y', '-ss', str(a), '-t', str(d), '-i', os.path.join(SRC, f'vch-{src}.m4a'),
+        if src: run(['ffmpeg', '-v', 'error', '-y', '-ss', str(a), '-t', str(d), '-i', os.path.join(SRC, f'vch-{src}.m4a'),
              '-af', f'afade=t=in:st=0:d={fi},afade=t=out:st={max(0, d - fo):.3f}:d={fo}', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-movflags', '+faststart', out])
         I, TP = loudness(out)
         gain = round(min(max(-12.0, -14.0 - I), -1.0 - TP), 1) # stings sit a little above the music (-14 LUFS)
@@ -301,6 +305,11 @@ def pack(name):
         raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', os.path.join(SRC, f'vch-{name}.m4a'), '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True, check=True).stdout
         _decoded[name] = np.frombuffer(raw, dtype=np.float32).copy()
     return _decoded[name]
+
+def kept(path):
+    """A sound made by hand, as it is (mono)."""
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32).copy()
 
 def fade(y, fin=0.002, fout=0.03):
     y = y.copy(); n = len(y)
@@ -392,7 +401,7 @@ def sets():
         success=mix((w['e5'], 0, -1), (w['g5'], 0.07, -1), (w['c6'], 0.14, 0)),
         match=mix((shimmer, 0, 0)),
         warning=mix((w['c6b'], 0, 0), (w['c6b'], 0.15, -2)),
-        start=mix((w['knock'], 0, -6), (w['g5'], 0, -3), (w['c6'], 0.0, -3)),
+        start=fade(kept(os.path.join(MUSIC, 'sting-start.m4a'))[:int(1.6 * SR)], 0.002, 0.25), # the game-start trumpet call (the start sting), without its long ring
         win=mix((w['e5'], 0, -2), (w['g5'], 0.08, -2), (w['c6'], 0.16, -1), (shift(w['e5'], 12), 0.24, -1)),
         lose=mix((w['g5'], 0, -1), (shift(w['e5'], -1), 0.13, -1), (shift(w['c6'], -12), 0.26, 0)),
         draw=mix((w['a5'], 0, -1), (w['f5'], 0.13, 0)),

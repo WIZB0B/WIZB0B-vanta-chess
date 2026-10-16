@@ -825,14 +825,38 @@ function pieceSoundOptions(){const names=pieceSoundNames();return [...PIECE_SETS
 // A moment with its own sting (src/music-library.js STINGS) when the music is playing, over it;
 // otherwise the interface's sound for it.
 function cue(sting,sound){if(vantaScore?.playing&&vantaScore.sting(sting))return true;if(sound)playUiSound(sound);return false}
+// The game-start card (owner, 2026-10-14: not a tune; "just make a sound ... the trumpet sound
+// that blows when the game starts ... brief with a notification panel telling you that game has
+// started ... something that is very obvious"): a short trumpet call (the start sting with the
+// music on, the interface's start sound without) and, over the board for under two seconds, who
+// plays whom, your colour and the clock. It never takes a click: you can move at once.
 function showGameStartBanner(color,seconds,increment,key){
   if(!color||!key||lastGameStartKey===key)return;
   lastGameStartKey=key;
-  let banner=$('#gameStartBanner');
-  if(!banner){banner=document.createElement('div');banner.id='gameStartBanner';banner.className='game-start-banner';banner.setAttribute('role','status');banner.setAttribute('aria-live','polite');document.body.append(banner)}
-  banner.textContent=`Game started · You play ${color==='w'?'White':'Black'} · ${formatTimeControl(seconds,increment)}`;
-  banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');cue('start','start');queueAtmosphere(); // the music turns to the game on its next bar line, under the start sting
-  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>banner.classList.remove('show'),2100);
+  let card=$('#gameStartCard');
+  if(!card){
+    card=document.createElement('div');card.id='gameStartCard';card.className='game-start-card';card.setAttribute('role','status');card.setAttribute('aria-live','polite');
+    const row=side=>`<div class="gs-player" data-gs="${side}"><span class="avatar gs-avatar"></span><span class="gs-who"><b></b><small></small></span><span class="player-flag hidden" aria-hidden="true"></span></div>`;
+    card.innerHTML=`<div class="gs-panel"><p class="gs-title">Game started</p>${row('top')}<p class="gs-vs"><span>vs</span></p>${row('bottom')}<p class="gs-meta"><span class="gs-side"></span><span class="gs-clock"></span></p></div>`;
+  }
+  const shell=$('.game .board-shell');(shell||document.body).append(card);card.classList.toggle('floating',!shell); // over the board
+  card.dataset.side=color;
+  card.querySelector('.gs-side').textContent=color==='w'?'You play White':'You play Black';
+  card.querySelector('.gs-clock').textContent=formatTimeControl(seconds,increment);
+  card.classList.remove('show');cue('start','start');queueAtmosphere(); // the music turns to the game on its next bar line, after the start sting
+  queueMicrotask(()=>{fillGameStartPlayers(card);void card.offsetWidth;card.classList.add('show')}); // once the player bars show this game
+  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>card.classList.remove('show'),1900);
+}
+// The two players as their bars show them: portrait, name, rating and flag.
+function fillGameStartPlayers(card){
+  for(const side of ['top','bottom']){
+    const row=card.querySelector(`[data-gs="${side}"]`),avatar=$(`#${side}Avatar`),flag=$(`#${side}Flag`),pic=row.querySelector('.gs-avatar'),mark=row.querySelector('.player-flag');
+    row.querySelector('b').textContent=side==='bottom'?ownPlayerName():$('#topPlayerName')?.textContent||'';
+    row.querySelector('small').textContent=$(`#${side}Rating`)?.textContent||'';
+    pic.replaceChildren(...[...(avatar?.childNodes||[])].map(n=>n.cloneNode(true)));
+    for(const c of ['has-picture','is-empty'])pic.classList.toggle(c,!!avatar?.classList.contains(c));
+    const shown=!!flag&&!flag.classList.contains('hidden');mark.classList.toggle('hidden',!shown);mark.replaceChildren(...(shown?[...flag.childNodes].map(n=>n.cloneNode(true)):[]));
+  }
 }
 function normalizedEndReason(value=''){
   const reason=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ');
