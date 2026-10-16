@@ -220,6 +220,7 @@ ${splashMarkup(splash)}
     </nav>
     <div class="header-actions">
       <button id="searchBtn" class="icon-btn search-btn" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.7" cy="10.7" r="6.3"/><path d="m16 16 4.2 4.2"/></svg></button>
+      <button id="settingsBtn" class="icon-btn settings-btn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.07 2.9 13.93 2.9 14.19 5.25 15.22 5.67 17.07 4.2 19.8 6.93 18.33 8.78 18.75 9.81 21.1 10.07 21.1 13.93 18.75 14.19 18.33 15.22 19.8 17.07 17.07 19.8 15.22 18.33 14.19 18.75 13.93 21.1 10.07 21.1 9.81 18.75 8.78 18.33 6.93 19.8 4.2 17.07 5.67 15.22 5.25 14.19 2.9 13.93 2.9 10.07 5.25 9.81 5.67 8.78 4.2 6.93 6.93 4.2 8.78 5.67 9.81 5.25Z"/><circle cx="12" cy="12" r="3.1"/></svg></button>
       <button id="installBtn" class="install-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M5 18v2h14v-2"/></svg><span>Install App</span></button>
       <button id="notifyBtn" class="icon-btn bell-btn" type="button" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notifyMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 5-2 6.5-3 8h18c-1-1.5-3-3-3-8M10 21h4"/></svg><i id="notifyCount" class="notify-count hidden" aria-hidden="true"></i></button>
       <button id="accountBtn" class="user" type="button" aria-label="Account" aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu">
@@ -3372,6 +3373,7 @@ function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return fa
 function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
 function openMoreSheet(){
   openSheet('More',[
+    {label:'Settings',run:()=>menus.open('theme')},
     {label:'Friends & challenges',run:()=>openSection('friends')},
     {label:'Clubs',run:()=>{openSection('friends');void renderClubs()}},
     {label:'League',run:()=>{openSection('friends');void renderLeague()}},
@@ -3380,7 +3382,6 @@ function openMoreSheet(){
     {label:'Studies',run:()=>{openSection('learn');void renderStudies()}},
     {label:'Famous games',run:()=>openSection('famous')},
     {label:'My games & Game Story',run:()=>openSection('review')},
-    {label:'Board & pieces',run:()=>$('#theme').click()},
     {label:'Edit profile',run:()=>void openProfileEditor()},
     {label:authSession?.access_token?'Account':'Sign in',run:()=>openAccount()},
     {label:'Notifications',run:()=>void openNotifications()},
@@ -3392,7 +3393,7 @@ function openGameOptions(){
   openSheet('Game options',[
     {label:'Flip board',run:()=>$('#flip').click()},
     {label:soundOff?'Sound: off (turn on)':'Sound: on (turn off)',run:()=>$('#sound').click()},
-    {label:'Board & pieces',run:()=>$('#theme').click()},
+    {label:'Settings',run:()=>menus.open('theme')},
     mode!=='computer'&&serverGameId?{label:'Share room link',run:()=>$('#copy').click()}:null,
   ]);
 }
@@ -6086,6 +6087,7 @@ $('#profileMenuProfile').onclick=openAccount;
 $('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
 $('#profileMenuInsights').onclick=()=>{menus.close('profile');void renderInsights()};
 $('#profileMenuSettings').onclick=()=>menus.open('theme');
+$('#settingsBtn').onclick=()=>menus.open('theme');
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
 $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};

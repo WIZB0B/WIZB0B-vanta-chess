@@ -166,7 +166,7 @@ main{
 }
 @media(max-width:1180px){
   .shell{width:calc(100vw - 18px);padding-top:10px}
-  .topbar{position:sticky;top:6px;z-index:50}.brand{width:auto}.brand b{display:none}.main-nav button{font-size:0;padding:10px}.main-nav button span{font-size:15px}.header-actions .user{display:none}
+  .topbar{position:sticky;top:6px;z-index:50}.brand{width:auto}.brand b{display:none}.main-nav button{font-size:0;padding:10px}.main-nav button span{font-size:15px}.header-actions .user{min-width:0;grid-template-columns:38px;column-gap:0}.header-actions .user>span,.header-actions .user>small,.header-actions .user .account-chevron{display:none}
   main{grid-template-columns:minmax(320px,38%) minmax(500px,1fr)}.rpanel{grid-column:1/-1;min-height:auto}.lpanel{min-height:auto}
 }
 @media(max-width:800px){
@@ -296,6 +296,11 @@ main{
   #searchBtn{display:grid;flex:0 0 34px;width:34px;height:34px}
   #notifyBtn{display:none}
 }
+
+/* Settings stay one tap away wherever the full account menu doesn't fit. */
+#settingsBtn{display:none}
+@media(max-width:1180px){#settingsBtn{display:grid}}
+@media(max-width:800px){#settingsBtn{display:grid;flex:0 0 34px;width:34px;height:34px}}
 
 
 /* Account / rated-play surface */
