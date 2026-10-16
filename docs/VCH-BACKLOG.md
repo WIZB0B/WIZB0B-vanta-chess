@@ -414,7 +414,53 @@ deploy waits for round 11 and the owner's approval for that deployment.
 - R12.4 Living atmosphere: the room reacts to check, a low clock, material and the result
   (position and clocks only); full, subtle or off. (PR #55)
 - R12.5 Adaptive music: a Web Audio score in each theme's key that follows the game's
-  tension; off by default. Higgsfield stems could replace the synths later. (PR #55)
+  tension; off by default. (PR #55) Then a synthesized cinematic score (PR #65, first commits),
+  which the owner turned down (2026-10-13: "That music does not make sense... please use
+  Lyria"). Now real music, made with Lyria 3.5 in Google Flow Music (the owner's account; the
+  owner asked for 100 to 200 pieces, sounds for every action, rank and mood music, and above
+  all smooth transitions). (PR #65)
+  - The library: 83 pieces (about 3.5 hours) plus 13 stings, as AAC (.m4a) files in
+    `public/assets/vch/music/` with `library.json` beside them (same origin: the CSP stays as
+    it is), read by src/music-library.js the first time Music is on. Each track carries its
+    station, place, part, theme, division, kind (song), skin, its silence trimmed (start/end),
+    a gain to -16 LUFS, and its measured tempo and first downbeat (bpm/beat).
+  - What plays where (Music: Follows the game): in the menus your league division's hall
+    (Bronze to Diamond, two each; Bronze before you have a division) with the Vanta Hall, and
+    a song about one time in three (13 songs with vocals, never two in a row); in a game the
+    theme's suite (Vanta, and each relic set's or realm's: Ashen March, Drowned Keep, Mirror
+    Court, Hollow Crown, Obsidian Spire, Rivalry) whose part follows the game: calm in the
+    opening, tense in the middlegame, Advantage or Under Siege when you are three points up or
+    down, the storm when your clock runs low; opera for each Campaign boss; electric music for
+    fast games and Blackout Blitz; focus music for puzzles, lessons, study, analysis and review;
+    after a game the win or loss music until you go elsewhere; each relic set's own theme in the
+    Relic sets. Stations: Dark cinematic, Focus, Opera, Electric, Songs, Everything.
+  - Transitions (the owner's priority): changes land on the music's own bar line (the incoming
+    track starts silently so that its first downbeat meets the outgoing track's next bar line,
+    and is lined up again once it plays); equal-power crossfades over two bars; leaving
+    somewhere, the old music also sinks into the distance (a low-pass sweep); a game's parts
+    hand over like one piece (same key and tempo, no sweep), at most every ten seconds and with
+    hysteresis, the storm on the next beat; a page you only pass through does not change the
+    music (it waits 1.2 s); into and out of a game it turns on the next bar line; three decks,
+    so a second change soon after the first never cuts a fading track; a settings dialog
+    muffles the music as if behind a door; stings (start, win, loss, draw, checkmate, up or
+    down a division, relic, realm freed, puzzle solved or failed, brilliant move) play over the
+    music, which steps back for them.
+  - Sound effects (src/sfx.js; `public/assets/vch/sfx/`, MP3): cut from Lyria sound packs
+    (tools in the PR description). The interface: a tap on every press, a page turning
+    forward and back on every screen change and Back, dialogs opening and closing, switches,
+    a chime with each message, success, error, warning, match found, a game's start and end,
+    the clock's tick under ten seconds; one sound per action (the most telling). The pieces:
+    each piece its own sound, a capture, castling, a promotion, a check, a mate, an illegal
+    try, in five sets (Wood, Crystal, Tidal, Gilded, Ember) or Classic (synthesized), or the
+    set of the relic you wear; placed where the move lands (HRTF). Theme Studio: Piece sounds,
+    Interface sounds, and a Sound test with every sound and sting, for the owner to judge.
+  - The room follows the real music (as before): the player listens to itself, and the
+    candles, the glow round the board, the clock and the captured pieces keep its beat.
+- R12.5b Next for the music (owner to judge first): listen through the Sound test and the
+  stings; replace any that miss with new takes (more packs of single hits with silence
+  between them); legendary and epic piece sets get their own sound sets and themes as they
+  are made; an MP3 copy of the music for browsers without AAC (open-source Chromium, some
+  Linux Firefox) if players ask for it.
 - R12.6 Vanta Bughouse: two against two on two boards, tables by link, the partner's board
   beside yours, team calls, the first board to finish decides the match. Casual. Server in
   PR #54; app in PR claude/round12-social.
@@ -509,6 +555,15 @@ Pieces show how their position feels; landings can shock the enemy. Owner's idea
   defeat poses at game end, idle breathing.
 - E6 Setting: Expressions Full / Subtle / Off (prototype in Theme Studio); later in the Settings page, plus a separate shockwave toggle.
 - E7 Per-piece sounds (landing, capture, fear, shock), matched to each set.
+- E8 Captured pieces, alive (owner, 2026-10-13: captured pieces "should be animated... where
+  they will be staying"): a captured piece is knocked off its square as the capturing piece
+  lands and flies in an arc to its own place in the capturer's tray (each kind keeps its
+  place, biggest first), lands with a bounce, and the material lead counts up as it lands;
+  pieces taken back leave the tray; jumps pop in without flights. Crazyhouse/Bughouse pockets
+  (the pieces waiting to come into the game) glow while you can drop them, a capture flies
+  into the pocket and its number counts up, a dropped piece flies from the pocket to its
+  square. Fog-safe: the hidden opponent's captures arrive without a flight. Reduced motion
+  and Motion 0: no flights. (src/capture-tray.js)
 
 ## P. Piece sets, themes and store (later; owner will send references)
 - P1 More piece sets, each in a 3D and a 2D version, all supporting expressions (3D fuller).

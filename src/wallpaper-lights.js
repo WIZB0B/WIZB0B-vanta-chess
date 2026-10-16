@@ -133,8 +133,8 @@ export function lightReaction({ captured = false, check = false, mine = true, fo
 // stir(x, y) leans the flames near a point for a moment. options: {view, scale, fps}
 const hexRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
 export class WallLights {
-  constructor(canvas, { view = globalThis, scale = 0.5, fps = 15 } = {}) {
-    Object.assign(this, { canvas, view, scale, fps });
+  constructor(canvas, { view = globalThis, scale = 0.5, fps = 15, random = Math.random } = {}) {
+    Object.assign(this, { canvas, view, scale, fps, random });
     this.ctx = canvas.getContext('2d');
     this.lights = []; this.speed = 1; this.raf = 0; this.last = 0; this.heldUntil = 0; this.still = false;
   }
@@ -146,7 +146,7 @@ export class WallLights {
       const warm = `${Math.min(255, r + 60)},${Math.min(255, g + 50)},${Math.min(255, b + 40)}`;
       grad.addColorStop(0, `rgba(${warm},.95)`); grad.addColorStop(0.16, `rgba(${r},${g},${b},.6)`);
       grad.addColorStop(0.42, `rgba(${r},${g},${b},.2)`); grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      return { ...l, grad, p: [i * 1.7 % 6.28, i * 2.9 % 6.28, i * 4.1 % 6.28], lean: 0, leanAt: 0 };
+      return { ...l, grad, p: [i * 1.7 % 6.28, i * 2.9 % 6.28, i * 4.1 % 6.28], lean: 0, leanAt: 0, flare: 0, flareAt: 0, flareMs: 1 };
     });
     this.draw(this.now());
   }
@@ -158,13 +158,25 @@ export class WallLights {
     const v = 0.64 + 0.17 * Math.sin(k * 2.1 + a) + 0.11 * Math.sin(k * 5.3 + b) + 0.07 * Math.sin(k * 11.7 + c);
     return Math.max(0.3, Math.min(1, l.kind === 'r' ? 0.45 + (v - 0.64) * 0.6 : v));
   }
+  // The music (owner, 2026-10-13: everything follows the music): the flames leap with a note and
+  // settle over `ms`. `amount` (−0.5 .. 0.8: below 0 they gutter) lights all the flames, or a
+  // random `share` of them (a pluck catches a few).
+  pulse(amount = 0.3, ms = 400, share = 1) {
+    const t = this.now();
+    for (const l of this.lights) {
+      if (share < 1 && this.random() >= share) continue;
+      const left = this.flareOf(l, t);
+      if (Math.abs(amount) >= Math.abs(left)) { l.flare = amount; l.flareAt = t; l.flareMs = Math.max(1, ms); }
+    }
+  }
+  flareOf(l, t) { const k = 1 - (t - l.flareAt) / l.flareMs; return k > 0 ? l.flare * k * k : 0; }
   draw(t) {
     const { ctx, canvas, scale } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const l of this.lights) {
-      const v = this.still ? 0.62 : this.level(l, t), r = (l.size / 2) * scale * (0.9 + v * 0.18);
+      const v = this.still ? 0.62 : Math.max(0.15, Math.min(1.25, this.level(l, t) + this.flareOf(l, t))), r = (l.size / 2) * scale * (0.9 + v * 0.18);
       const lean = l.lean * Math.max(0, 1 - (t - l.leanAt) / 850);
-      ctx.globalAlpha = v;
+      ctx.globalAlpha = Math.min(1, v);
       ctx.setTransform(r * (1 - Math.abs(lean) * 0.12), 0, lean * r * 0.25, r * (1 + Math.abs(lean) * 0.08), l.x * scale, l.y * scale);
       ctx.fillStyle = l.grad; ctx.fillRect(-1, -1, 2, 2);
     }
