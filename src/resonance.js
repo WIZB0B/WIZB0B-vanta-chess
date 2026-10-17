@@ -199,7 +199,8 @@ export class ResonancePlate {
 // light of the lines and of each ring: it still reads through frosted glass, where single grains
 // blur away.
 // Options: {glow, color, glowColor, density (CSS px² of window per grain), size and spread (CSS
-// px: a grain, and how far grains scatter around a line), flow (ms), fps, motion (false: nothing
+// px: a grain, and how far grains scatter around a line), flow (ms), fps, maxDpr (the most pixels
+// per CSS px it draws at), motion (false: nothing
 // moves, for reduced motion), swell ([shortest, longest] ms between swells, or null), random,
 // view, onReady}, where `view` supplies innerWidth/innerHeight/devicePixelRatio, performance,
 // the animation frame and timer calls, and onReady() runs once, when the first figure is drawn.
@@ -226,8 +227,8 @@ function blur3(a, tmp, w, h) {
   }
 }
 export class SandBackdrop {
-  constructor(canvas, { glow = null, color = '#e9dcb8', glowColor = '#e5c17c', density = 60, size = 1.6, spread = 3, flow = 3200, fps = 30, motion = true, swell = [9000, 16000], random = Math.random, view = globalThis, onReady = null } = {}) {
-    Object.assign(this, { canvas, glowCanvas: glow, density, size, spread, flow, fps, motion, swell, random, view, onReady });
+  constructor(canvas, { glow = null, color = '#e9dcb8', glowColor = '#e5c17c', density = 60, size = 1.6, spread = 3, flow = 3200, fps = 30, maxDpr = 2, motion = true, swell = [9000, 16000], random = Math.random, view = globalThis, onReady = null } = {}) {
+    Object.assign(this, { canvas, glowCanvas: glow, density, size, spread, flow, fps, maxDpr, motion, swell, random, view, onReady });
     this.ctx = canvas.getContext('2d'); this.gctx = glow?.getContext?.('2d') || null;
     this.rgb = packRgb(color); this.grgb = packRgb(glowColor); this.image = null; this.gimage = null;
     this.mode = null; this.count = 0; this.raf = 0; this.job = null; this.drift = null; this.drawn = false;
@@ -245,7 +246,7 @@ export class SandBackdrop {
   // only when the window changes a lot (a phone turned on its side), and then simply re-forms.
   layout() {
     const v = this.view, W = Math.max(1, v.innerWidth || 1), H = Math.max(1, v.innerHeight || 1), S = Math.max(W, H);
-    this.dpr = Math.min(W * H > 600000 ? 1 : 2, v.devicePixelRatio || 1); // a background: big windows draw at 1x
+    this.dpr = Math.min(W * H > 600000 ? 1 : this.maxDpr, v.devicePixelRatio || 1); // a background: big windows draw at 1x (and any, given maxDpr 1)
     Object.assign(this, { W, H, S, ox: (W - S) / 2, oy: (H - S) / 2 });
     const vx = (1 - W / S) / 2, vy = (1 - H / S) / 2, margin = 0.03;
     this.lo = [Math.max(0, vx - margin), Math.max(0, vy - margin)]; this.hi = [Math.min(1, 1 - vx + margin), Math.min(1, 1 - vy + margin)];

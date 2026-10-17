@@ -2016,6 +2016,9 @@ export const ROWS = [
   ["Not enough space on this device", "この端末の空き容量が足りません"],
   ["This browser can't play your own songs here", "このブラウザではここで自分の曲を再生できません"],
   ["Saved. Reload the page to play your songs", "保存しました。曲を再生するにはページを再読み込みしてください"],
+  ["Sound & music", "サウンドと音楽"],
+  ["Look & motion", "見た目と動き"],
+  ["Your own colours", "自分の色"],
 ];
 
 export const PATTERNS = [
