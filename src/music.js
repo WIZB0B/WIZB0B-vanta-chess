@@ -238,6 +238,7 @@ export class VantaScore {
     this.decks = []; this.active = null; this.next = null; this.switchedAt = -1e9; this.pending = false; this.failures = 0; this.gaveUpAt = -1e9;
     this.debounce = null; this.history = []; this.muffled = 0; this.crossing = null; this.duckBack = -Infinity;
     this.likes = { liked: [], hidden: [] }; this.language = null; this.pinned = null; this.queued = null;
+    this.unlocked = false; this.refused = null; // a tap has readied the audio; a deck the browser would not start
     this.listeners = new Set(); this.beats = 0; this.bands = { low: { avg: 0, dev: 0 }, mid: { avg: 0, dev: 0 } }; this.lastBeat = -1;
   }
   get available() { return !!(this.AC && this.Audio && this.tracks.some(t => !isSting(t))); }
@@ -272,8 +273,9 @@ export class VantaScore {
   onNote(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit(ev) { for (const fn of this.listeners) { try { fn(ev); } catch {} } }
   later(fn, ms) { return this.timers.setTimeout(fn, Math.max(0, ms)); }
-  ensure() {
-    if (this.ctx || !this.available) return this.ctx;
+  // `ready`: build the audio even before the library has arrived (a tap must ready it, see unlock).
+  ensure(ready = false) {
+    if (this.ctx || !(this.available || (ready && this.AC && this.Audio))) return this.ctx;
     const ctx = new this.AC();
     // master (the volume) → muffle (a dialog's door) → out; the analyser listens before the door.
     const master = ctx.createGain(), muffle = ctx.createBiquadFilter(), muffleGain = ctx.createGain();
@@ -328,9 +330,34 @@ export class VantaScore {
     this.toLevel(0.8);
     // Back from a pause: the same track carries on where it was, if it still suits the moment.
     const chosen = this.pinned && this.tracks.find(t => t.id === this.pinned);
-    if (!chosen && this.active?.track && this.suits(this.active.track)) this.active.el.play?.()?.catch?.(() => {});
+    if (!chosen && this.active?.track && this.suits(this.active.track)) { const back = this.active; back.el.play?.()?.catch?.(e => { if (e?.name === 'NotAllowedError' && this.active === back) this.refused = back; }); }
     else this.transition(chosen || this.pick(), 'start');
     this.timer = this.timers.setInterval(() => this.tick(), 40);
+    return true;
+  }
+  // iOS and iPadOS let sound start only inside a tap (a touch's end, a click or a key, never a
+  // touch's start), and let an audio element play later on its own only once a tap has readied it.
+  // So every tap calls this. The first one builds the audio, wakes it (a silent sample), and
+  // readies each deck; a track the browser refused to start (see transition) starts now.
+  unlock() {
+    if (!this.ensure(true)) return false;
+    const ctx = this.ctx;
+    try { if (ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume?.(); } catch {}
+    if (!this.unlocked) {
+      this.unlocked = true;
+      try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start?.(0); } catch {}
+      // An empty deck is readied by loading nothing; one with a track waiting plays it for a moment
+      // at no volume (its fader is down). The stings' deck is never at zero, so it only loads.
+      for (const d of [...this.decks, this.stingDeck]) {
+        if (!d || !d.el.paused) continue;
+        try {
+          if (!d.file || d === this.stingDeck) { if (!d.file) d.el.load?.(); }
+          else d.el.play?.()?.then?.(() => { if (this.active !== d || !this.playing) d.el.pause?.(); }, () => {});
+        } catch {}
+      }
+    }
+    const held = this.refused; this.refused = null;
+    if (held && this.playing && this.active === held && held.el.paused) held.el.play?.()?.catch?.(e => { if (e?.name === 'NotAllowedError' && this.active === held) this.refused = held; });
     return true;
   }
   stop() {
@@ -380,7 +407,9 @@ export class VantaScore {
       if (to.file !== this.urlOf(track) || to.el.error) { to.file = this.urlOf(track); to.el.src = to.file; }
       to.filter.frequency.cancelScheduledValues?.(this.ctx.currentTime); to.filter.frequency.setValueAtTime(OPEN, this.ctx.currentTime);
       try { to.el.currentTime = entry - lead; } catch {}
-      const go = () => { if (this.active === to) to.el.play?.()?.catch?.(() => {}); };
+      // A browser that will not start sound outside a tap (iOS and iPadOS) refuses this; the next
+      // tap starts it (unlock).
+      const go = () => { if (this.active === to) to.el.play?.()?.catch?.(e => { if (e?.name === 'NotAllowedError' && this.active === to) this.refused = to; }); };
       if (delay > 0.02) this.later(go, delay * 1000); else go();
     };
     this.active = to; to.track = track; to.usedAt = now; to.until = Infinity; to.fading = false;

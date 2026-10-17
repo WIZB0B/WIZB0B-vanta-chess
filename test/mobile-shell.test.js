@@ -16,9 +16,9 @@ test('tabs map to views; Play returns to a game in progress', () => {
 
 test('settings are one tap away on phones and tablets, not only in the desktop account menu', () => {
   assert.match(main, /<button id="settingsBtn"[^>]*aria-label="Settings"/, 'a settings button in the header');
-  assert.match(main, /\$\('#settingsBtn'\)\.onclick=\(\)=>menus\.open\('theme'\)/, 'it opens the same settings as desktop');
-  assert.match(main, /openSheet\('More',\[\s*\{label:'Settings',run:\(\)=>menus\.open\('theme'\)\}/, 'Settings leads the More sheet');
-  assert.match(main, /openSheet\('Game options',\[[\s\S]*?\{label:'Settings',run:\(\)=>menus\.open\('theme'\)\}/, 'and the in-game options');
+  assert.match(main, /\$\('#settingsBtn'\)\.onclick=\(\)=>openSettings\(\)/, 'it opens the same settings as desktop');
+  assert.match(main, /openSheet\('More',\[\s*\{label:'Settings',run:\(\)=>openSettings\(\)\}/, 'Settings leads the More sheet');
+  assert.match(main, /openSheet\('Game options',\[[\s\S]*?\{label:'Settings',run:\(\)=>openSettings\(\)\}/, 'and the in-game options');
   assert.doesNotMatch(css, /\.header-actions \.user\{display:none\}/, 'the account button never disappears on narrower screens');
 });
 

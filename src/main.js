@@ -192,6 +192,17 @@ const WORLD_KEY='vch.world',WORLD_NAMES={egypt:'Mehen',greece:'Petteia',rome:'La
   WORLD_LANDS={egypt:'Ancient Egypt',greece:'Ancient Greece',rome:'Ancient Rome',china:'Ancient China',japan:'Old Japan',persia:'Ancient Persia',babylon:'Babylon',benin:'Kingdom of Benin'};
 document.documentElement.dataset.pieceStyle='vanta';
 function pieceAsset(name){return pieceAssetFor(normalizePieceStyle(document.documentElement.dataset.pieceStyle),name)}
+// The images a piece set draws with (src/style.css): the 1x or 2x sheet, as the browser would
+// pick, or the twelve drawings of an ink set.
+function pieceStyleImages(style){
+  const sharp=(window.devicePixelRatio||1)>=1.5,sheet=name=>`/assets/vch/pieces/${name}${sharp?'':'-1x'}.png`;
+  if(style==='vanta')return [sheet('vanta-3d')];
+  if(style==='regal')return [sheet('vanta-regal')];
+  return ['w','b'].flatMap(c=>['k','q','r','b','n','p'].map(p=>`/assets/vch/pieces/vanta-2d/${c}${p}.svg`));
+}
+function preloadImages(urls){
+  return Promise.all(urls.map(src=>new Promise(done=>{const img=new Image();img.onload=img.onerror=()=>done();img.src=src})));
+}
 function applyPieceStyle(value){
   const style=normalizePieceStyle(value);
   document.documentElement.dataset.pieceStyle=style;
@@ -407,7 +418,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>World <select id="worldSetting"><option value="">Vanta Chess</option>${WORLDS.map(w=>`<option value="${w}">${WORLD_NAMES[w]} · ${WORLD_LANDS[w]}</option>`).join('')}</select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Resonance background <select id="resonanceSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openResonance" type="button" class="theme-relics">Resonance room</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio" class="settings-dialog" aria-labelledby="settingsTitle"><header class="settings-head"><h2 id="settingsTitle" tabindex="-1" autofocus>Settings</h2><button id="closeThemeTop" type="button" class="settings-top-done">Done</button></header><div class="settings-body"><section class="settings-group" aria-labelledby="setBoardTitle"><h3 id="setBoardTitle">Board &amp; pieces</h3><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Board set <select id="boardSet"></select></label><small id="boardSetNote" class="board-set-note"></small><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><details id="ownColours" class="settings-colours"><summary>Your own colours</summary><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label></details><button id="openRelics" type="button" class="theme-relics">Relic sets</button></section><section class="settings-group" aria-labelledby="setSoundTitle"><h3 id="setSoundTitle">Sound &amp; music</h3><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>World <select id="worldSetting"><option value="">Vanta Chess</option>${WORLDS.map(w=>`<option value="${w}">${WORLD_NAMES[w]} · ${WORLD_LANDS[w]}</option>`).join('')}</select></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><div class="settings-links"><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button></div></section><section class="settings-group" aria-labelledby="setLookTitle"><h3 id="setLookTitle">Look &amp; motion</h3><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Resonance background <select id="resonanceSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><button id="openResonance" type="button" class="theme-relics">Resonance room</button></section><section class="settings-group" aria-labelledby="setLanguageTitle"><h3 id="setLanguageTitle">Language</h3><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label></section></div><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -1304,6 +1315,11 @@ function moveCell(record,index,records,signature){
   return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
 function moveRecords(){return archiveSession?.records?archiveSession.records:watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
+// The engine reports each new depth many times a second, and the move list is rebuilt whole each
+// time; on a phone or tablet that alone made a move stutter (owner, 2026-10-17: "laggy"). Its
+// evaluations reach the list at most four times a second.
+let movesUpdateTimer=0;
+function queueMovesUpdate(){if(!movesUpdateTimer)movesUpdateTimer=setTimeout(()=>{movesUpdateTimer=0;updateMoves()},250)}
 function updateMoves(){
   const records=maskedRecords(moveRecords());syncBlackout();
   syncMoveStrip(records);
@@ -3513,7 +3529,7 @@ function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return fa
 function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
 function openMoreSheet(){
   openSheet('More',[
-    {label:'Settings',run:()=>menus.open('theme')},
+    {label:'Settings',run:()=>openSettings()},
     {label:'Friends & challenges',run:()=>openSection('friends')},
     {label:'Clubs',run:()=>{openSection('friends');void renderClubs()}},
     {label:'League',run:()=>{openSection('friends');void renderLeague()}},
@@ -3533,7 +3549,7 @@ function openGameOptions(){
   openSheet('Game options',[
     {label:'Flip board',run:()=>$('#flip').click()},
     {label:soundOff?'Sound: off (turn on)':'Sound: on (turn off)',run:()=>$('#sound').click()},
-    {label:'Settings',run:()=>menus.open('theme')},
+    {label:'Settings',run:()=>openSettings()},
     mode!=='computer'&&serverGameId?{label:'Share room link',run:()=>$('#copy').click()}:null,
   ]);
 }
@@ -3753,7 +3769,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>openSettings({colours:true});$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -4054,7 +4070,6 @@ $('#boardSet').onchange=e=>{
   savedTheme.boardSet=set.id;try{localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))}catch{}
   toast(`${set.name} board set`);
 };
-$('#theme').addEventListener('click',syncBoardSets);
 // ---- Offline: the computer opponent works without a connection (public/sw.js caches it) ----
 function syncOffline(){
   const off=navigator.onLine===false;document.body.classList.toggle('offline',off);
@@ -4454,7 +4469,7 @@ function updateAnalysisFromUci(text,request){
     const scoreEl=$('#score');if(scoreEl)scoreEl.textContent=(analysisScore>=0?'+':'')+(Math.abs(analysisScore)>=90?'M'+Math.abs(Number(scoreMatch[2])||1):analysisScore.toFixed(1));
     const fill=$('#meterFill');if(fill)fill.style.width=(50+Math.max(-45,Math.min(45,analysisScore*8)))+'%';
     const advantage=$('#advantage');if(advantage)advantage.textContent=Math.abs(analysisScore)<.2?'Equal position':analysisScore>0?'Advantage for White':'Advantage for Black';
-    updateMoves();
+    queueMovesUpdate();
   }
   const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(depth);
   const line=$('#line');if(line&&pv)line.textContent=formatPv(pv);
@@ -5520,7 +5535,9 @@ let heroKick=()=>{};
   };
   const go=()=>{if(!raf)raf=requestAnimationFrame(step)};
   addEventListener('pointermove',e=>{
-    if(still())return;const img=art();if(!img||img.offsetParent===null)return;
+    // A mouse only: a finger dragging a piece on a phone or tablet must not turn it (and measure
+    // the page on every move of the finger).
+    if(e.pointerType!=='mouse'||still())return;const img=art();if(!img||img.offsetParent===null)return;
     const r=img.getBoundingClientRect();tx=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/(innerWidth/2)));ty=Math.max(-1,Math.min(1,(e.clientY-(r.top+r.height/2))/(innerHeight/2)));go();
   },{passive:true});
   heroKick=s=>{if(still())return;const img=art();if(!img||img.offsetParent===null)return;sway=-sway;kick=Math.min(1,kick+.55*s);go()};
@@ -5670,6 +5687,12 @@ function initRoundTwelve(){
   ensureAtmosphere();setInterval(syncAtmosphere,1000);
   document.addEventListener('visibilitychange',syncAtmosphere);
   document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(musicPrefsGet().on&&!vantaScore?.playing)queueAtmosphere();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
+  // iPhone and iPad (owner, 2026-10-17: "the music do not play"): sound may start only inside a
+  // tap (a touch's end, a click or a key; a touch's start is too early), and an audio element plays
+  // on its own later only once a tap has readied it. So each tap readies the music, and starts a
+  // track Safari refused to start (src/music.js unlock).
+  const unlockMusic=()=>{if(!musicPrefsGet().on||$('#sound')?.dataset.off)return;ensureScore();if(!vantaScore?.unlock())return;if(!vantaScore.playing)queueAtmosphere()};
+  for(const type of ['touchend','pointerup','click','keydown'])document.addEventListener(type,unlockMusic,{capture:true,passive:true});
   document.addEventListener('pointerover',e=>{
     if(e.pointerType!=='mouse')return;const el=e.target.closest?.('.board-piece[data-veteran]');if(!el)return;
     clearTimeout(vetHoverTimer);vetHoverTimer=setTimeout(()=>showVeteranCard(el),420);
@@ -6280,6 +6303,15 @@ menus.register('game-more',{open:()=>{gameMore.open=true},close:()=>{gameMore.op
 gameMore.addEventListener('toggle',()=>{if(gameMore.open){if(!menus.isOpen('game-more'))menus.open('game-more')}else menus.closed('game-more')});
 gameMore.querySelectorAll('.game-more-menu button').forEach(button=>button.addEventListener('click',()=>menus.close('game-more')));
 registerModal('theme',$('#themeStudio'));
+// Settings (owner, 2026-10-17: "when one enters the settings it pops up a color panel"): grouped
+// as Board & pieces, Sound & music, Look & motion and Language, with the colour pickers folded
+// away under "Your own colours". The board's own Board theme button opens it with them unfolded.
+function openSettings({colours=false}={}){
+  const fold=$('#ownColours');if(fold)fold.open=colours;
+  syncBoardSets();menus.open('theme');
+  if(colours)fold?.scrollIntoView?.({block:'nearest'});
+}
+$('#closeThemeTop').onclick=()=>menus.close('theme');
 registerModal('account',$('#accountDialog'));
 registerModal('search',$('#searchDialog'));
 registerModal('promotion',$('#promotion'));
@@ -6299,8 +6331,8 @@ $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
 $('#profileMenuProfile').onclick=openAccount;
 $('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
 $('#profileMenuInsights').onclick=()=>{menus.close('profile');void renderInsights()};
-$('#profileMenuSettings').onclick=()=>menus.open('theme');
-$('#settingsBtn').onclick=()=>menus.open('theme');
+$('#profileMenuSettings').onclick=()=>openSettings();
+$('#settingsBtn').onclick=()=>openSettings();
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
 $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};
@@ -6405,7 +6437,15 @@ savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#expressionsSetting').value=expressionSetting;
 $('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
-$('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
+// A new piece set shows once its images are in (two seconds at most): the board keeps its pieces
+// meanwhile instead of standing empty while a phone or tablet downloads them (owner, 2026-10-17).
+$('#pieceStyle').onchange=e=>{
+  const want=e.target.value;
+  void Promise.race([preloadImages(pieceStyleImages(normalizePieceStyle(want))),new Promise(done=>setTimeout(done,2000))]).then(()=>{
+    if(e.target.value!==want)return; // chosen again meanwhile: that one wins
+    savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+  });
+};
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
@@ -6419,6 +6459,8 @@ $('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');r
 $('#openMusicList').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()};
 $('#worldSetting').value=worldGet();
 $('#worldSetting').onchange=e=>{const w=e.target.value;try{if(w)localStorage.setItem(WORLD_KEY,w);else localStorage.removeItem(WORLD_KEY)}catch{}
+  // A world is its music: choosing one with the music off turns it on, following the game.
+  if(w&&!musicPrefsGet().on)setMusicOn(true,'on');
   // Heard at once in the menus: the world's own theme (the music otherwise changes when a piece ends).
   const theme=w&&vantaScore?.playing&&musicPlace()==='lobby'&&musicPrefsGet().station==='on'&&(musicLibrary||[]).find(t=>t.theme===w&&t.place==='lobby');
   queueAtmosphere();if(theme){vantaScore.setKey(w);vantaScore.playNow(theme.id)}};
@@ -6612,7 +6654,10 @@ function syncResonance(){
   const canvas=layer.querySelector('.resonance-sand'),still=prefersStill();
   if(resonance?.canvas!==canvas){
     resonance?.stop();
-    resonance=new SandBackdrop(canvas,{glow:layer.querySelector('.resonance-glow'),spread:matchMedia('(max-width: 800px)').matches?2.2:3,motion:!still,onReady:()=>{layer.dataset.ready='1'}});
+    // Phones and tablets (owner, 2026-10-17: "laggy"): half the grains, at one pixel per CSS px,
+    // a little slower, and no glow layer (its blur was a fifth of the work on an iPad).
+    const light=matchMedia('(pointer: coarse)').matches;
+    resonance=new SandBackdrop(canvas,{glow:light?null:layer.querySelector('.resonance-glow'),density:light?120:60,fps:light?24:30,maxDpr:light?1:2,spread:matchMedia('(max-width: 800px)').matches?2.2:3,motion:!still,onReady:()=>{layer.dataset.ready='1'}});
     resonance.listen(()=>vantaScore?.playing?vantaScore.readSpectrum():null); // the room's score too
     resonanceBeat={step:-1,at:0,key:'',glow:''};
   }
