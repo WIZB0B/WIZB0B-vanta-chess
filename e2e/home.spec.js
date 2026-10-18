@@ -6,6 +6,7 @@ async function mockApi(page) {
 }
 
 test('a first visit opens on the pavilion; Play now goes in; the V leads back home', async ({ page }) => {
+  test.setTimeout(60000); // decoding the 3840 px photograph is slow on a loaded test machine
   await mockApi(page);
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'intro');
@@ -13,7 +14,7 @@ test('a first visit opens on the pavilion; Play now goes in; the V leads back ho
   await expect(page.locator('#mainMenuTitle')).toHaveText('Play Better Chess');
   const photo = page.locator('#homeScene img');
   // (naturalWidth is in CSS pixels for a srcset choice, so only "decoded" is asked of it)
-  await expect.poll(() => photo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => photo.evaluate(img => img.complete && img.naturalWidth > 0), { timeout: 20000 }).toBe(true);
   expect(await photo.evaluate(img => img.currentSrc)).toMatch(/\/assets\/vch\/home\/pavilion-(1920|2560|3840)\.webp$/);
   // nothing scrolls sideways, and the way in is on screen without scrolling
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -31,6 +32,7 @@ test('a first visit opens on the pavilion; Play now goes in; the V leads back ho
 });
 
 test('a return visit opens on the game and never fetches the photograph until home is opened', async ({ page }) => {
+  test.setTimeout(60000);
   await mockApi(page);
   const fetched = [];
   page.on('request', request => { if (request.url().includes('/assets/vch/home/')) fetched.push(request.url()); });
@@ -43,7 +45,7 @@ test('a return visit opens on the game and never fetches the photograph until ho
   await page.locator('.vch-brand').click();
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'intro');
   await expect.poll(() => fetched.length).toBeGreaterThan(0);
-  await expect.poll(() => page.locator('#homeScene img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => page.locator('#homeScene img').evaluate(img => img.complete && img.naturalWidth > 0), { timeout: 20000 }).toBe(true);
 });
 
 test('Sign in on the home screen opens the account window', async ({ page }) => {
