@@ -2016,6 +2016,9 @@ export const ROWS = [
   ["Not enough space on this device", "इस डिवाइस पर पर्याप्त जगह नहीं है"],
   ["This browser can't play your own songs here", "यह ब्राउज़र यहाँ आपके अपने गाने नहीं चला सकता"],
   ["Saved. Reload the page to play your songs", "सहेजा गया। अपने गाने चलाने के लिए पेज फिर से लोड करें"],
+  ["Sound & music", "ध्वनि और संगीत"],
+  ["Look & motion", "रूप और गति"],
+  ["Your own colours", "आपके अपने रंग"],
 ];
 
 export const PATTERNS = [

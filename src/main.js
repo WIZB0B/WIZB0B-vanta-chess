@@ -74,6 +74,8 @@ import { KEY_FOR_THEME, VantaScore, WORLDS, chordFor, hideTrack, likeTrack, load
 import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-library.js';
 import { ACCEPT as MY_MUSIC_ACCEPT, MAX_SONG_MB, MAX_SONGS, addSongs, listSongs, myMusicServed, putSong, removeSong, renameSong, songTrack } from './my-music.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
+import { backgroundUrls, revealApp } from './boot-reveal.js';
+import { ARRIVAL, arrivalMs, startArrival } from './board-arrival.js';
 import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
@@ -192,6 +194,17 @@ const WORLD_KEY='vch.world',WORLD_NAMES={egypt:'Mehen',greece:'Petteia',rome:'La
   WORLD_LANDS={egypt:'Ancient Egypt',greece:'Ancient Greece',rome:'Ancient Rome',china:'Ancient China',japan:'Old Japan',persia:'Ancient Persia',babylon:'Babylon',benin:'Kingdom of Benin'};
 document.documentElement.dataset.pieceStyle='vanta';
 function pieceAsset(name){return pieceAssetFor(normalizePieceStyle(document.documentElement.dataset.pieceStyle),name)}
+// The images a piece set draws with (src/style.css): the 1x or 2x sheet, as the browser would
+// pick, or the twelve drawings of an ink set.
+function pieceStyleImages(style){
+  const sharp=(window.devicePixelRatio||1)>=1.5,sheet=name=>`/assets/vch/pieces/${name}${sharp?'':'-1x'}.png`;
+  if(style==='vanta')return [sheet('vanta-3d')];
+  if(style==='regal')return [sheet('vanta-regal')];
+  return ['w','b'].flatMap(c=>['k','q','r','b','n','p'].map(p=>`/assets/vch/pieces/vanta-2d/${c}${p}.svg`));
+}
+function preloadImages(urls){
+  return Promise.all(urls.map(src=>new Promise(done=>{const img=new Image();img.onload=img.onerror=()=>done();img.src=src})));
+}
 function applyPieceStyle(value){
   const style=normalizePieceStyle(value);
   document.documentElement.dataset.pieceStyle=style;
@@ -407,7 +420,7 @@ ${splashMarkup(splash)}
 </aside>
 
 <dialog id="promotion"><h2>Promote pawn</h2><div><button data-piece="q">♕</button><button data-piece="r">♖</button><button data-piece="b">♗</button><button data-piece="n">♘</button></div></dialog>
-<dialog id="themeStudio"><h2>Theme Studio</h2><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Board set <select id="boardSet"></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><small id="boardSetNote" class="board-set-note"></small><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>World <select id="worldSetting"><option value="">Vanta Chess</option>${WORLDS.map(w=>`<option value="${w}">${WORLD_NAMES[w]} · ${WORLD_LANDS[w]}</option>`).join('')}</select></label><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>Resonance background <select id="resonanceSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button><button id="openResonance" type="button" class="theme-relics">Resonance room</button><button id="openRelics" type="button" class="theme-relics">Relic sets</button><button id="closeTheme" class="gold theme-done">Done</button></dialog>
+<dialog id="themeStudio" class="settings-dialog" aria-labelledby="settingsTitle"><header class="settings-head"><h2 id="settingsTitle" tabindex="-1" autofocus>Settings</h2><button id="closeThemeTop" type="button" class="settings-top-done">Done</button></header><div class="settings-body"><section class="settings-group" aria-labelledby="setBoardTitle"><h3 id="setBoardTitle">Board &amp; pieces</h3><label>Piece style <select id="pieceStyle">${pieceStyleOptions()}</select></label><label>Board set <select id="boardSet"></select></label><small id="boardSetNote" class="board-set-note"></small><label>Piece expressions <select id="expressionsSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Veteran marks <select id="veteranSetting"><option value="on">On</option><option value="off">Off</option></select></label><details id="ownColours" class="settings-colours"><summary>Your own colours</summary><label>Light squares <input data-theme="--light" type="color" value="#d9cfb2"></label><label>Dark squares <input data-theme="--dark" type="color" value="#29463b"></label><label>Accent <input data-theme="--mint" type="color" value="#82edba"></label><label>Gold <input data-theme="--gold" type="color" value="#e5c17c"></label><label>Ivory piece tint <input id="whitePiece" type="color" value="#f0d9a4"></label><label>Black piece tint <input id="blackPiece" type="color" value="#342019"></label><label>Piece tint strength <input id="pieceTint" type="range" min="0" max="70" value="18"></label></details><button id="openRelics" type="button" class="theme-relics">Relic sets</button></section><section class="settings-group" aria-labelledby="setSoundTitle"><h3 id="setSoundTitle">Sound &amp; music</h3><label>Music <select id="musicSetting"><option value="off">Off</option>${STATIONS.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><small id="musicNow" class="music-now" aria-live="polite"></small><label>Music volume <input id="musicVolume" type="range" min="0" max="100" value="50"></label><label>World <select id="worldSetting"><option value="">Vanta Chess</option>${WORLDS.map(w=>`<option value="${w}">${WORLD_NAMES[w]} · ${WORLD_LANDS[w]}</option>`).join('')}</select></label><label>Now playing <select id="nowPlayingSetting"><option value="bl">Bottom left</option><option value="br">Bottom right</option><option value="tr">Top right</option><option value="off">Off</option></select></label><label class="check-row">Read moves aloud <input id="speakMoves" type="checkbox"></label><label>Piece sounds <select id="pieceSoundSetting">${pieceSoundOptions()}</select></label><label class="check-row">Interface sounds <input id="uiSoundSetting" type="checkbox" checked></label><div class="settings-links"><button id="openMusicList" type="button" class="theme-relics">Music list</button><button id="openSoundTest" type="button" class="theme-relics">Sound test</button></div></section><section class="settings-group" aria-labelledby="setLookTitle"><h3 id="setLookTitle">Look &amp; motion</h3><label>Wallpaper <select id="wallpaper"><option value="classic">Midnight Emerald</option><option value="cobalt">Midnight Cobalt</option><option value="burgundy">Burgundy Brass</option><option value="ivory">Ivory Noir</option></select></label><label>Living atmosphere <select id="atmosphereSetting"><option value="full">Full</option><option value="subtle">Subtle</option><option value="off">Off</option></select></label><label>Resonance background <select id="resonanceSetting"><option value="off">Off</option><option value="on">On</option></select></label><label>Glass opacity <input data-theme="--glass" type="range" min="15" max="100" value="94"></label><label>Motion <input data-theme="--motion" type="range" min="0" max="100" value="100"></label><button id="openResonance" type="button" class="theme-relics">Resonance room</button></section><section class="settings-group" aria-labelledby="setLanguageTitle"><h3 id="setLanguageTitle">Language</h3><label>Language <select id="languageSelect">${Object.entries(LANGUAGES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label></section></div><button id="closeTheme" class="gold theme-done">Done</button></dialog>
 
 
 <dialog id="accountDialog" class="account-dialog">
@@ -774,7 +787,7 @@ function renderStatus(){
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
   renderReviewBoardDecorations();syncClockBars();
-  updateOpeningLabel();scheduleAnalysis();void maybeShowGameOver();syncMobileShell();
+  updateOpeningLabel();scheduleAnalysis();syncGameEndPanel();void maybeShowGameOver();syncMobileShell();
 }
 // The board updates now; status text, review decorations, opening name, analysis and the
 // game-over check follow once the frame with the board change has been painted.
@@ -832,11 +845,20 @@ function cue(sting,sound){if(vantaScore?.playing&&vantaScore.sting(sting))return
 // The game-start card (owner, 2026-10-14: not a tune; "just make a sound ... the trumpet sound
 // that blows when the game starts ... brief with a notification panel telling you that game has
 // started ... something that is very obvious"): a short trumpet call (the start sting with the
-// music on, the interface's start sound without) and, over the board for under two seconds, who
-// plays whom, your colour and the clock. It never takes a click: you can move at once.
+// music on, the interface's start sound without) and, over the board, who plays whom, your
+// colour and the clock. Since 2026-10-18 (owner: the pieces "don't load naturally", "the game
+// start screen") it is the opening of the game's arrival (src/board-arrival.js): the card shows
+// over the board's empty squares, and as it leaves the pieces settle onto their squares, so
+// nothing covers a piece while you play. It never takes a click: a touch on the board ends the
+// arrival at once and you can move.
+let boardArrival=null;
+function arrivalWanted(){return motionScale()>0&&!document.hidden}
+function finishBoardArrival(){const arrival=boardArrival;boardArrival=null;arrival?.finish()}
+// How long until the pieces are down: the computer's first move waits for it.
+function startCeremonyMs(){return boardArrival?arrivalMs():0}
 function showGameStartBanner(color,seconds,increment,key){
   if(!color||!key||lastGameStartKey===key)return;
-  lastGameStartKey=key;
+  lastGameStartKey=key;hideGameEndPanel();
   let card=$('#gameStartCard');
   if(!card){
     card=document.createElement('div');card.id='gameStartCard';card.className='game-start-card';card.setAttribute('role','status');card.setAttribute('aria-live','polite');
@@ -849,7 +871,11 @@ function showGameStartBanner(color,seconds,increment,key){
   card.querySelector('.gs-clock').textContent=formatTimeControl(seconds,increment);
   card.classList.remove('show');cue('start','start');queueAtmosphere(); // the music turns to the game on its next bar line, after the start sting
   queueMicrotask(()=>{fillGameStartPlayers(card);void card.offsetWidth;card.classList.add('show')}); // once the player bars show this game
-  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>card.classList.remove('show'),1900);
+  finishBoardArrival();
+  const dom=ensureBoardDom(),arrival=arrivalWanted()?startArrival(dom.board,dom.pieces.elements,{onScreen:dom.board.getClientRects().length>0}):null;
+  boardArrival=arrival;arrival?.done.then(()=>{if(boardArrival===arrival)boardArrival=null});
+  // With the arrival, the card leaves as the pieces begin to settle; without it, it stays a moment.
+  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>card.classList.remove('show'),arrival?ARRIVAL.holdMs:1900);
 }
 // The two players as their bars show them: portrait, name, rating and flag.
 function fillGameStartPlayers(card){
@@ -861,6 +887,93 @@ function fillGameStartPlayers(card){
     for(const c of ['has-picture','is-empty'])pic.classList.toggle(c,!!avatar?.classList.contains(c));
     const shown=!!flag&&!flag.classList.contains('hidden');mark.classList.toggle('hidden',!shown);mark.replaceChildren(...(shown?[...flag.childNodes].map(n=>n.cloneNode(true)):[]));
   }
+}
+// A touch on the board during the arrival ends it at once (the card too): it never holds up a move.
+document.addEventListener('pointerdown',event=>{if(boardArrival&&event.target?.closest?.('#board')){finishBoardArrival();$('#gameStartCard')?.classList.remove('show')}},{capture:true,passive:true});
+
+// The end of a game (owner, 2026-10-17: "the game end screen"), in place of the Game over
+// dialog: a result card over the board that leaves the rest of the page free (no layer to
+// dismiss before anything else works). The result and how it ended, the two players as their
+// bars show them with the game's score and their rating change counting to its new value, and
+// Game Review, Rematch (online) and New game. Close it (or Escape) to look at the final
+// position; it goes by itself when a new game starts or the board shows something else.
+const GE_CLOSE_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+function gameEndKeys(event){
+  if(event.key!=='Escape'||!$('#gameEndPanel')||document.querySelector('dialog[open],.vch-dialog-layer'))return;
+  event.preventDefault();hideGameEndPanel();
+}
+function hideGameEndPanel(){
+  const panel=$('#gameEndPanel');if(!panel)return;
+  panel.removeAttribute('id');document.removeEventListener('keydown',gameEndKeys,true);
+  cancelAnimationFrame(Number(panel.dataset.countFrame)||0);
+  panel.classList.remove('show');setTimeout(()=>panel.remove(),motionScale()>0?280:0);
+}
+// The panel belongs to one finished game: anything else on the board takes it away.
+function syncGameEndPanel(){const panel=$('#gameEndPanel');if(panel&&gameOverInfo()?.key!==panel.dataset.key)hideGameEndPanel()}
+function endScore(result,color){
+  if(result==='1/2-1/2')return '½';
+  if(result==='1-0')return color==='w'?'1':'0';
+  if(result==='0-1')return color==='b'?'1':'0';
+  return '';
+}
+// A rated online game's rating change for one colour: {before, delta}, or null.
+function endRatingChange(info,color){
+  if(!info.online||!serverGame?.rated)return null;
+  const prefix=color==='w'?'white':'black',before=Number(serverGame[`${prefix}_rating_before`]),delta=Number(serverGame[`${prefix}_rating_delta`]);
+  return serverGame[`${prefix}_rating_before`]!=null&&serverGame[`${prefix}_rating_delta`]!=null&&Number.isFinite(before)&&Number.isFinite(delta)?{before,delta}:null;
+}
+function showGameEndPanel(info,title){
+  hideGameEndPanel();
+  const mine=info.myColor==='b'?'b':'w',theirs=mine==='w'?'b':'w';
+  const outcome=title==='You won'?'won':title==='You lost'?'lost':title==='Draw'?'draw':'aborted';
+  const plies=currentHistory().length,moves=Math.ceil(plies/2);
+  const reason=[info.reason&&info.reason!=='aborted'?info.reason:'',moves?`${moves} ${moves===1?'move':'moves'}`:''].filter(Boolean).join(' · ');
+  const row=(side,color)=>{
+    const change=endRatingChange(info,color);
+    const rating=change?`<span class="ge-rating" data-from="${change.before}" data-to="${change.before+change.delta}">${change.before}</span><span class="ge-delta ${change.delta>0?'up':change.delta<0?'down':'even'}">${change.delta>0?'+':change.delta<0?'−':'±'}${Math.abs(change.delta)}</span>`:`<span class="ge-rating">${escapeHtml($(`#${side}Rating`)?.textContent||'')}</span>`;
+    return `<div class="ge-player" data-side="${side}" data-color="${color}"><span class="avatar ge-avatar"></span><span class="ge-who"><span class="ge-name"><b></b><span class="player-flag hidden" aria-hidden="true"></span></span><span class="ge-meta">${rating}</span></span><span class="ge-score">${endScore(info.result,color)}</span></div>`;
+  };
+  const panel=document.createElement('section');
+  panel.id='gameEndPanel';panel.className='game-end';panel.dataset.key=info.key;panel.dataset.outcome=outcome;
+  panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','false');panel.setAttribute('aria-labelledby','gameEndTitle');
+  panel.innerHTML=`<div class="ge-card">
+    <button type="button" class="ge-close" aria-label="Close">${GE_CLOSE_ICON}</button>
+    <p class="ge-kicker">Game over</p>
+    <h2 class="ge-title" id="gameEndTitle" tabindex="-1">${escapeHtml(title)}</h2>
+    ${reason?`<p class="ge-reason">${escapeHtml(reason)}</p>`:''}
+    <div class="ge-players">${row('top',theirs)}${row('bottom',mine)}</div>
+    <div class="ge-actions"><button type="button" class="gold ge-review" data-ge="review">Game Review</button>${info.online?'<button type="button" class="ge-secondary" data-ge="rematch">Rematch</button>':''}<button type="button" class="ge-secondary" data-ge="new">New game</button></div>
+  </div>`;
+  // The players as their bars show them: portrait, name and flag.
+  for(const side of ['top','bottom']){
+    const el=panel.querySelector(`.ge-player[data-side="${side}"]`),avatar=$(`#${side}Avatar`),flag=$(`#${side}Flag`),pic=el.querySelector('.ge-avatar'),mark=el.querySelector('.player-flag');
+    el.querySelector('b').textContent=side==='bottom'?ownPlayerName():$('#topPlayerName')?.textContent||'';
+    pic.replaceChildren(...[...(avatar?.childNodes||[])].map(n=>n.cloneNode(true)));
+    for(const c of ['has-picture','is-empty','light'])pic.classList.toggle(c,!!avatar?.classList.contains(c));
+    const shown=!!flag&&!flag.classList.contains('hidden');mark.classList.toggle('hidden',!shown);mark.replaceChildren(...(shown?[...flag.childNodes].map(n=>n.cloneNode(true)):[]));
+  }
+  panel.querySelector('.ge-close').addEventListener('click',hideGameEndPanel);
+  panel.querySelector('.ge-actions').addEventListener('click',async event=>{
+    const action=event.target.closest('[data-ge]')?.dataset.ge;if(!action)return;
+    hideGameEndPanel();
+    if(action==='review')await startGameReview();
+    if(action==='rematch')await startOnlineRematch();
+    if(action==='new'){await resetFinishedGame();if(isMobileApp()){mTab='play';setMView('home')}} // a phone goes back to where a game is chosen
+  });
+  const shell=$('.game .board-shell');(shell||document.body).append(panel);panel.classList.toggle('floating',!shell);
+  document.addEventListener('keydown',gameEndKeys,true);
+  requestAnimationFrame(()=>{panel.classList.add('show');panel.querySelector('.ge-title')?.focus({preventScroll:true})});
+  // A rating change counts up (or down) to its new value as the card settles.
+  const counters=[...panel.querySelectorAll('.ge-rating[data-to]')];
+  if(counters.length&&motionScale()>0){
+    const start=performance.now()+260,span=900;
+    const step=now=>{
+      const t=Math.min(1,Math.max(0,(now-start)/span)),ease=1-(1-t)**3;
+      for(const el of counters){const from=Number(el.dataset.from),to=Number(el.dataset.to);el.textContent=String(Math.round(from+(to-from)*ease))}
+      if(t<1)panel.dataset.countFrame=String(requestAnimationFrame(step));
+    };
+    panel.dataset.countFrame=String(requestAnimationFrame(step));
+  }else for(const el of counters)el.textContent=el.dataset.to;
 }
 function normalizedEndReason(value=''){
   const reason=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ');
@@ -925,13 +1038,6 @@ function gameOverTitle(info){
   const won=(info.result==='1-0'&&info.myColor==='w')||(info.result==='0-1'&&info.myColor==='b');
   return won?'You won':'You lost';
 }
-function gameOverBody(info,title){
-  const body=document.createElement('div');body.className='game-over-body';
-  const result=document.createElement('div');result.className='game-over-result';result.innerHTML=`<strong>${escapeHtml(title)} · ${escapeHtml(info.reason)}</strong>`;
-  const players=document.createElement('div');players.className='game-over-players';
-  players.innerHTML=`<div><span class="game-over-avatar">${escapeHtml(playerInitials(info.whiteName,'W'))}</span><span class="game-over-player"><small>White</small><b>${escapeHtml(info.whiteName)}</b></span><em>${escapeHtml(info.whiteRating)}</em></div><div><span class="game-over-avatar">${escapeHtml(playerInitials(info.blackName,'B'))}</span><span class="game-over-player"><small>Black</small><b>${escapeHtml(info.blackName)}</b></span><em>${escapeHtml(info.blackRating)}</em></div>`;
-  body.append(result,players);return body;
-}
 async function resetFinishedGame(nextMode=['match','room','computer'].includes(mode)?mode:'room'){
   restoreRealmTheme();
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();roomCreated=false;lastDrawOffer=null;clearDrawOfferTimer();drawOfferKey=null;localGameOver=false;localGameOverInfo=null;computerStarted=false;localClockState=null;lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();rematchOfferPending=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();game.reset();history.replaceState(null,'',location.pathname);mode=nextMode;render();updateMoves();await activateLeftMode(nextMode);showMovesView();
@@ -953,7 +1059,7 @@ async function acceptRematchOffer(){
 let rematchOpening=null,rematchOfferSeen=null;
 async function openRematchGame(id){
   if(rematchOpening===id||serverGameId===id)return;rematchOpening=id;
-  document.querySelector('.vch-dialog-layer .vch-dialog-close')?.click();
+  hideGameEndPanel();
   try{
     const state=await api.state(id);applyServerState(state);room=(state.game||state).invite_code||room;roomCreated=false;rematchOfferPending=false;
     history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
@@ -974,12 +1080,15 @@ async function maybeShowGameOver(){
     lastLocalArchiveId=`local-${Date.now()}`;
     saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason,variant:computerRules||'standard'});
   }if(!stung)playUiSound(title==='Draw'?'draw':won?'win':'lose'); // with the music on, its sting instead
-  await playEnding(info);
-  const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
-  const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
-  if(action==='review')await startGameReview();
-  if(action==='rematch')await startOnlineRematch();
-  if(action==='new')await resetFinishedGame();
+  if(info.result!=='*')countFinishedGame();
+  // The ending plays on the board first (the winners cheer, the losing king topples); without
+  // it, a moment to see the last move land. Then the result card, if this game is still the one
+  // on the board (a new game, a puzzle or a review may have begun meanwhile).
+  const ending=performance.now();await playEnding(info);
+  if(performance.now()-ending<400)await new Promise(resolve=>setTimeout(resolve,650));
+  if(gameOverInfo()?.key!==info.key)return;
+  showGameEndPanel(info,title);
+  scheduleFlagPrompt(); // a first finished game is when the flag question is first asked
 }
 function premovePlayerColor(){if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
 function premoveBlocked(){return !!puzzleSession||mode==='puzzle'||reviewState.running||reviewState.viewing||currentRightView==='review'}
@@ -1157,7 +1266,7 @@ function startComputerGame(opts={}){
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
   showGameStartBanner(computerSide,computerRules==='blackout'?BLACKOUT_SECONDS:600,0,`computer:${Date.now()}`);
   swearOath(`computer:${Date.now()}`,{startFen:computerRules==='freestyle'?game.fen():null});
-  if(game.turn()!==computerSide)setTimeout(engineMove,280);
+  if(game.turn()!==computerSide)setTimeout(engineMove,Math.max(280,startCeremonyMs())); // once its pieces are down
 }
 // ---- Round 11: Vanta Dark (fog of war) and Blackout Blitz, games against the computer ----
 function computerLive(){return mode==='computer'&&computerStarted&&!localGameOver&&!game.isGameOver()&&!reviewState.viewing&&!browse}
@@ -1304,6 +1413,11 @@ function moveCell(record,index,records,signature){
   return `<span class="move-cell${current}" role="button" tabindex="0" data-review-ply="${index+1}"><span class="move-san">${book}${badge}<b>${san}</b></span><span class="move-meta"><em>${recordEval(record,index)}</em><time>${recordTime(record,index)}</time></span></span>`;
 }
 function moveRecords(){return archiveSession?.records?archiveSession.records:watchSession?(watchSession.state?.move_history||[]):serverGameId&&Array.isArray(serverGame?.move_history)?serverGame.move_history:game.history({verbose:true})}
+// The engine reports each new depth many times a second, and the move list is rebuilt whole each
+// time; on a phone or tablet that alone made a move stutter (owner, 2026-10-17: "laggy"). Its
+// evaluations reach the list at most four times a second.
+let movesUpdateTimer=0;
+function queueMovesUpdate(){if(!movesUpdateTimer)movesUpdateTimer=setTimeout(()=>{movesUpdateTimer=0;updateMoves()},250)}
 function updateMoves(){
   const records=maskedRecords(moveRecords());syncBlackout();
   syncMoveStrip(records);
@@ -1366,7 +1480,9 @@ async function findEngineMove(){
   if(!chosen&&blind&&uci){const pool=moves.filter(x=>blind.searchmoves.includes(x.from+x.to+(x.promotion||'')));return pool[Math.floor(Math.random()*pool.length)]||moves[0]}
   return chosen;
 }
-async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
+// A reply that comes after the game has ended (you resigned, or a clock ran out, while it was
+// thinking) is dropped: the final position stays as the game ended, under its result card.
+async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen&&!localGameOver)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined||localGameOver)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
 function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
 // A move is heard where it lands: placed around you by its square (HRTF, src/move-sound.js
@@ -1732,13 +1848,24 @@ async function saveProfileChanges(changes){
   const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
 }
 function flagPromptDone(){try{return !!localStorage.getItem('vanta.flagPrompt')}catch{return true}}
+// Games finished on this device: no question before the first one (owner, 2026-10-17: a first
+// visit should land calmly, with nothing popping up over it).
+const GAMES_FINISHED_KEY='vch.games-finished';
+function gamesFinished(){try{return Number(localStorage.getItem(GAMES_FINISHED_KEY))||0}catch{return 0}}
+function countFinishedGame(){try{localStorage.setItem(GAMES_FINISHED_KEY,String(gamesFinished()+1))}catch{}}
 function scheduleFlagPrompt(){
-  if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending)return;
+  if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending||!gamesFinished())return;
   scheduleFlagPrompt.pending=true;setTimeout(showFlagPrompt,2500);
 }
 // The flag prompt never interrupts a game or a conversation: it waits for a quiet moment, and
 // steps aside (to come back later) if a game starts or the chat opens while it is showing.
-function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')}
+// On a phone it sits just above the tab bar, where the Play tab keeps its Start game and Create
+// room buttons, so it also waits while that tab's setup is on screen and asks on another tab or
+// after a game instead (on a 360 px Galaxy it covered Start game, 2026-10-18).
+function phonePlaySetupShowing(){
+  return document.body.classList.contains('m-app')&&!['game','review'].includes(document.querySelector('.shell')?.dataset.mview)&&!!document.querySelector('[data-m-tab="play"].on');
+}
+function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')&&!$('#gameEndPanel')&&!phonePlaySetupShowing()}
 function showFlagPrompt(){
   if(flagPromptDone()||currentProfile?.country_code||document.querySelector('.flag-prompt'))return;
   if(!flagPromptCalm()){setTimeout(showFlagPrompt,6000);return}
@@ -3476,7 +3603,7 @@ function syncMobileShell(){
   const reviewing=reviewState.running||reviewState.viewing;
   if(reviewing&&!mReviewShown){mReviewShown=true;mView='review'}
   if(!reviewing){mReviewShown=false;if(mView==='review')mView='game'}
-  if(shell.dataset.mview!==mView)shell.dataset.mview=mView;
+  if(shell.dataset.mview!==mView){const first=!shell.dataset.mview;shell.dataset.mview=mView;if(!first)markEntering(mView)}
   if(key?.startsWith('waiting:'))syncMoveStrip([]);
   const tab=mView==='game'||mView==='review'?'play':mTab;
   $$('[data-m-tab]').forEach(button=>button.classList.toggle('on',button.dataset.mTab===tab));
@@ -3513,7 +3640,7 @@ function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return fa
 function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
 function openMoreSheet(){
   openSheet('More',[
-    {label:'Settings',run:()=>menus.open('theme')},
+    {label:'Settings',run:()=>openSettings()},
     {label:'Friends & challenges',run:()=>openSection('friends')},
     {label:'Clubs',run:()=>{openSection('friends');void renderClubs()}},
     {label:'League',run:()=>{openSection('friends');void renderLeague()}},
@@ -3533,7 +3660,7 @@ function openGameOptions(){
   openSheet('Game options',[
     {label:'Flip board',run:()=>$('#flip').click()},
     {label:soundOff?'Sound: off (turn on)':'Sound: on (turn off)',run:()=>$('#sound').click()},
-    {label:'Settings',run:()=>menus.open('theme')},
+    {label:'Settings',run:()=>openSettings()},
     mode!=='computer'&&serverGameId?{label:'Share room link',run:()=>$('#copy').click()}:null,
   ]);
 }
@@ -3753,7 +3880,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>menus.open('theme');$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>openSettings({colours:true});$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -4054,7 +4181,6 @@ $('#boardSet').onchange=e=>{
   savedTheme.boardSet=set.id;try{localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))}catch{}
   toast(`${set.name} board set`);
 };
-$('#theme').addEventListener('click',syncBoardSets);
 // ---- Offline: the computer opponent works without a connection (public/sw.js caches it) ----
 function syncOffline(){
   const off=navigator.onLine===false;document.body.classList.toggle('offline',off);
@@ -4454,7 +4580,7 @@ function updateAnalysisFromUci(text,request){
     const scoreEl=$('#score');if(scoreEl)scoreEl.textContent=(analysisScore>=0?'+':'')+(Math.abs(analysisScore)>=90?'M'+Math.abs(Number(scoreMatch[2])||1):analysisScore.toFixed(1));
     const fill=$('#meterFill');if(fill)fill.style.width=(50+Math.max(-45,Math.min(45,analysisScore*8)))+'%';
     const advantage=$('#advantage');if(advantage)advantage.textContent=Math.abs(analysisScore)<.2?'Equal position':analysisScore>0?'Advantage for White':'Advantage for Black';
-    updateMoves();
+    queueMovesUpdate();
   }
   const depthEl=$('#depth');if(depthEl)depthEl.textContent=String(depth);
   const line=$('#line');if(line&&pv)line.textContent=formatPv(pv);
@@ -4488,10 +4614,11 @@ function setDynamicView(kind,title,html){
   if(kind!=='prep'&&prepSession)endPrep();
   if(kind!=='analysis'&&analysis)leaveAnalysis();
   if(kind!=='lesson'&&lessonSession)leaveLesson({restore:false});
-  currentRightView=kind;
+  const arriving=currentRightView!==kind;currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view" aria-label="Back"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
   target.querySelector('.back-view').onclick=()=>{playUiSound('back');showMovesView()};
+  if(arriving)enterView(target); // a section fades in when you open it (not when it fills in)
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
   queueAtmosphere(); // the music follows you here (src/music.js waits a moment, in case you are only passing through)
 }
@@ -5520,7 +5647,9 @@ let heroKick=()=>{};
   };
   const go=()=>{if(!raf)raf=requestAnimationFrame(step)};
   addEventListener('pointermove',e=>{
-    if(still())return;const img=art();if(!img||img.offsetParent===null)return;
+    // A mouse only: a finger dragging a piece on a phone or tablet must not turn it (and measure
+    // the page on every move of the finger).
+    if(e.pointerType!=='mouse'||still())return;const img=art();if(!img||img.offsetParent===null)return;
     const r=img.getBoundingClientRect();tx=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/(innerWidth/2)));ty=Math.max(-1,Math.min(1,(e.clientY-(r.top+r.height/2))/(innerHeight/2)));go();
   },{passive:true});
   heroKick=s=>{if(still())return;const img=art();if(!img||img.offsetParent===null)return;sway=-sway;kick=Math.min(1,kick+.55*s);go()};
@@ -5670,6 +5799,16 @@ function initRoundTwelve(){
   ensureAtmosphere();setInterval(syncAtmosphere,1000);
   document.addEventListener('visibilitychange',syncAtmosphere);
   document.addEventListener('pointerdown',e=>{if(vantaScore?.ctx?.state==='suspended')vantaScore.ctx.resume?.();if(musicPrefsGet().on&&!vantaScore?.playing)queueAtmosphere();if(!e.target.closest?.('#veteranCard'))hideVeteranCard()},{capture:true,passive:true});
+  // iPhone and iPad (owner, 2026-10-17: "the music do not play"): sound may start only inside a
+  // tap (a touch's end, a click or a key; a touch's start is too early), and an audio element plays
+  // on its own later only once a tap has readied it. So each tap readies the music, and starts a
+  // track Safari refused to start (src/music.js unlock).
+  const unlockMusic=()=>{if(!musicPrefsGet().on||$('#sound')?.dataset.off)return;ensureScore();if(!vantaScore?.unlock())return;if(!vantaScore.playing)queueAtmosphere()};
+  for(const type of ['touchend','pointerup','click','keydown'])document.addEventListener(type,unlockMusic,{capture:true,passive:true});
+  // The tap that turns the music on (Music on, a station, a World) readies it in that same tap:
+  // these run after the control's own handler, when the music is already on (the listeners above
+  // run before it and still find it off, so the first track waited for another tap).
+  for(const type of ['click','change'])document.addEventListener(type,unlockMusic,{passive:true});
   document.addEventListener('pointerover',e=>{
     if(e.pointerType!=='mouse')return;const el=e.target.closest?.('.board-piece[data-veteran]');if(!el)return;
     clearTimeout(vetHoverTimer);vetHoverTimer=setTimeout(()=>showVeteranCard(el),420);
@@ -6252,8 +6391,23 @@ window.addEventListener('popstate',event=>{
   try{if(snap.mTab)mTab=snap.mTab;activateNav(snap.nav);if(snap.mView&&isMobileApp())setMView(snap.mView)}
   finally{navRestoring=false;navCurrent=navSnapshot()}
 });
+// Moving between screens and sections (owner, 2026-10-17: "it does not land naturally"): the
+// screen you go to fades in, briefly, instead of swapping in a single frame (style.css
+// .shell[data-entering], .view-entering). Not before the page's first appearance, which has
+// its own (src/boot-reveal.js), and never with Motion off or reduced motion.
+let enteringTimer=0;
+function markEntering(view){
+  const shell=$('.shell');if(!shell||!document.documentElement.classList.contains('app-revealed')||motionScale()===0)return;
+  shell.dataset.entering=view;clearTimeout(enteringTimer);enteringTimer=setTimeout(()=>{delete shell.dataset.entering},360);
+}
+function enterView(el){
+  if(!el||!document.documentElement.classList.contains('app-revealed')||motionScale()===0)return;
+  el.classList.remove('view-entering');void el.offsetWidth;el.classList.add('view-entering');
+  clearTimeout(el.enteringTimer);el.enteringTimer=setTimeout(()=>el.classList.remove('view-entering'),360);
+}
 function setPrimaryScreen(screen,{remember=false}={}){
   const shell=$('.shell'),menu=$('#mainMenu'),workspace=$('#gameWorkspace'),showGame=screen==='game';
+  if(shell&&shell.classList.contains('game-active')!==showGame)markEntering(showGame?'game':'intro');
   shell?.classList.toggle('game-active',showGame);shell?.classList.toggle('intro-active',!showGame);
   menu?.setAttribute('aria-hidden',String(showGame));workspace?.setAttribute('aria-hidden',String(!showGame));
   document.body.dataset.screen=showGame?'game':'intro';
@@ -6280,6 +6434,15 @@ menus.register('game-more',{open:()=>{gameMore.open=true},close:()=>{gameMore.op
 gameMore.addEventListener('toggle',()=>{if(gameMore.open){if(!menus.isOpen('game-more'))menus.open('game-more')}else menus.closed('game-more')});
 gameMore.querySelectorAll('.game-more-menu button').forEach(button=>button.addEventListener('click',()=>menus.close('game-more')));
 registerModal('theme',$('#themeStudio'));
+// Settings (owner, 2026-10-17: "when one enters the settings it pops up a color panel"): grouped
+// as Board & pieces, Sound & music, Look & motion and Language, with the colour pickers folded
+// away under "Your own colours". The board's own Board theme button opens it with them unfolded.
+function openSettings({colours=false}={}){
+  const fold=$('#ownColours');if(fold)fold.open=colours;
+  syncBoardSets();menus.open('theme');
+  if(colours)fold?.scrollIntoView?.({block:'nearest'});
+}
+$('#closeThemeTop').onclick=()=>menus.close('theme');
 registerModal('account',$('#accountDialog'));
 registerModal('search',$('#searchDialog'));
 registerModal('promotion',$('#promotion'));
@@ -6299,8 +6462,8 @@ $('#closeNotifyMenu').onclick=()=>menus.close('notifications');
 $('#profileMenuProfile').onclick=openAccount;
 $('#profileMenuEdit').onclick=()=>{menus.close('profile');void openProfileEditor()};
 $('#profileMenuInsights').onclick=()=>{menus.close('profile');void renderInsights()};
-$('#profileMenuSettings').onclick=()=>menus.open('theme');
-$('#settingsBtn').onclick=()=>menus.open('theme');
+$('#profileMenuSettings').onclick=()=>openSettings();
+$('#settingsBtn').onclick=()=>openSettings();
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
 $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};
@@ -6405,7 +6568,15 @@ savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
 localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#expressionsSetting').value=expressionSetting;
 $('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
-$('#pieceStyle').onchange=e=>{savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
+// A new piece set shows once its images are in (two seconds at most): the board keeps its pieces
+// meanwhile instead of standing empty while a phone or tablet downloads them (owner, 2026-10-17).
+$('#pieceStyle').onchange=e=>{
+  const want=e.target.value;
+  void Promise.race([preloadImages(pieceStyleImages(normalizePieceStyle(want))),new Promise(done=>setTimeout(done,2000))]).then(()=>{
+    if(e.target.value!==want)return; // chosen again meanwhile: that one wins
+    savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+  });
+};
 $('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
@@ -6419,6 +6590,8 @@ $('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');r
 $('#openMusicList').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()};
 $('#worldSetting').value=worldGet();
 $('#worldSetting').onchange=e=>{const w=e.target.value;try{if(w)localStorage.setItem(WORLD_KEY,w);else localStorage.removeItem(WORLD_KEY)}catch{}
+  // A world is its music: choosing one with the music off turns it on, following the game.
+  if(w&&!musicPrefsGet().on)setMusicOn(true,'on');
   // Heard at once in the menus: the world's own theme (the music otherwise changes when a piece ends).
   const theme=w&&vantaScore?.playing&&musicPlace()==='lobby'&&musicPrefsGet().station==='on'&&(musicLibrary||[]).find(t=>t.theme===w&&t.place==='lobby');
   queueAtmosphere();if(theme){vantaScore.setKey(w);vantaScore.playNow(theme.id)}};
@@ -6612,7 +6785,10 @@ function syncResonance(){
   const canvas=layer.querySelector('.resonance-sand'),still=prefersStill();
   if(resonance?.canvas!==canvas){
     resonance?.stop();
-    resonance=new SandBackdrop(canvas,{glow:layer.querySelector('.resonance-glow'),spread:matchMedia('(max-width: 800px)').matches?2.2:3,motion:!still,onReady:()=>{layer.dataset.ready='1'}});
+    // Phones and tablets (owner, 2026-10-17: "laggy"): half the grains, at one pixel per CSS px,
+    // a little slower, and no glow layer (its blur was a fifth of the work on an iPad).
+    const light=matchMedia('(pointer: coarse)').matches;
+    resonance=new SandBackdrop(canvas,{glow:light?null:layer.querySelector('.resonance-glow'),density:light?120:60,fps:light?24:30,maxDpr:light?1:2,spread:matchMedia('(max-width: 800px)').matches?2.2:3,motion:!still,onReady:()=>{layer.dataset.ready='1'}});
     resonance.listen(()=>vantaScore?.playing?vantaScore.readSpectrum():null); // the room's score too
     resonanceBeat={step:-1,at:0,key:'',glow:''};
   }
@@ -6777,3 +6953,12 @@ function renderResonanceRoom(){
   addEventListener('mouseout',e=>{if(!e.relatedTarget)resonance?.lift()},{passive:true});
   if(resonanceLevel==='on')syncResonance();
 })();
+// The first appearance (src/boot-reveal.js; owner, 2026-10-17: the menu "does not land
+// naturally"): index.html's veil covers the page until it is built, the saved theme applied and
+// the pictures on screen decoded (the wallpaper, the piece set, the hero art), then the page
+// rises into place once. The installed app's splash is up already, so it reveals at once.
+function firstPaintImages(){
+  const onScreen=img=>{const r=img.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth};
+  return [...backgroundUrls(getComputedStyle(document.body).backgroundImage),...pieceStyleImages(document.documentElement.dataset.pieceStyle||'vanta'),...[...document.images].filter(onScreen).map(img=>img.currentSrc||img.src)];
+}
+void revealApp({urls:firstPaintImages(),immediate:!!splash});

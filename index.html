@@ -1,1 +1,14 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07110f"><title>VCH — Play Better Chess</title><meta name="description" content="VCH — competitive games, real progress, and a community that thinks ahead."><link rel="icon" type="image/svg+xml" href="/icon.svg"><link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="preconnect" href="https://ubjldcfiwrwiouwgmduo.supabase.co" crossorigin><link rel="preload" as="image" href="/assets/vch/pieces/vanta-3d-1x.png" imagesrcset="/assets/vch/pieces/vanta-3d-1x.png 1x, /assets/vch/pieces/vanta-3d.png 2x" fetchpriority="high"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07110f"><title>VCH — Play Better Chess</title><meta name="description" content="VCH — competitive games, real progress, and a community that thinks ahead."><link rel="icon" type="image/svg+xml" href="/icon.svg"><link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="preconnect" href="https://ubjldcfiwrwiouwgmduo.supabase.co" crossorigin><link rel="preload" as="image" href="/assets/vch/pieces/vanta-3d-1x.png" imagesrcset="/assets/vch/pieces/vanta-3d-1x.png 1x, /assets/vch/pieces/vanta-3d.png 2x" fetchpriority="high">
+<style>
+/* The veil (src/boot-reveal.js): the theme's dark colour until the page is ready, so the first
+   thing seen is never a half-built page; then it fades. Only a slow load shows the V, and only
+   after a moment. If the script never runs, the veil lifts by itself. */
+html{background:#07110f}
+.boot-veil{position:fixed;inset:0;z-index:2147483000;background:#07110f;pointer-events:none;transition:opacity .42s cubic-bezier(.4,0,.2,1);animation:boot-veil-lift .42s ease 6s forwards}
+.boot-veil::after{content:"";position:absolute;left:50%;top:50%;width:56px;height:61px;margin:-31px 0 0 -28px;background:url(/icon.svg) center/contain no-repeat;opacity:0;animation:boot-veil-mark .6s ease .9s forwards}
+.boot-veil.out{opacity:0}
+@keyframes boot-veil-mark{to{opacity:.5}}
+@keyframes boot-veil-lift{to{opacity:0;visibility:hidden}}
+@media (prefers-reduced-motion:reduce){.boot-veil{transition-duration:.2s}.boot-veil::after{animation:none}}
+</style>
+</head><body><div id="bootVeil" class="boot-veil" aria-hidden="true"></div><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>

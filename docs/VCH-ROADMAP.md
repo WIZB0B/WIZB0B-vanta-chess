@@ -28,6 +28,13 @@ the server region.
   - every result reason, including "abandoned by opponent";
   - a mini analysis summary (accuracy for both sides, best/blunder counts);
   - buttons: Game Review, New game (with time control), Rematch.
+  - (2026-10-18: no longer a modal. A result card over the board, after the ending animation,
+    leaves the rest of the page free: the result and how it ended, both players with the
+    score and the rating change counting up, Game Review, Rematch online, New game. The mini
+    analysis summary is still to come.)
+- **Game start (2026-10-18):** the start card shows over the empty squares, then the pieces
+  settle onto their squares from the middle files out (`src/board-arrival.js`); a touch on
+  the board ends it at once.
 - **Move list:** first/previous/play/next/last controls under it, and Draw / Abort
   (before move 2) / Resign / Flip there too.
 - **Opening name** shown above the move list (from an open opening database such as the

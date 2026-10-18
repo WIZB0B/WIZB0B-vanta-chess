@@ -25,7 +25,7 @@ test('Vanta Dark: the enemy is hidden, their moves are "?" and the board shows a
   await expect(page.locator('#moves .move-cell').first().locator('.move-san b')).toHaveText('e4');
   page.once('dialog', d => d.accept());
   await page.locator('#resign').click();
-  await page.getByRole('button', { name: 'Resign' }).last().click();
+  await page.locator('.vch-dialog-layer.open').getByRole('button', { name: 'Resign' }).click(); // the confirmation, once open
   await expect(page.locator('.board-piece.b')).toHaveCount(16);
   await expect(page.locator('.square.fog')).toHaveCount(0);
 });
@@ -57,7 +57,7 @@ test('Vanta Gauntlet: a run starts at The Gate, a resignation costs a life', asy
   await expect(page.locator('#topPlayerName')).toHaveText('The Gate');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vch.gauntlet')).run.pending)).toBe(0);
   await page.locator('#resign').click();
-  await page.getByRole('button', { name: 'Resign' }).last().click();
+  await page.locator('.vch-dialog-layer.open').getByRole('button', { name: 'Resign' }).click(); // the confirmation, once open
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('vch.gauntlet')).run.lives)).toBe(2);
 });
 

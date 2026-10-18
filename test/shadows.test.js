@@ -72,14 +72,14 @@ test('the shadow is cheap to composite: painted gradients only, nothing filtered
   // No transitions either: hovering a piece just before it moves must not start a second
   // animation alongside the move.
   assert.doesNotMatch(code,/filter|blur\(|drop-shadow|mask|mix-blend|blend-mode|box-shadow|@keyframes|animation|transition|will-change/);
-  const shadow=rule('.board-piece:not([data-react="triumph"])::after');
+  const shadow=rule('.board.cast-shadows .board-piece:not([data-react="triumph"])::after');
   assert.match(shadow.background,/^radial-gradient\([\s\S]*\),\s*radial-gradient\(/);
   // It is part of the piece, so it travels with the piece's transform (compositor-only moves).
   assert.match(style,/\.board-piece\{[^}]*will-change:transform;/);
 });
 
 test('the shadow lies under its piece and above the squares, turned away from the light',()=>{
-  const shadow=rule('.board-piece:not([data-react="triumph"])::after');
+  const shadow=rule('.board.cast-shadows .board-piece:not([data-react="triumph"])::after');
   assert.equal(shadow.content,'""');
   assert.equal(shadow.position,'absolute');
   assert.equal(shadow['z-index'],'-1');
@@ -87,6 +87,17 @@ test('the shadow lies under its piece and above the squares, turned away from th
   assert.equal(shadow.transform,'scaleY(var(--shadow-depth)) rotate(atan2(calc(var(--light-y) * -1),calc(var(--light-x) * -1)))');
   // Pieces stack by screen row, so a nearer piece covers a shadow falling toward it.
   assert.match(style,/\.board-piece\{[^}]*z-index:calc\(1 \+ var\(--row,0\)\);/);
+});
+
+// Owner, 2026-10-17: the pieces "seem to be floating on the board". On the flat board, seen
+// from straight above, a shadow running down the screen into the next square reads as a piece
+// hovering, so the cast shadow is drawn only on a board shown in perspective, which no screen
+// is yet; the flat board's pieces keep their contact shadow, nudged by the same light.
+test('on the flat board a piece casts no long shadow: only a board in perspective does',()=>{
+  assert.match(code,/\.board\.cast-shadows \.board-piece:not\(\[data-react="triumph"\]\)::after\{/);
+  assert.doesNotMatch(code,/(^|[},])\s*\.board-piece:not\(\[data-react="triumph"\]\)::after\{/m,'no shadow rule for every board');
+  assert.doesNotMatch(main,/cast-shadows/,'no screen shows the board in perspective yet');
+  assert.match(style,/\.board-piece::before\{[^}]*left:calc\(20% - var\(--light-x,0\) \* 2\.5%\);/,'the light still nudges the contact shadow');
 });
 
 test('taller pieces throw longer shadows',()=>{
