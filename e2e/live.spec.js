@@ -27,10 +27,12 @@ test('two browsers share an authoritative game, chat, reconnect, arena and puzzl
   await b.locator('.board-piece[data-square="e7"]').click();await b.locator('[data-sq="e5"]').click();
   await expect(a.locator('.board-piece[data-square="e5"] .piece.b.piece-p')).toBeVisible({timeout:6000});
 
+  // White's clock runs once both first moves are in. It counts from the server's time of
+  // Black's move, which can land a moment after the relayed e5 is already on A's board, and the
+  // clock shows whole seconds rounded up: so wait for the first tick rather than sample once
+  // 1.2 s later (that sample still read 10:00 whenever the server's time came >0.2 s later).
   const before=await a.locator('#bottomClock').textContent();
-  await a.waitForTimeout(1200);
-  const after=await a.locator('#bottomClock').textContent();
-  expect(after).not.toBe(before);
+  await expect.poll(()=>a.locator('#bottomClock').textContent(),{timeout:5000}).not.toBe(before);
 
   // Chat lives in the board's "More game actions" (⋯) menu since the Batch 5 right-panel cleanup.
   for(const page of [a,b]){await page.locator('.game-more>summary').click();await page.locator('#openChat').click();await expect(page.locator('#chatDrawer')).toHaveClass(/open/)}
