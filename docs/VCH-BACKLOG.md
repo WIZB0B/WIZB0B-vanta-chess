@@ -65,6 +65,13 @@ Use the current piece images and refine them with CSS only:
 - **In code:** `src/splash.js` decides (`splashPlan`). Installed launches keep the full
   splash; a first web visit gets 380ms + 200ms fade, remembered in `localStorage`
   (`vch.splash-seen`); if storage can't be read or written the splash is skipped.
+- **Updated 2026-10-18** (owner, 2026-10-17: the menu "does not land naturally"): the browser
+  never shows the splash. `index.html` has a veil in the theme's dark colour that covers the
+  page until it is built, the saved theme applied and the pictures on screen decoded (at most
+  1.4 s after navigation starts), then fades in 0.42 s while the page's regions rise 8 px into
+  place once (`src/boot-reveal.js`). A slow load shows a faint V after 0.9 s. Installed
+  launches keep the splash. Moving between screens and sections fades the new one in
+  (`markEntering`, `enterView` in `src/main.js`).
 
 ## 7. Separate screens + mini live game
 - Each top-nav item (Arena, Puzzles, Learn, Openings, Famous Games, Review) opens its

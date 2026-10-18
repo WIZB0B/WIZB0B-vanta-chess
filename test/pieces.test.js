@@ -11,8 +11,8 @@ test('board pieces have no filter halo; depth comes from a contact shadow that t
   assert.ok(layers.length>0,'board layers block exists');
   assert.match(layers,/\.board-piece \.piece\{display:block;filter:none;pointer-events:none\}/);
   const shadow=layers.match(/\.board-piece::before\{([^}]*)\}/)?.[1]||'';
-  assert.match(shadow,/left:20%;width:60%;/,'about 60% of the square wide, centred');
-  assert.match(shadow,/top:calc\(var\(--piece-baseline\) - 6%\);height:12%;/,'12% tall, centred on the baseline');
+  assert.match(shadow,/left:calc\(20% - var\(--light-x,0\) \* 2\.5%\);width:60%;/,'about 60% of the square wide, centred, nudged away from the light');
+  assert.match(shadow,/top:calc\(var\(--shadow-base,var\(--piece-baseline\)\) - 6%\);height:12%;/,'12% tall, centred where the base meets the square');
   assert.match(shadow,/radial-gradient\(ellipse at center,rgba\(0,0,0,\.35\)/,'opacity about .35');
   assert.match(shadow,/filter:blur\(1\.5px\)/,'slightly blurred');
   // The shadow belongs to the piece element, not to a square, so it can't arrive before it.

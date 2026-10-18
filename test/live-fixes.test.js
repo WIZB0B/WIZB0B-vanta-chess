@@ -157,7 +157,7 @@ test('a 360 px phone: the oath picker narrows instead of widening the Play panel
 
 test('on a phone the flag prompt never covers the Play tab\'s Start game and Create room buttons', () => {
   assert.match(main, /function phonePlaySetupShowing\(\)\{\n\s*return document\.body\.classList\.contains\('m-app'\)&&!\['game','review'\]\.includes\(document\.querySelector\('\.shell'\)\?\.dataset\.mview\)&&!!document\.querySelector\('\[data-m-tab="play"\]\.on'\);/);
-  assert.match(main, /function flagPromptCalm\(\)\{return !liveGameOn\(\)&&!chatIsOpen\(\)&&!document\.querySelector\('\.vch-dialog-layer'\)&&!phonePlaySetupShowing\(\)\}/);
+  assert.match(main, /function flagPromptCalm\(\)\{return !liveGameOn\(\)&&!chatIsOpen\(\)&&!document\.querySelector\('\.vch-dialog-layer'\)&&!\$\('#gameEndPanel'\)&&!phonePlaySetupShowing\(\)\}/);
 });
 
 test('a new piece set shows once its images are in, so the board never stands empty', () => {

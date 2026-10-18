@@ -15,7 +15,9 @@ const boot = async (page, extra = null, arg = null) => {
   await api(page); await page.goto('/');
   return errors;
 };
-const resign = async page => { await page.locator('#resign').click(); await page.getByRole('button', { name: 'Resign' }).last().click(); };
+// The confirmation opens on the next frame: until then its button is hidden, and .last() would
+// pick the toolbar's Resign, which the opening dialog then covers.
+const resign = async page => { await page.locator('#resign').click(); await page.locator('.vch-dialog-layer.open').getByRole('button', { name: 'Resign' }).click(); };
 const dark = page => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--dark').trim());
 
 test('Vanta Campaign: the first realm lends its board and weather, and a loss leaves it open', async ({ page }) => {
@@ -36,7 +38,8 @@ test('Vanta Campaign: the first realm lends its board and weather, and a loss le
   await resign(page);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('vch.campaign')).pending)).toBe(null);
   await expect(page.locator('#atmosphere')).toHaveAttribute('data-mood', 'dusk');
-  await page.locator('.vch-dialog-layer .vch-dialog-close').click();
+  await page.locator('#gameEndPanel .ge-close').click();
+  await expect(page.locator('#gameEndPanel')).toHaveCount(0);
   // An ordinary game gives your own board back.
   await page.locator('#computerStart').click();
   await expect.poll(() => dark(page)).toBe(before);
