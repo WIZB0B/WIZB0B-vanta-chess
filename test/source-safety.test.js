@@ -22,6 +22,8 @@ test('reference artwork is test-only and dedicated UI art is used at runtime',as
 test('committed VCH wordmark is used for visible brand surfaces',async()=>{
   const source=await readFile(new URL('../src/main.js',import.meta.url),'utf8')+await readFile(new URL('../src/splash.js',import.meta.url),'utf8');
   const uses=(source.match(/\/assets\/vch\/brand\/vch-metal\.svg/g)||[]).length;
-  assert.ok(uses>=7,'brand wordmark must be used in top bar, splash, menu, account, search, views, and loading states');
+  assert.ok(uses>=6,'brand wordmark must be used in top bar, splash, account, search, views, and loading states');
+  // The home screen carries the new name beside the V (owner, 2026-10-18: the landing is "Vchess").
+  assert.match(source,/<p class="home-name"><span class="vch-v vch-v-chrome" aria-hidden="true"><\/span>Vchess<\/p>/);
   assert.doesNotMatch(source,/VANTA CHESS ACCOUNT|VANTA CHESS<|Search Vanta Chess|Loading live Vanta tournaments/);
 });

@@ -28,6 +28,7 @@ export const ROWS = [
   ["Edit portrait & flag", "Portre ve bayrağı düzenle"],
   ["Moderation", "Moderasyon"],
   ["Play Better", "Daha iyi oyna"],
+  ["Play Better Chess", "Daha İyi Satranç Oyna"],
   ["Chess", "satranç"],
   ["Competitive games. Real progress. A community that thinks ahead.", "Rekabetçi oyunlar. Gerçek gelişim. İleriyi düşünen bir topluluk."],
   ["Join Now", "Hemen katıl"],

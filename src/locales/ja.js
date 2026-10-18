@@ -28,6 +28,7 @@ export const ROWS = [
   ["Edit portrait & flag", "肖像と国旗を編集"],
   ["Moderation", "モデレーション"],
   ["Play Better", "もっと強くなる"],
+  ["Play Better Chess", "もっと強くチェスを"],
   ["Chess", "チェス"],
   ["Competitive games. Real progress. A community that thinks ahead.", "真剣勝負。確かな上達。先を読むコミュニティ。"],
   ["Join Now", "今すぐ参加"],

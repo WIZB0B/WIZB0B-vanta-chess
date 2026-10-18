@@ -28,6 +28,7 @@ export const ROWS = [
   ["Edit portrait & flag", "Modifica ritratto e bandiera"],
   ["Moderation", "Moderazione"],
   ["Play Better", "Gioca meglio"],
+  ["Play Better Chess", "Gioca meglio a scacchi"],
   ["Chess", "a scacchi"],
   ["Competitive games. Real progress. A community that thinks ahead.", "Partite combattute. Progressi reali. Una community che pensa in anticipo."],
   ["Join Now", "Unisciti ora"],

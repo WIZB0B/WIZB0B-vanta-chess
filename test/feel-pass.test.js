@@ -82,7 +82,7 @@ test('pictures come from the wallpaper, the piece set and the images on screen',
   assert.deepEqual(backgroundUrls('linear-gradient(rgb(2 7 8 / .42),rgb(2 7 8 / .52)), url("/assets/vch/wallpapers/wallpaper-emerald.webp")'), ['/assets/vch/wallpapers/wallpaper-emerald.webp']);
   assert.deepEqual(backgroundUrls('url(/a.png), url(\'/b.png\')'), ['/a.png', '/b.png']);
   assert.deepEqual(backgroundUrls('none'), []);
-  assert.match(main, /void revealApp\(\{urls:firstPaintImages\(\),immediate:!!splash\}\);\s*$/, 'at the very end of main.js, once everything is built');
+  assert.match(main, /void revealApp\(\{\.\.\.firstPaintImages\(\),immediate:!!splash\}\);\s*$/, 'at the very end of main.js, once everything is built');
   assert.match(main, /\.\.\.backgroundUrls\(getComputedStyle\(document\.body\)\.backgroundImage\),\.\.\.pieceStyleImages\(document\.documentElement\.dataset\.pieceStyle\|\|'vanta'\)/);
 });
 
