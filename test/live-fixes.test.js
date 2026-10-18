@@ -68,6 +68,25 @@ test('every tap readies the music: a touch\'s end, a click or a key; and a world
   assert.match(main, /const unlockMusic=\(\)=>\{if\(!musicPrefsGet\(\)\.on\|\|\$\('#sound'\)\?\.dataset\.off\)return;ensureScore\(\);if\(!vantaScore\?\.unlock\(\)\)return;if\(!vantaScore\.playing\)queueAtmosphere\(\)\};/);
   assert.match(main, /for\(const type of \['touchend','pointerup','click','keydown'\]\)document\.addEventListener\(type,unlockMusic,\{capture:true,passive:true\}\);/);
   assert.match(main, /if\(w&&!musicPrefsGet\(\)\.on\)setMusicOn\(true,'on'\);/);
+  // The tap that turns the music on readies it too: a listener that runs after the control's own
+  // handler (the capture listeners run before it, while the music is still off).
+  assert.match(main, /for\(const type of \['click','change'\]\)document\.addEventListener\(type,unlockMusic,\{passive:true\}\);/);
+});
+
+test('iPhone and iPad: the tap that turns the music on starts it, with no second tap', async () => {
+  // A new player: music off, so the listener before the control's handler does nothing; the
+  // control turns the music on and starts it outside Safari's view of the tap...
+  const score = new VantaScore({ AudioContextClass: SafariContext, AudioElement: SafariAudio, timers: { setInterval: () => 1, clearInterval() {}, setTimeout: fn => { fn(); return 1; }, clearTimeout() {} }, tracks: LIB, base: '/m/', random: () => 0, clock: () => 0 });
+  let on = false;
+  const unlockIfOn = () => { if (on) score.unlock(); };
+  tap(() => { unlockIfOn(); on = true; unlockIfOn(); }); // capture listener, the control, then the listener after it
+  assert.equal(score.start(), true); // the track arrives a moment later, outside the tap
+  await settle();
+  assert.ok(!score.active.el.paused, 'it plays: the tap that turned the music on readied it');
+});
+
+test('Settings is a full-screen sheet on every phone width, held sideways too', () => {
+  assert.match(css, /@media \(max-width:760px\),\(max-height:500px\)\{\n\s*#themeStudio\.settings-dialog\{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;/);
 });
 
 // ---- Settings ----

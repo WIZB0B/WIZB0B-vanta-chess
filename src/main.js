@@ -5699,6 +5699,10 @@ function initRoundTwelve(){
   // track Safari refused to start (src/music.js unlock).
   const unlockMusic=()=>{if(!musicPrefsGet().on||$('#sound')?.dataset.off)return;ensureScore();if(!vantaScore?.unlock())return;if(!vantaScore.playing)queueAtmosphere()};
   for(const type of ['touchend','pointerup','click','keydown'])document.addEventListener(type,unlockMusic,{capture:true,passive:true});
+  // The tap that turns the music on (Music on, a station, a World) readies it in that same tap:
+  // these run after the control's own handler, when the music is already on (the listeners above
+  // run before it and still find it off, so the first track waited for another tap).
+  for(const type of ['click','change'])document.addEventListener(type,unlockMusic,{passive:true});
   document.addEventListener('pointerover',e=>{
     if(e.pointerType!=='mouse')return;const el=e.target.closest?.('.board-piece[data-veteran]');if(!el)return;
     clearTimeout(vetHoverTimer);vetHoverTimer=setTimeout(()=>showVeteranCard(el),420);
