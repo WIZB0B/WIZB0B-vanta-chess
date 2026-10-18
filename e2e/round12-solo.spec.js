@@ -15,7 +15,9 @@ const boot = async (page, extra = null, arg = null) => {
   await api(page); await page.goto('/');
   return errors;
 };
-const resign = async page => { await page.locator('#resign').click(); await page.getByRole('button', { name: 'Resign' }).last().click(); };
+// The confirmation opens on the next frame: until then its button is hidden, and .last() would
+// pick the toolbar's Resign, which the opening dialog then covers.
+const resign = async page => { await page.locator('#resign').click(); await page.locator('.vch-dialog-layer.open').getByRole('button', { name: 'Resign' }).click(); };
 const dark = page => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--dark').trim());
 
 test('Vanta Campaign: the first realm lends its board and weather, and a loss leaves it open', async ({ page }) => {
