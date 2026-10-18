@@ -99,3 +99,20 @@ test('phone: a tap never zooms the page', async ({ page }) => {
   expect(sizes.length).toBeGreaterThan(2);
   expect(Math.min(...sizes)).toBeGreaterThanOrEqual(16);
 });
+
+// Found by the device matrix (2026-10-18): on a 360 px Android phone (Galaxy S-class) the oath
+// picker widened the Play panel to 387 px, so the phone zoomed the whole page out and let it
+// slide sideways.
+test('phone 360 px wide: every Play setup fits the width, and Start game starts the game', async ({ page }) => {
+  test.skip(test.info().project.name!=='mobile','phones only');
+  await page.setViewportSize({width:360,height:780});
+  await setup(page);await page.goto('/');
+  for(const m of ['room','match','computer']){
+    await page.locator(`[data-mode="${m}"]`).click();
+    const fit=await page.evaluate(()=>({inner:innerWidth,scroll:document.scrollingElement.scrollWidth}));
+    expect(fit.inner,m).toBe(360);
+    expect(fit.scroll,m).toBeLessThanOrEqual(360);
+  }
+  await page.locator('#computerStart').click();
+  await expect(page.locator('.shell')).toHaveAttribute('data-mview','game');
+});

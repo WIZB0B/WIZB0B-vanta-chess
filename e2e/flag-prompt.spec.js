@@ -35,10 +35,20 @@ test('the flag prompt waits while a game is on and never covers the chat', async
   await expect(page.locator('#message')).toHaveValue('');
 });
 
-test('the flag prompt still appears when no game is on, and stays dismissed', async ({ page }) => {
+test('the flag prompt still appears when no game is on, and stays dismissed', async ({ page, isMobile }) => {
   await mockServer(page);
   await page.goto('/');
-  await expect(page.locator('.flag-prompt')).toBeVisible({timeout:6000});
+  if(isMobile){
+    // Phones: never over the Play tab's Start game / Create room buttons; it asks on another tab.
+    await page.waitForTimeout(3500);
+    await expect(page.locator('.flag-prompt')).toHaveCount(0);
+    await page.locator('[data-m-tab="puzzles"]').click();
+    await expect(page.locator('.flag-prompt')).toBeVisible({timeout:9000});
+    await page.locator('[data-m-tab="play"]').click();
+    await expect(page.locator('.flag-prompt')).toHaveCount(0);
+    await page.locator('[data-m-tab="puzzles"]').click();
+  }
+  await expect(page.locator('.flag-prompt')).toBeVisible({timeout:9000});
   await page.locator('.flag-prompt [data-flag="no"]').click();
   await expect(page.locator('.flag-prompt')).toHaveCount(0);
   await page.reload();await page.waitForTimeout(3500);
