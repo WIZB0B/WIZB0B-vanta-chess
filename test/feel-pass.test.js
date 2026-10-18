@@ -117,6 +117,11 @@ test('a computer reply that comes after the game has ended is dropped', () => {
   assert.match(main, /const move=await findEngineMove\(\);if\(move===undefined\|\|localGameOver\)return;/);
 });
 
+test('on a small board the end card tightens so it shows whole (measured on the board)', () => {
+  assert.match(css, /\.game-end\{container-type:size\}/);
+  assert.match(css, /@container \(max-height:440px\)\{[^@]*\.ge-actions>\.ge-review:nth-last-child\(2\),\.ge-actions>\.ge-secondary:nth-child\(2\):last-child\{grid-column:auto\}/);
+});
+
 // ---- The start of a game ----
 test('the pieces settle from the middle files out: d and e first, a and h last', () => {
   assert.deepEqual(['d1', 'e8', 'c2', 'f7', 'b1', 'g8', 'a1', 'h8'].map(s => arrivalDelay(s)), [0, 0, 36, 36, 72, 72, 108, 108]);

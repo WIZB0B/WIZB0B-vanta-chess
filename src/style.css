@@ -3719,4 +3719,17 @@ html.app-revealing .shell>main>:nth-child(n+2):not(.game),html.app-revealing .sh
 .ge-actions>.ge-secondary:nth-child(2):last-child{grid-column:1/-1}
 .ge-actions button:focus-visible,.ge-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 @media (max-width:420px){.ge-card{padding:16px 14px 14px;gap:10px}.ge-title{font-size:28px}}
+/* A small board (a phone's, or any board under about 460 px): a tighter card, and against the
+   computer its two actions side by side, so the whole card shows without scrolling (on a 360 px
+   Galaxy and an iPhone SE it used to scroll). Measured on the board, not the screen. */
+.game-end{container-type:size}
+@container (max-height:440px){
+  .ge-card{gap:8px;padding:14px 14px 12px}
+  .ge-title{font-size:26px}
+  .ge-reason{margin:-4px 0 0;font-size:13px}
+  .ge-player{grid-template-columns:32px minmax(0,1fr) auto;padding:6px 10px 6px 7px}
+  .ge-avatar{width:32px;height:32px}
+  .ge-actions{margin-top:2px}
+  .ge-actions>.ge-review:nth-last-child(2),.ge-actions>.ge-secondary:nth-child(2):last-child{grid-column:auto}
+}
 @media (prefers-reduced-motion:reduce){.game-end::before,.ge-card{transition:none}.ge-card{transform:none}}

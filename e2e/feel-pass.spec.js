@@ -82,6 +82,8 @@ test('the end of a game: a result card over the board that leaves the page free'
   await expect(panel.locator('[data-ge="review"]')).toBeVisible();
   await expect(panel.locator('[data-ge="new"]')).toBeVisible();
   await expect(panel.locator('[data-ge="rematch"]')).toHaveCount(0, { timeout: 100 });
+  // The whole card shows, on the phone's board too (no scrolling inside it).
+  expect(await panel.locator('.ge-card').evaluate(card => card.scrollHeight - card.clientHeight)).toBeLessThanOrEqual(1);
   // No modal layer: the rest of the page answers while the card is up.
   await expect(page.locator('.vch-dialog-layer')).toHaveCount(0);
   if (!(await page.locator('body.m-app').count())) {
