@@ -3130,9 +3130,11 @@ button.zh-piece[disabled]{opacity:.55;cursor:default}
 .army-piece.rank-champion{border-color:rgba(229,193,124,.35)}.army-piece.rank-legend{border-color:rgba(244,213,138,.7);background:linear-gradient(145deg,#1d1b10,#0b1715)}
 .army-piece .vet-mark{left:auto;right:9px;top:9px;bottom:auto;width:12px}
 @media (max-width:560px){.army-cols{grid-template-columns:1fr}}
-/* Oaths */
-.oath-row{display:grid;gap:5px;margin-top:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#ffffff08}
-.oath-row label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#d8dfdd}
+/* Oaths. The row's one column may be narrower than the picker's natural width (its longest vow):
+   on a 360 px phone the picker used to widen the Play panel to 387 px, so the phone zoomed the
+   whole page out and let it slide sideways (Galaxy S23-sized screen, 2026-10-18). */
+.oath-row{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin-top:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#ffffff08}
+.oath-row label{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;font-size:12px;color:#d8dfdd}
 .oath-row select{min-width:0;max-width:62%;background:#091416;color:#e9ece9;border:1px solid #3b4848;border-radius:8px;padding:7px 8px;font-size:12px}
 .oath-vow{color:var(--muted);font-size:10px;line-height:1.4}.oath-vow b{color:#f2dfaf;font-weight:700}.oath-vow em{font-style:normal;color:#e5c17c;margin-left:4px}
 .oath-line{display:flex;align-items:center;gap:6px;margin-top:2px;min-width:0;font-size:9px;line-height:1.2;color:var(--muted);white-space:nowrap}

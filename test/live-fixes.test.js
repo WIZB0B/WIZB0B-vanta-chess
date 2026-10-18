@@ -129,6 +129,18 @@ test('the Resonance background on a phone or tablet: fewer grains, one pixel per
   assert.equal(phone.count, Math.round(390 * 844 / 120));
 });
 
+// ---- Found by the phone and tablet matrix (2026-10-18) ----
+test('a 360 px phone: the oath picker narrows instead of widening the Play panel', () => {
+  assert.match(css, /\.oath-row\{display:grid;grid-template-columns:minmax\(0,1fr\);/);
+  assert.match(css, /\.oath-row label\{display:flex;[^}]*min-width:0;/);
+  assert.match(css, /\.oath-row select\{min-width:0;max-width:62%;/);
+});
+
+test('on a phone the flag prompt never covers the Play tab\'s Start game and Create room buttons', () => {
+  assert.match(main, /function phonePlaySetupShowing\(\)\{\n\s*return document\.body\.classList\.contains\('m-app'\)&&!\['game','review'\]\.includes\(document\.querySelector\('\.shell'\)\?\.dataset\.mview\)&&!!document\.querySelector\('\[data-m-tab="play"\]\.on'\);/);
+  assert.match(main, /function flagPromptCalm\(\)\{return !liveGameOn\(\)&&!chatIsOpen\(\)&&!document\.querySelector\('\.vch-dialog-layer'\)&&!phonePlaySetupShowing\(\)\}/);
+});
+
 test('a new piece set shows once its images are in, so the board never stands empty', () => {
   assert.match(main, /function pieceStyleImages\(style\)\{/);
   assert.match(main, /if\(style==='vanta'\)return \[sheet\('vanta-3d'\)\];/);

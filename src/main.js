@@ -1754,7 +1754,13 @@ function scheduleFlagPrompt(){
 }
 // The flag prompt never interrupts a game or a conversation: it waits for a quiet moment, and
 // steps aside (to come back later) if a game starts or the chat opens while it is showing.
-function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')}
+// On a phone it sits just above the tab bar, where the Play tab keeps its Start game and Create
+// room buttons, so it also waits while that tab's setup is on screen and asks on another tab or
+// after a game instead (on a 360 px Galaxy it covered Start game, 2026-10-18).
+function phonePlaySetupShowing(){
+  return document.body.classList.contains('m-app')&&!['game','review'].includes(document.querySelector('.shell')?.dataset.mview)&&!!document.querySelector('[data-m-tab="play"].on');
+}
+function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')&&!phonePlaySetupShowing()}
 function showFlagPrompt(){
   if(flagPromptDone()||currentProfile?.country_code||document.querySelector('.flag-prompt'))return;
   if(!flagPromptCalm()){setTimeout(showFlagPrompt,6000);return}
