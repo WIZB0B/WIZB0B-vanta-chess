@@ -112,6 +112,11 @@ test('moving between screens and sections: the one you go to fades in briefly, n
   assert.doesNotMatch(css, /@keyframes vch-view-fade\{[^}]*translate/);
 });
 
+test('a computer reply that comes after the game has ended is dropped', () => {
+  assert.match(main, /if\(game\.fen\(\)===book\.fen&&!localGameOver\)makeMove\(book\.move,true\);/);
+  assert.match(main, /const move=await findEngineMove\(\);if\(move===undefined\|\|localGameOver\)return;/);
+});
+
 // ---- The start of a game ----
 test('the pieces settle from the middle files out: d and e first, a and h last', () => {
   assert.deepEqual(['d1', 'e8', 'c2', 'f7', 'b1', 'g8', 'a1', 'h8'].map(s => arrivalDelay(s)), [0, 0, 36, 36, 72, 72, 108, 108]);

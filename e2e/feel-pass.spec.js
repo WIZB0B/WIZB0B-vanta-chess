@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { clickAt, mockBackend, piece, releaseBotMove, startComputerGame as startTournamentGame, useScriptedEngine } from './board-helpers.js';
 
 // The smoothness pass (owner, 2026-10-17: "it feels choppy ... when you go to the menu ... it does
 // not land naturally ... the elements on the board ... seem to be floating on the board", and
@@ -120,4 +121,20 @@ test('a first visit lands with nothing popping up; the flag question waits for a
   await expect(page.locator('.flag-prompt'), 'never over the end card').toHaveCount(0);
   await page.locator('#gameEndPanel .ge-close').click();
   await expect(page.locator('.flag-prompt')).toBeVisible({ timeout: 9000 });
+});
+
+test('resigning while the computer thinks: its late reply is not played and the end card stays', async ({ page }) => {
+  await mockBackend(page); await useScriptedEngine(page); await startTournamentGame(page);
+  await expect(page.locator('#board')).not.toHaveAttribute('data-arrival', /.+/, { timeout: 3000 });
+  await clickAt(page, 'e2'); await clickAt(page, 'e4');
+  await expect.poll(() => page.evaluate(() => window.__botRequests), { timeout: 5000 }).toBeGreaterThanOrEqual(1);
+  await resign(page);
+  const panel = page.locator('#gameEndPanel');
+  await expect(panel).toBeVisible({ timeout: 5000 });
+  await releaseBotMove(page, 'e7e5', 1);
+  await page.waitForTimeout(900);
+  await expect(piece(page, 'e5')).toHaveCount(0);
+  await expect(piece(page, 'e7')).toHaveCount(1);
+  await expect(panel).toBeVisible();
+  await expect(page.locator('.game-end')).toHaveCount(1);
 });

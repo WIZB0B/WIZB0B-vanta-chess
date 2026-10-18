@@ -1480,7 +1480,9 @@ async function findEngineMove(){
   if(!chosen&&blind&&uci){const pool=moves.filter(x=>blind.searchmoves.includes(x.from+x.to+(x.promotion||'')));return pool[Math.floor(Math.random()*pool.length)]||moves[0]}
   return chosen;
 }
-async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
+// A reply that comes after the game has ended (you resigned, or a clock ran out, while it was
+// thinking) is dropped: the final position stays as the game ended, under its result card.
+async function engineMove(){if(mode==='computer'&&(!computerStarted||game.turn()===computerSide))return;const book=shadowMove();if(book){await new Promise(resolve=>setTimeout(resolve,320));if(game.fen()===book.fen&&!localGameOver)makeMove(book.move,true);return}const move=await findEngineMove();if(move===undefined||localGameOver)return;if(!move)return toast('Stockfish 19 is unavailable — no substitute move was played');makeMove(move,true)}
 // One AudioContext for the whole session: creating one per move is slow and browsers cap them.
 function audioContext(){toneContext??=new AudioContext();if(toneContext.state==='suspended')void toneContext.resume();return toneContext}
 // A move is heard where it lands: placed around you by its square (HRTF, src/move-sound.js
