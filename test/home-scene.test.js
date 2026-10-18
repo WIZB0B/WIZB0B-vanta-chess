@@ -120,3 +120,29 @@ test('the living scene: real time, never a loop, and it stops when it cannot be 
     assert.ok(lamp.flame[0] < 3840 && lamp.flame[1] < 2160 && lamp.pivot[1] < lamp.flame[1] && lamp.flame[1] < lamp.bottom[1], 'each lantern hangs from its chain');
   }
 });
+
+// Owner, 2026-10-18: "The background is not alive ... The fogs are not moving. Nothing is moving",
+// and the light outside the pavilion did not react to the candles.
+test('the fog in the photograph itself drifts, at a pace you can see', () => {
+  // the photo's own fog is carried along the wind over the land beneath it (no painted layer)
+  assert.match(scene, /the fog in the photograph drifts: the land under it stays put, and the light the fog adds is\n  \/\/ carried along the wind/);
+  assert.match(scene, /vec3 moved = clamp\(c \+ tint\*add, vec3\(0\.0\), max\(c, max\(p1, p2\)\)\);/, 'fog never brightens anything past the fog it came from');
+  // the sky stops where the land starts, column by column, so fog never drifts over open sky
+  assert.match(scene, /per column: where the sky ends/);
+  // speeds on the master photograph, in pixels a second: fog 22, clouds 20 (a few seconds shows it)
+  assert.match(scene, /const speed = \{ cloud: quality\.cloudSpeed \?\? 20, fog: quality\.fogSpeed \?\? 22, ground: quality\.groundSpeed \?\? 0\.6 \};/);
+  // the two copies of the moving sky and fog wrap at different moments in different places
+  assert.match(scene, /float off = 0\.5\*sin\(uv\.x\*5\.3 \+ uv\.y\*3\.1\) \+ 0\.5\*sin\(uv\.x\*2\.1 - uv\.y\*7\.7 \+ 1\.3\);/);
+});
+
+test('candlelight: every lit surface, inside and out, flickers with the lanterns that light it', () => {
+  // each lantern's share of the light falls off with the square of the distance; the lit stone
+  // follows the share, so the spill on the steps and the path flickers too, not only the interior
+  assert.match(scene, /float e = 1\.0\/\(14400\.0 \+ d2\);/);
+  assert.match(scene, /float share = lsum\/max\(wsum, 1e-6\);/);
+  assert.match(scene, /c \*= 1\.0 \+ m\.g\*\(share - 1\.0\);/);
+  // any number of lanterns, up to eight, each with its own flame, sway and flicker
+  assert.match(scene, /export const MAX_LAMPS = 8;/);
+  assert.match(scene, /uniform vec4 uLampA\[\$\{MAX_LAMPS\}\];/);
+  assert.ok(PAVILION.lamps.length >= 1 && PAVILION.lamps.length <= 8);
+});
