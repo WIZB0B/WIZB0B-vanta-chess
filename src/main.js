@@ -74,6 +74,8 @@ import { KEY_FOR_THEME, VantaScore, WORLDS, chordFor, hideTrack, likeTrack, load
 import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-library.js';
 import { ACCEPT as MY_MUSIC_ACCEPT, MAX_SONG_MB, MAX_SONGS, addSongs, listSongs, myMusicServed, putSong, removeSong, renameSong, songTrack } from './my-music.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
+import { backgroundUrls, revealApp } from './boot-reveal.js';
+import { ARRIVAL, arrivalMs, startArrival } from './board-arrival.js';
 import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
 import { DRILLS, drillById, drillStatus, loadProgress, saveStars, starsFor, yourColor } from './endgames.js';
@@ -785,7 +787,7 @@ function renderStatus(){
   document.body.dataset.botGame=serverGame?.bot_player_id?'true':'false';
   const reviewButton=$('#reviewGame');if(reviewButton)reviewButton.classList.toggle('hidden',!isGameFinishedForReview()||!currentHistory().length);
   renderReviewBoardDecorations();syncClockBars();
-  updateOpeningLabel();scheduleAnalysis();void maybeShowGameOver();syncMobileShell();
+  updateOpeningLabel();scheduleAnalysis();syncGameEndPanel();void maybeShowGameOver();syncMobileShell();
 }
 // The board updates now; status text, review decorations, opening name, analysis and the
 // game-over check follow once the frame with the board change has been painted.
@@ -843,11 +845,20 @@ function cue(sting,sound){if(vantaScore?.playing&&vantaScore.sting(sting))return
 // The game-start card (owner, 2026-10-14: not a tune; "just make a sound ... the trumpet sound
 // that blows when the game starts ... brief with a notification panel telling you that game has
 // started ... something that is very obvious"): a short trumpet call (the start sting with the
-// music on, the interface's start sound without) and, over the board for under two seconds, who
-// plays whom, your colour and the clock. It never takes a click: you can move at once.
+// music on, the interface's start sound without) and, over the board, who plays whom, your
+// colour and the clock. Since 2026-10-18 (owner: the pieces "don't load naturally", "the game
+// start screen") it is the opening of the game's arrival (src/board-arrival.js): the card shows
+// over the board's empty squares, and as it leaves the pieces settle onto their squares, so
+// nothing covers a piece while you play. It never takes a click: a touch on the board ends the
+// arrival at once and you can move.
+let boardArrival=null;
+function arrivalWanted(){return motionScale()>0&&!document.hidden}
+function finishBoardArrival(){const arrival=boardArrival;boardArrival=null;arrival?.finish()}
+// How long until the pieces are down: the computer's first move waits for it.
+function startCeremonyMs(){return boardArrival?arrivalMs():0}
 function showGameStartBanner(color,seconds,increment,key){
   if(!color||!key||lastGameStartKey===key)return;
-  lastGameStartKey=key;
+  lastGameStartKey=key;hideGameEndPanel();
   let card=$('#gameStartCard');
   if(!card){
     card=document.createElement('div');card.id='gameStartCard';card.className='game-start-card';card.setAttribute('role','status');card.setAttribute('aria-live','polite');
@@ -860,7 +871,11 @@ function showGameStartBanner(color,seconds,increment,key){
   card.querySelector('.gs-clock').textContent=formatTimeControl(seconds,increment);
   card.classList.remove('show');cue('start','start');queueAtmosphere(); // the music turns to the game on its next bar line, after the start sting
   queueMicrotask(()=>{fillGameStartPlayers(card);void card.offsetWidth;card.classList.add('show')}); // once the player bars show this game
-  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>card.classList.remove('show'),1900);
+  finishBoardArrival();
+  const dom=ensureBoardDom(),arrival=arrivalWanted()?startArrival(dom.board,dom.pieces.elements,{onScreen:dom.board.getClientRects().length>0}):null;
+  boardArrival=arrival;arrival?.done.then(()=>{if(boardArrival===arrival)boardArrival=null});
+  // With the arrival, the card leaves as the pieces begin to settle; without it, it stays a moment.
+  clearTimeout(gameStartBannerTimer);gameStartBannerTimer=setTimeout(()=>card.classList.remove('show'),arrival?ARRIVAL.holdMs:1900);
 }
 // The two players as their bars show them: portrait, name, rating and flag.
 function fillGameStartPlayers(card){
@@ -872,6 +887,93 @@ function fillGameStartPlayers(card){
     for(const c of ['has-picture','is-empty'])pic.classList.toggle(c,!!avatar?.classList.contains(c));
     const shown=!!flag&&!flag.classList.contains('hidden');mark.classList.toggle('hidden',!shown);mark.replaceChildren(...(shown?[...flag.childNodes].map(n=>n.cloneNode(true)):[]));
   }
+}
+// A touch on the board during the arrival ends it at once (the card too): it never holds up a move.
+document.addEventListener('pointerdown',event=>{if(boardArrival&&event.target?.closest?.('#board')){finishBoardArrival();$('#gameStartCard')?.classList.remove('show')}},{capture:true,passive:true});
+
+// The end of a game (owner, 2026-10-17: "the game end screen"), in place of the Game over
+// dialog: a result card over the board that leaves the rest of the page free (no layer to
+// dismiss before anything else works). The result and how it ended, the two players as their
+// bars show them with the game's score and their rating change counting to its new value, and
+// Game Review, Rematch (online) and New game. Close it (or Escape) to look at the final
+// position; it goes by itself when a new game starts or the board shows something else.
+const GE_CLOSE_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+function gameEndKeys(event){
+  if(event.key!=='Escape'||!$('#gameEndPanel')||document.querySelector('dialog[open],.vch-dialog-layer'))return;
+  event.preventDefault();hideGameEndPanel();
+}
+function hideGameEndPanel(){
+  const panel=$('#gameEndPanel');if(!panel)return;
+  panel.removeAttribute('id');document.removeEventListener('keydown',gameEndKeys,true);
+  cancelAnimationFrame(Number(panel.dataset.countFrame)||0);
+  panel.classList.remove('show');setTimeout(()=>panel.remove(),motionScale()>0?280:0);
+}
+// The panel belongs to one finished game: anything else on the board takes it away.
+function syncGameEndPanel(){const panel=$('#gameEndPanel');if(panel&&gameOverInfo()?.key!==panel.dataset.key)hideGameEndPanel()}
+function endScore(result,color){
+  if(result==='1/2-1/2')return '½';
+  if(result==='1-0')return color==='w'?'1':'0';
+  if(result==='0-1')return color==='b'?'1':'0';
+  return '';
+}
+// A rated online game's rating change for one colour: {before, delta}, or null.
+function endRatingChange(info,color){
+  if(!info.online||!serverGame?.rated)return null;
+  const prefix=color==='w'?'white':'black',before=Number(serverGame[`${prefix}_rating_before`]),delta=Number(serverGame[`${prefix}_rating_delta`]);
+  return serverGame[`${prefix}_rating_before`]!=null&&serverGame[`${prefix}_rating_delta`]!=null&&Number.isFinite(before)&&Number.isFinite(delta)?{before,delta}:null;
+}
+function showGameEndPanel(info,title){
+  hideGameEndPanel();
+  const mine=info.myColor==='b'?'b':'w',theirs=mine==='w'?'b':'w';
+  const outcome=title==='You won'?'won':title==='You lost'?'lost':title==='Draw'?'draw':'aborted';
+  const plies=currentHistory().length,moves=Math.ceil(plies/2);
+  const reason=[info.reason&&info.reason!=='aborted'?info.reason:'',moves?`${moves} ${moves===1?'move':'moves'}`:''].filter(Boolean).join(' · ');
+  const row=(side,color)=>{
+    const change=endRatingChange(info,color);
+    const rating=change?`<span class="ge-rating" data-from="${change.before}" data-to="${change.before+change.delta}">${change.before}</span><span class="ge-delta ${change.delta>0?'up':change.delta<0?'down':'even'}">${change.delta>0?'+':change.delta<0?'−':'±'}${Math.abs(change.delta)}</span>`:`<span class="ge-rating">${escapeHtml($(`#${side}Rating`)?.textContent||'')}</span>`;
+    return `<div class="ge-player" data-side="${side}" data-color="${color}"><span class="avatar ge-avatar"></span><span class="ge-who"><span class="ge-name"><b></b><span class="player-flag hidden" aria-hidden="true"></span></span><span class="ge-meta">${rating}</span></span><span class="ge-score">${endScore(info.result,color)}</span></div>`;
+  };
+  const panel=document.createElement('section');
+  panel.id='gameEndPanel';panel.className='game-end';panel.dataset.key=info.key;panel.dataset.outcome=outcome;
+  panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','false');panel.setAttribute('aria-labelledby','gameEndTitle');
+  panel.innerHTML=`<div class="ge-card">
+    <button type="button" class="ge-close" aria-label="Close">${GE_CLOSE_ICON}</button>
+    <p class="ge-kicker">Game over</p>
+    <h2 class="ge-title" id="gameEndTitle" tabindex="-1">${escapeHtml(title)}</h2>
+    ${reason?`<p class="ge-reason">${escapeHtml(reason)}</p>`:''}
+    <div class="ge-players">${row('top',theirs)}${row('bottom',mine)}</div>
+    <div class="ge-actions"><button type="button" class="gold ge-review" data-ge="review">Game Review</button>${info.online?'<button type="button" class="ge-secondary" data-ge="rematch">Rematch</button>':''}<button type="button" class="ge-secondary" data-ge="new">New game</button></div>
+  </div>`;
+  // The players as their bars show them: portrait, name and flag.
+  for(const side of ['top','bottom']){
+    const el=panel.querySelector(`.ge-player[data-side="${side}"]`),avatar=$(`#${side}Avatar`),flag=$(`#${side}Flag`),pic=el.querySelector('.ge-avatar'),mark=el.querySelector('.player-flag');
+    el.querySelector('b').textContent=side==='bottom'?ownPlayerName():$('#topPlayerName')?.textContent||'';
+    pic.replaceChildren(...[...(avatar?.childNodes||[])].map(n=>n.cloneNode(true)));
+    for(const c of ['has-picture','is-empty','light'])pic.classList.toggle(c,!!avatar?.classList.contains(c));
+    const shown=!!flag&&!flag.classList.contains('hidden');mark.classList.toggle('hidden',!shown);mark.replaceChildren(...(shown?[...flag.childNodes].map(n=>n.cloneNode(true)):[]));
+  }
+  panel.querySelector('.ge-close').addEventListener('click',hideGameEndPanel);
+  panel.querySelector('.ge-actions').addEventListener('click',async event=>{
+    const action=event.target.closest('[data-ge]')?.dataset.ge;if(!action)return;
+    hideGameEndPanel();
+    if(action==='review')await startGameReview();
+    if(action==='rematch')await startOnlineRematch();
+    if(action==='new'){await resetFinishedGame();if(isMobileApp()){mTab='play';setMView('home')}} // a phone goes back to where a game is chosen
+  });
+  const shell=$('.game .board-shell');(shell||document.body).append(panel);panel.classList.toggle('floating',!shell);
+  document.addEventListener('keydown',gameEndKeys,true);
+  requestAnimationFrame(()=>{panel.classList.add('show');panel.querySelector('.ge-title')?.focus({preventScroll:true})});
+  // A rating change counts up (or down) to its new value as the card settles.
+  const counters=[...panel.querySelectorAll('.ge-rating[data-to]')];
+  if(counters.length&&motionScale()>0){
+    const start=performance.now()+260,span=900;
+    const step=now=>{
+      const t=Math.min(1,Math.max(0,(now-start)/span)),ease=1-(1-t)**3;
+      for(const el of counters){const from=Number(el.dataset.from),to=Number(el.dataset.to);el.textContent=String(Math.round(from+(to-from)*ease))}
+      if(t<1)panel.dataset.countFrame=String(requestAnimationFrame(step));
+    };
+    panel.dataset.countFrame=String(requestAnimationFrame(step));
+  }else for(const el of counters)el.textContent=el.dataset.to;
 }
 function normalizedEndReason(value=''){
   const reason=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ');
@@ -936,13 +1038,6 @@ function gameOverTitle(info){
   const won=(info.result==='1-0'&&info.myColor==='w')||(info.result==='0-1'&&info.myColor==='b');
   return won?'You won':'You lost';
 }
-function gameOverBody(info,title){
-  const body=document.createElement('div');body.className='game-over-body';
-  const result=document.createElement('div');result.className='game-over-result';result.innerHTML=`<strong>${escapeHtml(title)} · ${escapeHtml(info.reason)}</strong>`;
-  const players=document.createElement('div');players.className='game-over-players';
-  players.innerHTML=`<div><span class="game-over-avatar">${escapeHtml(playerInitials(info.whiteName,'W'))}</span><span class="game-over-player"><small>White</small><b>${escapeHtml(info.whiteName)}</b></span><em>${escapeHtml(info.whiteRating)}</em></div><div><span class="game-over-avatar">${escapeHtml(playerInitials(info.blackName,'B'))}</span><span class="game-over-player"><small>Black</small><b>${escapeHtml(info.blackName)}</b></span><em>${escapeHtml(info.blackRating)}</em></div>`;
-  body.append(result,players);return body;
-}
 async function resetFinishedGame(nextMode=['match','room','computer'].includes(mode)?mode:'room'){
   restoreRealmTheme();
   stopOnlineSync();serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();roomCreated=false;lastDrawOffer=null;clearDrawOfferTimer();drawOfferKey=null;localGameOver=false;localGameOverInfo=null;computerStarted=false;localClockState=null;lowTimeWarned=false;opponentWasConnected=null;lastChatMessageId=null;chatSessionStartedAt=Date.now();chatUnread=0;updateChatUnread();rematchOfferPending=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();game.reset();history.replaceState(null,'',location.pathname);mode=nextMode;render();updateMoves();await activateLeftMode(nextMode);showMovesView();
@@ -964,7 +1059,7 @@ async function acceptRematchOffer(){
 let rematchOpening=null,rematchOfferSeen=null;
 async function openRematchGame(id){
   if(rematchOpening===id||serverGameId===id)return;rematchOpening=id;
-  document.querySelector('.vch-dialog-layer .vch-dialog-close')?.click();
+  hideGameEndPanel();
   try{
     const state=await api.state(id);applyServerState(state);room=(state.game||state).invite_code||room;roomCreated=false;rematchOfferPending=false;
     history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Rematch started');
@@ -985,12 +1080,15 @@ async function maybeShowGameOver(){
     lastLocalArchiveId=`local-${Date.now()}`;
     saveLocalGame({id:lastLocalArchiveId,source:'computer',pgn:game.pgn(),result:info.result,white:info.whiteName,black:info.blackName,myColor:info.myColor,whiteRating:currentBot&&info.myColor==='b'?currentBot.elo:null,blackRating:currentBot&&info.myColor==='w'?currentBot.elo:null,rated:false,base:600,inc:0,date:new Date().toISOString(),moves:game.history().length,reason:info.reason,variant:computerRules||'standard'});
   }if(!stung)playUiSound(title==='Draw'?'draw':won?'win':'lose'); // with the music on, its sting instead
-  await playEnding(info);
-  const actions=[{label:'Game Review',value:'review',primary:true},...(info.online?[{label:'Rematch',value:'rematch'}]:[]),{label:'New game',value:'new'}];
-  const action=await vchDialog({title:'Game over',body:gameOverBody(info,title),actions});
-  if(action==='review')await startGameReview();
-  if(action==='rematch')await startOnlineRematch();
-  if(action==='new')await resetFinishedGame();
+  if(info.result!=='*')countFinishedGame();
+  // The ending plays on the board first (the winners cheer, the losing king topples); without
+  // it, a moment to see the last move land. Then the result card, if this game is still the one
+  // on the board (a new game, a puzzle or a review may have begun meanwhile).
+  const ending=performance.now();await playEnding(info);
+  if(performance.now()-ending<400)await new Promise(resolve=>setTimeout(resolve,650));
+  if(gameOverInfo()?.key!==info.key)return;
+  showGameEndPanel(info,title);
+  scheduleFlagPrompt(); // a first finished game is when the flag question is first asked
 }
 function premovePlayerColor(){if(serverGameId&&myColor)return myColor;if(mode==='computer'&&computerStarted)return computerSide;return null}
 function premoveBlocked(){return !!puzzleSession||mode==='puzzle'||reviewState.running||reviewState.viewing||currentRightView==='review'}
@@ -1168,7 +1266,7 @@ function startComputerGame(opts={}){
   const label=$('#computerStart span');if(label)label.textContent='Restart game';
   showGameStartBanner(computerSide,computerRules==='blackout'?BLACKOUT_SECONDS:600,0,`computer:${Date.now()}`);
   swearOath(`computer:${Date.now()}`,{startFen:computerRules==='freestyle'?game.fen():null});
-  if(game.turn()!==computerSide)setTimeout(engineMove,280);
+  if(game.turn()!==computerSide)setTimeout(engineMove,Math.max(280,startCeremonyMs())); // once its pieces are down
 }
 // ---- Round 11: Vanta Dark (fog of war) and Blackout Blitz, games against the computer ----
 function computerLive(){return mode==='computer'&&computerStarted&&!localGameOver&&!game.isGameOver()&&!reviewState.viewing&&!browse}
@@ -1748,8 +1846,13 @@ async function saveProfileChanges(changes){
   const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
 }
 function flagPromptDone(){try{return !!localStorage.getItem('vanta.flagPrompt')}catch{return true}}
+// Games finished on this device: no question before the first one (owner, 2026-10-17: a first
+// visit should land calmly, with nothing popping up over it).
+const GAMES_FINISHED_KEY='vch.games-finished';
+function gamesFinished(){try{return Number(localStorage.getItem(GAMES_FINISHED_KEY))||0}catch{return 0}}
+function countFinishedGame(){try{localStorage.setItem(GAMES_FINISHED_KEY,String(gamesFinished()+1))}catch{}}
 function scheduleFlagPrompt(){
-  if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending)return;
+  if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending||!gamesFinished())return;
   scheduleFlagPrompt.pending=true;setTimeout(showFlagPrompt,2500);
 }
 // The flag prompt never interrupts a game or a conversation: it waits for a quiet moment, and
@@ -1760,7 +1863,7 @@ function scheduleFlagPrompt(){
 function phonePlaySetupShowing(){
   return document.body.classList.contains('m-app')&&!['game','review'].includes(document.querySelector('.shell')?.dataset.mview)&&!!document.querySelector('[data-m-tab="play"].on');
 }
-function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')&&!phonePlaySetupShowing()}
+function flagPromptCalm(){return !liveGameOn()&&!chatIsOpen()&&!document.querySelector('.vch-dialog-layer')&&!$('#gameEndPanel')&&!phonePlaySetupShowing()}
 function showFlagPrompt(){
   if(flagPromptDone()||currentProfile?.country_code||document.querySelector('.flag-prompt'))return;
   if(!flagPromptCalm()){setTimeout(showFlagPrompt,6000);return}
@@ -3498,7 +3601,7 @@ function syncMobileShell(){
   const reviewing=reviewState.running||reviewState.viewing;
   if(reviewing&&!mReviewShown){mReviewShown=true;mView='review'}
   if(!reviewing){mReviewShown=false;if(mView==='review')mView='game'}
-  if(shell.dataset.mview!==mView)shell.dataset.mview=mView;
+  if(shell.dataset.mview!==mView){const first=!shell.dataset.mview;shell.dataset.mview=mView;if(!first)markEntering(mView)}
   if(key?.startsWith('waiting:'))syncMoveStrip([]);
   const tab=mView==='game'||mView==='review'?'play':mTab;
   $$('[data-m-tab]').forEach(button=>button.classList.toggle('on',button.dataset.mTab===tab));
@@ -4509,10 +4612,11 @@ function setDynamicView(kind,title,html){
   if(kind!=='prep'&&prepSession)endPrep();
   if(kind!=='analysis'&&analysis)leaveAnalysis();
   if(kind!=='lesson'&&lessonSession)leaveLesson({restore:false});
-  currentRightView=kind;
+  const arriving=currentRightView!==kind;currentRightView=kind;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view" aria-label="Back"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
   target.querySelector('.back-view').onclick=()=>{playUiSound('back');showMovesView()};
+  if(arriving)enterView(target); // a section fades in when you open it (not when it fills in)
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===kind));
   queueAtmosphere(); // the music follows you here (src/music.js waits a moment, in case you are only passing through)
 }
@@ -6285,8 +6389,23 @@ window.addEventListener('popstate',event=>{
   try{if(snap.mTab)mTab=snap.mTab;activateNav(snap.nav);if(snap.mView&&isMobileApp())setMView(snap.mView)}
   finally{navRestoring=false;navCurrent=navSnapshot()}
 });
+// Moving between screens and sections (owner, 2026-10-17: "it does not land naturally"): the
+// screen you go to fades in, briefly, instead of swapping in a single frame (style.css
+// .shell[data-entering], .view-entering). Not before the page's first appearance, which has
+// its own (src/boot-reveal.js), and never with Motion off or reduced motion.
+let enteringTimer=0;
+function markEntering(view){
+  const shell=$('.shell');if(!shell||!document.documentElement.classList.contains('app-revealed')||motionScale()===0)return;
+  shell.dataset.entering=view;clearTimeout(enteringTimer);enteringTimer=setTimeout(()=>{delete shell.dataset.entering},360);
+}
+function enterView(el){
+  if(!el||!document.documentElement.classList.contains('app-revealed')||motionScale()===0)return;
+  el.classList.remove('view-entering');void el.offsetWidth;el.classList.add('view-entering');
+  clearTimeout(el.enteringTimer);el.enteringTimer=setTimeout(()=>el.classList.remove('view-entering'),360);
+}
 function setPrimaryScreen(screen,{remember=false}={}){
   const shell=$('.shell'),menu=$('#mainMenu'),workspace=$('#gameWorkspace'),showGame=screen==='game';
+  if(shell&&shell.classList.contains('game-active')!==showGame)markEntering(showGame?'game':'intro');
   shell?.classList.toggle('game-active',showGame);shell?.classList.toggle('intro-active',!showGame);
   menu?.setAttribute('aria-hidden',String(showGame));workspace?.setAttribute('aria-hidden',String(!showGame));
   document.body.dataset.screen=showGame?'game':'intro';
@@ -6832,3 +6951,12 @@ function renderResonanceRoom(){
   addEventListener('mouseout',e=>{if(!e.relatedTarget)resonance?.lift()},{passive:true});
   if(resonanceLevel==='on')syncResonance();
 })();
+// The first appearance (src/boot-reveal.js; owner, 2026-10-17: the menu "does not land
+// naturally"): index.html's veil covers the page until it is built, the saved theme applied and
+// the pictures on screen decoded (the wallpaper, the piece set, the hero art), then the page
+// rises into place once. The installed app's splash is up already, so it reveals at once.
+function firstPaintImages(){
+  const onScreen=img=>{const r=img.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth};
+  return [...backgroundUrls(getComputedStyle(document.body).backgroundImage),...pieceStyleImages(document.documentElement.dataset.pieceStyle||'vanta'),...[...document.images].filter(onScreen).map(img=>img.currentSrc||img.src)];
+}
+void revealApp({urls:firstPaintImages(),immediate:!!splash});

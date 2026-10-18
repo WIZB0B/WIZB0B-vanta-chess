@@ -1,8 +1,9 @@
-// Splash screen policy (backlog task 6): only installed-app launches get the full splash;
-// a first web visit gets a short one (under 600ms in total); a normal refresh gets none.
-export const SPLASH_SEEN_KEY='vch.splash-seen';
+// Splash screen policy (backlog task 6; owner, 2026-10-06: a splash is for an installed app):
+// only installed-app launches get the splash. In a browser, index.html's veil covers the page
+// while it loads and fades once it is ready (src/boot-reveal.js; owner, 2026-10-17: the menu
+// "does not land naturally" — a first visit used to show the wallpaper, then a short splash,
+// then the page).
 export const STANDALONE_SPLASH={holdMs:2050,fadeMs:450};
-export const FIRST_VISIT_SPLASH={holdMs:380,fadeMs:200};
 
 export function isStandaloneDisplay(win=globalThis){
   try{
@@ -11,22 +12,9 @@ export function isStandaloneDisplay(win=globalThis){
   return win.navigator?.standalone===true;
 }
 
-function readSeen(storage){
-  try{return storage?.getItem(SPLASH_SEEN_KEY)==='1';}
-  catch{return true;}
-}
-
-function markSeen(storage){
-  try{storage.setItem(SPLASH_SEEN_KEY,'1');return true;}
-  catch{return false;}
-}
-
 // Returns null when the app should render immediately, otherwise the splash timing.
-export function splashPlan({standalone,storage}){
-  if(standalone)return STANDALONE_SPLASH;
-  // If the visit can't be remembered, skip the splash rather than repeat it on every refresh.
-  if(readSeen(storage)||!markSeen(storage))return null;
-  return FIRST_VISIT_SPLASH;
+export function splashPlan({standalone}){
+  return standalone?STANDALONE_SPLASH:null;
 }
 
 export function splashMarkup(plan){

@@ -16,7 +16,7 @@ async function mockServer(page,{status='active'}={}){
       :a==='chat_send'?{message:{id:'m1',game_id:'g1',player_id:'me',display_name:'Guest-ME',body:body.body,client_nonce:body.nonce||'n',created_at:new Date().toISOString()}}:{};
     await route.fulfill({contentType:'application/json',body:JSON.stringify(payload)});
   });
-  await page.addInitScript(()=>localStorage.setItem('vch.intro-seen','1'));
+  await page.addInitScript(()=>{localStorage.setItem('vch.intro-seen','1');localStorage.setItem('vch.games-finished','1')}); // past a first game: no question before one (e2e/feel-pass.spec.js)
   return sent;
 }
 

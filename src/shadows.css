@@ -1,5 +1,7 @@
 /* Cast shadows (owner request 2026-10-12: "soft shadows for the pieces; depending on the theme
    and where the light is coming from in the theme background, the shadow direction changes").
+   Since 2026-10-18 they are drawn only on a board shown in perspective (.board.cast-shadows,
+   see "The shadow" below); on the flat board the light only nudges each piece's contact shadow.
 
    Every piece throws a soft shadow across the board, away from the scene's key light. The light
    is set per wallpaper (and per campaign realm) on body with these custom properties; :root
@@ -93,8 +95,13 @@ body[data-realm="spire"]{--light-x:-.7;--light-y:-.8;--shadow-length:.62;--shado
 .board-piece[data-piece$="p"]{--piece-h:.74}
 
 /* ---- The shadow ---- */
-/* (A reviewed piece's triumph glow also uses ::after; it replaces the shadow while it shows.) */
-.board-piece:not([data-react="triumph"])::after{
+/* Only on a board drawn in perspective (.board.cast-shadows; none yet). On the flat board, seen
+   from straight above, a shadow running down the screen into the next square made the pieces
+   look as if they floated (owner, 2026-10-17: they "seem to be floating on the board"); there a
+   piece has only its contact shadow, nudged away from the scene's light (style.css,
+   .board-piece::before). The light per wallpaper and realm above still sets that nudge.
+   (A reviewed piece's triumph glow also uses ::after; it replaces the shadow while it shows.) */
+.board.cast-shadows .board-piece:not([data-react="triumph"])::after{
   --sl:calc(var(--shadow-length) * var(--piece-h));                       /* floor length (squares) */
   --sw:calc(var(--shadow-width) * (1 + var(--shadow-softness) * .3));     /* width: softer is wider */
   --sx:calc(var(--sl) + var(--sw));                                       /* box length (squares) */

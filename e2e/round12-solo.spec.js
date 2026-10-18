@@ -36,7 +36,8 @@ test('Vanta Campaign: the first realm lends its board and weather, and a loss le
   await resign(page);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('vch.campaign')).pending)).toBe(null);
   await expect(page.locator('#atmosphere')).toHaveAttribute('data-mood', 'dusk');
-  await page.locator('.vch-dialog-layer .vch-dialog-close').click();
+  await page.locator('#gameEndPanel .ge-close').click();
+  await expect(page.locator('#gameEndPanel')).toHaveCount(0);
   // An ordinary game gives your own board back.
   await page.locator('#computerStart').click();
   await expect.poll(() => dark(page)).toBe(before);

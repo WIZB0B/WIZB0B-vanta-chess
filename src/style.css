@@ -1863,7 +1863,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .board .square.premove-selecting{
   box-shadow:inset 0 0 0 5px rgba(226,58,151,.88);
 }
-/* Reusable VCH glass dialog, game-over presentation, and game-start card. */
+/* Reusable VCH glass dialog, and the game-start card (the end of a game: .game-end, below). */
 .vch-dialog-layer{
   position:fixed;inset:0;z-index:240;display:grid;place-items:center;padding:20px;
   background:rgba(1,7,8,.66);backdrop-filter:blur(10px);opacity:0;transition:opacity 180ms ease;
@@ -1889,14 +1889,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .vch-dialog-action.primary{background:linear-gradient(#efd59d,#d5ad64);color:#10120e;border-color:rgba(239,213,157,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 8px 20px rgba(0,0,0,.24)}
 .vch-dialog-action.secondary{background:linear-gradient(180deg,#1b2927,#111b1a);color:#dce5e1}
 .vch-dialog-action:focus-visible,.vch-dialog-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-.game-over-body{display:grid;gap:18px}
-.game-over-result{display:flex;align-items:baseline;gap:9px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.08)}
-.game-over-result strong{font-size:22px;color:#f3dfb0}.game-over-result span{color:#9ca9a5}
-.game-over-players{display:grid;gap:8px}
-.game-over-players>div{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.035)}
-.game-over-players span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8fa09a}
-.game-over-players b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eef2ef}
-.game-over-players em{font-style:normal;color:#d6bd83;font-variant-numeric:tabular-nums}
 /* The game-start card: who plays whom, your colour and the clock, over the board for under two
    seconds. It never takes a click (the board under it plays on). */
 .game-start-card{
@@ -1933,7 +1925,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 }
 @media(max-width:600px){
   .vch-dialog-actions{display:grid;grid-template-columns:1fr}.vch-dialog-action{width:100%}
-  .game-over-players>div{grid-template-columns:46px minmax(0,1fr)}.game-over-players em{grid-column:2}
   .gs-panel{padding:12px 14px;gap:8px}.gs-player{grid-template-columns:34px minmax(0,1fr) auto}.gs-avatar{width:34px;height:34px}.gs-who b{font-size:14px}
 }
 @media(prefers-reduced-motion:reduce){
@@ -1953,11 +1944,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 #toast.actionable{cursor:pointer}
 #toast .toast-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #toast .toast-action{padding:6px 10px;border-radius:7px;background:#172019;color:#f3dda9;font-weight:800}
-.game-over-result{display:block}.game-over-result strong{display:block}
-.game-over-players>div{grid-template-columns:38px minmax(0,1fr) auto}
-.game-over-avatar{width:34px;height:34px!important;border-radius:50%;display:grid!important;place-items:center;background:#1c302b;color:#f0dcae!important;border:1px solid rgba(229,193,124,.35);font-size:10px!important;letter-spacing:.04em!important}
-.game-over-player{display:grid!important;gap:1px;text-transform:none!important;letter-spacing:0!important;font-size:inherit!important}
-.game-over-player small{font-size:8px;color:#80908b;text-transform:uppercase;letter-spacing:.1em}.game-over-player b{font-size:13px;color:#eef2ef}
 #bottomClock.low-time{border-color:#ff5b68!important;color:#ff8a93!important;box-shadow:0 0 0 1px rgba(255,75,88,.32),0 0 18px rgba(255,45,62,.28);animation:vch-low-time-pulse .72s ease-in-out infinite alternate}
 @keyframes vch-low-time-pulse{from{transform:scale(1)}to{transform:scale(1.045);background:#251013}}
 @media(max-width:600px){.draw-offer-card{align-items:flex-start;flex-direction:column}.draw-offer-card>div:last-child{width:100%}.draw-offer-card button{flex:1}}
@@ -2060,13 +2046,16 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .board-piece.moving{z-index:20}
 .board-piece.captured{z-index:0;pointer-events:none}
 .board-piece.drag-origin{visibility:hidden}
-/* Contact shadow: about 60% of the square wide and 12% tall, centred on the baseline. It
-   belongs to the piece, so it travels with it. The Ink sets stay flat. */
+/* Contact shadow: about 60% of the square wide and 12% tall, centred where the piece's base
+   meets its square (--shadow-base per set and piece, src/shadows.css), so it never leaves the
+   square; nudged a little away from the scene's light (--light-x). This is a piece's only shadow
+   on the flat board (owner, 2026-10-17: the long cast shadows made the pieces look as if they
+   floated). It belongs to the piece, so it travels with it. The Ink sets stay flat. */
 .board-piece::before{
   content:"";
   position:absolute;
-  left:20%;width:60%;
-  top:calc(var(--piece-baseline) - 6%);height:12%;
+  left:calc(20% - var(--light-x,0) * 2.5%);width:60%;
+  top:calc(var(--shadow-base,var(--piece-baseline)) - 6%);height:12%;
   border-radius:50%;
   background:radial-gradient(ellipse at center,rgba(0,0,0,.35) 0%,rgba(0,0,0,.24) 38%,rgba(0,0,0,.08) 62%,transparent 72%);
   filter:blur(1.5px);
@@ -3328,7 +3317,7 @@ body.puzzle-board #resign{display:none}
 :root[data-piece-style="regal"] .piece.piece-b{--regal-lift:-2.5%}
 :root[data-piece-style="regal"] .piece.piece-n{--regal-lift:-3.5%}
 :root[data-piece-style="regal"] .piece.piece-p{--regal-lift:-8%}
-:root[data-piece-style="regal"] .board-piece::before{top:calc(var(--piece-baseline) - 3%)}
+:root[data-piece-style="regal"] .board-piece::before{top:calc(var(--shadow-base,var(--piece-baseline)) - 6%)}
 /* The default Vanta set: pawns and rooks sat lowest in their cells; lift them a touch so
    every piece's outline is centred like the rest. */
 :root[data-piece-style="vanta"] .board-piece .piece.piece-p{translate:0 -4.5%}
@@ -3652,3 +3641,82 @@ body.m-app .now-playing:not([data-corner="tr"]){bottom:calc(var(--m-tabs-h,56px)
   .oath-row label{flex-wrap:wrap}
   .rpanel .tabs{overflow-x:auto;scrollbar-width:none}
 }
+
+/* ---- Smoothness (owner, 2026-10-17: "it feels choppy ... it does not land naturally ... the
+   elements on the board ... seem to be floating") ---- */
+
+/* The page's first appearance (src/boot-reveal.js): as index.html's veil fades, the top bar and
+   the side panels rise a few pixels into place, once, and briefly, so nothing is still moving
+   when a finger reaches for it. The board's panel stays put: the board is the anchor. The
+   individual translate property leaves each region's own transform alone (and the game panel,
+   whose cards are fixed to the screen, is never given one). */
+@keyframes vch-rise{from{translate:0 8px}to{translate:0 0}}
+html.app-revealing .shell>.topbar,html.app-revealing .shell>main>:not(.game),html.app-revealing .shell>.m-tabs{animation:vch-rise 420ms cubic-bezier(.16,.84,.24,1) both}
+html.app-revealing .shell>main>:nth-child(n+2):not(.game),html.app-revealing .shell>.m-tabs{animation-delay:50ms}
+@media (prefers-reduced-motion:reduce){html.app-revealing .shell *{animation:none!important}}
+
+/* Moving between screens and sections (src/main.js markEntering, enterView): the screen you go to
+   fades in briefly instead of swapping in a single frame; the side panels and sections also rise
+   6px. Opacity only on the game panel, whose cards are fixed to the screen. */
+@keyframes vch-view-fade{from{opacity:0}to{opacity:1}}
+@keyframes vch-view-rise{from{opacity:0;translate:0 6px}to{opacity:1;translate:0 0}}
+.shell[data-entering="intro"]>.main-menu,.shell[data-entering="game"]>main>:not(.game),body.m-app .shell[data-entering="home"]>main>.lpanel,body.m-app .shell:is([data-entering="panel"],[data-entering="review"])>main>.rpanel,#dynamicView.view-entering{animation:vch-view-rise 300ms cubic-bezier(.2,.8,.2,1) both}
+.shell:is([data-entering="game"],[data-entering="review"])>main>.game{animation:vch-view-fade 240ms ease-out both}
+@media (prefers-reduced-motion:reduce){.shell[data-entering] *,#dynamicView.view-entering{animation:none!important}}
+
+/* The start of a game (src/board-arrival.js): under the start card the board shows its empty
+   squares; as the card leaves, the pieces settle onto their squares, the middle files first.
+   Opacity on the piece and transform on its artwork: the piece's own transform (its square)
+   and its artwork's translate (each set's per-piece lift) are left alone. */
+.board[data-arrival="hold"] .board-piece{opacity:0}
+.board[data-arrival="clear"] .board-piece{opacity:0;transition:opacity 200ms ease}
+.board[data-arrival="drop"] .board-piece{animation:vch-arrive-fade 340ms ease-out var(--arrive-delay,0ms) both}
+.board[data-arrival="drop"] .board-piece .piece{animation:vch-arrive-drop 460ms cubic-bezier(.2,.9,.25,1) var(--arrive-delay,0ms) both}
+.board[data-arrival="drop"] .board-piece::before{animation:vch-arrive-shadow 460ms cubic-bezier(.2,.9,.25,1) var(--arrive-delay,0ms) both}
+@keyframes vch-arrive-fade{from{opacity:0}to{opacity:1}}
+@keyframes vch-arrive-drop{from{transform:translateY(-12%)}to{transform:none}}
+@keyframes vch-arrive-shadow{from{opacity:0;scale:.5}to{opacity:1;scale:1}}
+@media (prefers-reduced-motion:reduce){.board[data-arrival] .board-piece,.board[data-arrival] .board-piece .piece,.board[data-arrival] .board-piece::before{animation:none!important;opacity:1}}
+
+/* The end of a game (src/main.js showGameEndPanel): a result card over the board, the board
+   dimmed a little around it. Only the card takes clicks: the rest of the page stays free. */
+.game-end{position:absolute;inset:0;z-index:45;display:grid;place-items:center;padding:12px;pointer-events:none}
+.game-end.floating{position:fixed;z-index:220}
+.game-end::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 80% 70% at 50% 50%,rgba(2,7,8,.62),rgba(2,7,8,.18) 82%);opacity:0;transition:opacity 420ms ease}
+.game-end.show::before{opacity:1}
+.ge-card{
+  position:relative;pointer-events:auto;width:min(360px,94%);max-height:100%;overflow:auto;display:grid;gap:12px;padding:20px 20px 18px;
+  border:1px solid rgba(229,193,124,.36);border-radius:18px;
+  background:linear-gradient(180deg,rgba(15,29,28,.97),rgba(6,15,16,.98));
+  box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);
+  opacity:0;transform:translateY(18px) scale(.97);transition:opacity 300ms ease,transform 560ms cubic-bezier(.16,.84,.24,1);
+}
+.game-end.show .ge-card{opacity:1;transform:none}
+.game-end[data-outcome="won"] .ge-card{border-color:rgba(239,213,157,.62);box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(239,213,157,.12),0 0 60px rgba(229,193,124,.14),inset 0 1px 0 rgba(255,255,255,.08)}
+.ge-close{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#dfe7e3}
+.ge-close:hover{background:rgba(255,255,255,.09)}
+.ge-close svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.ge-kicker{margin:0;font:800 11px/1 var(--ui-font);letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}
+.ge-title{margin:-2px 44px 0 0;font:700 34px/1.05 'Playfair Display',Georgia,serif;color:#f5f1e6;outline:none}
+.game-end[data-outcome="won"] .ge-title{color:#f3dfb0}
+.game-end[data-outcome="lost"] .ge-title{color:#e9e6de}
+.ge-reason{margin:-4px 0 2px;color:#a9b6b2;font-size:14px}
+.ge-players{display:grid;gap:8px}
+.ge-player{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 12px 9px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.035)}
+.ge-avatar{width:38px;height:38px;font-size:12px;flex:none}
+.ge-who{display:grid;gap:2px;min-width:0}
+.ge-name{display:flex;align-items:center;gap:6px;min-width:0}
+.ge-name b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;color:#f0f2ee}
+.ge-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:#9fb0aa;font-variant-numeric:tabular-nums}
+.ge-delta{padding:2px 7px;border-radius:999px;font-weight:700;font-size:11px;border:1px solid rgba(255,255,255,.12)}
+.ge-delta.up{color:#82edba;border-color:rgba(130,237,186,.4);background:rgba(130,237,186,.08)}
+.ge-delta.down{color:#ff9c8f;border-color:rgba(255,140,125,.38);background:rgba(255,140,125,.08)}
+.ge-score{font:700 20px/1 var(--ui-font);font-variant-numeric:tabular-nums;color:#eef2ef;min-width:1.1em;text-align:right}
+.ge-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.ge-actions button{min-height:44px;margin:0;padding:10px 12px;border-radius:10px;font-weight:700;font-size:14px;width:100%}
+.ge-actions .ge-review{grid-column:1/-1;height:auto}
+.ge-actions .ge-secondary{border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,#1b2927,#111b1a);color:#dce5e1}
+.ge-actions>.ge-secondary:nth-child(2):last-child{grid-column:1/-1}
+.ge-actions button:focus-visible,.ge-close:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (max-width:420px){.ge-card{padding:16px 14px 14px;gap:10px}.ge-title{font-size:28px}}
+@media (prefers-reduced-motion:reduce){.game-end::before,.ge-card{transition:none}.ge-card{transform:none}}

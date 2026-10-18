@@ -21,6 +21,10 @@ export async function mockBackend(page){
 }
 
 export async function useScriptedEngine(page){
+  // The page must fetch the engine's worker itself: once the service worker has installed (it
+  // precaches the real engine a moment after the page goes idle), a worker started later can be
+  // served past page.route, and the real engine answers instead of the script.
+  await page.addInitScript(()=>{try{Object.defineProperty(navigator.serviceWorker,'register',{configurable:true,value:()=>new Promise(()=>{})})}catch{}});
   await page.route('**/stockfish.worker.js',route=>route.fulfill({contentType:'text/javascript',body:FAKE_ENGINE}));
   await page.addInitScript(()=>{
     window.__botRequests=0;

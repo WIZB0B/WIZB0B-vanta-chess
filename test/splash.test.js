@@ -1,35 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { FIRST_VISIT_SPLASH, SPLASH_SEEN_KEY, STANDALONE_SPLASH, dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from '../src/splash.js';
+import { STANDALONE_SPLASH, dismissSplash, isStandaloneDisplay, splashMarkup, splashPlan } from '../src/splash.js';
 
 const main=await readFile(new URL('../src/main.js',import.meta.url),'utf8');
 
-function memoryStorage(initial={}){
-  const data={...initial};
-  return {data,getItem:key=>key in data?data[key]:null,setItem:(key,value)=>{data[key]=String(value);}};
-}
-
 test('installed app launches always show the full splash',()=>{
-  const storage=memoryStorage({[SPLASH_SEEN_KEY]:'1'});
-  assert.equal(splashPlan({standalone:true,storage}),STANDALONE_SPLASH);
+  assert.equal(splashPlan({standalone:true}),STANDALONE_SPLASH);
 });
 
-test('a first web visit shows a splash under 600ms, then a refresh renders immediately',()=>{
-  const storage=memoryStorage();
-  const plan=splashPlan({standalone:false,storage});
-  assert.equal(plan,FIRST_VISIT_SPLASH);
-  assert.ok(plan.holdMs+plan.fadeMs<600,'first-visit splash including its fade stays under 600ms');
-  assert.equal(storage.data[SPLASH_SEEN_KEY],'1');
-  assert.equal(splashPlan({standalone:false,storage}),null);
+test('a browser visit never shows a splash, first visit or not: the veil covers loading instead',()=>{
+  // Owner, 2026-10-17: the menu "does not land naturally" (a first visit showed the wallpaper,
+  // then a short splash, then the page).
+  assert.equal(splashPlan({standalone:false}),null);
   assert.equal(splashMarkup(null),'');
-});
-
-test('blocked storage skips the splash rather than showing it on every refresh',()=>{
-  const storage={getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}};
-  assert.equal(splashPlan({standalone:false,storage}),null);
-  const readOnly={getItem:()=>null,setItem(){throw new Error('quota');}};
-  assert.equal(splashPlan({standalone:false,storage:readOnly}),null,'unwritable storage also skips it');
 });
 
 test('standalone detection covers display-mode media query and iOS home-screen apps',()=>{
@@ -41,12 +25,12 @@ test('standalone detection covers display-mode media query and iOS home-screen a
 test('the splash fades out and is removed after its hold and fade',()=>{
   const calls=[],classes=[];let removed=false;
   const element={classList:{add:name=>classes.push(name)},remove:()=>{removed=true;}};
-  dismissSplash(element,FIRST_VISIT_SPLASH,(fn,ms)=>calls.push([fn,ms]));
-  assert.deepEqual(calls.map(([,ms])=>ms),[FIRST_VISIT_SPLASH.holdMs,FIRST_VISIT_SPLASH.holdMs+FIRST_VISIT_SPLASH.fadeMs]);
+  dismissSplash(element,STANDALONE_SPLASH,(fn,ms)=>calls.push([fn,ms]));
+  assert.deepEqual(calls.map(([,ms])=>ms),[STANDALONE_SPLASH.holdMs,STANDALONE_SPLASH.holdMs+STANDALONE_SPLASH.fadeMs]);
   calls.forEach(([fn])=>fn());
   assert.deepEqual(classes,['done']);
   assert.equal(removed,true);
-  assert.match(splashMarkup(FIRST_VISIT_SPLASH),/--splash-fade:200ms/);
+  assert.match(splashMarkup(STANDALONE_SPLASH),/--splash-fade:450ms/);
 });
 
 test('main.js renders the splash only through the splash plan',()=>{
