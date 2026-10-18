@@ -93,11 +93,14 @@ the server region.
   board with notes.
 
 ## Phase G: Home page and navigation
+- **Done 2026-10-18 (backlog H1):** the home screen is the living pavilion (a still brought to
+  life in WebGL), with Vchess, the headline, Play now and Sign in; the V leads home from
+  anywhere. Still to come here: the night sound, and the parts below that it does not cover.
 - **Visitor home page:**
   - an animated board replaying a famous game, view-only (not a playable board);
   - a headline and a "Get started" / "Play now" call to action;
   - quick links (Play, Puzzles, Learn, Watch).
-- The **VCH logo is clickable everywhere** and returns to Home.
+- The **VCH logo is clickable everywhere** and returns to Home. (Done 2026-10-18.)
 - **Left sidebar navigation** (Play, Puzzles, Learn, Train, Watch, Community, More)
   with search, profile, messages, notifications and settings at the bottom. It
   collapses on small screens.

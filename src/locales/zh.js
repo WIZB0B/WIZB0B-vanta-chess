@@ -28,6 +28,7 @@ export const ROWS = [
   ["Edit portrait & flag", "编辑头像和旗帜"],
   ["Moderation", "内容管理"],
   ["Play Better", "下得更好"],
+  ["Play Better Chess", "下出更好的国际象棋"],
   ["Chess", "国际象棋"],
   ["Competitive games. Real progress. A community that thinks ahead.", "激烈对局。真实进步。一个善于谋划的社区。"],
   ["Join Now", "立即加入"],

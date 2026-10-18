@@ -75,6 +75,7 @@ import { DIVISIONS, STATIONS, STINGS, isSting, loadLibrary } from './music-libra
 import { ACCEPT as MY_MUSIC_ACCEPT, MAX_SONG_MB, MAX_SONGS, addSongs, listSongs, myMusicServed, putSong, removeSong, renameSong, songTrack } from './my-music.js';
 import { playMoveSound, soundPlace } from './move-sound.js';
 import { backgroundUrls, revealApp } from './boot-reveal.js';
+import { createHomeScene, homeSceneMarkup } from './home-scene.js';
 import { ARRIVAL, arrivalMs, startArrival } from './board-arrival.js';
 import { PIECE_SETS, PIECE_SOUNDS, SET_FOR_RELIC, SoundBank, UI_SOUNDS, moveSoundName, uiGate } from './sfx.js';
 import { MAX_STARS, REALMS, battleKey, battleOpen, loadCampaign, realmById, realmFreed, realmOpen, realmsFreed, recordBattle, saveCampaign, totalStars } from './campaign.js';
@@ -114,6 +115,7 @@ let guestName=(()=>{try{const v=cleanDisplayName(localStorage.getItem('vch.guest
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug=DEFAULT_LEVEL, toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
+let homeScene=null; // the living pavilion behind the home screen (homeSceneNow)
 let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back button history (see recordNav)
 // Round 12 state (the functions are in the round 12 section below)
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
@@ -209,7 +211,6 @@ function applyPieceStyle(value){
   const style=normalizePieceStyle(value);
   document.documentElement.dataset.pieceStyle=style;
   const control=$('#pieceStyle');if(control)control.value=style;
-  const menuPiece=$('.main-menu-art img');if(menuPiece)menuPiece.src=pieceAsset('bk');
   renderComputerBots();
   return style;
 }
@@ -217,9 +218,10 @@ const app=$('#app');
 const splash=splashPlan({standalone:isStandaloneDisplay(window),storage:window.localStorage});
 app.innerHTML=`
 ${splashMarkup(splash)}
+${homeSceneMarkup({eager:!startsInGame})}
 <div class="shell ${startsInGame?'game-active':'intro-active'}">
   <header class="topbar">
-    <a class="brand vch-brand" href="#" aria-label="VCH home">
+    <a class="brand vch-brand" href="/" aria-label="Home">
       <span class="vch-v vch-v-top" aria-hidden="true"></span>
       <img class="vch-wordmark vch-wordmark-top" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
     </a>
@@ -261,38 +263,15 @@ ${splashMarkup(splash)}
     </div>
   </header>
 
-  <section id="mainMenu" class="main-menu" aria-labelledby="mainMenuTitle" aria-hidden="${startsInGame?'true':'false'}">
-    <div class="main-menu-tagline">Play <span>/</span> Improve <span>/</span> Belong</div>
-    <div class="main-menu-hero">
-      <div class="main-menu-copy">
-        <span class="vch-v vch-v-chrome vch-v-menu" aria-hidden="true"></span>
-        <img class="main-menu-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH">
-        <h1 id="mainMenuTitle">Play Better<br>Chess</h1>
-        <p class="main-menu-subtext">Competitive games. Real progress. A community that thinks ahead.</p>
-        <button id="joinNow" class="join-now" type="button"><span>Join Now</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10M13 8l4 4-4 4"/></svg></button>
+  <section id="mainMenu" class="main-menu home" aria-labelledby="mainMenuTitle" aria-hidden="${startsInGame?'true':'false'}">
+    <div class="home-copy">
+      <p class="home-name"><span class="vch-v vch-v-chrome" aria-hidden="true"></span>Vchess</p>
+      <h1 id="mainMenuTitle">Play Better Chess</h1>
+      <p class="home-lede">Competitive games. Real progress. A community that thinks ahead.</p>
+      <div class="home-actions">
+        <button id="joinNow" class="home-play" type="button"><span>Play now</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10M13 8l4 4-4 4"/></svg></button>
+        <button id="homeSignIn" class="home-signin" type="button">Sign in</button>
       </div>
-      <div class="main-menu-art" aria-hidden="true">
-        <div class="main-menu-art-glow"></div>
-        <img src="/assets/vch/pieces/3d/bk.webp" alt="">
-      </div>
-    </div>
-    <div class="main-menu-tiles" aria-label="VCH features">
-      <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 6 13h5l-1 9 8-12h-5l0-8Z"/></svg></span>
-        <div><h2>Rapid &amp; Blitz</h2></div>
-      </article>
-      <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5M8 21h8"/></svg></span>
-        <div><h2>Tournaments</h2></div>
-      </article>
-      <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18V10M10 18V6M15 18v-5M20 18V3"/></svg></span>
-        <div><h2>Ratings</h2></div>
-      </article>
-      <article class="menu-tile">
-        <span class="menu-tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM16 11a3 3 0 1 0 0-6M2 20c0-4 2.7-6 6-6s6 2 6 6M14 14c4 0 7 1.8 7 6"/></svg></span>
-        <div><h2>Community</h2></div>
-      </article>
     </div>
     <button type="button" id="menuMoment" class="menu-moment hidden" aria-label="Vanta Moment of the Week"></button>
   </section>
@@ -1807,7 +1786,7 @@ function syncIdentityUI(){
   const headerAvatar=$('#accountBtn>i');if(headerAvatar){headerAvatar.classList.add('avatar');setPortrait(headerAvatar,ownPortrait(name))}
   setPlayerFlag($('#bottomFlag'),currentProfile?.country_code);
   syncPlayerBars();
-  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),ownPortrait(name));$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';
+  $('#profileMenuName').textContent=name;$('#profileMenuRating').textContent=rating+' rating';setPortrait($('#profileMenuAvatar'),ownPortrait(name));$('#profileMenuAuth').textContent=signed?'Sign out':'Sign in';$('#homeSignIn')?.classList.toggle('hidden',signed);
   $('#accountGuest')?.classList.toggle('hidden',signed);$('#accountSigned')?.classList.toggle('hidden',!signed);
   if(signed){
     $('#profileName').textContent=name;$('#profileRating').textContent=rating+' rapid';
@@ -6412,9 +6391,14 @@ function setPrimaryScreen(screen,{remember=false}={}){
   menu?.setAttribute('aria-hidden',String(showGame));workspace?.setAttribute('aria-hidden',String(!showGame));
   document.body.dataset.screen=showGame?'game':'intro';
   if(showGame&&remember)localStorage.setItem('vch.intro-seen','1');
+  if(showGame)homeScene?.hide();else homeSceneNow().show();
   window.scrollTo(0,0);
 }
+// The home screen (owner, 2026-10-18): the living pavilion behind it, alive while it shows
+// (src/home-scene.js). The V at the top left always leads back to it.
+function homeSceneNow(){return homeScene??=createHomeScene({host:$('#homeScene'),events:$('#mainMenu'),motionOff:()=>motionScale()===0})}
 document.body.dataset.screen=startsInGame?'game':'intro';
+$('.vch-brand')?.addEventListener('click',e=>{e.preventDefault();menus.close();setPrimaryScreen('intro')});
 function registerPopover(name,panel,trigger){
   menus.register(name,{
     open:()=>{panel.hidden=false;trigger.setAttribute('aria-expanded','true');(panel.querySelector('.profile-menu-items button')||panel.querySelector('button'))?.focus({preventScroll:true})},
@@ -6467,6 +6451,7 @@ $('#settingsBtn').onclick=()=>openSettings();
 $('#profileMenuAuth').onclick=()=>{if(authSession?.access_token&&currentProfile?.account){menus.close('profile');void signOut()}else openAccount()};
 $$('.main-nav button').forEach(button=>button.onclick=()=>{if($('.shell')?.classList.contains('intro-active'))setPrimaryScreen('game',{remember:true});activateNav(button.dataset.nav)});
 $('#joinNow').onclick=()=>{setPrimaryScreen('game',{remember:true});activateNav('play')};
+$('#homeSignIn').onclick=openAccount;
 $$('.feature-card').forEach(button=>button.onclick=()=>activateNav(button.dataset.action));
 $$('.tabs button').forEach(button=>button.onclick=()=>{const kind=button.dataset.tab;if(kind==='moves')showMovesView();if(kind==='analysis'){startGameReview();document.querySelector('.analysis')?.scrollIntoView({block:'nearest'})}if(kind==='openings')renderOpenings();if(kind==='famous')renderFamous()});
 $('#reviewGame').onclick=startGameReview;
@@ -6557,6 +6542,7 @@ document.documentElement.style.setProperty('--black-piece',savedTheme.blackPiece
 document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));
 for(const [key,value] of Object.entries(savedTheme)){if(key==='wallpaper')document.body.dataset.wallpaper=value;else if(key!=='pieceStyle'&&key!=='pieceTint'&&key!=='spriteTint')document.documentElement.style.setProperty(key,value)}
 motionScaleCache=null; // the saved Motion setting is applied now
+if(!startsInGame)homeSceneNow().show(); // a first visit opens on the home screen, alive unless Motion is off
 const glassControl=$('[data-theme="--glass"]'),motionControl=$('[data-theme="--motion"]');
 if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'])*100));
 if(motionControl)motionControl.value=String(Math.round(parseFloat(savedTheme['--motion'])/4));
@@ -6959,6 +6945,8 @@ function renderResonanceRoom(){
 // rises into place once. The installed app's splash is up already, so it reveals at once.
 function firstPaintImages(){
   const onScreen=img=>{const r=img.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth};
-  return [...backgroundUrls(getComputedStyle(document.body).backgroundImage),...pieceStyleImages(document.documentElement.dataset.pieceStyle||'vanta'),...[...document.images].filter(onScreen).map(img=>img.currentSrc||img.src)];
+  // a picture chosen from a srcset (the home screen's photograph) is waited for as the page chose it
+  const shown=[...document.images].filter(onScreen),chosen=shown.filter(img=>img.srcset);
+  return {urls:[...backgroundUrls(getComputedStyle(document.body).backgroundImage),...pieceStyleImages(document.documentElement.dataset.pieceStyle||'vanta'),...shown.filter(img=>!img.srcset).map(img=>img.currentSrc||img.src)],images:chosen};
 }
-void revealApp({urls:firstPaintImages(),immediate:!!splash});
+void revealApp({...firstPaintImages(),immediate:!!splash});

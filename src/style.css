@@ -22,7 +22,6 @@ body[data-wallpaper="ivory"]{background-image:linear-gradient(rgb(2 7 8 / .38),r
 :root[data-piece-style="heritage"] .piece.w.piece-k{--piece-image:url('/assets/vch/pieces/3d/wk.webp')}:root[data-piece-style="heritage"] .piece.w.piece-q{--piece-image:url('/assets/vch/pieces/3d/wq.webp')}:root[data-piece-style="heritage"] .piece.w.piece-r{--piece-image:url('/assets/vch/pieces/3d/wr.webp')}:root[data-piece-style="heritage"] .piece.w.piece-b{--piece-image:url('/assets/vch/pieces/3d/wb.webp')}:root[data-piece-style="heritage"] .piece.w.piece-n{--piece-image:url('/assets/vch/pieces/3d/wn.webp')}:root[data-piece-style="heritage"] .piece.w.piece-p{--piece-image:url('/assets/vch/pieces/3d/wp.webp')}
 :root[data-piece-style="heritage"] .piece.b.piece-k{--piece-image:url('/assets/vch/pieces/3d/bk.webp')}:root[data-piece-style="heritage"] .piece.b.piece-q{--piece-image:url('/assets/vch/pieces/3d/bq.webp')}:root[data-piece-style="heritage"] .piece.b.piece-r{--piece-image:url('/assets/vch/pieces/3d/br.webp')}:root[data-piece-style="heritage"] .piece.b.piece-b{--piece-image:url('/assets/vch/pieces/3d/bb.webp')}:root[data-piece-style="heritage"] .piece.b.piece-n{--piece-image:url('/assets/vch/pieces/3d/bn.webp')}:root[data-piece-style="heritage"] .piece.b.piece-p{--piece-image:url('/assets/vch/pieces/3d/bp.webp')}
 
-
 /* === VCH reference-match rebuild === */
 :root{
   --bg:#07100f;--panel:#081315;--panel-2:#0d1718;--line:rgba(203,225,218,.16);
@@ -194,7 +193,6 @@ main{
   .hero h1{max-width:70%}
 }
 
-
 /* === REFERENCE LOCK: target image geometry ===
    Calibrated against the supplied 1672×941 Vanta Chess reference.
    At 1672px viewport: shell≈1576px, columns≈427/660/449, board≈600px. */
@@ -231,7 +229,6 @@ main{
   .hero h1{font-size:54px}
   .lpanel{padding:16px 18px}
 }
-
 
 /* Interactive study surfaces: Opening Explorer, Famous Games, Learn and Review. */
 .library-action,.secondary-action{
@@ -302,7 +299,6 @@ main{
 @media(max-width:1180px){#settingsBtn{display:grid}}
 @media(max-width:800px){#settingsBtn{display:grid;flex:0 0 34px;width:34px;height:34px}}
 
-
 /* Account / rated-play surface */
 .user{appearance:none;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
 .user:hover{transform:none}
@@ -322,7 +318,6 @@ main{
 
 .square.last-move{box-shadow:inset 0 0 0 999px rgba(214,219,70,.30)}
 .square.last-move.selected{box-shadow:inset 0 0 0 4px rgba(225,231,100,.82),inset 0 0 0 999px rgba(214,219,70,.22)}
-
 
 /* Dedicated VCH artwork assets sized for their display surfaces. */
 .hero-art{
@@ -349,11 +344,9 @@ main{
 .square.light,.study-square.light{background:var(--light)}
 .square.dark,.study-square.dark{background:var(--dark)}
 
-
 /* The reference environment must remain visible behind the glass shell. */
 #app{background:transparent!important}
 html{background:#06100f}
-
 
 /* === PAGE SKELETON LOCK — supplied 1672×941 desktop reference ===
    Scope: top bar + left/center/right column geometry + major glass surfaces + page background only. */
@@ -459,7 +452,6 @@ html{background:#06100f}
     padding-right:clamp(22px,1.75vw,29px);
   }
 }
-
 
 /* === TOP BAR LOCK — supplied desktop reference === */
 .wordmark{
@@ -653,7 +645,6 @@ html{background:#06100f}
   .wordmark{display:none}
 }
 
-
 /* Keep the top bar collision-free on narrower desktop test/view widths without changing the 1672px reference lock. */
 @media(min-width:1181px) and (max-width:1499px){
   .topbar{padding-left:18px;padding-right:10px}
@@ -678,7 +669,6 @@ html{background:#06100f}
   .user span{font-size:11px}
   .user small{font-size:8.5px}
 }
-
 
 /* === VCH BRAND + PRE-GAME MAIN MENU ===
    Scope: identity, UI typography, palette and the screen shown before gameplay. */
@@ -710,157 +700,8 @@ body,button,input,select,textarea,dialog{
   height:52px;
   object-fit:contain;
 }
-.main-menu{
-  position:relative;
-  min-height:650px;
-  margin-top:14px;
-  overflow:hidden;
-  display:grid;
-  grid-template-columns:minmax(0,1.05fr) minmax(520px,.95fr);
-  gap:70px;
-  align-items:center;
-  padding:72px 74px;
-  border:1px solid rgba(210,188,141,.18);
-  border-radius:18px;
-  background:
-    radial-gradient(circle at 76% 18%,rgba(184,154,95,.13),transparent 31%),
-    radial-gradient(circle at 18% 78%,rgba(24,68,50,.28),transparent 36%),
-    linear-gradient(118deg,rgba(6,10,9,.97),rgba(10,25,20,.94) 56%,rgba(5,9,8,.97));
-  box-shadow:0 28px 80px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.025);
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
-}
-.main-menu:before{
-  content:"";
-  position:absolute;
-  width:520px;
-  height:520px;
-  right:-170px;
-  top:-220px;
-  border:1px solid rgba(210,188,141,.11);
-  border-radius:50%;
-  box-shadow:0 0 0 70px rgba(210,188,141,.018),0 0 0 140px rgba(210,188,141,.012);
-  pointer-events:none;
-}
-.main-menu:after{
-  content:"";
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  background:linear-gradient(90deg,transparent 0 49.8%,rgba(241,236,223,.035) 50%,transparent 50.2%);
-  opacity:.55;
-}
-.main-menu-copy,.main-menu-tiles{position:relative;z-index:1}
-.main-menu-tagline{
-  margin:0 0 24px;
-  color:var(--vch-gold-soft);
-  font-size:11px;
-  font-weight:700;
-  letter-spacing:5px;
-  text-transform:uppercase;
-}
-.main-menu-tagline span{color:rgba(241,236,223,.35);padding:0 8px}
-.main-menu h1{
-  max-width:650px;
-  margin:0;
-  color:var(--vch-ivory);
-  font-family:var(--ui-font);
-  font-size:clamp(64px,5.7vw,96px);
-  font-weight:650;
-  line-height:.94;
-  letter-spacing:-4.6px;
-}
-.main-menu-subtext{
-  max-width:610px;
-  margin:26px 0 34px;
-  color:rgba(241,236,223,.68);
-  font-size:18px;
-  line-height:1.55;
-  letter-spacing:-.2px;
-}
-.join-now{
-  min-width:154px;
-  height:52px;
-  padding:0 24px 0 27px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:18px;
-  border:1px solid rgba(241,236,223,.22);
-  border-radius:999px;
-  background:linear-gradient(180deg,#c6aa70,#a98950);
-  color:#0b0d0b;
-  box-shadow:0 12px 30px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.33);
-  font-size:13px;
-  font-weight:800;
-  letter-spacing:.4px;
-}
-.join-now span{font-size:17px;line-height:1}
-.join-now:hover{filter:brightness(1.06);transform:translateY(-1px)}
-.main-menu-tiles{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:14px;
-}
-.menu-tile{
-  min-height:205px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  gap:30px;
-  padding:24px;
-  border:1px solid rgba(241,236,223,.10);
-  border-radius:14px;
-  background:
-    linear-gradient(145deg,rgba(25,56,44,.72),rgba(7,15,12,.86));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 14px 32px rgba(0,0,0,.20);
-}
-.menu-tile:nth-child(2),.menu-tile:nth-child(3){
-  background:linear-gradient(145deg,rgba(19,45,35,.72),rgba(6,13,11,.88));
-}
-.menu-tile-icon{
-  width:42px;
-  height:42px;
-  display:grid;
-  place-items:center;
-  border:1px solid rgba(184,154,95,.34);
-  border-radius:11px;
-  color:var(--vch-gold-soft);
-  background:rgba(6,11,9,.42);
-}
-.menu-tile-icon svg{
-  width:21px;
-  height:21px;
-  fill:none;
-  stroke:currentColor;
-  stroke-width:1.55;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-.menu-tile small{
-  display:block;
-  margin-bottom:7px;
-  color:var(--vch-gold-soft);
-  font-size:9px;
-  font-weight:750;
-  letter-spacing:2.4px;
-}
-.menu-tile h2{
-  margin:0;
-  color:var(--vch-ivory);
-  font-family:var(--ui-font);
-  font-size:20px;
-  font-weight:650;
-  letter-spacing:-.45px;
-}
-.menu-tile p{
-  margin:8px 0 0;
-  color:rgba(241,236,223,.55);
-  font-size:11px;
-  line-height:1.5;
-}
+
 #gameWorkspace{scroll-margin-top:14px}
-.main-menu.direct-game{display:none}
 
 /* Brand palette refinements without altering chessboard or gameplay surfaces. */
 .topbar{
@@ -886,42 +727,12 @@ body,button,input,select,textarea,dialog{
 @media(min-width:1181px) and (max-width:1499px){
   .vch-brand{flex-basis:112px!important;width:112px!important}
   .vch-brand-logo{width:43px;height:48px}
-  .main-menu{grid-template-columns:minmax(0,1fr) minmax(470px,.92fr);gap:42px;padding:62px 54px}
 }
-@media(max-width:1180px){
-  .main-menu{
-    min-height:auto;
-    grid-template-columns:1fr;
-    gap:42px;
-    padding:58px 44px;
-  }
-  .main-menu h1{font-size:clamp(56px,9vw,84px)}
-}
+
 @media(max-width:800px){
   .vch-brand{flex:0 0 44px!important;width:44px!important}
   .vch-brand-logo{width:40px;height:45px}
-  .main-menu{
-    margin:7px 6px 0;
-    padding:42px 24px 30px;
-    border-radius:12px;
-    gap:34px;
-  }
-  .main-menu:after{display:none}
-  .main-menu-tagline{font-size:9px;letter-spacing:3px;margin-bottom:18px}
-  .main-menu-tagline span{padding:0 4px}
-  .main-menu h1{font-size:clamp(48px,15vw,68px);letter-spacing:-3px}
-  .main-menu-subtext{font-size:15px;margin:20px 0 27px}
-  .main-menu-tiles{grid-template-columns:1fr 1fr;gap:8px}
-  .menu-tile{min-height:165px;padding:17px;gap:20px}
-  .menu-tile-icon{width:36px;height:36px}
-  .menu-tile h2{font-size:16px}
-  .menu-tile p{font-size:9px}
 }
-@media(max-width:520px){
-  .main-menu-tiles{grid-template-columns:1fr}
-  .menu-tile{min-height:140px}
-}
-
 
 /* === VCH BRAND REFERENCE LOCK: logo + pre-game menu only === */
 :root{
@@ -972,178 +783,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.02)!important;
 }
 
-/* Main menu: premium brand card inspired directly by the supplied UI sample. */
-.main-menu{
-  position:relative;
-  min-height:700px;
-  margin-top:14px;
-  padding:0;
-  display:grid;
-  grid-template-rows:1fr 150px;
-  overflow:hidden;
-  border:1px solid rgba(242,239,229,.13);
-  border-radius:16px;
-  background:
-    radial-gradient(circle at 71% 33%,rgba(35,84,63,.30),transparent 25%),
-    linear-gradient(108deg,#071612 0%,#08291f 46%,#06110e 100%);
-  box-shadow:0 24px 70px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.02);
-}
-.main-menu:before{
-  content:"";
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  opacity:.20;
-  background:
-    linear-gradient(90deg,transparent 0 49.92%,rgba(242,239,229,.11) 50%,transparent 50.08%),
-    linear-gradient(0deg,transparent 0 79.9%,rgba(242,239,229,.08) 80%,transparent 80.1%);
-}
-.main-menu.direct-game{display:none}
-.main-menu-tagline{
-  position:absolute;
-  z-index:4;
-  top:34px;
-  right:42px;
-  margin:0;
-  color:rgba(242,239,229,.74);
-  font-size:9px;
-  font-weight:650;
-  letter-spacing:4.3px;
-  text-transform:uppercase;
-}
-.main-menu-tagline span{padding:0 9px;color:rgba(242,239,229,.32)}
-.main-menu-hero{
-  position:relative;
-  min-height:550px;
-  display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(360px,.78fr);
-  align-items:center;
-  padding:68px 72px 32px;
-  overflow:hidden;
-}
-.main-menu-copy{position:relative;z-index:3;max-width:650px}
-.main-menu-eyebrow{
-  margin-bottom:27px;
-  color:var(--vch-ivory);
-  font-family:Georgia,'Times New Roman',serif!important;
-  font-size:21px;
-  font-weight:500;
-  letter-spacing:6px;
-}
-.main-menu h1{
-  max-width:620px;
-  margin:0;
-  color:var(--vch-ivory);
-  font-family:var(--ui-font)!important;
-  font-size:clamp(58px,5vw,82px);
-  font-weight:650;
-  line-height:.94;
-  letter-spacing:-4.1px;
-}
-.main-menu-subtext{
-  max-width:500px;
-  margin:24px 0 30px;
-  color:rgba(242,239,229,.68);
-  font-size:15px;
-  font-weight:400;
-  line-height:1.55;
-  letter-spacing:.05px;
-}
-.join-now{
-  height:46px;
-  min-width:136px;
-  padding:0 18px 0 21px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:18px;
-  border:1px solid rgba(30,27,20,.22);
-  border-radius:999px;
-  background:linear-gradient(180deg,#c7aa6d,#ae8d50);
-  color:#11130f;
-  font-size:12px;
-  font-weight:650;
-  letter-spacing:.2px;
-  box-shadow:0 9px 22px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.36);
-}
-.join-now svg{
-  width:15px;height:15px;
-  fill:none;stroke:currentColor;stroke-width:1.6;
-  stroke-linecap:round;stroke-linejoin:round
-}
-.join-now:hover{transform:translateY(-1px);filter:brightness(1.035)}
-.main-menu-art{
-  position:relative;
-  align-self:stretch;
-  display:flex;
-  align-items:flex-end;
-  justify-content:center;
-  min-width:0;
-}
-.main-menu-art-glow{
-  position:absolute;
-  width:360px;height:360px;
-  right:10%;bottom:42px;
-  border-radius:50%;
-  background:radial-gradient(circle,rgba(175,151,98,.16),rgba(20,62,45,.09) 46%,transparent 70%);
-  filter:blur(10px)
-}
-.main-menu-art img{
-  position:relative;
-  z-index:2;
-  width:min(76%,350px);
-  max-height:500px;
-  object-fit:contain;
-  object-position:center bottom;
-  filter:drop-shadow(0 30px 24px rgba(0,0,0,.48)) contrast(1.04) saturate(.82);
-}
-.main-menu-tiles{
-  position:relative;
-  z-index:3;
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:0;
-  min-height:150px;
-  border-top:1px solid rgba(242,239,229,.12);
-  background:rgba(5,31,23,.76);
-}
-.menu-tile{
-  min-height:150px;
-  padding:27px 26px 23px;
-  display:flex;
-  align-items:flex-start;
-  gap:15px;
-  border:0;
-  border-right:1px solid rgba(242,239,229,.10);
-  border-radius:0;
-  background:transparent!important;
-  box-shadow:none!important;
-}
-.menu-tile:last-child{border-right:0}
-.menu-tile-icon{
-  width:34px;height:34px;
-  flex:0 0 34px;
-  display:grid;place-items:center;
-  margin-top:1px;
-  border:0;
-  border-radius:0;
-  color:var(--vch-gold-light);
-  background:transparent;
-}
-.menu-tile-icon svg{
-  width:21px;height:21px;
-  fill:none;stroke:currentColor;stroke-width:1.45;
-  stroke-linecap:round;stroke-linejoin:round;
-}
-.menu-tile h2{
-  margin:6px 0 0;
-  color:var(--vch-ivory);
-  font-family:var(--ui-font)!important;
-  font-size:13px;
-  font-weight:500;
-  line-height:1.25;
-  letter-spacing:-.1px;
-}
 #gameWorkspace{scroll-margin-top:14px}
 
 @media(min-width:1181px){
@@ -1152,41 +791,19 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 @media(min-width:1181px) and (max-width:1499px){
   .vch-brand{flex:0 0 100px!important;width:100px!important}
   .vch-brand-logo{width:47px!important;height:52px!important}
-  .main-menu-hero{padding-left:54px;padding-right:54px;grid-template-columns:minmax(0,1fr) minmax(320px,.72fr)}
-  .main-menu h1{font-size:62px}
 }
-@media(max-width:1180px){
-  .main-menu{min-height:auto;grid-template-rows:auto auto}
-  .main-menu-hero{grid-template-columns:1fr minmax(260px,.62fr);padding:60px 42px 28px}
-  .main-menu h1{font-size:clamp(54px,7vw,74px)}
-  .main-menu-tiles{grid-template-columns:repeat(4,1fr)}
-}
+
 @media(max-width:800px){
   .vch-brand{flex:0 0 48px!important;width:48px!important}
   .vch-brand-logo{width:42px!important;height:47px!important}
-  .main-menu{margin:7px 6px 0;border-radius:11px;grid-template-rows:auto auto}
-  .main-menu-tagline{position:static;padding:23px 22px 0;font-size:8px;letter-spacing:2.7px}
-  .main-menu-tagline span{padding:0 4px}
-  .main-menu-hero{min-height:430px;grid-template-columns:1fr;padding:34px 24px 22px}
-  .main-menu-copy{z-index:4}
-  .main-menu-eyebrow{font-size:18px;margin-bottom:20px}
-  .main-menu h1{font-size:clamp(48px,14vw,64px);letter-spacing:-3px}
-  .main-menu-subtext{max-width:78%;font-size:13px;margin:19px 0 24px}
-  .main-menu-art{position:absolute;right:-38px;bottom:0;width:48%;height:72%;opacity:.68}
-  .main-menu-art img{width:100%;max-height:100%}
-  .main-menu-tiles{grid-template-columns:1fr 1fr}
-  .menu-tile{min-height:94px;padding:20px 17px;border-bottom:1px solid rgba(242,239,229,.08)}
-  .menu-tile:nth-child(2){border-right:0}
-  .menu-tile h2{font-size:12px}
 }
 
-
 /* === COMMITTED VCH BRAND ASSETS === */
-.vch-wordmark,.main-menu-wordmark,.account-wordmark,.view-wordmark,.search-wordmark,.brand-loading img,.brand-splash-wordmark img{
+.vch-wordmark,.account-wordmark,.view-wordmark,.search-wordmark,.brand-loading img,.brand-splash-wordmark img{
   display:block;width:auto;min-height:20px;object-fit:contain
 }
 .vch-wordmark-top{height:24px;max-width:118px}
-.main-menu-wordmark{height:32px;margin:0 0 27px}
+
 .account-wordmark{height:27px;margin:0 0 10px}
 .view-wordmark{height:20px;margin:0 0 3px}
 .search-title{display:flex;align-items:center;gap:12px;margin:0 0 12px}
@@ -1219,7 +836,7 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
     url('/assets/vch/brand/brand-atmosphere.png') center/cover no-repeat!important
 }
 .account-head{position:relative;z-index:1}
-@media(max-width:800px){.vch-wordmark-top{height:20px;max-width:none}.main-menu-wordmark{height:27px}}
+@media(max-width:800px){.vch-wordmark-top{height:20px;max-width:none}}
 @media(prefers-reduced-motion:reduce){.brand-splash-wordmark::after{animation:none}}
 /* The VCH mark (owner, 2026-10-13: "the V is our main logo"): the V with the knight from the
    owner's logo (vch-logo-light.svg), cropped to the V by the mask's size and position. A mask
@@ -1245,7 +862,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 @media(min-width:1181px) and (max-width:1499px){.vch-brand{flex:0 0 124px!important;width:124px!important}.vch-v-top{width:30px}.vch-brand .vch-wordmark-top{height:20px}}
 @media(max-width:800px){.vch-brand{flex:0 0 auto!important;width:auto!important;gap:8px}.vch-v-top{width:30px}.vch-v-menu{width:60px}}
 @media(prefers-reduced-motion:reduce){.vch-v-shine::after{animation:none}}
-
 
 /* === CHESSBOARD ONLY: board palette, external coordinates, piece scale, last move === */
 :root{
@@ -1314,20 +930,13 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .board-files{padding-top:4px}
 }
 
-
 /* Batch 1: intro and play workspace are separate screens, never stacked. */
 .shell.intro-active #gameWorkspace{display:none}
 .shell.game-active #mainMenu{display:none}
 @media(min-width:1181px){
   body[data-screen="intro"],body[data-screen="game"]{height:100vh;min-height:100vh;overflow:hidden}
   .shell.intro-active,.shell.game-active{height:100vh;min-height:0}
-  .shell.intro-active .main-menu{
-    height:calc(100vh - 124px);
-    min-height:0;
-    margin-top:14px;
-  }
 }
-
 
 /* Batch 3: distinct Match / Room / Computer surfaces in the left panel. */
 .lpanel{overflow:hidden}
@@ -1460,7 +1069,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .time-chips{grid-template-columns:repeat(3,1fr)}
 }
 
-
 /* Batch 4: board piece depth, player bars, and reference-strength last-move color. */
 .player{
   height:58px;
@@ -1537,7 +1145,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 5px 14px rgba(0,0,0,.32);
 }
 
-
 /* Stronger yellow-green last-move wash, preserving the underlying light/dark square. */
 .board .square.last-move{
   box-shadow:inset 0 0 0 999px rgba(200,216,61,.56);
@@ -1557,7 +1164,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .player-connection{font-size:8px}
 }
 @media(prefers-reduced-motion:reduce){.ping-bars[data-quality="pending"] i:first-child{animation:none}}
-
 
 /* Batch 5 + requested regressions: coordinates, flags, move table, Live Game cleanup, feature icon tiles. */
 .board-coords{font-size:11px;font-weight:760;color:rgba(236,240,231,.82)}
@@ -1650,7 +1256,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .feature-card .feature-arrow svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .feature-card .feature-icon{display:none!important}
 
-
 /* Batch 6: review progress and move-classification badges. */
 .moves{
   padding-top:4px;
@@ -1705,7 +1310,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
   .board-review-badge img{width:20px;height:20px}
 }
 @media(prefers-reduced-motion:reduce){.review-progress>div i{transition:none}}
-
 
 /* Batch 7: full game review navigation, arrows, eval bar, graph, and accuracy. */
 .moves{
@@ -1813,7 +1417,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 @media(prefers-reduced-motion:reduce){
   .review-eval-bar>div i{transition:none}
 }
-
 
 /* Urgent clock mapping fix: clocks follow the color assigned to each player bar. */
 /* The track playing now, under the Music setting in the Theme Studio. */
@@ -1978,7 +1581,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
    panel past the viewport. The list scrolls internally instead. */
 @media(min-width:1181px){.moves{height:140px}}
 
-
 /* Backlog task 5: pieces rest on their squares.
    Every piece's base footprint is centred and sits on one baseline (90% of the square).
    Offsets below are measured from the artwork's alpha (base-footprint centre and lowest
@@ -2001,7 +1603,6 @@ body,button,input,select,textarea,dialog,h1,h2,h3,h4,h5,h6,p,span,small,label,b,
 .auth-resend-field{display:grid;gap:6px;margin-top:12px;color:#9ba7a4;font-size:11px}
 .auth-resend-field input{width:100%;padding:11px;border:1px solid #354a45;border-radius:8px;background:#071211;color:#fff;font:inherit}
 .auth-resend-field input:focus-visible{outline:2px solid rgba(130,237,186,.55);outline-offset:1px}
-
 
 /* Board layers (backlog V1-fix + V1b), drawn like chessground / chess.com:
    1. the squares grid (.board, 8 equal columns, aspect-ratio 1): colours and highlights;
@@ -3488,7 +3089,6 @@ body.puzzle-hurry .run-clock.countdown b{color:#ff8a7a}
 .match-variants button{padding:9px 6px;border-radius:10px;border:1px solid #2c3a38;background:#0f1918;font-size:11.5px;color:#cfd8d4}
 .match-variants button.on{border-color:var(--mint,#82edba);background:#13241f;color:#eef6f2;box-shadow:0 0 12px rgba(101,212,156,.25)}
 
-
 /* ===== ROUND 13 · HOVER GUIDE: what each section, tab and mode is (src/hover-guide.js) ===== */
 .hover-guide{position:fixed;z-index:10050;max-width:min(280px,calc(100vw - 16px));padding:9px 12px 10px;border:1px solid #2f4d43;border-radius:11px;background:linear-gradient(180deg,#10211cf7,#08130ff7);box-shadow:0 14px 34px #0009,0 0 0 1px #ffffff08 inset;color:#d7e2dc;font-size:11.5px;line-height:1.4;pointer-events:none;animation:hover-guide-in .14s ease-out}
 .hover-guide[hidden]{display:none}
@@ -3660,7 +3260,7 @@ html.app-revealing .shell>main>:nth-child(n+2):not(.game),html.app-revealing .sh
    6px. Opacity only on the game panel, whose cards are fixed to the screen. */
 @keyframes vch-view-fade{from{opacity:0}to{opacity:1}}
 @keyframes vch-view-rise{from{opacity:0;translate:0 6px}to{opacity:1;translate:0 0}}
-.shell[data-entering="intro"]>.main-menu,.shell[data-entering="game"]>main>:not(.game),body.m-app .shell[data-entering="home"]>main>.lpanel,body.m-app .shell:is([data-entering="panel"],[data-entering="review"])>main>.rpanel,#dynamicView.view-entering{animation:vch-view-rise 300ms cubic-bezier(.2,.8,.2,1) both}
+.shell[data-entering="game"]>main>:not(.game),body.m-app .shell[data-entering="home"]>main>.lpanel,body.m-app .shell:is([data-entering="panel"],[data-entering="review"])>main>.rpanel,#dynamicView.view-entering{animation:vch-view-rise 300ms cubic-bezier(.2,.8,.2,1) both}
 .shell:is([data-entering="game"],[data-entering="review"])>main>.game{animation:vch-view-fade 240ms ease-out both}
 @media (prefers-reduced-motion:reduce){.shell[data-entering] *,#dynamicView.view-entering{animation:none!important}}
 
@@ -3733,3 +3333,62 @@ html.app-revealing .shell>main>:nth-child(n+2):not(.game),html.app-revealing .sh
   .ge-actions>.ge-review:nth-last-child(2),.ge-actions>.ge-secondary:nth-child(2):last-child{grid-column:auto}
 }
 @media (prefers-reduced-motion:reduce){.game-end::before,.ge-card{transition:none}.ge-card{transform:none}}
+
+/* === HOME: the living pavilion (owner, 2026-10-18; src/home-scene.js, src/living-scene.js) ===
+   The home screen is a place: a photograph of a stone pavilion at dusk fills the screen, and the
+   scene brings it to life (the candles flicker and light the stone, the mist drifts). The name,
+   the headline and the way in sit over the dark sky on wide screens and over the floor on tall
+   ones, each with a soft fall of shadow behind the words. Nothing else is drawn on it. */
+.home-scene{position:fixed;inset:0;z-index:-1;overflow:hidden;background:#070b12;pointer-events:none}
+body:not([data-screen="intro"]) .home-scene{visibility:hidden}
+.home-scene img,.home-scene canvas{position:absolute;inset:0;width:100%;height:100%;max-width:none;display:block}
+.home-scene img{object-fit:cover;object-position:var(--home-fx,50%) var(--home-fy,50%)}
+.home-scene canvas{opacity:0;transition:opacity .7s ease}
+.home-scene canvas.on{opacity:1}
+.home-scene::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(4,7,12,.62) 0%,rgba(4,7,12,.34) 30%,rgba(4,7,12,0) 56%),linear-gradient(0deg,rgba(4,7,12,.38),rgba(4,7,12,0) 30%)}
+body[data-screen="intro"] :is(#atmosphere,#wallLights,#resonanceBg){visibility:hidden}
+body[data-screen="intro"] .topbar{background:linear-gradient(180deg,rgba(5,9,14,.66),rgba(5,9,14,.42)) border-box!important;border-color:rgba(242,239,229,.10)!important;box-shadow:0 10px 30px rgba(0,0,0,.22)!important}
+.main-menu.home{position:relative;display:flex;flex-direction:column;justify-content:center;gap:28px;min-height:calc(100svh - 124px);margin-top:14px;padding:clamp(24px,6vh,72px) clamp(20px,4.4vw,76px);color:#f2efe5;touch-action:pan-y}
+.home-copy{display:grid;justify-items:start;gap:18px;max-width:min(560px,38vw)}
+.home-name{display:flex;align-items:center;gap:14px;margin:0;color:#efe7d3;font-family:Optima,Candara,'Segoe UI','Noto Sans',sans-serif!important;font-size:21px;font-weight:500;letter-spacing:.34em}
+.home-name .vch-v{width:40px}
+.main-menu.home h1{margin:0;color:#f5f1e7;font-size:clamp(46px,5.2vw,84px);font-weight:650;line-height:.96;letter-spacing:-.045em;text-wrap:balance;text-shadow:0 2px 28px rgba(0,0,0,.38)}
+.home-lede{max-width:430px;margin:0;color:rgba(242,239,229,.8);font-size:16px;line-height:1.55;text-shadow:0 1px 14px rgba(0,0,0,.5)}
+.home-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:10px}
+.home-play,.home-signin{height:50px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;font-size:15px;letter-spacing:.2px;white-space:nowrap}
+.home-play{gap:14px;padding:0 22px 0 26px;border:1px solid rgba(30,27,20,.25);background:linear-gradient(180deg,#d6b97a,#ad8c4f);color:#15130e;font-weight:700;box-shadow:0 12px 28px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.42)}
+.home-play svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.home-signin{padding:0 24px;border:1px solid rgba(242,239,229,.34);background:rgba(7,11,17,.34);color:#f2efe5;font-weight:600;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.home-play:hover{filter:brightness(1.05)}
+.home-signin:hover{border-color:rgba(242,239,229,.6);background:rgba(7,11,17,.5)}
+.home-play:focus-visible,.home-signin:focus-visible{outline:2px solid #f0d9a4;outline-offset:3px}
+.main-menu.home .menu-moment{position:absolute;right:clamp(20px,4.4vw,76px);bottom:clamp(20px,6vh,72px);width:min(360px,40vw);margin:0}
+.shell[data-entering="intro"] .home-copy{animation:vch-view-rise 300ms cubic-bezier(.2,.8,.2,1) both}
+html.app-revealing .home-copy{animation:vch-rise 420ms cubic-bezier(.16,.84,.24,1) 60ms both}
+@media(min-width:1181px){.shell.intro-active .main-menu.home{height:calc(100vh - 124px);min-height:0}}
+/* Low landscape screens (a phone on its side): smaller words so the buttons stay in view. */
+@media(max-height:560px) and (min-aspect-ratio:1/1){
+  .main-menu.home{gap:16px;padding-top:18px;padding-bottom:18px}
+  .home-copy{gap:10px}
+  .main-menu.home h1{font-size:clamp(34px,7vh,46px)}
+  .home-lede{font-size:14px}
+  .home-actions{margin-top:4px}
+}
+/* Tall screens look into the pavilion: the words go to the bottom, over the floor. */
+@media(max-aspect-ratio:1/1){
+  .home-scene::after{background:linear-gradient(0deg,rgba(4,7,12,.86) 0%,rgba(4,7,12,.55) 26%,rgba(4,7,12,0) 54%),linear-gradient(180deg,rgba(4,7,12,.42),rgba(4,7,12,0) 16%)}
+  .main-menu.home{justify-content:flex-end}
+  .home-copy{max-width:560px}
+  .main-menu.home .menu-moment{position:static;width:100%;max-width:560px}
+}
+body.m-app .main-menu.home{min-height:calc(100svh - 54px - env(safe-area-inset-top) - var(--m-tabs-h));margin:0;gap:18px;padding:24px 20px 26px}
+body.m-app .home-copy{gap:12px}
+body.m-app .home-name{font-size:17px;gap:11px}
+body.m-app .home-name .vch-v{width:32px}
+body.m-app .main-menu.home h1{font-size:clamp(38px,11vw,50px)}
+body.m-app .home-lede{font-size:14.5px}
+body.m-app .home-actions{display:grid;grid-template-columns:1fr auto;width:100%;margin-top:6px}
+body.m-app .home-play{width:100%}
+body.m-app[data-screen="intro"] .topbar{background:linear-gradient(180deg,rgba(4,7,12,.62),rgba(4,7,12,0)) border-box!important;border-color:transparent!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+body.m-app[data-screen="intro"] .m-tabs{background:rgba(5,9,14,.74);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+@media(prefers-reduced-motion:reduce){.home-scene canvas{transition:none}.shell[data-entering="intro"] .home-copy,html.app-revealing .home-copy{animation:none}}

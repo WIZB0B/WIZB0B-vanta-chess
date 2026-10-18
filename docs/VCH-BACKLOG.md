@@ -71,7 +71,9 @@ Use the current piece images and refine them with CSS only:
   1.4 s after navigation starts), then fades in 0.42 s while the page's regions rise 8 px into
   place once (`src/boot-reveal.js`). A slow load shows a faint V after 0.9 s. Installed
   launches keep the splash. Moving between screens and sections fades the new one in
-  (`markEntering`, `enterView` in `src/main.js`).
+  (`markEntering`, `enterView` in `src/main.js`). The veil also waits for a picture chosen from
+  a srcset (the home screen's photograph) as the page chose it, and never waits on frames a
+  background tab does not paint (250 ms at most).
 
 ## 7. Separate screens + mini live game
 - Each top-nav item (Arena, Puzzles, Learn, Openings, Famous Games, Review) opens its
@@ -543,6 +545,30 @@ function deploy wait for the owner's approval for that deployment.
   seasonal campaign chapters.
 - Security before launch: items M3–M5 and L2–L12 from the round 13 review; owner checks of RLS
   on the base tables, `realtime.messages` policies and auth settings.
+
+## H1. The living home screen (owner, 2026-10-18)
+Owner: "The one with the pavilion is good. So we just need to bring it to life because the home
+screen needs to be alive with the lights glowing and flickering and the background fog alive ...
+And a sound that suits it." The landing's name is Vchess. After a generated video loop did not
+look alive ("more effort can be put into this"), the life is drawn in code from the one still.
+- **The photograph:** the stone pavilion at dusk (Higgsfield, AI-checked and fixed with a GPT
+  Image edit: Staunton knight, true 8x8 floor, candle flames, no border), served as WebP at
+  1920, 2560 and 3840 px (`public/assets/vch/home/`). It is the first paint, and all there is
+  with reduced motion, Motion at 0, no WebGL, or WebGL drawn in software.
+- **The scene** (`src/living-scene.js`, WebGL, loaded only when the home screen first shows):
+  the candle flames flicker, lean and stretch, their light rises and falls on the stone, the
+  floor and the pieces (the photograph's own warm light, multiplied), the near lantern swings
+  on its chain as a damped pendulum pushed by the wind; mist drifts through the valley, creeps
+  over the ground and hangs in the lamplight (at a third of the resolution); the clouds creep;
+  a few motes of dust turn near the lanterns; a little grain. Touch or a moving pointer stirs
+  the air (gusts, the flames gutter, the mist swirls around the finger). Never a loop. It pauses
+  off the home screen and in hidden tabs, lets its GPU memory go after a minute away, and draws
+  fewer pixels on a slow device.
+- **The home screen** (`src/home-scene.js`, `#mainMenu`): Vchess beside the V, Play Better
+  Chess, Play now and Sign in (hidden when signed in), over the dark sky on wide screens and
+  over the floor on tall ones. The V at the top left leads back to it from anywhere.
+- **Open:** the night sound (made in Google Flow Music, after the first tap, following the sound
+  settings); the topbar wordmark still reads VCH until the rename (task: rename to Vchess).
 
 ## E. Expressions (prototype PR, owner reviewing the demo video)
 Pieces show how their position feels; landings can shock the enemy. Owner's idea (2026-10-10).
