@@ -32,6 +32,7 @@
 // The player listens to itself (an analyser): every beat it hears reaches the room (onNote), so
 // the candles, the board's glow, the clocks and the sand follow the real music.
 import { MUSIC_BASE, isSting, placesOf } from './music-library.js';
+import { localStore } from './safe-storage.js';
 
 export const MUSIC_KEY = 'vch.music';
 const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], ionian: [0, 2, 4, 5, 7, 9, 11], hijaz: [0, 1, 4, 5, 7, 8, 10] };
@@ -85,11 +86,11 @@ export function moodFor(diff = 0, was = 'even') {
   if (d <= -3 || (was === 'behind' && d <= -2)) return 'behind';
   return 'even';
 }
-export function loadMusic(storage = globalThis.localStorage) {
+export function loadMusic(storage = localStore) {
   try { const v = JSON.parse(storage?.getItem(MUSIC_KEY) || ''); return { on: !!v?.on, volume: Number.isFinite(v?.volume) ? Math.max(0, Math.min(1, v.volume)) : 0.5, station: typeof v?.station === 'string' && v.station ? v.station : 'on' }; }
   catch { return { on: false, volume: 0.5, station: 'on' }; }
 }
-export function saveMusic(v, storage = globalThis.localStorage) { try { storage?.setItem(MUSIC_KEY, JSON.stringify({ on: !!v.on, volume: v.volume, station: v.station || 'on' })); } catch {} return v; }
+export function saveMusic(v, storage = localStore) { try { storage?.setItem(MUSIC_KEY, JSON.stringify({ on: !!v.on, volume: v.volume, station: v.station || 'on' })); } catch {} return v; }
 // How loud the music is at a volume (0..1): a ceiling (full volume is about -21 LUFS, the
 // library being at -16; the default, half way, about -29) and a curve, so the slider's lower half
 // is fine-grained.
@@ -102,11 +103,11 @@ export const levelFor = volume => MAX_LEVEL * clamp(Number(volume) || 0, 0, 1) *
 // to hear again ("Not for me").
 export const LIKES_KEY = 'vch.music.likes';
 const trackIds = a => [...new Set((Array.isArray(a) ? a : []).filter(x => typeof x === 'string' && /^[a-z0-9-]{1,60}$/.test(x)))].slice(0, 500);
-export function loadMusicLikes(storage = globalThis.localStorage) {
+export function loadMusicLikes(storage = localStore) {
   try { const v = JSON.parse(storage?.getItem(LIKES_KEY) || '{}'), liked = trackIds(v?.liked); return { liked, hidden: trackIds(v?.hidden).filter(id => !liked.includes(id)) }; }
   catch { return { liked: [], hidden: [] }; }
 }
-export function saveMusicLikes(v, storage = globalThis.localStorage) {
+export function saveMusicLikes(v, storage = localStore) {
   const out = { liked: trackIds(v?.liked), hidden: trackIds(v?.hidden) };
   out.hidden = out.hidden.filter(id => !out.liked.includes(id));
   try { storage?.setItem(LIKES_KEY, JSON.stringify(out)); } catch {}

@@ -9,6 +9,7 @@
 //     A wrong move costs a mistake and is taken back; the learner tries again.
 //   - 'quiz' steps: pick an option; a wrong pick costs a mistake.
 // Famous run: {kind:'famous', lessonId, moment, results:[{correct, hinted}], answered}
+import { localStore } from './safe-storage.js';
 export const LESSON_PROGRESS_KEY = 'vch.courseProgress';
 
 export function newCourseRun(lesson) {
@@ -56,10 +57,10 @@ export function courseStars(run) {
 }
 
 // Progress across lessons: {lessonId: {stars, at}}. Kept in this browser.
-export function loadProgress(storage = globalThis.localStorage) {
+export function loadProgress(storage = localStore) {
   try { const v = JSON.parse(storage?.getItem(LESSON_PROGRESS_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
 }
-export function saveLessonResult(lessonId, stars, storage = globalThis.localStorage, now = Date.now()) {
+export function saveLessonResult(lessonId, stars, storage = localStore, now = Date.now()) {
   const all = loadProgress(storage), before = all[lessonId]?.stars || 0;
   all[lessonId] = { stars: Math.max(before, Math.max(1, Math.min(3, Number(stars) || 1))), at: now };
   try { storage?.setItem(LESSON_PROGRESS_KEY, JSON.stringify(all)); } catch {}

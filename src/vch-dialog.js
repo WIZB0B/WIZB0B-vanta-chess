@@ -31,7 +31,9 @@ export function vchDialog({title,body,actions=[],dismissible=true}){
     document.dispatchEvent(new CustomEvent('vch-dialog',{detail:{open:true}}));
     const focusables=()=>[...panel.querySelectorAll(focusableSelector)].filter(el=>!el.disabled&&el.getAttribute('aria-hidden')!=='true');
     layer.addEventListener('keydown',event=>{
-      if(event.key==='Escape'&&dismissible){event.preventDefault();finish(null);return}
+      // Escape is the dialog's alone: it must not also close a menu, the phone sheet or a premove
+      // underneath (and a dialog that can't be dismissed keeps it from them too).
+      if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(dismissible)finish(null);return}
       if(event.key!=='Tab')return;
       const items=focusables();if(!items.length){event.preventDefault();panel.focus();return}
       const first=items[0],last=items.at(-1);

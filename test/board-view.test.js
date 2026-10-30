@@ -184,7 +184,10 @@ test('a premove in progress becomes a normal move when the opponent replies',()=
 test('panels blur their backdrop only for see-through glass',()=>{
   assert.match(main,/function syncGlassBlur\(value\)\{document\.documentElement\.dataset\.glass=Number\(value\)<GLASS_BLUR_BELOW\?'clear':'solid'\}/);
   assert.match(main,/if\(input\.dataset\.theme==='--glass'\)syncGlassBlur\(value\)/);
-  assert.match(css,/:root\[data-glass="solid"\] \.panel,:root\[data-glass="solid"\] \.game,:root\[data-glass="solid"\] \.topbar\{backdrop-filter:none;-webkit-backdrop-filter:none\}/);
+  assert.match(css,/:root\[data-glass="solid"\] \.panel,:root\[data-glass="solid"\] \.game,:root\[data-glass="solid"\] \.topbar,:root\[data-glass="solid"\] \.main-menu\{backdrop-filter:none;-webkit-backdrop-filter:none\}/);
+  // The dialog backdrop and the music panel too (bug pass, 2026-10-30).
+  assert.match(css,/:root\[data-glass="solid"\] \.vch-dialog-layer\{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba\(1,7,8,\.76\)\}/);
+  assert.match(css,/:root\[data-glass="solid"\] \.now-playing\{backdrop-filter:none;-webkit-backdrop-filter:none;/);
 });
 
 test('a selected square is filled like the last move, and a local move clears the selection before drawing',async()=>{

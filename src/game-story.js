@@ -1,5 +1,6 @@
 import { Chess } from 'chess.js';
 import { accuracyFromLosses, gameAccuracy } from './review.js';
+import { localStore } from './safe-storage.js';
 
 // Game archive and "Game Story": every finished game can be reopened, reviewed and replayed
 // as a story told in chapters (opening, middlegame, endgame), with its turning points and a
@@ -45,13 +46,13 @@ export const LOCAL_ARCHIVE_KEY = 'vch.archive.local';
 export const REVIEW_CACHE_KEY = 'vch.archive.reviews';
 const read = (storage, key, fallback) => { try { return JSON.parse(storage?.getItem(key) || '') ?? fallback } catch { return fallback } };
 const write = (storage, key, value) => { try { storage?.setItem(key, JSON.stringify(value)) } catch {} };
-export function loadLocalArchive(storage = globalThis.localStorage) { const list = read(storage, LOCAL_ARCHIVE_KEY, []); return Array.isArray(list) ? list : [] }
-export function saveLocalGame(entry, storage = globalThis.localStorage, limit = 60) {
+export function loadLocalArchive(storage = localStore) { const list = read(storage, LOCAL_ARCHIVE_KEY, []); return Array.isArray(list) ? list : [] }
+export function saveLocalGame(entry, storage = localStore, limit = 60) {
   const list = loadLocalArchive(storage).filter(e => e.id !== entry.id);
   list.unshift(entry); write(storage, LOCAL_ARCHIVE_KEY, list.slice(0, limit)); return list.slice(0, limit);
 }
-export function loadReviewCache(storage = globalThis.localStorage) { const map = read(storage, REVIEW_CACHE_KEY, {}); return map && typeof map === 'object' ? map : {} }
-export function saveReviewSummary(id, summary, storage = globalThis.localStorage, limit = 120) {
+export function loadReviewCache(storage = localStore) { const map = read(storage, REVIEW_CACHE_KEY, {}); return map && typeof map === 'object' ? map : {} }
+export function saveReviewSummary(id, summary, storage = localStore, limit = 120) {
   const map = loadReviewCache(storage); map[id] = { ...summary, at: Date.now() };
   const keys = Object.keys(map).sort((a, b) => (map[b].at || 0) - (map[a].at || 0)).slice(0, limit);
   write(storage, REVIEW_CACHE_KEY, Object.fromEntries(keys.map(k => [k, map[k]])));

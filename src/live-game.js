@@ -7,6 +7,7 @@
 // (the tab closed, the connection gone) lets your opponent claim the game, after the server's
 // thirty seconds; open VCH again in time and you are back in it. Kept on this device.
 
+import { localStore } from './safe-storage.js';
 export const LIVE_KEY = 'vch.liveGame';
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROOM = /^[A-Za-z0-9_-]{1,40}$/;
@@ -27,10 +28,10 @@ export function checkLive(v) {
   if (!seat) return null;
   return { id: String(v.id), mode, room: typeof v.room === 'string' && ROOM.test(v.room) ? v.room : null, seat };
 }
-export function loadLive(storage = globalThis.localStorage) {
+export function loadLive(storage = localStore) {
   try { return checkLive(JSON.parse(storage?.getItem(LIVE_KEY) || 'null')); } catch { return null; }
 }
-export function saveLive(live, storage = globalThis.localStorage) {
+export function saveLive(live, storage = localStore) {
   try { if (live) storage?.setItem(LIVE_KEY, JSON.stringify(checkLive(live))); else storage?.removeItem(LIVE_KEY); } catch {}
   return live ? checkLive(live) : null;
 }

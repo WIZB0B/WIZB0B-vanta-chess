@@ -1,6 +1,7 @@
 // The Vanta Gauntlet: seven computer opponents, each stronger than the last. Three lives per
 // run; a win moves you on, a draw or a loss costs a life. Colours alternate, starting with
 // White. Progress lives on this device.
+import { localStore } from './safe-storage.js';
 export const GAUNTLET_KEY = 'vch.gauntlet';
 export const GAUNTLET_LIVES = 3;
 export const GAUNTLET_STAGES = [
@@ -13,11 +14,11 @@ export const GAUNTLET_STAGES = [
   { name: 'The Vanta', elo: 2700 },
 ];
 const read = s => { try { return JSON.parse(s?.getItem(GAUNTLET_KEY) || '') || null; } catch { return null; } };
-export function loadGauntlet(storage = globalThis.localStorage) {
+export function loadGauntlet(storage = localStore) {
   const v = read(storage) || {};
   return { run: v.run && Number.isInteger(v.run.stage) ? v.run : null, best: Number(v.best) || 0, clears: Number(v.clears) || 0, runs: Number(v.runs) || 0 };
 }
-export function saveGauntlet(state, storage = globalThis.localStorage) { try { storage?.setItem(GAUNTLET_KEY, JSON.stringify(state)); } catch {} return state; }
+export function saveGauntlet(state, storage = localStore) { try { storage?.setItem(GAUNTLET_KEY, JSON.stringify(state)); } catch {} return state; }
 export function newRun(state) { return { ...state, run: { stage: 0, lives: GAUNTLET_LIVES, results: [] }, runs: state.runs + 1 }; }
 export const stageColor = stage => (stage % 2 ? 'b' : 'w');
 // `score`: 1 win, 0.5 draw, 0 loss. Returns the new state plus what happened.

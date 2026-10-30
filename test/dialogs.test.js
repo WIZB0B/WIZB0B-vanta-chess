@@ -16,7 +16,7 @@ test('src contains no native confirm alert or prompt calls',async()=>{
 
 test('vchDialog provides glass actions, safe dismissal, focus trap, and transitions',()=>{
   assert.match(dialog,/export function vchDialog\(\{title,body,actions=\[\],dismissible=true\}\)/);
-  assert.match(dialog,/event\.key==='Escape'&&dismissible/);
+  assert.match(dialog,/if\(event\.key==='Escape'\)\{event\.preventDefault\(\);event\.stopPropagation\(\);if\(dismissible\)finish\(null\);return\}/,'Escape closes the dialog and goes no further');
   assert.match(dialog,/event\.key!=='Tab'/);
   assert.match(dialog,/event\.target===layer/);
   assert.match(dialog,/action\.primary\?'primary':'secondary'/);

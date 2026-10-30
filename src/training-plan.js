@@ -1,5 +1,6 @@
 // Today's training: a short plan built from your own data, with a daily streak.
 // Progress lives on this device (PLAN_KEY), the streak too (STREAK_KEY).
+import { localStore } from './safe-storage.js';
 export const PLAN_KEY = 'vch.plan', STREAK_KEY = 'vch.planStreak';
 export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const yesterday = d => { const [y, m, day] = String(d).split('-').map(Number); return dayKey(new Date(y, m - 1, day - 1)); }; // local dates, no UTC parsing
@@ -14,15 +15,15 @@ export function buildPlan({ repertoireLines = 0, mistakesDue = 0, endgames = [],
   tasks.push({ id: 'game', label: 'Play a game', target: 1 });
   return tasks;
 }
-export function loadProgress(storage = globalThis.localStorage, today = dayKey()) {
+export function loadProgress(storage = localStore, today = dayKey()) {
   try { const p = JSON.parse(storage?.getItem(PLAN_KEY) || 'null'); return p?.date === today ? p : { date: today, done: {} }; } catch { return { date: today, done: {} }; }
 }
-export function loadStreak(storage = globalThis.localStorage) { try { return JSON.parse(storage?.getItem(STREAK_KEY) || 'null') || { last: null, days: 0, best: 0 }; } catch { return { last: null, days: 0, best: 0 }; } }
+export function loadStreak(storage = localStore) { try { return JSON.parse(storage?.getItem(STREAK_KEY) || 'null') || { last: null, days: 0, best: 0 }; } catch { return { last: null, days: 0, best: 0 }; } }
 // The streak shown today: it lapses if yesterday's plan wasn't finished.
 export function currentStreak(s, today = dayKey()) { return s.last === today || s.last === yesterday(today) ? s.days : 0; }
 export const planComplete = (tasks, progress) => tasks.every(t => (progress.done[t.id] || 0) >= t.target);
 // Counts one step of a task; returns {progress, streak, completedNow}.
-export function tick(tasks, id, storage = globalThis.localStorage, today = dayKey(), n = 1) {
+export function tick(tasks, id, storage = localStore, today = dayKey(), n = 1) {
   const progress = loadProgress(storage, today), streak = loadStreak(storage);
   const task = tasks.find(t => t.id === id);
   if (!task) return { progress, streak, completedNow: false };

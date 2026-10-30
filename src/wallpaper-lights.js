@@ -136,7 +136,7 @@ export class WallLights {
   constructor(canvas, { view = globalThis, scale = 0.5, fps = 15, random = Math.random } = {}) {
     Object.assign(this, { canvas, view, scale, fps, random });
     this.ctx = canvas.getContext('2d');
-    this.lights = []; this.speed = 1; this.raf = 0; this.last = 0; this.heldUntil = 0; this.still = false;
+    this.lights = []; this.speed = 1; this.raf = 0; this.timer = 0; this.last = 0; this.heldUntil = 0; this.still = false;
   }
   setLights(lights, w, h) {
     const c = this.canvas, s = this.scale;
@@ -199,10 +199,26 @@ export class WallLights {
   tick(t) {
     this.raf = 0;
     if (!this.running) return;
-    if (!this.held && t - this.last >= 1000 / this.fps) { this.last = t; this.draw(t); }
-    this.raf = this.view.requestAnimationFrame?.(n => this.tick(n)) || 0;
+    if (!this.held && t - this.last >= 1000 / this.fps - 2) { this.last = t; this.draw(t); }
+    this.schedule();
+  }
+  // Wakes only when the next picture is due (15 or 8 a second; after a move, when it has landed),
+  // not on every screen refresh (60 to 120 a second), so the page can rest between flickers (bug
+  // pass, 2026-10-30). The picture itself is still drawn in an animation frame.
+  schedule() {
+    const v = this.view, due = Math.max(this.last + 1000 / this.fps, this.heldUntil) - this.now();
+    if (v.setTimeout && due > 12) {
+      this.timer = v.setTimeout(() => { this.timer = 0; if (this.running) this.raf = v.requestAnimationFrame?.(n => this.tick(n)) || 0; }, due - 8);
+      return;
+    }
+    this.raf = v.requestAnimationFrame?.(n => this.tick(n)) || 0;
   }
   start() { if (this.running) return; this.running = true; this.still = false; this.raf = this.view.requestAnimationFrame?.(n => this.tick(n)) || 0; }
   // Still: one calm picture, no redraws (reduced motion, or the layer is hidden).
-  stop({ still = false } = {}) { this.running = false; if (this.raf) this.view.cancelAnimationFrame?.(this.raf); this.raf = 0; this.still = still; if (still) this.draw(this.now()); }
+  stop({ still = false } = {}) {
+    this.running = false;
+    if (this.raf) this.view.cancelAnimationFrame?.(this.raf); this.raf = 0;
+    if (this.timer) this.view.clearTimeout?.(this.timer); this.timer = 0;
+    this.still = still; if (still) this.draw(this.now());
+  }
 }

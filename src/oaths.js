@@ -4,6 +4,7 @@
 // Three oaths are offered each day. Honor lives on this device. Pure helpers; src/main.js draws
 // the oath picker, the live oath line and the result.
 import { Chess } from 'chess.js';
+import { localStore } from './safe-storage.js';
 
 export const OATHS_KEY = 'vch.oaths';
 export const OATHS = [
@@ -79,11 +80,11 @@ export function oathStatus(id, summary, { over = false, score = null } = {}) {
   if (!over) return id !== 'swift-blade' && done(id, summary) ? 'done' : 'pending'; // a swift win is only known at the end
   return done(id, summary) && score === 1 ? 'fulfilled' : 'failed';
 }
-export function loadOaths(storage = globalThis.localStorage) {
+export function loadOaths(storage = localStore) {
   let v = null; try { v = JSON.parse(storage?.getItem(OATHS_KEY) || ''); } catch {}
   return { honor: Number(v?.honor) || 0, sworn: Number(v?.sworn) || 0, kept: Number(v?.kept) || 0, history: Array.isArray(v?.history) ? v.history.slice(0, 30) : [] };
 }
-export function saveOaths(state, storage = globalThis.localStorage) { try { storage?.setItem(OATHS_KEY, JSON.stringify(state)); } catch {} return state; }
+export function saveOaths(state, storage = localStore) { try { storage?.setItem(OATHS_KEY, JSON.stringify(state)); } catch {} return state; }
 // Records a finished oath. Returns {state, gained, relics} (relic ids crossed by this honor).
 export function recordOath(state, id, status, at = new Date().toISOString()) {
   const oath = oathById(id); if (!oath || !['fulfilled', 'broken', 'failed'].includes(status)) return { state, gained: 0, relics: [] };
