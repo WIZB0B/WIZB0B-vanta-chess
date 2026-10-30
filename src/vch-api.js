@@ -1,3 +1,4 @@
+import { localStore } from './safe-storage.js';
 const DEFAULT_ENDPOINT = 'https://ubjldcfiwrwiouwgmduo.supabase.co/functions/v1/chess';
 // The database lives in us-east-2. Without this, Supabase runs the function in the region
 // nearest the player (Frankfurt for West Africa), and every database call inside it then
@@ -154,7 +155,7 @@ export class VchApi {
   momentPick(gameId, caption = '') { return this.request('moment_pick', gameId ? { gameId, caption } : {}); }
 }
 
-export function stableGuestToken(storage = localStorage) {
+export function stableGuestToken(storage = localStore) {
   const key = 'vanta.guest-token';
   let token = storage.getItem(key);
   if (!token || token.length < 20) {

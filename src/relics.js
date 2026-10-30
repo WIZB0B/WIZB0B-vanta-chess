@@ -1,6 +1,7 @@
 // Relic sets: board themes you earn by playing (never bought). Each relic is a full set:
 // light and dark squares, accent, gold and wallpaper; your piece set stays your own choice.
 // Unlocks and the equipped relic live on this device.
+import { localStore } from './safe-storage.js';
 export const RELICS_KEY = 'vch.relics';
 export const RELICS = [
   { id: 'umbra', name: 'Umbra', how: 'Win a game of Vanta Dark', theme: { '--light': '#9a9fb0', '--dark': '#23262f', '--mint': '#9bb5ff', '--gold': '#c9cfe0' }, wallpaper: 'cobalt' },
@@ -19,12 +20,12 @@ export const RELICS = [
   { id: 'eclipse', name: 'Eclipse', how: 'Defeat the Vanta King', theme: { '--light': '#a7a3b2', '--dark': '#0e0d14', '--mint': '#b49cff', '--gold': '#e9d3a0' }, wallpaper: 'classic' },
 ];
 export const relicById = id => RELICS.find(r => r.id === id) || null;
-export function loadRelics(storage = globalThis.localStorage) {
+export function loadRelics(storage = localStore) {
   let v = null; try { v = JSON.parse(storage?.getItem(RELICS_KEY) || ''); } catch {}
   const unlocked = v && typeof v.unlocked === 'object' && v.unlocked ? Object.fromEntries(Object.entries(v.unlocked).filter(([k]) => relicById(k))) : {};
   return { unlocked, equipped: relicById(v?.equipped) && unlocked[v.equipped] ? v.equipped : null, prev: v?.prev && typeof v.prev === 'object' ? v.prev : null };
 }
-export function saveRelics(state, storage = globalThis.localStorage) { try { storage?.setItem(RELICS_KEY, JSON.stringify(state)); } catch {} return state; }
+export function saveRelics(state, storage = localStore) { try { storage?.setItem(RELICS_KEY, JSON.stringify(state)); } catch {} return state; }
 // Returns { state, unlocked: relic | null } (null when it was already yours or unknown).
 export function unlockRelic(state, id, at = new Date().toISOString()) {
   const relic = relicById(id); if (!relic || state.unlocked[id]) return { state, unlocked: null };

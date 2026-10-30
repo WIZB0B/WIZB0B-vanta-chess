@@ -9,6 +9,7 @@
 // different mind from Stockfish; the first realms' guards (below Lozza's measured range) and
 // every boss are Stockfish 19, which alone plays blind, plays Chess960, and is the strongest.
 
+import { localStore } from './safe-storage.js';
 export const CAMPAIGN_KEY = 'vch.campaign';
 export const REALMS = [
   { id: 'ashen', name: 'The Ashen March', relic: 'ashen', atmosphere: 'embers', music: 'ember',
@@ -51,12 +52,12 @@ export const realmById = id => REALMS.find(r => r.id === id) || null;
 export const battleKey = (realm, i) => `${realm}-${i}`;
 export const MAX_STARS = REALMS.length * 3 * 3;
 
-export function loadCampaign(storage = globalThis.localStorage) {
+export function loadCampaign(storage = localStore) {
   let v = null; try { v = JSON.parse(storage?.getItem(CAMPAIGN_KEY) || ''); } catch {}
   const won = v && typeof v.won === 'object' && v.won ? Object.fromEntries(Object.entries(v.won).filter(([k, x]) => /^[a-z]+-[0-2]$/.test(k) && x && Number.isInteger(x.stars))) : {};
   return { won, pending: v?.pending && realmById(v.pending.realm) ? v.pending : null };
 }
-export function saveCampaign(state, storage = globalThis.localStorage) { try { storage?.setItem(CAMPAIGN_KEY, JSON.stringify(state)); } catch {} return state; }
+export function saveCampaign(state, storage = localStore) { try { storage?.setItem(CAMPAIGN_KEY, JSON.stringify(state)); } catch {} return state; }
 // A realm opens when the previous realm's boss is beaten; a battle opens when the previous one is won.
 export function realmOpen(state, index) { return index === 0 || !!state.won[battleKey(REALMS[index - 1].id, 2)]; }
 export function battleOpen(state, realmIndex, battle) { return realmOpen(state, realmIndex) && (battle === 0 || !!state.won[battleKey(REALMS[realmIndex].id, battle - 1)]); }

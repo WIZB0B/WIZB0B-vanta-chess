@@ -4,6 +4,7 @@
 // the board as small chevrons (Veteran one, Champion two, Legend three and a glint) and on
 // hover. Built from your own game history; pure helpers, src/main.js draws them.
 import { Chess } from 'chess.js';
+import { localStore } from './safe-storage.js';
 
 export const VETERANS_KEY = 'vch.veterans';
 const START = new Chess().fen();
@@ -115,10 +116,10 @@ export function armyList(map, color = null) {
     .map(([id, s]) => ({ id, name: pieceName(id), color: id[0], type: id.split('-')[1], ...s, deeds: deeds(s), rank: rankOf(s)?.id || null, rankName: rankOf(s)?.name || 'Recruit', epithet: rankOf(s) ? epithetOf(s) : null }))
     .sort((a, b) => b.deeds - a.deeds || b.games - a.games);
 }
-export function loadVeterans(storage = globalThis.localStorage) {
+export function loadVeterans(storage = localStore) {
   let v = null; try { v = JSON.parse(storage?.getItem(VETERANS_KEY) || ''); } catch {}
   const ok = id => /^[wb]-[pnbrqk]-[a-h][1-8]$/.test(id);
   const totals = v && typeof v.totals === 'object' && v.totals ? Object.fromEntries(Object.entries(v.totals).filter(([id, s]) => ok(id) && s && typeof s === 'object').map(([id, s]) => [id, Object.fromEntries(Object.keys(blank()).map(k => [k, Math.max(0, Number(s[k]) || 0)]))])) : {};
   return { ids: Array.isArray(v?.ids) ? v.ids.filter(x => typeof x === 'string').slice(-MAX_CAREER_IDS) : [], totals };
 }
-export function saveVeterans(state, storage = globalThis.localStorage) { try { storage?.setItem(VETERANS_KEY, JSON.stringify({ ids: state.ids, totals: state.totals })); } catch {} return state; }
+export function saveVeterans(state, storage = localStore) { try { storage?.setItem(VETERANS_KEY, JSON.stringify({ ids: state.ids, totals: state.totals })); } catch {} return state; }

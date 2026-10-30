@@ -1,4 +1,5 @@
 import { Chess } from 'chess.js';
+import { localStore } from './safe-storage.js';
 
 // Endgame drills against Stockfish at full strength. Each drill has a goal:
 //  'mate'    – checkmate within `limit` of your moves,
@@ -43,8 +44,8 @@ export function starsFor(drill, yourMoves, success) {
   if (drill.goal === 'hold') return 3;
   return yourMoves <= drill.par ? 3 : yourMoves <= Math.ceil(drill.par * 1.5) ? 2 : 1;
 }
-export function loadProgress(storage = globalThis.localStorage) { try { return JSON.parse(storage?.getItem(ENDGAME_KEY) || '{}') || {}; } catch { return {}; } }
-export function saveStars(id, stars, storage = globalThis.localStorage) {
+export function loadProgress(storage = localStore) { try { return JSON.parse(storage?.getItem(ENDGAME_KEY) || '{}') || {}; } catch { return {}; } }
+export function saveStars(id, stars, storage = localStore) {
   const p = loadProgress(storage); if (stars > (p[id] || 0)) p[id] = stars;
   try { storage?.setItem(ENDGAME_KEY, JSON.stringify(p)); } catch {}
   return p;

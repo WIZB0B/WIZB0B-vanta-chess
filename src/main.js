@@ -1,3 +1,4 @@
+import { localStore, sessionStore, readJson } from './safe-storage.js';
 import './style.css';
 import './rtl.css';
 import './shadows.css';
@@ -97,7 +98,7 @@ import { CHALLENGE_TIMES, VAPID_PUBLIC_KEY, achievementBoard, berserkProgress, c
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const params=new URLSearchParams(location.search), generatedRoom=Math.random().toString(36).slice(2,10).toUpperCase();
 const directGame=Boolean(params.get('game'));
-const introSeen=localStorage.getItem('vch.intro-seen')==='1';
+const introSeen=localStore.getItem('vch.intro-seen')==='1';
 const startsInGame=directGame||introSeen;
 let room=normalizeRoomId(params.get('game'),generatedRoom);
 const playerToken=stableGuestToken();
@@ -105,12 +106,12 @@ const api=new VchApi({token:playerToken});
 const SUPABASE_URL='https://ubjldcfiwrwiouwgmduo.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_q3KU0sdaVKOeMcLND2D15Q_Qsu2X5pN';
 const realtimeClient=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-let authSession=JSON.parse(localStorage.getItem('vanta.auth-session')||'null'),currentProfile=null,authMode='signin';
+let authSession=readJson('vanta.auth-session',null),currentProfile=null,authMode='signin';
 if(authSession?.access_token)api.accessToken=authSession.access_token;
 const defaultGuestName=`Guest-${playerToken.slice(-4).toUpperCase()}`;
 // A guest may choose a display name (Portrait & profile); it is kept on this device and sent
 // with every request that carries the guest's name.
-let guestName=(()=>{try{const v=cleanDisplayName(localStorage.getItem('vch.guestName')||'');return isDisplayName(v)?v:defaultGuestName}catch{return defaultGuestName}})();
+let guestName=(()=>{try{const v=cleanDisplayName(localStore.getItem('vch.guestName')||'');return isDisplayName(v)?v:defaultGuestName}catch{return defaultGuestName}})();
 const game=new Chess(); const premoves=new PremoveQueue(); const menus=new MenuController(); const realtimeClientId=crypto.randomUUID(); let selected=null, flipped=false, mode='room', myColor=null, ticking, enginePending, serverGameId=null, serverVersion=0, pollTimer, clockSnapshot=null, serverGame=null, botThinking=false, puzzleSession=null, currentPlayerId=null, orientationSet=false, lastAnimatedVersion=0, lastDrawOffer=null, drawOfferTimer=null, drawOfferCountdownTimer=null, drawOfferKey=null, pollCount=0, currentBot=null, latencyMs=null, realtimeChannel=null, realtimeGameId=null, realtimeReady=false, realtimePingTimer=null, pingProbe=null, realtimeRefreshPromise=null, onlineMovePending=false, lastLocalRealtimeMove=null, provisional=null, relayConfirm=null, installPrompt=null, lastGameStartKey=null, lastGameOverKey=null, gameStartBannerTimer=null, localGameOverInfo=null, currentRightView='moves', analysisTimer=null, analysisScore=0, matchTimer=null, searching=false, localClockState=null, localGameOver=false, roomCreated=false, computerStarted=false, computerSideChoice='w', computerSide='w', botsLoaded=false, selectedComputerBotSlug=DEFAULT_LEVEL, toastTimer=null, chatUnread=0, lastChatMessageId=null, chatSessionStartedAt=Date.now(), lowTimeWarned=false, opponentWasConnected=null, rematchOfferPending=false;
 // Phone layout state (see the Phone layout section).
 let mobileMedia=null,mView='home',mTab='play',mLastGameKey=null,mReviewShown=false;
@@ -119,7 +120,7 @@ let navLast='play',navCurrent=null,navRestoring=false,navPending=false; // Back 
 let studySession=null,exploreSession=null; // sessions read by boardContext() during the first render
 let uiLang='en'; // the interface language; set from the saved choice in the language section below
 let lessonSession=null; // a course lesson or a famous-game lesson on the board (src/lesson-player.js)
-let resonance=null,resonanceLevel='off',resonanceRoom=null; // Resonance (src/resonance.js): the page background and the room
+let resonance=null,resonanceLevel='off',resonanceRoom=null,resonanceSteps=0,resonanceTimer=0; // Resonance (src/resonance.js): the page background and the room
 let soundBank=null,sfxPrefsCache=null,uiVoiceFn=null,musicResult=null,musicMood='even',r12PrefsCache=null,r12ToastQueue=[],r12ToastTimer=null,veteranState=null,vetCache=null,vetHoverTimer=null,veteranRefreshAt=0,veteranRefreshing=null,currentOath=null,oathLineKey='',atmoEl=null,atmoQueued=false,atmoEnd=null,atmosphereRealm=null,musicKeyOverride=null,musicPrefs=null,vantaScore=null,realmThemeSaved=null,bhSession=null,twinSession=null,ownClubInfo=null,engineSight=null;
 let streakSession=null; // a puzzle run: {mode:'streak'|'survival',count,best,startedAt} (src/puzzle-modes.js)
 let runTimer=0; // ticks the run clock while a run puzzle is on the board
@@ -128,7 +129,7 @@ let watchSession=null; // spectating a live game: {id,state,timer,channel,prevMo
 let liveGame=loadLive(),liveState=null,liveSeenAt=0,liveBeating=false,liveReturning=null; // your online game, wherever you are (src/live-game.js)
 let browse=null; // looking at an earlier position: {ply,positions,moves} (src/move-browse.js)
 let pointerDrag=null, suppressBoardClick=false, instantMoveAnimation=false, toneContext=null;
-let expressionSetting=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
+let expressionSetting=(()=>{try{return JSON.parse(localStore.getItem('vanta.theme')||'{}').expressions||'full'}catch{return 'full'}})();
 let lastPointerType='mouse'; // touch taps make a selected piece react (no hover on touch)
 // Piece reactions (src/piece-reactions.js): hover gestures, lean, press pull and hint swell.
 const reactions=new PieceReactions({
@@ -214,7 +215,7 @@ function applyPieceStyle(value){
   return style;
 }
 const app=$('#app');
-const splash=splashPlan({standalone:isStandaloneDisplay(window),storage:window.localStorage});
+const splash=splashPlan({standalone:isStandaloneDisplay(window),storage:localStore});
 app.innerHTML=`
 ${splashMarkup(splash)}
 <div class="shell ${startsInGame?'game-active':'intro-active'}">
@@ -412,7 +413,7 @@ ${splashMarkup(splash)}
 <div id="simulBar" class="simul-bar hidden" role="status"><span id="simulBarText">Simul</span><button id="simulNext" type="button">Next board</button><button id="simulAll" type="button">All boards</button></div>
 <div id="a11yLive" class="sr-only" aria-live="polite" aria-atomic="true" data-no-i18n></div>
 
-<aside id="chatDrawer" class="chat-drawer" aria-hidden="true">
+<aside id="chatDrawer" class="chat-drawer" aria-hidden="true" inert>
   <header><div><small>PLAYER CHAT</small><h3>Game conversation</h3></div><button id="closeChat" aria-label="Close chat">×</button></header>
   <div id="messages"></div>
   <div id="chatTray" class="chat-tray hidden" role="dialog" aria-label="Emoji and reactions"><div class="chat-tray-tabs" role="tablist"><button type="button" data-tray="reactions" class="on" role="tab">Reactions</button><button type="button" data-tray="emoji" role="tab">Emoji</button></div><div class="chat-tray-body"></div></div>
@@ -810,11 +811,11 @@ function formatTimeControl(seconds,increment=0){
 // Interface sounds can be turned off on their own; the board's Sound button silences everything.
 function menuSound(kind){return ['tap','page','back','open','close','toggle-on','toggle-off','notify'].includes(kind)}
 function sfxPrefs(){
-  if(!sfxPrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem('vch.sfx')||'')}catch{}
+  if(!sfxPrefsCache){let v=null;try{v=JSON.parse(localStore.getItem('vch.sfx')||'')}catch{}
     sfxPrefsCache={pieces:[...PIECE_SETS,'relic','classic'].includes(v?.pieces)?v.pieces:'wood',ui:v?.ui!==false}}
   return sfxPrefsCache;
 }
-function setSfxPref(key,value){sfxPrefsCache={...sfxPrefs(),[key]:value};try{localStorage.setItem('vch.sfx',JSON.stringify(sfxPrefsCache))}catch{}}
+function setSfxPref(key,value){sfxPrefsCache={...sfxPrefs(),[key]:value};try{localStore.setItem('vch.sfx',JSON.stringify(sfxPrefsCache))}catch{}}
 function soundBankNow(){if(!soundBank){soundBank=new SoundBank({context:audioContext});void soundBank.load()}return soundBank}
 // The set your pieces sound like: your choice, or (Match my relic set) the equipped relic's.
 function pieceSoundSet(){const p=sfxPrefs().pieces;return p==='relic'?SET_FOR_RELIC[loadRelics().equipped]||'wood':p}
@@ -902,8 +903,13 @@ function gameEndKeys(event){
   if(event.key!=='Escape'||!$('#gameEndPanel')||document.querySelector('dialog[open],.vch-dialog-layer'))return;
   event.preventDefault();hideGameEndPanel();
 }
+let gameEndReturn=null;
 function hideGameEndPanel(){
   const panel=$('#gameEndPanel');if(!panel)return;
+  // The card had focus (its title, or a button): give it back to where it was before the card
+  // came, rather than leave the keyboard on a card that is about to be gone.
+  const back=gameEndReturn;gameEndReturn=null;
+  if(panel.contains(document.activeElement)){if(back instanceof HTMLElement&&back.isConnected&&back!==document.body)back.focus({preventScroll:true});else document.activeElement.blur?.()}
   panel.removeAttribute('id');document.removeEventListener('keydown',gameEndKeys,true);
   cancelAnimationFrame(Number(panel.dataset.countFrame)||0);
   panel.classList.remove('show');setTimeout(()=>panel.remove(),motionScale()>0?280:0);
@@ -923,7 +929,7 @@ function endRatingChange(info,color){
   return serverGame[`${prefix}_rating_before`]!=null&&serverGame[`${prefix}_rating_delta`]!=null&&Number.isFinite(before)&&Number.isFinite(delta)?{before,delta}:null;
 }
 function showGameEndPanel(info,title){
-  hideGameEndPanel();
+  hideGameEndPanel();gameEndReturn=document.activeElement;
   const mine=info.myColor==='b'?'b':'w',theirs=mine==='w'?'b':'w';
   const outcome=title==='You won'?'won':title==='You lost'?'lost':title==='Draw'?'draw':'aborted';
   const plies=currentHistory().length,moves=Math.ceil(plies/2);
@@ -1186,7 +1192,9 @@ function setMatchSearching(active){
   $('#findOpponent')?.classList.toggle('searching',active);
   updateOnlineCount(serverGameId?'2':active?'1+':'—');
 }
+let matchSearchToken=0; // a search cancelled while its join request was in flight must not start polling
 async function cancelMatchSearch({announce=true}={}){
+  matchSearchToken++;
   if(matchTimer){clearInterval(matchTimer);matchTimer=null}
   const wasSearching=searching;setMatchSearching(false);
   if(wasSearching){try{await api.queueLeave()}catch{}}
@@ -1199,21 +1207,27 @@ async function beginMatchSearch(){
   stopOnlineSync();
   serverGameId=null;serverGame=null;clockSnapshot=null;serverVersion=0;currentBot=null;myColor=null;orientationSet=false;selected=null;premoves.cancel();flipped=false;roomCreated=false;moveEvalByPly=[];moveTimeByPly=[];resetReviewState();
   game.reset();render();updateMoves();setMatchSearching(true);
-  const started=Date.now();
+  const started=Date.now(),token=++matchSearchToken,live=()=>token===matchSearchToken&&searching;
   try{
     const first=await api.queueJoin({seconds:matchSelection.seconds,increment:matchSelection.increment,rated:matchSelection.rated,...(matchSelection.variant!=='standard'?{variant:matchSelection.variant}:{})});
-    if(first.game||first.matched){setMatchSearching(false);updateOnlineCount(2);applyServerState(first);showMovesView();toast('Player matched');return}
+    if(first.game||first.matched){
+      // Matched as the search was cancelled: the opponent is already seated, so the game is shown.
+      const cancelled=!live();setMatchSearching(false);updateOnlineCount(2);applyServerState(first);showMovesView();toast(cancelled?'Matched just as you cancelled':'Player matched');return}
+    if(!live()){try{await api.queueLeave()}catch{}return} // cancelled while joining: leave the queue again, no polling
+    if(matchTimer)clearInterval(matchTimer);
     matchTimer=setInterval(async()=>{
+      if(!live()){clearInterval(matchTimer);matchTimer=null;return}
       try{
         const state=await api.queueStatus(matchSelection.rated);
+        if(!live())return;
         if(state.game||state.matched){
           clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);updateOnlineCount(2);
           applyServerState(state);showMovesView();
           toast(state.botFallback||Date.now()-started>=15000?'Closest Elo engine matched':'Player matched');
         }
-      }catch(error){clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);toast(error.message)}
+      }catch(error){if(!live())return;clearInterval(matchTimer);matchTimer=null;setMatchSearching(false);toast(error.message)}
     },1000);
-  }catch(error){setMatchSearching(false);toast(error.message)}
+  }catch(error){if(token===matchSearchToken){setMatchSearching(false);toast(error.message)}}
 }
 // A Campaign boss, a Gauntlet rung or Your Shadow is not one of the cards below: while one is
 // on the board the panel says so, and the usual opponent and variant choices stop looking picked.
@@ -1563,16 +1577,18 @@ function currentClockSeconds(){
 function syncClockBars(values=currentClockSeconds(),active=activeClockColor()){
   if(mode==='puzzle'&&runTimer)return; // the run clock owns your clock during a puzzle run
   const colors=playerBarClockColors(),top=$('#topClock'),bottom=$('#bottomClock');
+  // Four times a second: only what changed is written, so a clock that isn't running (or a
+  // second that hasn't turned) costs no style or layout work, and no translation pass.
   const apply=(element,color)=>{
     if(!element)return;
-    element.dataset.color=color;
-    element.textContent=clockText(Math.max(0,Math.ceil(Number(values?.[color])||0)));
+    if(element.dataset.color!==color)element.dataset.color=color;
+    const text=clockText(Math.max(0,Math.ceil(Number(values?.[color])||0)));if(element.textContent!==text)element.textContent=text;
     element.classList.toggle('running',active===color);
   };
   apply(top,colors.top);apply(bottom,colors.bottom);
   const topBar=$('.player.top'),bottomBar=$('.player.bottom');
-  if(topBar)topBar.dataset.color=colors.top;
-  if(bottomBar)bottomBar.dataset.color=colors.bottom;
+  if(topBar&&topBar.dataset.color!==colors.top)topBar.dataset.color=colors.top;
+  if(bottomBar&&bottomBar.dataset.color!==colors.bottom)bottomBar.dataset.color=colors.bottom;
   syncLowTimeWarning(values,active);
 }
 function syncLowTimeWarning(values,active){
@@ -1782,7 +1798,7 @@ async function refreshServerState(){if(!serverGameId)return;try{applyServerState
 async function maybePlayBot(){if(botThinking||!serverGame?.bot_player_id||game.isGameOver())return;const activePlayer=game.turn()==='w'?serverGame.white_player_id:serverGame.black_player_id;if(activePlayer!==serverGame.bot_player_id)return;botThinking=true;try{const move=await findEngineMove();if(move===undefined)return;if(!move)throw new Error('Stockfish 19 is required for the matched bot');applyServerState(await api.botMove(serverGameId,serverVersion,{from:move.from,to:move.to,promotion:move.promotion||undefined}))}catch(error){toast(error.message)}finally{botThinking=false}}
 function saveAuthSession(session){
   authSession=session||null;
-  if(authSession)localStorage.setItem('vanta.auth-session',JSON.stringify(authSession));else localStorage.removeItem('vanta.auth-session');
+  if(authSession)localStore.setItem('vanta.auth-session',JSON.stringify(authSession));else localStore.removeItem('vanta.auth-session');
   api.accessToken=authSession?.access_token||undefined;
 }
 async function authFetch(path,body,token){
@@ -1841,18 +1857,18 @@ async function detectCountry(){
 // Your VCH portrait: the server's copy once the round 13 server is live, else this device's.
 function ownPreset(){
   const server=currentProfile?.avatar_preset;if(isPortraitPreset(server))return server;
-  try{const v=localStorage.getItem('vch.portraitPreset');return isPortraitPreset(v)?v:null}catch{return null}
+  try{const v=localStore.getItem('vch.portraitPreset');return isPortraitPreset(v)?v:null}catch{return null}
 }
 function ownPortrait(label){return {avatar:currentProfile?.avatar_data,preset:ownPreset(),label}}
 async function saveProfileChanges(changes){
   const out=await api.profileUpdate(changes);currentProfile={...currentProfile,...(out.player||{})};syncIdentityUI();syncPlayerBars();return out;
 }
-function flagPromptDone(){try{return !!localStorage.getItem('vanta.flagPrompt')}catch{return true}}
+function flagPromptDone(){try{return !!localStore.getItem('vanta.flagPrompt')}catch{return true}}
 // Games finished on this device: no question before the first one (owner, 2026-10-17: a first
 // visit should land calmly, with nothing popping up over it).
 const GAMES_FINISHED_KEY='vch.games-finished';
-function gamesFinished(){try{return Number(localStorage.getItem(GAMES_FINISHED_KEY))||0}catch{return 0}}
-function countFinishedGame(){try{localStorage.setItem(GAMES_FINISHED_KEY,String(gamesFinished()+1))}catch{}}
+function gamesFinished(){try{return Number(localStore.getItem(GAMES_FINISHED_KEY))||0}catch{return 0}}
+function countFinishedGame(){try{localStore.setItem(GAMES_FINISHED_KEY,String(gamesFinished()+1))}catch{}}
 function scheduleFlagPrompt(){
   if(flagPromptDone()||currentProfile?.country_code||scheduleFlagPrompt.pending||!gamesFinished())return;
   scheduleFlagPrompt.pending=true;setTimeout(showFlagPrompt,2500);
@@ -1871,7 +1887,7 @@ function showFlagPrompt(){
   if(!flagPromptCalm()){setTimeout(showFlagPrompt,6000);return}
   const card=document.createElement('section');card.className='flag-prompt';card.setAttribute('role','dialog');card.setAttribute('aria-label','Show your country flag');
   card.innerHTML=`<b>Show your country flag?</b><p>Opponents see it beside your name. "Detect" looks up only your country from your connection; we keep the 2-letter code, never your IP address.</p><div><button type="button" data-flag="detect" class="primary">Detect my country</button><button type="button" data-flag="choose">Choose myself</button><button type="button" data-flag="no">No thanks</button></div>`;
-  const done=()=>{try{localStorage.setItem('vanta.flagPrompt','1')}catch{}card.remove()};
+  const done=()=>{try{localStore.setItem('vanta.flagPrompt','1')}catch{}card.remove()};
   card.addEventListener('click',async event=>{
     const choice=event.target.closest('[data-flag]')?.dataset.flag;if(!choice)return;
     if(choice==='no'){done();return}
@@ -1925,11 +1941,11 @@ ${account?`<div class="pe-upload-row"><label class="pe-upload"><input type="file
     }
     if(!account&&name!==guestName){
       if(!isDisplayName(name))return toast('Names are 3–20 letters or numbers (spaces, _ . - inside)');
-      guestName=name;try{localStorage.setItem('vch.guestName',name)}catch{}
+      guestName=name;try{localStore.setItem('vch.guestName',name)}catch{}
       await api.profile(guestName).then(out=>{currentProfile={...currentProfile,...(out.player||out.profile||{})}}).catch(()=>{});
     }
-    try{if(preset)localStorage.setItem('vch.portraitPreset',preset);else localStorage.removeItem('vch.portraitPreset')}catch{}
-    await saveProfileChanges(changes);try{localStorage.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')
+    try{if(preset)localStore.setItem('vch.portraitPreset',preset);else localStore.removeItem('vch.portraitPreset')}catch{}
+    await saveProfileChanges(changes);try{localStore.setItem('vanta.flagPrompt','1')}catch{}toast('Profile saved')
   }catch(error){syncIdentityUI();toast(error.message)}
 }
 async function loadProfile(){
@@ -2213,8 +2229,9 @@ function puzzleMiss(move){
 }
 async function renderPuzzleStats(){
   setDynamicView('puzzles','Puzzle stats',brandLoading('Loading your puzzle stats…'));
+  const viewGen=dynamicViewGen;
   try{
-    const st=await api.puzzleStats(),target=$('#dynamicView .view-content');if(!target)return;
+    const st=await api.puzzleStats(),target=viewContent(viewGen);if(!target)return;
     const points=sparklinePoints(st.history||[],280,64),weak=weakestThemes(st.themes||[]);
     target.innerHTML=`<article class="puzzle-stats"><div class="puzzle-stat-row"><div><small>RATING</small><b>${st.rating}</b></div><div><small>RATED</small><b>${st.games}</b></div><div><small>BEST STREAK</small><b>${Math.max(st.best_streak||0,loadBestStreak())}</b></div></div>
       ${points?`<svg class="puzzle-spark" viewBox="0 0 280 64" preserveAspectRatio="none" aria-label="Puzzle rating over your last puzzles"><polyline points="${points}"/></svg>`:'<p class="menu-empty">Solve a few puzzles to see your rating line.</p>'}
@@ -2710,6 +2727,14 @@ function startSocial(){
       .subscribe();
   }
 }
+// Signing out ends the old account's live updates: its private channel and its 45-second poll.
+// (Before, a tournament round or a battle for the previous account could still open on a shared
+// device after sign-out.)
+function stopSocial(){
+  if(socialState.timer){clearInterval(socialState.timer);socialState.timer=null}
+  if(socialState.channel){realtimeClient.removeChannel(socialState.channel).catch(()=>{});socialState.channel=null}
+  socialState.channelFor=null;socialState.incoming=[];socialState.outgoing=[];socialState.daily=[];socialState.vacation=null;
+}
 // A Swiss round is ready: open your game from the server's list of your tournament games.
 async function openTournamentRound(){
   if(isOnlineGame()||mode==='computer')return;
@@ -2873,8 +2898,9 @@ function closeClubChannel(){if(clubChannel){realtimeClient.removeChannel(clubCha
 async function renderClubs(){
   closeClubChannel();clubOpen=null;
   setDynamicView('friends','Community',communityTabs('clubs')+brandLoading('Loading clubs…'));wireCommunityTabs();
+  const viewGen=dynamicViewGen;
   try{
-    const out=await api.clubList(),target=$('#dynamicView .view-content');if(!target||currentRightView!=='friends')return;
+    const out=await api.clubList(),target=viewContent(viewGen);if(!target||currentRightView!=='friends')return;
     const list=c=>`<article class="club-row" data-club="${escapeHtml(c.slug)}">${c.crest?`<span class="club-crest">${crestSvg(c.crest,{size:26,label:`${c.name} crest`})}</span>`:''}<div><b>${escapeHtml(c.name)}</b><small>${c.member_count} ${c.member_count===1?'member':'members'}${c.description?` · ${escapeHtml(c.description)}`:''}</small></div><button class="club-open">Open</button></article>`;
     target.innerHTML=communityTabs('clubs')+`<div class="friends-view">
       ${out.mine?`<section class="friends-block my-club"><h4>Your club</h4>${list(out.mine)}</section>`:''}
@@ -2893,8 +2919,9 @@ async function openClub(slug){
   if(!slug)return;closeClubChannel();
   setPrimaryScreen('game');if(isMobileApp()){mTab='more';setMView('panel')}
   setDynamicView('friends','Community',communityTabs('clubs')+brandLoading('Opening the club…'));wireCommunityTabs();
+  const viewGen=dynamicViewGen;
   try{
-    const d=await api.clubView(slug),target=$('#dynamicView .view-content');if(!target)return;clubOpen=d.club.slug;
+    const d=await api.clubView(slug),target=viewContent(viewGen);if(!target)return;clubOpen=d.club.slug;
     target.innerHTML=communityTabs('clubs')+`<article class="club">
       <header>${d.club.crest?`<span class="club-crest big">${crestSvg(d.club.crest,{size:48,label:`${d.club.name} crest`})}</span>`:''}<h4>${escapeHtml(d.club.name)}</h4><small>${d.club.member_count} members${d.role==='owner'?' · you run this club':''}</small>${d.club.description?`<p>${escapeHtml(d.club.description)}</p>`:''}</header>
       <div class="pp-actions">${d.member?'<button class="club-leave">Leave club</button>':'<button class="club-join primary">Join club</button>'}<button class="club-copy">Copy invite link</button>${d.role==='owner'||currentProfile?.role==='admin'?`<button class="club-crest-edit">${d.club.crest?'Edit crest':'Design a crest'}</button>`:''}<button class="club-back">All clubs</button></div>
@@ -2911,7 +2938,7 @@ async function openClub(slug){
     target.querySelector('.club-leave')?.addEventListener('click',async()=>{const ok=await vchDialog({title:'Leave the club?',body:d.role==='owner'?'The longest-standing member takes over. If you are the last member, the club closes.':'You can join again later.',actions:[{label:'Stay',value:false},{label:'Leave',value:true,primary:true}]});if(!ok)return;try{await api.clubLeave();toast('You left the club');void renderClubs()}catch(error){toast(error.message)}});
     target.querySelector('.club-say')?.addEventListener('submit',async e=>{e.preventDefault();const input=e.target.querySelector('input'),body=input.value.trim();if(!body)return;input.value='';try{await api.clubChat(d.club.slug,body);void refreshClubChat()}catch(error){toast(error.message);input.value=body}});
     if(d.member)clubChannel=realtimeClient.channel(`club:${d.club.id}`).on('broadcast',{event:'message'},()=>void refreshClubChat()).subscribe();
-  }catch(error){toast(error.message);void renderClubs()}
+  }catch(error){if(viewGen!==dynamicViewGen)return;toast(error.message);void renderClubs()}
 }
 async function refreshClubChat(){
   if(!clubOpen||currentRightView!=='friends')return closeClubChannel();
@@ -2922,8 +2949,9 @@ let leagueDivision=null;
 async function renderLeague(division=leagueDivision){
   closeClubChannel();
   setDynamicView('friends','Community',communityTabs('league')+brandLoading('Loading the league…'));wireCommunityTabs();
+  const viewGen=dynamicViewGen;
   try{
-    const d=await api.league(division),target=$('#dynamicView .view-content');if(!target||currentRightView!=='friends')return;
+    const d=await api.league(division),target=viewContent(viewGen);if(!target||currentRightView!=='friends')return;
     leagueDivision=d.division;
     const days=Math.max(0,Math.ceil((Date.parse(d.ends)-Date.now())/86400000)),up=d.division<d.divisions.length-1?d.zones.promote:0,down=d.division>0?d.zones.relegate:0;
     const zone=r=>r.rank<=up?'up':down&&r.rank>d.total-down?'down':'';
@@ -3048,8 +3076,9 @@ async function renderModeration(){
   if(!isAdmin())return toast('Moderation is for admins');
   setPrimaryScreen('game');if(isMobileApp()){mTab='more';setMView('panel')}
   setDynamicView('moderation','Moderation',brandLoading('Loading cases…'));
+  const viewGen=dynamicViewGen;
   try{
-    const d=await api.modQueue(),target=$('#dynamicView .view-content');if(!target)return;
+    const d=await api.modQueue(),target=viewContent(viewGen);if(!target)return;
     const reasons=r=>Object.entries(r).map(([k,v])=>`${v} ${k}`).join(' · ');
     target.innerHTML=`<article class="mod">
       <p class="trainer-intro">Reports and accuracy signals are leads for a person to check, not proof. Open a file, look at the games, then decide.</p>
@@ -3062,8 +3091,9 @@ async function renderModeration(){
 }
 async function openModFile(playerId){
   setDynamicView('moderation','Moderation',brandLoading('Opening the file…'));
+  const viewGen=dynamicViewGen;
   try{
-    const d=await api.modPlayer(playerId),p=d.player,target=$('#dynamicView .view-content');if(!target)return;
+    const d=await api.modPlayer(playerId),p=d.player,target=viewContent(viewGen);if(!target)return;
     const muted=p.muted_until&&Date.parse(p.muted_until)>Date.now();
     target.innerHTML=`<article class="mod">
       <header class="mod-head"><h4>${escapeHtml(p.username)}</h4><small>${p.account?'Account':'Guest'} · ${p.rating} blitz · ${p.rated_games} rated games${p.banned_at?` · <b class="mod-flag">Suspended</b> (${escapeHtml(p.ban_reason||'')})`:''}${muted?` · <b class="mod-flag">Muted until ${escapeHtml(new Date(p.muted_until).toLocaleString())}</b>`:''}</small></header>
@@ -3260,9 +3290,9 @@ function coachAnalyze(fen){
     coachWorker.postMessage({mode:'analysis',fen,depth:12,requestId:id});
   });
 }
-function coachOn(){try{return localStorage.getItem('vch.coach')==='1'}catch{return false}}
+function coachOn(){try{return localStore.getItem('vch.coach')==='1'}catch{return false}}
 function syncCoachToggle(){$$('[data-coach]').forEach(b=>b.classList.toggle('on',(b.dataset.coach==='on')===coachOn()))}
-$$('[data-coach]').forEach(b=>b.addEventListener('click',()=>{try{localStorage.setItem('vch.coach',b.dataset.coach==='on'?'1':'0')}catch{}syncCoachToggle();if(!coachOn())hideCoach()}));
+$$('[data-coach]').forEach(b=>b.addEventListener('click',()=>{try{localStore.setItem('vch.coach',b.dataset.coach==='on'?'1':'0')}catch{}syncCoachToggle();if(!coachOn())hideCoach()}));
 syncCoachToggle();
 function hideCoach(){coachShown=null;$('#coachCard')?.classList.add('hidden')}
 async function coachAfterMove(made){
@@ -3435,8 +3465,9 @@ const watchTabs=()=>`<div class="watch-tabs" role="tablist"><button type="button
 function wireWatchTabs(){$$('#dynamicView [data-watch-tab]').forEach(b=>b.onclick=()=>{watchTab=b.dataset.watchTab;void renderWatch()})}
 async function renderStreams(){
   setDynamicView('watch','Watch',watchTabs()+brandLoading('Finding streamers…'));wireWatchTabs();
+  const viewGen=dynamicViewGen;
   try{
-    const {streams=[]}=await api.request('live_streams'),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch'||watchTab!=='streams')return;
+    const {streams=[]}=await api.request('live_streams'),target=viewContent(viewGen);if(!target||currentRightView!=='watch'||watchTab!=='streams')return;
     const card=x=>`<article class="stream-card service-${x.service}"><div class="stream-head"><span class="stream-badge">${x.service==='youtube'?'YouTube':'Twitch'}</span>${x.lang?`<em>${escapeHtml(x.lang.toUpperCase())}</em>`:''}<i class="live-dot" aria-hidden="true"></i></div><b>${x.title?`<span class="stream-title">${escapeHtml(x.title)}</span> `:''}${escapeHtml(x.name)}</b><p>${escapeHtml(x.status||x.headline||'')}</p><div class="stream-actions"><a class="library-action" href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">Watch on ${x.service==='youtube'?'YouTube':'Twitch'}</a><a class="library-action ghost" href="${escapeHtml(x.profile)}" target="_blank" rel="noopener noreferrer">Profile</a></div></article>`;
     target.innerHTML=watchTabs()+(streams.length?`<p class="watch-intro">Chess streamers live now. Streams open on Twitch or YouTube in a new tab.</p><div class="stream-grid">${streams.map(card).join('')}</div><p class="stream-source">Live list from Lichess's streamer directory. <button type="button" class="watch-refresh">Refresh</button></p>`:`<div class="watch-empty"><h4>No streamers live right now</h4><p>Check back soon: the list refreshes every minute.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
     wireWatchTabs();target.querySelector('.watch-refresh')?.addEventListener('click',()=>void renderStreams());
@@ -3445,8 +3476,9 @@ async function renderStreams(){
 async function renderWatch(){
   if(watchTab==='streams')return renderStreams();
   setDynamicView('watch','Watch',watchTabs()+brandLoading('Finding live games…'));wireWatchTabs();
+  const viewGen=dynamicViewGen;
   try{
-    const [{games=[]},moment]=await Promise.all([api.liveGames(),loadMoment()]),target=$('#dynamicView .view-content');if(!target||currentRightView!=='watch')return;
+    const [{games=[]},moment]=await Promise.all([api.liveGames(),loadMoment()]),target=viewContent(viewGen);if(!target||currentRightView!=='watch')return;
     target.innerHTML=watchTabs()+momentHtml(moment)+(games.length?`<p class="watch-intro">Live games from matchmaking and arenas. Private rooms are never listed, and no engine help is shown while a game is on.</p><div class="watch-grid">${games.map((g,i)=>`<button type="button" class="watch-card" data-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white_name||'White')}</b><em>${escapeHtml(String(g.white_rating_before||''))}</em></span><span><b>${escapeHtml(g.black_name||'Black')}</b><em>${escapeHtml(String(g.black_rating_before||''))}</em></span><small>${formatTimeControl(g.time_control_seconds||600,g.increment_seconds||0)} · ${g.rated?'Rated':'Casual'} · move ${Math.max(1,Math.ceil(Number(g.move_count||0)/2))}</small></span></button>`).join('')}</div><button type="button" class="watch-refresh">Refresh</button>`
       :`<div class="watch-empty"><h4>No live games right now</h4><p>Games from matchmaking and arenas appear here while they're played. Private rooms are never listed.</p><button type="button" class="watch-refresh">Refresh</button></div>`);
     wireMoment(target,moment);wireWatchTabs();
@@ -3632,11 +3664,21 @@ function openSheet(title,items){
   $('#mSheetTitle').textContent=title;
   list.replaceChildren(...items.filter(Boolean).map(item=>{
     const button=document.createElement('button');button.type='button';button.textContent=item.label;
-    button.onclick=()=>{closeSheet();item.run()};return button;
+    button.onclick=()=>{closeSheet({restore:false});item.run()};return button;
   }));
+  if(sheet.hidden)sheetReturn=document.activeElement;
   sheet.hidden=false;requestAnimationFrame(()=>sheet.classList.add('open'));list.querySelector('button')?.focus({preventScroll:true});
 }
-function closeSheet(){const sheet=$('#mSheet');if(!sheet||sheet.hidden)return false;sheet.classList.remove('open');sheet.hidden=true;return true}
+// Closing the sheet (the backdrop, its close button, Escape) puts focus back on what opened it;
+// choosing an item leaves focus to the screen that item opens.
+let sheetReturn=null;
+function closeSheet({restore=true}={}){
+  const sheet=$('#mSheet');if(!sheet||sheet.hidden)return false;
+  const inside=sheet.contains(document.activeElement),back=sheetReturn;sheetReturn=null;
+  sheet.classList.remove('open');sheet.hidden=true;
+  if(restore&&inside&&back instanceof HTMLElement&&back.isConnected)back.focus({preventScroll:true});
+  return true;
+}
 function openSection(kind){mTab=['puzzles','learn','watch'].includes(kind)?kind:'more';activateNav(kind);setMView('panel')}
 function openMoreSheet(){
   openSheet('More',[
@@ -3693,8 +3735,16 @@ $$('[data-m-tab]').forEach(button=>button.onclick=()=>{
 $('#mBack').onclick=()=>{playUiSound('back');if(watchSession){stopWatching();openSection('watch');return}if(archiveSession&&mView!=='review'){leaveArchive();openSection('review');return}if(mView==='review'){reviewState.viewing=false;renderReviewDashboard();render();setMView('game')}else{mTab='play';setMView('home')}};
 $('#mReturnGame').onclick=()=>liveAway()?void returnToLiveGame():setMView('game');
 $('#returnGame').onclick=()=>void returnToLiveGame();
-$$('#mSheet [data-m-close]').forEach(el=>el.onclick=closeSheet);
-document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheet()});
+$$('#mSheet [data-m-close]').forEach(el=>el.onclick=()=>closeSheet());
+// Escape closes the sheet and nothing else (not a menu or a premove underneath); Tab stays in it.
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&closeSheet()){event.preventDefault();event.stopImmediatePropagation()}});
+$('#mSheet')?.addEventListener('keydown',event=>{
+  if(event.key!=='Tab')return;
+  const items=[...$('#mSheet .m-sheet-card').querySelectorAll('button:not([disabled])')];if(!items.length)return;
+  const first=items[0],last=items.at(-1);
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+});
 isMobileApp();mobileMedia.addEventListener?.('change',syncMobileShell);syncMobileShell();
 async function claimAbandoned(outcome){
   if(!serverGameId)return;
@@ -3835,8 +3885,16 @@ async function sendChatBody(body){
 }
 function chatIsOpen(){return $('#chatDrawer')?.classList.contains('open')===true}
 function updateChatUnread(){const badge=$('#chatUnread');if(!badge)return;badge.textContent=String(chatUnread);badge.classList.toggle('hidden',chatUnread<=0)}
-function openChatDrawer(){chatUnread=0;updateChatUnread();$('#chatDrawer').classList.add('open');$('#chatDrawer').setAttribute('aria-hidden','false');void loadChat()}
-function closeChatDrawer(){$('#chatDrawer').classList.remove('open');$('#chatDrawer').setAttribute('aria-hidden','true')}
+// Closed, the drawer is inert: nothing in it can be tabbed to or read out while it is off screen
+// (its Send button and message box were reachable by keyboard, unseen). Closing it from inside
+// gives focus back to what opened it.
+let chatReturn=null;
+function openChatDrawer(){const drawer=$('#chatDrawer');chatUnread=0;updateChatUnread();if(!chatIsOpen())chatReturn=document.activeElement;drawer.inert=false;drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');void loadChat()}
+function closeChatDrawer(){
+  const drawer=$('#chatDrawer'),inside=drawer.contains(document.activeElement),back=chatReturn;chatReturn=null;
+  drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');drawer.inert=true;
+  if(inside&&back instanceof HTMLElement&&back.isConnected&&back.offsetParent!==null)back.focus({preventScroll:true});
+}
 function previewChatMessage(item){
   const name=String(item?.display_name||'Opponent'),reaction=parseReaction(item?.body),body=reaction?reaction.label:String(item?.body||'').slice(0,60);
   toast(`${name}: ${body}`,{duration:4200,onClick:openChatDrawer});
@@ -3880,7 +3938,7 @@ function showSidePanel(){if(isMobileApp()){mTab='more';setMView('panel')}}
 $('.computer-shadow')?.addEventListener('click',()=>{void renderShadow();showSidePanel()});
 $('.computer-gauntlet')?.addEventListener('click',()=>{renderGauntlet();showSidePanel()});
 renderComputerBots();
-$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>openSettings({colours:true});$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{await navigator.clipboard.writeText($('#share').value);toast('Room link copied')};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
+$('#flip').onclick=()=>{flipped=!flipped;render()};$('#sound').onclick=e=>{e.currentTarget.dataset.off=e.currentTarget.dataset.off?'':'1';e.currentTarget.querySelector('span').textContent=e.currentTarget.dataset.off?'Sound off':'Sound on'};$('#theme').onclick=()=>openSettings({colours:true});$('#resign').onclick=async()=>{if(mode==='computer'&&computerStarted&&!localGameOver){const resign=await vchDialog({title:'Resign game?',body:'Your computer game will end immediately.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign){settleLocalClock();localGameOver=true;localGameOverInfo={result:computerSide==='w'?'0-1':'1-0',reason:'by resignation'};render()}}else if(serverGameId){const resign=await vchDialog({title:'Resign game?',body:'This game will end immediately and the result will be final.',actions:[{label:'Cancel',value:false},{label:'Resign',value:true,primary:true}]});if(resign)try{applyServerState(await api.resign(serverGameId))}catch(error){toast(error.message)}}else toast('Start a game first')};$('#draw').onclick=async()=>{if(mode==='computer')return toast('Draw offers are available in multiplayer games');if(!serverGameId)return toast('Start a game first');if(serverGame?.draw_offer_by===currentPlayerId)return cancelOwnDrawOffer();if(serverGame?.draw_offer_by&&serverGame.draw_offer_by!==currentPlayerId)return toast('Answer the draw offer above your player bar');try{applyServerState(await api.drawOffer(serverGameId));broadcastAux('draw_hint',{from:realtimeClientId});toast('Draw offer sent')}catch(error){toast(error.message)}};$('#copy').onclick=async()=>{const field=$('#share');try{await navigator.clipboard.writeText(field.value);toast('Room link copied')}catch{field.focus();field.select();toast('The link is selected · copy it from there')}};$('#create').onclick=async()=>{if(onlineGameBusy())return;if($('#variant').value==='bughouse')return void createBughouse();if($('#variant').value==='twin')return renderFates();if(['crazyhouse','dark','blackout'].includes($('#variant').value)&&String($('#time').value).startsWith('daily'))return toast('This variant is played live, not as a daily game');const rated=$('#level').value==='rated';if(rated&&!authSession?.access_token){openAccount();return toast('Sign in is required for rated games')}try{const state=await api.create({name:(currentProfile?.username||guestName),...(({dailyDays,seconds,increment})=>({seconds,increment,...(dailyDays?{dailyDays}:{})}))(timeChoice($('#time').value)),rated,variant:$('#variant').value});applyServerState(state);room=(state.game||state).invite_code;roomCreated=true;history.replaceState(null,'',`?game=${encodeURIComponent(room)}`);syncRoomUi();await loadChat();toast('Private room is ready')}catch(error){toast(error.message)}};$('#join').onclick=()=>{const input=$('#roomInput'),v=input.value.trim();if(!v){toast('Enter a room code first');input.focus();return}location.search='?game='+encodeURIComponent(v)};$('#roomInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#join').click()}};
 $('#time').onchange=e=>{if(game.history().length)return toast('Time control cannot change after the first move');clocks=initialClocks(Number(e.target.value));syncClockBars(clocks,null)};
 const boardEl=$('#board');
 function boardPlayArea(){
@@ -3924,8 +3982,8 @@ boardEl.addEventListener('click',event=>{
 // piece layer is hidden meanwhile and the square under the pointer is outlined.
 // The dragged piece stays inside the board: past an edge it slides along it. Whole pixels
 // keep the artwork crisp.
-function positionDragFloat(drag,x,y){
-  const area=boardPlayArea(),half=drag.size/2;
+function positionDragFloat(drag,x,y,area=boardPlayArea()){
+  const half=drag.size/2;
   const cx=Math.min(Math.max(x,area.left+half),area.left+area.width-half),cy=Math.min(Math.max(y,area.top+half),area.top+area.height-half);
   drag.float.style.transform=`translate(${Math.round(cx-half)}px,${Math.round(cy-half)}px)`;
   // Sway: the piece hangs from the hand and swings against the motion, settling when it stops.
@@ -4026,8 +4084,11 @@ function onDragPointerMove(event){
     startPointerDrag(drag,event.clientX,event.clientY);
   }
   event.preventDefault();
-  positionDragFloat(drag,event.clientX,event.clientY);
-  markDragOver(drag,boardSquareAt(event.clientX,event.clientY));
+  // The board is measured once per pointer move, before anything is written: measuring it again
+  // after moving the piece made the browser recompute styles in the middle of every frame.
+  const area=boardPlayArea();
+  positionDragFloat(drag,event.clientX,event.clientY,area);
+  markDragOver(drag,squareFromPoint(area,event.clientX,event.clientY,flipped));
 }
 function onDragPointerUp(event){
   const drag=pointerDrag;if(!drag||event.pointerId!==drag.id)return;
@@ -4102,7 +4163,7 @@ boardEl.addEventListener('contextmenu',event=>{event.preventDefault();if(pointer
 render();startClock();
 recordNav(); // the starting screen is the first entry Back returns to
 // ---- Interface language (src/i18n.js) ----
-uiLang=(()=>{try{return detectLanguage(localStorage.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
+uiLang=(()=>{try{return detectLanguage(localStore.getItem(LANG_KEY),navigator.languages||[navigator.language])}catch{return 'en'}})();
 const i18nPending=new Set();let i18nFrame=0;
 function applyLanguage(lang,{save=false}={}){
   uiLang=LANGUAGES[lang]?lang:'en';
@@ -4111,7 +4172,7 @@ function applyLanguage(lang,{save=false}={}){
   // Each language's dictionary (src/locales/<code>.js) downloads the first time it is chosen;
   // until it arrives the page shows English, never the previous language.
   if(uiLang!=='en'){const wanted=uiLang;loadLanguage(wanted).then(()=>{if(uiLang===wanted)translateTree(document.body,uiLang)}).catch(()=>{})}
-  if(save)try{localStorage.setItem(LANG_KEY,uiLang)}catch{}
+  if(save)try{localStore.setItem(LANG_KEY,uiLang)}catch{}
   const select=$('#languageSelect');if(select)select.value=uiLang;
 }
 new MutationObserver(records=>{
@@ -4122,7 +4183,7 @@ new MutationObserver(records=>{
 $('#languageSelect').onchange=e=>applyLanguage(e.target.value,{save:true});
 applyLanguage(uiLang);
 // ---- Accessibility: moves read out, moves typed (src/a11y.js, src/typed-move.js) ----
-function speakOn(){try{return localStorage.getItem('vch.speak')==='1'}catch{return false}}
+function speakOn(){try{return localStore.getItem('vch.speak')==='1'}catch{return false}}
 function announce(text,{speak=true}={}){
   const live=$('#a11yLive');if(live){live.textContent='';requestAnimationFrame(()=>{live.textContent=text})}
   if(speak&&speakOn()&&'speechSynthesis' in window){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH_LANG[uiLang]||'en-US';speechSynthesis.speak(u)}catch{}}
@@ -4137,7 +4198,7 @@ function announceLatestMove(){
   announce(spokenMove({...last,color:last.color||(count%2?'w':'b')},uiLang));
 }
 $('#speakMoves').checked=speakOn();
-$('#speakMoves').onchange=e=>{try{localStorage.setItem('vch.speak',e.target.checked?'1':'0')}catch{}if(e.target.checked)announce(translateText('Moves will be read aloud',uiLang)||'Moves will be read aloud');else try{speechSynthesis.cancel()}catch{}};
+$('#speakMoves').onchange=e=>{try{localStore.setItem('vch.speak',e.target.checked?'1':'0')}catch{}if(e.target.checked)announce(translateText('Moves will be read aloud',uiLang)||'Moves will be read aloud');else try{speechSynthesis.cancel()}catch{}};
 function typedMoveError(code){return {illegal:'That move is not legal here',ambiguous:'More than one piece can go there. Add its file or rank, like Nbd2',unreadable:'Type a move like Nf3, e4 or O-O',empty:'Type a move like Nf3, e4 or O-O'}[code]||'That move is not legal here'}
 async function submitTypedMove(event){
   event.preventDefault();
@@ -4169,7 +4230,7 @@ document.addEventListener('keydown',e=>{
 function setThemeVar(name,value){const input=$(`#themeStudio [data-theme="${name}"]`);if(input){input.value=value;input.oninput?.()}}
 function syncBoardSets(){
   const select=$('#boardSet');if(!select)return;
-  const sets=unlockedSets(currentProfile),current=(()=>{try{return JSON.parse(localStorage.getItem('vanta.theme')||'{}').boardSet||'classic'}catch{return 'classic'}})();
+  const sets=unlockedSets(currentProfile),current=(()=>{try{return JSON.parse(localStore.getItem('vanta.theme')||'{}').boardSet||'classic'}catch{return 'classic'}})();
   select.innerHTML=sets.map(s=>`<option value="${s.id}"${s.unlocked?'':' disabled'}${s.id===current?' selected':''}>${s.name}${s.unlocked?'':' · locked'}</option>`).join('');
   const locked=sets.filter(s=>!s.unlocked).length,note=$('#boardSetNote');
   if(note)note.textContent=locked?(signedIn()?'Reach a league division (or finish a season in it) to unlock its board set.':'Sign in and play rated games in the monthly league to unlock board sets.'):'Every board set is yours.';
@@ -4178,7 +4239,7 @@ $('#boardSet').onchange=e=>{
   const set=BOARD_SETS.find(s=>s.id===e.target.value),open=unlockedSets(currentProfile).find(s=>s.id===e.target.value)?.unlocked;
   if(!set||!open){syncBoardSets();return toast('That board set is still locked')}
   setThemeVar('--light',set.light);setThemeVar('--dark',set.dark);
-  savedTheme.boardSet=set.id;try{localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))}catch{}
+  savedTheme.boardSet=set.id;try{localStore.setItem('vanta.theme',JSON.stringify(savedTheme))}catch{}
   toast(`${set.name} board set`);
 };
 // ---- Offline: the computer opponent works without a connection (public/sw.js caches it) ----
@@ -4335,7 +4396,7 @@ function renderReviewBoardDecorations(){
   bar?.classList.remove('hidden');arrows?.classList.remove('hidden');
   const evaluation=reviewState.evaluations[reviewState.currentPly]||{cp:0},cp=Math.max(-1200,Math.min(1200,Number(evaluation.cp)||0));
   const whiteShare=50+45*Math.tanh(cp/420),fill=$('#reviewEvalFill'),text=$('#reviewEvalText');
-  if(fill)fill.style.height=`${whiteShare}%`;if(text)text.textContent=(cp>=0?'+':'')+(cp/100).toFixed(1);
+  if(fill)fill.style.transform=`scaleY(${whiteShare/100})`;if(text)text.textContent=(cp>=0?'+':'')+(cp/100).toFixed(1);
   const result=reviewState.currentPly>0?reviewState.results[reviewState.currentPly-1]:null;
   if(!arrows)return;
   const defs='<defs><marker id="reviewBestHead" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0 0 5 2.5 0 5Z"/></marker><marker id="reviewPlayedHead" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0 0 5 2.5 0 5Z"/></marker></defs>';
@@ -4578,7 +4639,7 @@ function updateAnalysisFromUci(text,request){
     analysisScore=Math.max(-99,Math.min(99,score));
     if(request.ply)moveEvalByPly[request.ply-1]=analysisScore;
     const scoreEl=$('#score');if(scoreEl)scoreEl.textContent=(analysisScore>=0?'+':'')+(Math.abs(analysisScore)>=90?'M'+Math.abs(Number(scoreMatch[2])||1):analysisScore.toFixed(1));
-    const fill=$('#meterFill');if(fill)fill.style.width=(50+Math.max(-45,Math.min(45,analysisScore*8)))+'%';
+    const fill=$('#meterFill');if(fill)fill.style.transform=`scaleX(${(50+Math.max(-45,Math.min(45,analysisScore*8)))/100})`;
     const advantage=$('#advantage');if(advantage)advantage.textContent=Math.abs(analysisScore)<.2?'Equal position':analysisScore>0?'Advantage for White':'Advantage for Black';
     queueMovesUpdate();
   }
@@ -4601,11 +4662,16 @@ function scheduleAnalysis({force=false,need=false}={}){
 }
 function showMovesView(){
   if(studySession)endStudy();if(exploreSession)endExplore();
-  currentRightView='moves';$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
+  currentRightView='moves';dynamicViewGen++;$('#movesView')?.classList.remove('hidden');$('#dynamicView')?.classList.add('hidden');
   if(reviewState.viewing){reviewState.viewing=false;renderReviewDashboard();render()}
   $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='moves'));
   updateMoves();scheduleAnalysis({force:true});queueAtmosphere();
 }
+// Each time the side view is replaced it gets a new number. A section that loads its content
+// (clubs, stats, the league...) only fills it in if it is still the view that asked: a slow
+// answer used to land over whatever you had opened in the meantime.
+let dynamicViewGen=0;
+function viewContent(gen){return gen===dynamicViewGen?$('#dynamicView .view-content'):null}
 function setDynamicView(kind,title,html){
   if(kind!=='study'&&studySession)endStudy();
   if(kind!=='explorer'&&exploreSession)endExplore();
@@ -4614,7 +4680,7 @@ function setDynamicView(kind,title,html){
   if(kind!=='prep'&&prepSession)endPrep();
   if(kind!=='analysis'&&analysis)leaveAnalysis();
   if(kind!=='lesson'&&lessonSession)leaveLesson({restore:false});
-  const arriving=currentRightView!==kind;currentRightView=kind;
+  const arriving=currentRightView!==kind;currentRightView=kind;dynamicViewGen++;
   $('#movesView')?.classList.add('hidden');
   const target=$('#dynamicView');target.classList.remove('hidden');target.innerHTML=`<div class="view-title"><button class="back-view" aria-label="Back"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div><img class="view-wordmark" src="/assets/vch/brand/vch-metal.svg" alt="VCH"><h3>${escapeHtml(title)}</h3></div></div><div class="view-content">${html}</div>`;
   target.querySelector('.back-view').onclick=()=>{playUiSound('back');showMovesView()};
@@ -4873,9 +4939,12 @@ async function showBackendView(kind){
     cancelPremove(false);if(watchSession)stopWatching();if(archiveSession)leaveArchive({reset:false});
     const streak=kind==='streak',daily=kind==='daily';if(!streak)streakSession=null;if(streak||daily)puzzleAngle=null;
     setDynamicView('puzzles',streak?(streakSession.mode==='survival'?'Puzzle Survival':'Puzzle Streak'):daily?'Daily Puzzle':'Puzzle Training',brandLoading(streak?`Puzzle ${streakSession.count+1} · ${streakDifficulty(streakSession.count)}`:daily?"Loading today's puzzle…":'Loading a real tactical position…'));
+    const viewGen=dynamicViewGen;
     try{
       const data=daily?await api.puzzleDaily():await api.puzzleNext(streak?streakDifficulty(streakSession.count):difficultyForRating(puzzleRatingNow()),puzzleRatingNow(),streak?null:puzzleAngle),puzzle=data.puzzle||data;
       if(streak&&!streakSession)return;
+      // Something else was opened while the puzzle loaded (a game, another section): it stays.
+      if(viewGen!==dynamicViewGen||onlineGameBusy())return;
       // Start where the solution's first move fits (older cached puzzles began one move early).
       const startFen=playablePuzzleFen(Chess,{fen:puzzle.fen,solution:puzzle.solution||puzzle.moves||[],gamePgn:puzzle.gamePgn,initialPly:puzzle.initialPly});
       if(!startFen){if(!daily&&puzzleRetries++<3)return void showBackendView(kind);puzzleRetries=0;throw new Error(daily?"Today's puzzle can't be played. Try the regular puzzles.":"Puzzles can't be loaded right now. Try again in a moment.")}
@@ -4898,7 +4967,7 @@ async function showBackendView(kind){
       $('#dynamicView .start-survival')?.addEventListener('click',startSurvival);
       if(streak)startRunTimer();
       $('#dynamicView .end-streak')?.addEventListener('click',()=>endStreak(null));
-    }catch(error){toast(error.message);showMovesView()}
+    }catch(error){if(viewGen!==dynamicViewGen)return;toast(error.message);showMovesView()}
     return;
   }
   if(kind==='arena'){
@@ -4940,8 +5009,8 @@ async function showBackendView(kind){
   }
 }
 // ---- Opening repertoire (src/repertoire.js): your lines, drilled; synced when signed in ----
-function localRepertoire(){try{const r=JSON.parse(localStorage.getItem(REP_KEY)||'null');return {w:Array.isArray(r?.w)?r.w:[],b:Array.isArray(r?.b)?r.b:[]}}catch{return {w:[],b:[]}}}
-function storeLocalRepertoire(){try{localStorage.setItem(REP_KEY,JSON.stringify(repertoire))}catch{}}
+function localRepertoire(){try{const r=JSON.parse(localStore.getItem(REP_KEY)||'null');return {w:Array.isArray(r?.w)?r.w:[],b:Array.isArray(r?.b)?r.b:[]}}catch{return {w:[],b:[]}}}
+function storeLocalRepertoire(){try{localStore.setItem(REP_KEY,JSON.stringify(repertoire))}catch{}}
 async function loadRepertoire(){
   const local=localRepertoire();
   if(!signedIn()){repertoire=local;return repertoire}
@@ -5284,11 +5353,11 @@ function drawRelics(){
 // call in here while the page is still starting.
 // No module-level constants here: the first render reads these before this part of the file has run.
 function r12Prefs(){
-  if(!r12PrefsCache){let v=null;try{v=JSON.parse(localStorage.getItem('vch.r12')||'')}catch{}
+  if(!r12PrefsCache){let v=null;try{v=JSON.parse(localStore.getItem('vch.r12')||'')}catch{}
     r12PrefsCache={veterans:v?.veterans==='off'?'off':'on',atmosphere:['full','subtle','off'].includes(v?.atmosphere)?v.atmosphere:'full'}}
   return r12PrefsCache;
 }
-function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStorage.setItem('vch.r12',JSON.stringify(r12PrefsCache))}catch{}}
+function setR12Pref(key,value){r12PrefsCache={...r12Prefs(),[key]:value};try{localStore.setItem('vch.r12',JSON.stringify(r12PrefsCache))}catch{}}
 // Messages after a game come one after another instead of replacing each other.
 function queueToast(text,{sound=null,sting=null,delay=1200}={}){
   r12ToastQueue.push({text,sound,sting});if(r12ToastTimer)return;
@@ -5370,9 +5439,9 @@ function drawArmy(){
 
 // Oaths: three a day, sworn before a game, judged when it ends.
 function todayKey(){return new Date().toISOString().slice(0,10)}
-function oathPickId(){let v=null;try{v=JSON.parse(localStorage.getItem('vch.oathPick')||'')}catch{}return v?.day===todayKey()&&dailyOaths().includes(v.id)?v.id:''}
-function readSessionOath(){try{const v=JSON.parse(sessionStorage.getItem('vch.oathNow')||'');return v&&oathById(v.id)?v:null}catch{return null}}
-function writeSessionOath(v){try{if(v)sessionStorage.setItem('vch.oathNow',JSON.stringify(v));else sessionStorage.removeItem('vch.oathNow')}catch{}}
+function oathPickId(){let v=null;try{v=JSON.parse(localStore.getItem('vch.oathPick')||'')}catch{}return v?.day===todayKey()&&dailyOaths().includes(v.id)?v.id:''}
+function readSessionOath(){try{const v=JSON.parse(sessionStore.getItem('vch.oathNow')||'');return v&&oathById(v.id)?v:null}catch{return null}}
+function writeSessionOath(v){try{if(v)sessionStore.setItem('vch.oathNow',JSON.stringify(v));else sessionStore.removeItem('vch.oathNow')}catch{}}
 function syncOathPicker(){
   const sel=$('#oathPick');if(!sel)return;
   const ids=dailyOaths(),pick=oathPickId(),st=loadOaths();
@@ -5437,14 +5506,32 @@ function syncAtmosphere(){
 // game: a breath on each move, the flames gutter on a capture and flare on a check, tremble in
 // time trouble and rise or fall with the game; the pointer stirs the flames it passes.
 let wallLights={el:null,glow:null,moveKey:null,stirAt:0};
+// What the layer needs from the page (which wallpaper, whether it scrolls, the page size) is read
+// again only after something that could change it: the page's attributes (theme, wallpaper,
+// classes), a resize, or the page growing. Reading the computed style and scrollHeight every
+// second, right after the clock or a move has changed the page, made the browser lay the whole
+// page out again on the spot once a second.
+let wallMeasure=null,wallStillQuery=null;
+function watchWallMeasure(){
+  if(watchWallMeasure.on)return;watchWallMeasure.on=true;
+  const dirty=()=>{wallMeasure=null};
+  const attrs=new MutationObserver(dirty);attrs.observe(document.documentElement,{attributes:true});attrs.observe(document.body,{attributes:true});
+  addEventListener('resize',dirty,{passive:true});
+  if(typeof ResizeObserver==='function')new ResizeObserver(dirty).observe(document.body);
+}
+function wallPageMeasure(){
+  watchWallMeasure();
+  if(wallMeasure)return wallMeasure;
+  const body=document.body,cs=getComputedStyle(body),scroll=!/fixed/.test(cs.backgroundAttachment);
+  return wallMeasure={key:wallpaperKey(cs.backgroundImage),scroll,w:scroll?body.clientWidth:innerWidth,h:scroll?Math.max(body.scrollHeight,innerHeight):innerHeight};
+}
 function wallLightsLayer(){
   const level=r12Prefs().atmosphere,body=document.body;
   let el=document.getElementById('wallLights');
   const drop=()=>{wallLights.glow?.stop();wallLights.glow=null;el?.remove();wallLights.el=null;return null};
   if(level==='off')return drop();
-  const cs=getComputedStyle(body),key=wallpaperKey(cs.backgroundImage);
+  const {key,scroll,w,h}=wallPageMeasure();
   if(!key)return drop();
-  const scroll=!/fixed/.test(cs.backgroundAttachment),w=scroll?body.clientWidth:innerWidth,h=scroll?Math.max(body.scrollHeight,innerHeight):innerHeight;
   if(!el){el=document.createElement('canvas');el.id='wallLights';el.setAttribute('aria-hidden','true');const atmo=document.getElementById('atmosphere');if(atmo)body.insertBefore(el,atmo);else body.prepend(el)}
   if(!wallLights.glow||wallLights.glow.canvas!==el)wallLights.glow=new WallLights(el);
   if(el.dataset.level!==level){el.dataset.level=level;wallLights.glow.fps=level==='full'?15:8}
@@ -5452,7 +5539,8 @@ function wallLightsLayer(){
   const size=scroll?[`${w}px`,`${h}px`]:['',''];if(el.style.width!==size[0]){el.style.width=size[0];el.style.height=size[1]}
   const sig=`${key}:${w}x${h}`;
   if(el.dataset.sig!==sig){el.dataset.sig=sig;const lights=placeLights(key,w,h);wallLights.glow.setLights(lights,w,h);el.dataset.lights=String(lights.length)}
-  const still=matchMedia('(prefers-reduced-motion: reduce)').matches||document.visibilityState!=='visible';
+  wallStillQuery||=matchMedia('(prefers-reduced-motion: reduce)');
+  const still=wallStillQuery.matches||document.visibilityState!=='visible';
   if(still){if(wallLights.glow.running||!wallLights.glow.still)wallLights.glow.stop({still:true})}else wallLights.glow.start();
   wallLights.el=el;return el;
 }
@@ -5492,7 +5580,7 @@ addEventListener('resize',()=>{clearTimeout(wallLights.resizeTimer);wallLights.r
 function musicPrefsGet(){if(!musicPrefs)musicPrefs=loadMusic();return musicPrefs}
 // Your world (Theme Studio: World): one of the old worlds plays its own theme in the menus and its
 // battle suite in your games, over your relic set's (a Campaign realm still plays its own).
-function worldGet(){try{const v=localStorage.getItem(WORLD_KEY)||'';return WORLDS.includes(v)?v:''}catch{return ''}}
+function worldGet(){try{const v=localStore.getItem(WORLD_KEY)||'';return WORLDS.includes(v)?v:''}catch{return ''}}
 function musicKeyNow(){return musicKeyOverride||worldGet()||KEY_FOR_THEME[loadRelics().equipped]||'vanta'}
 // The music (src/music.js, the tracks in src/music-library.js): with Music on it plays everywhere
 // and follows you (or plays the station you chose), and every beat it plays reaches the room.
@@ -5576,8 +5664,8 @@ function syncMusic(mood){
 // A new league division (signed-in players): a sting up or down, and a message.
 function noticeDivision(){
   const div=musicDivision(),id=currentProfile?.id;if(!div||!id)return;
-  const key=`vch.division.${id}`;let was=null;try{was=localStorage.getItem(key)}catch{}
-  if(was===div)return;try{localStorage.setItem(key,div)}catch{}
+  const key=`vch.division.${id}`;let was=null;try{was=localStore.getItem(key)}catch{}
+  if(was===div)return;try{localStore.setItem(key,div)}catch{}
   if(!was||!DIVISIONS.includes(was))return; // the first time: nothing to compare with
   const up=DIVISIONS.indexOf(div)>DIVISIONS.indexOf(was),name=div[0].toUpperCase()+div.slice(1);
   const stung=cue(up?'rank-up':'rank-down',null);
@@ -5602,7 +5690,7 @@ let musicLikes=null,nowPanel=null;
 function musicLikesGet(){if(!musicLikes)musicLikes=loadMusicLikes();return musicLikes}
 function setMusicLikes(next){musicLikes=saveMusicLikes(next);vantaScore?.setLikes(musicLikes);syncNowPlaying();if(currentRightView==='music')drawMusicList()}
 const NOW_KEY='vch.nowPlaying',NOW_CORNERS=['bl','br','tr','off'];
-function nowCorner(){try{const v=localStorage.getItem(NOW_KEY);return NOW_CORNERS.includes(v)?v:'bl'}catch{return 'bl'}}
+function nowCorner(){try{const v=localStore.getItem(NOW_KEY);return NOW_CORNERS.includes(v)?v:'bl'}catch{return 'bl'}}
 function ensureNowPanel(){
   if(nowPanel?.isConnected)return nowPanel;
   nowPanel=document.createElement('aside');nowPanel.id='nowPlaying';nowPanel.className='now-playing';nowPanel.hidden=true;nowPanel.dataset.quiet='';nowPanel.setAttribute('aria-label','Music');
@@ -5785,7 +5873,7 @@ function initRoundTwelve(){
   $('#musicToggle')?.addEventListener('click',()=>setMusicOn(!musicPrefsGet().on));
   syncMusicUi();
   $('#oathPick')?.addEventListener('change',e=>{
-    try{localStorage.setItem('vch.oathPick',JSON.stringify({day:todayKey(),id:e.target.value}))}catch{}
+    try{localStore.setItem('vch.oathPick',JSON.stringify({day:todayKey(),id:e.target.value}))}catch{}
     syncOathPicker();
     // Still before your first move: the new choice counts for this game.
     const color=premovePlayerColor(),n=currentHistory().length,myMoves=color==='w'?Math.ceil(n/2):Math.floor(n/2);
@@ -6174,8 +6262,9 @@ setInterval(()=>{if(battle?.status==='live')drawBattleScore()},1000);
 let simulSession=null,simulTimer=null;
 async function renderSimuls(){
   setDynamicView('simuls','Simuls',brandLoading('Loading simuls…'));
+  const viewGen=dynamicViewGen;
   try{
-    const {simuls=[]}=await api.simulList(),target=$('#dynamicView .view-content');if(!target||currentRightView!=='simuls')return;
+    const {simuls=[]}=await api.simulList(),target=viewContent(viewGen);if(!target||currentRightView!=='simuls')return;
     target.innerHTML=`<article class="simuls"><p class="trainer-intro">In a simul one player takes on everyone who joins, each on their own board. The host plays White on every board; games are casual.</p>
       ${signedIn()?`<details class="simul-host"><summary>Host a simul</summary><form class="simul-form"><label>Name <input name="name" maxlength="60" placeholder="Friday simul"></label><label>Time control <select name="tc"><option value="1800+30">30+30</option><option value="900+10">15+10</option><option value="600+5">10+5</option></select></label><label>Players <input name="max" type="number" min="2" max="20" value="10"></label><label class="check-row">Club members only <input name="club" type="checkbox"></label><button class="gold">Create simul</button></form></details>`:'<p class="menu-empty">Sign in to host or join a simul.</p>'}
       <div class="simul-list">${simuls.map(x=>`<article class="simul-card"><div><small>${escapeHtml(x.status==='live'?'PLAYING':'OPEN')} · ${formatTimeControl(x.base_seconds,x.increment_seconds)}</small><b>${escapeHtml(x.name)}</b><span>${escapeHtml(x.host)}${x.hostRating?` · ${x.hostRating}`:''} · ${x.players}/${x.max_players} players</span></div><div>${x.mine?`<button data-simul-open="${x.id}" class="gold">Manage</button>`:x.status==='open'?(x.joined?`<button data-simul-leave="${x.id}">Leave</button>`:`<button data-simul-join="${x.id}" class="gold">Join</button>`):''}<button data-simul-open="${x.id}">Open</button></div></article>`).join('')||'<p class="menu-empty">No simuls right now. Host the first one.</p>'}</div></article>`;
@@ -6185,13 +6274,15 @@ async function renderSimuls(){
     target.querySelectorAll('[data-simul-open]').forEach(b=>b.onclick=()=>void renderSimul(b.dataset.simulOpen));
   }catch(error){toast(error.message)}
 }
+let simulGen=0,lobbyGen=0; // opening another simul or lobby (or the same one twice, quickly) retires the older poll
 async function renderSimul(id){
-  clearInterval(simulTimer);
+  clearInterval(simulTimer);const gen=++simulGen;
   setDynamicView('simul','Simul',brandLoading('Loading the simul…'));
   const draw=async()=>{
+    if(gen!==simulGen)return;
     if(currentRightView!=='simul'){clearInterval(simulTimer);return}
-    let d;try{d=await api.simulState(id)}catch(error){clearInterval(simulTimer);toast(error.message);return}
-    if(currentRightView!=='simul')return;const target=$('#dynamicView .view-content');if(!target)return;
+    let d;try{d=await api.simulState(id)}catch(error){if(gen===simulGen){clearInterval(simulTimer);toast(error.message)}return}
+    if(gen!==simulGen||currentRightView!=='simul')return;const target=$('#dynamicView .view-content');if(!target)return;
     if(d.isHost&&d.simul.status==='live')simulSession={id,boards:d.boards};
     const s=d.simul,waiting=d.boards.filter(b=>b.hostToMove).length,mine=d.boards.find(b=>b.mine&&b.code);
     target.innerHTML=`<article class="simul">
@@ -6208,7 +6299,7 @@ async function renderSimul(id){
     target.querySelectorAll('[data-board]').forEach(el=>el.onclick=()=>{const b=d.boards[Number(el.dataset.board)];if(b?.code)void openGameByCode(b.code)});
     syncSimulBar();
   };
-  await draw();simulTimer=setInterval(()=>{if(!document.hidden)void draw()},5000);
+  await draw();if(gen!==simulGen)return;clearInterval(simulTimer);simulTimer=setInterval(()=>{if(!document.hidden)void draw()},5000);
 }
 async function openGameByCode(code){
   try{
@@ -6327,12 +6418,13 @@ function drawAnalysis(){
 // ---- Tournament lobby: standings, pairings and the top live games (refreshes every 10s) ----
 let lobbyTimer=null;
 async function openTournamentLobby(t){
-  clearInterval(lobbyTimer);
+  clearInterval(lobbyTimer);const gen=++lobbyGen;
   setDynamicView('lobby',t.name||'Tournament lobby',brandLoading('Loading the lobby…'));
   const draw=async()=>{
+    if(gen!==lobbyGen)return;
     if(currentRightView!=='lobby'){clearInterval(lobbyTimer);return}
-    let d;try{d=await api.tournamentLobby(t.id)}catch(error){clearInterval(lobbyTimer);toast(error.message);return}
-    const target=$('#dynamicView .view-content');if(!target||currentRightView!=='lobby')return;
+    let d;try{d=await api.tournamentLobby(t.id)}catch(error){if(gen===lobbyGen){clearInterval(lobbyTimer);toast(error.message)}return}
+    const target=$('#dynamicView .view-content');if(gen!==lobbyGen||!target||currentRightView!=='lobby')return;
     const typing=target.querySelector('.cm-input');if(typing&&(typing.value||document.activeElement===typing))return; // don't wipe a comment being written
     const tt=d.tournament||t,swiss=tt.format==='swiss',games=d.games||[],top=games.slice(0,4),rest=games.slice(4);
     const card=(g,i)=>`<button type="button" class="watch-card lobby-game${g.mine?' mine':''}" data-lobby-watch="${i}">${studyBoardHtml(g.fen)}<span class="watch-meta"><span><b>${escapeHtml(g.white||'White')}</b><em>${escapeHtml(String(g.whiteRating||''))}</em></span><span><b>${escapeHtml(g.black||'Black')}</b><em>${escapeHtml(String(g.blackRating||''))}</em></span><small>${g.mine?'Your game':`move ${Math.max(1,Math.ceil(Number(g.moves||0)/2))}`}</small></span></button>`;
@@ -6353,8 +6445,8 @@ async function openTournamentLobby(t){
     target.querySelector('.lobby-mine')?.addEventListener('click',e=>{location.search='?game='+encodeURIComponent(e.currentTarget.dataset.code)});
     target.querySelector('.cm-form')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,f=new FormData(form),body=String(f.get('body')||'').trim();if(!body)return;try{await api.commentaryPost(t.id,body,String(f.get('game')||'')||null);form.querySelector('.cm-input').value='';form.querySelector('.cm-input').blur();toast('Posted');void draw()}catch(error){toast(error.message)}});
   };
-  await draw();
-  lobbyTimer=setInterval(()=>{if(document.hidden)return;void draw()},10000);
+  await draw();if(gen!==lobbyGen)return;
+  clearInterval(lobbyTimer);lobbyTimer=setInterval(()=>{if(document.hidden)return;void draw()},10000);
 }
 function activateNav(kind){
   $$('.main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.nav===kind));
@@ -6411,7 +6503,7 @@ function setPrimaryScreen(screen,{remember=false}={}){
   shell?.classList.toggle('game-active',showGame);shell?.classList.toggle('intro-active',!showGame);
   menu?.setAttribute('aria-hidden',String(showGame));workspace?.setAttribute('aria-hidden',String(!showGame));
   document.body.dataset.screen=showGame?'game':'intro';
-  if(showGame&&remember)localStorage.setItem('vch.intro-seen','1');
+  if(showGame&&remember)localStore.setItem('vch.intro-seen','1');
   window.scrollTo(0,0);
 }
 document.body.dataset.screen=startsInGame?'game':'intro';
@@ -6514,7 +6606,7 @@ $('#authSubmit').onclick=async()=>{
     saveAuthSession(session);await loadProfile();syncIdentityUI();message.textContent='Signed in.';setTimeout(()=>$('#accountDialog').close(),450);
   }catch(error){message.textContent=error.message}
 };
-async function signOut(){try{if(authSession?.access_token)await authFetch('/auth/v1/logout',null,authSession.access_token)}catch{}saveAuthSession(null);currentProfile=null;await loadProfile().catch(()=>{});syncIdentityUI();menus.close('account');toast('Signed out')}
+async function signOut(){stopSocial();try{if(authSession?.access_token)await authFetch('/auth/v1/logout',null,authSession.access_token)}catch{}saveAuthSession(null);currentProfile=null;await loadProfile().catch(()=>{});syncIdentityUI();menus.close('account');toast('Signed out')}
 $('#signOutBtn').onclick=signOut;
 $('#searchBtn').onclick=()=>{menus.open('search');$('#searchInput').focus()};
 $('#searchInput').oninput=e=>{
@@ -6531,7 +6623,7 @@ $('#searchInput').oninput=e=>{
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.add('ready')});
 $('#installBtn').onclick=async()=>{if(installPrompt){installPrompt['prompt']();await installPrompt.userChoice;installPrompt=null}else toast('Use your browser menu to install this app')};
 $('#notifyBtn').onclick=()=>menus.toggle('notifications');
-const savedTheme=JSON.parse(localStorage.getItem('vanta.theme')||'{}');
+const savedTheme=(t=>t&&typeof t==='object'&&!Array.isArray(t)?t:{})(readJson('vanta.theme',{}));
 const clamp=(value,min,max,fallback)=>{const number=Number(value);return Number.isFinite(number)?Math.max(min,Math.min(max,number)):fallback};
 const motionCssValue=value=>`${Math.round(clamp(value,0,100,100)*4)}ms`;
 const normalizeMotionCss=value=>{
@@ -6562,22 +6654,22 @@ if(glassControl)glassControl.value=String(Math.round(Number(savedTheme['--glass'
 if(motionControl)motionControl.value=String(Math.round(parseFloat(savedTheme['--motion'])/4));
 $$('[data-theme]').forEach(input=>input.oninput=()=>{
   const value=input.type!=='range'?input.value:input.dataset.theme==='--glass'?String(clamp(Number(input.value)/100,.15,1,.94)):motionCssValue(input.value);
-  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--motion')motionScaleCache=null;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+  document.documentElement.style.setProperty(input.dataset.theme,value);savedTheme[input.dataset.theme]=value;if(input.dataset.theme==='--motion')motionScaleCache=null;if(input.dataset.theme==='--glass')syncGlassBlur(value);localStore.setItem('vanta.theme',JSON.stringify(savedTheme));
 });
 savedTheme.pieceStyle=applyPieceStyle(migratePieceStyle(savedTheme));
-localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+localStore.setItem('vanta.theme',JSON.stringify(savedTheme));
 $('#expressionsSetting').value=expressionSetting;
-$('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
+$('#expressionsSetting').onchange=e=>{expressionSetting=e.target.value;savedTheme.expressions=expressionSetting;localStore.setItem('vanta.theme',JSON.stringify(savedTheme));if(boardDom)boardDom.moodKey='';render()};
 // A new piece set shows once its images are in (two seconds at most): the board keeps its pieces
 // meanwhile instead of standing empty while a phone or tablet downloads them (owner, 2026-10-17).
 $('#pieceStyle').onchange=e=>{
   const want=e.target.value;
   void Promise.race([preloadImages(pieceStyleImages(normalizePieceStyle(want))),new Promise(done=>setTimeout(done,2000))]).then(()=>{
     if(e.target.value!==want)return; // chosen again meanwhile: that one wins
-    savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme));
+    savedTheme.pieceStyle=applyPieceStyle(e.target.value);localStore.setItem('vanta.theme',JSON.stringify(savedTheme));
   });
 };
-$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStorage.setItem('vanta.theme',JSON.stringify(savedTheme))};
+$('#whitePiece').value=savedTheme.whitePiece||'#f0d9a4';$('#blackPiece').value=savedTheme.blackPiece||'#342019';$('#pieceTint').value=Math.round(savedTheme.spriteTint*100);$('#whitePiece').oninput=e=>{savedTheme.whitePiece=e.target.value;document.documentElement.style.setProperty('--white-piece',e.target.value);localStore.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#blackPiece').oninput=e=>{savedTheme.blackPiece=e.target.value;document.documentElement.style.setProperty('--black-piece',e.target.value);localStore.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#pieceTint').oninput=e=>{savedTheme.spriteTint=clamp(Number(e.target.value)/100,0,.7,0);document.documentElement.style.setProperty('--piece-tint',String(savedTheme.spriteTint));localStore.setItem('vanta.theme',JSON.stringify(savedTheme))};$('#wallpaper').onchange=e=>{document.body.dataset.wallpaper=e.target.value;queueAtmosphere();savedTheme.wallpaper=e.target.value;localStore.setItem('vanta.theme',JSON.stringify(savedTheme))};
 $('#closeTheme').onclick=()=>menus.close('theme');
 $('#openRelics').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderRelics();showSidePanel()};
 // Theme Studio: the piece sounds (a set, your relic set's, or the classic synthesized ones), the
@@ -6589,14 +6681,14 @@ $('#uiSoundSetting').onchange=e=>setSfxPref('ui',e.target.checked);
 $('#openSoundTest').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderSoundTest();showSidePanel()};
 $('#openMusicList').onclick=()=>{menus.close('theme');setPrimaryScreen('game');renderMusicList();showSidePanel()};
 $('#worldSetting').value=worldGet();
-$('#worldSetting').onchange=e=>{const w=e.target.value;try{if(w)localStorage.setItem(WORLD_KEY,w);else localStorage.removeItem(WORLD_KEY)}catch{}
+$('#worldSetting').onchange=e=>{const w=e.target.value;try{if(w)localStore.setItem(WORLD_KEY,w);else localStore.removeItem(WORLD_KEY)}catch{}
   // A world is its music: choosing one with the music off turns it on, following the game.
   if(w&&!musicPrefsGet().on)setMusicOn(true,'on');
   // Heard at once in the menus: the world's own theme (the music otherwise changes when a piece ends).
   const theme=w&&vantaScore?.playing&&musicPlace()==='lobby'&&musicPrefsGet().station==='on'&&(musicLibrary||[]).find(t=>t.theme===w&&t.place==='lobby');
   queueAtmosphere();if(theme){vantaScore.setKey(w);vantaScore.playNow(theme.id)}};
 $('#nowPlayingSetting').value=nowCorner();
-$('#nowPlayingSetting').onchange=e=>{try{localStorage.setItem(NOW_KEY,e.target.value)}catch{}syncNowPlaying()};
+$('#nowPlayingSetting').onchange=e=>{try{localStore.setItem(NOW_KEY,e.target.value)}catch{}syncNowPlaying()};
 // The music list (owner, 2026-10-13): every track by station, to play now, like, or put away.
 const MUSIC_GROUPS=['cinematic','worlds','focus','opera','electric','songs'];
 function renderMusicList(){
@@ -6780,7 +6872,7 @@ let resonanceBeat={step:-1,at:0,key:'',glow:''};
 let resonanceGame={key:null,timer:0,echo:0,mood:'calm',strength:0,captures:0,retunedAt:0,endAt:0,glow:1,shiverAt:0,rings:0};
 function syncResonance(){
   let layer=document.getElementById('resonanceBg');
-  if(resonanceLevel==='off'){resonance?.stop();resonance=null;layer?.remove();return}
+  if(resonanceLevel==='off'){resonance?.stop();resonance=null;layer?.remove();syncResonanceLoop();return}
   if(!layer){layer=document.createElement('div');layer.id='resonanceBg';layer.setAttribute('aria-hidden','true');layer.innerHTML='<canvas class="resonance-glow"></canvas><canvas class="resonance-sand"></canvas>';document.body.prepend(layer)}
   const canvas=layer.querySelector('.resonance-sand'),still=prefersStill();
   if(resonance?.canvas!==canvas){
@@ -6794,6 +6886,7 @@ function syncResonance(){
   }
   resonance.setMotion(!still);
   if(!resonance.mode){resonanceBeat.key=musicKeyNow();resonance.show(resonanceThemeMode(resonanceBeat.key),{flow:!still})}
+  syncResonanceLoop();
 }
 // Where on the window a square of the board is (its middle), or the board's middle, and how far
 // it is to the board's nearest edge (`under`: a ring that wide is still hidden by the board).
@@ -6854,10 +6947,17 @@ function resonanceAfterEnding(){const g=resonanceGame;if(!g.endAt)return;g.endAt
 // The music drives both: the room's big plate follows every chord live; the background takes
 // every other chord (at most one figure per nine seconds), hears every note, and rests on the
 // theme's figure when the music stops. The same beat keeps the game's slow answers going.
-(function resonanceMusicLoop(){
-  let ticks=0;
-  setInterval(()=>{
-    ticks++;
+// It runs only while there is something to drive (the background is on, or the room is open);
+// otherwise nothing wakes the page eight times a second for no reason (bug pass, 2026-10-30).
+function syncResonanceLoop(){
+  const want=!!(resonance||resonanceRoom);
+  if(want&&!resonanceTimer)resonanceTimer=setInterval(stepResonance,120);
+  else if(!want&&resonanceTimer){clearInterval(resonanceTimer);resonanceTimer=0}
+}
+function stepResonance(){
+    const ticks=++resonanceSteps;
+    // The room left by any route (Back, the Moves tab, a new screen): its sand and its score stop.
+    if(resonanceRoom&&(!resonanceRoom.canvas.isConnected||resonanceRoom.canvas.offsetParent===null))resonanceRoom.leave();
     const playing=!!vantaScore?.playing;
     if(resonanceRoom&&playing){const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());resonanceRoom.plate.setMode(mode);resonanceRoom.plate.setTarget(0.25+energy*0.75);resonanceRoom.show?.(mode,energy)}
     if(!resonance)return;
@@ -6888,11 +6988,10 @@ function resonanceAfterEnding(){const g=resonanceGame;if(!g.endAt)return;g.endAt
     if(ticks%8||g.endAt)return;
     const key=musicKeyNow();
     if(key!==beat.key||beat.step!==-1){beat.key=key;beat.step=-1;beat.at=0;resonance.show(resonanceThemeMode(key),{flow:!still})}
-  },120);
-})();
+}
 function setResonanceLevel(level){
   resonanceLevel=level==='off'?'off':'on';
-  try{localStorage.setItem(RESONANCE_KEY,resonanceLevel)}catch{}
+  try{localStore.setItem(RESONANCE_KEY,resonanceLevel)}catch{}
   const select=$('#resonanceSetting');if(select)select.value=resonanceLevel;
   syncResonance();
 }
@@ -6908,11 +7007,13 @@ function renderResonanceRoom(){
     <p class="computer-note">Turn on the Resonance background in the Theme Studio to keep the music's figures behind your games, dim and slow.</p>
   </article>`);
   const root=$('#dynamicView .resonance-room');if(!root)return;
+  const watch=new MutationObserver(()=>{if(!canvas.isConnected)room.leave()});
   const canvas=root.querySelector('.resonance-big'),plate=new ResonancePlate(canvas,{count:matchMedia('(max-width: 800px)').matches?7000:14000,color:'#f1e6c9',size:1.2});
   plate.ctx.globalCompositeOperation='lighter';plate.setMode(MODES[18]);
   let theme='vanta';
-  const room={plate,playing:false,show(mode,energy){const r=root.querySelector('.resonance-readout');if(r){r.querySelector('b').textContent=`Mode ${mode.n}·${mode.m}`;r.querySelector('span').textContent=`${Math.round(energy*100)}% · ${RESONANCE_THEMES.find(t=>t[0]===theme)[1]}`}}};
-  resonanceRoom=room;
+  const room={plate,canvas,playing:false,left:false,leave(){if(room.left)return;room.left=true;watch.disconnect();plate.stop();if(room.playing){room.playing=false;vantaScore?.stop()}if(resonanceRoom===room)resonanceRoom=null;syncResonanceLoop()},show(mode,energy){const r=root.querySelector('.resonance-readout');if(r){r.querySelector('b').textContent=`Mode ${mode.n}·${mode.m}`;r.querySelector('span').textContent=`${Math.round(energy*100)}% · ${RESONANCE_THEMES.find(t=>t[0]===theme)[1]}`}}};
+  if(resonanceRoom&&resonanceRoom!==room)resonanceRoom.leave();
+  resonanceRoom=room;syncResonanceLoop();
   const pick=id=>{theme=id;root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.classList.toggle('on',b.dataset.resonanceTheme===id));if(vantaScore)vantaScore.setKey(id)};
   root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.onclick=()=>pick(b.dataset.resonanceTheme));pick(theme);
   const play=root.querySelector('.resonance-play');
@@ -6927,12 +7028,12 @@ function renderResonanceRoom(){
   root.querySelector('.resonance-tension').oninput=e=>vantaScore?.setTension(Number(e.target.value)/100);
   root.querySelector('.resonance-storm').oninput=e=>vantaScore?.setStorm(Number(e.target.value)/100);
   if(prefersStill()){plate.resize();plate.settle(200)}else plate.start();
-  // Leaving the room stops its score and its sand.
-  const watch=new MutationObserver(()=>{if(!canvas.isConnected){watch.disconnect();plate.stop();if(room.playing)vantaScore?.stop();if(resonanceRoom===room)resonanceRoom=null}});
+  // Leaving the room stops its score and its sand: at once when its view is replaced, and within a
+  // tick (stepResonance) when it is only hidden (Back, the Moves tab).
   watch.observe($('#dynamicView'),{childList:true});
 }
 (function initResonance(){
-  let saved=null;try{saved=localStorage.getItem(RESONANCE_KEY)}catch{}
+  let saved=null;try{saved=localStore.getItem(RESONANCE_KEY)}catch{}
   resonanceLevel=['on','subtle','vivid'].includes(saved)?'on':'off'; // subtle and vivid: the board layer of an earlier build
   const select=$('#resonanceSetting');if(select){select.value=resonanceLevel;select.onchange=e=>setResonanceLevel(e.target.value)}
   $('#openResonance')?.addEventListener('click',()=>{menus.close('theme');setPrimaryScreen('game');renderResonanceRoom();showSidePanel()});

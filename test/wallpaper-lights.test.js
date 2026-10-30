@@ -129,7 +129,7 @@ test('wired: the music plays everywhere when Music is on, and every beat reaches
   assert.match(main, /score\.setVolume\(p\.volume\);score\.setLanguage\(uiLang\);score\.setStation\(p\.station\);score\.setKey\(musicKeyNow\(\)\);score\.setDivision\(musicDivision\(\)\);/, 'it follows you (songs in your language), or plays your station');
   assert.match(main, /vantaScore\.setLikes\(musicLikesGet\(\)\);vantaScore\.setLanguage\(uiLang\);/, 'your likes and your language from the start');
   assert.match(main, /if\(k==='beat'\|\|k==='drum'\|\|k==='heartbeat'\|\|k==='chord'\)\{nowPanelBeat\(k,s\);if\(k!=='chord'\)heroKick\(s\)\}/, 'the now-playing panel and the hero piece keep the beat');
-  assert.match(css, /\.now-playing:hover,\.now-playing:focus-within\{opacity:1;filter:none;/, 'the panel is dim until you hover it');
+  assert.match(css, /\.now-playing:focus-within\{opacity:1;filter:none;[^}]*\}@media \(hover:hover\)\{\.now-playing:hover\{opacity:1;filter:none;/, 'the panel is dim until you hover it (or tab into it); a tap does not leave it lit');
   assert.match(main, /score\.setPlace\(place,urgent\);/, 'into a game and out of it on the next bar line');
   assert.match(main, /const wait=\(ev\.at-ctx\.currentTime\+\(ctx\.outputLatency\|\|ctx\.baseLatency\|\|0\)\)\*1000;/, 'in time with the sound');
   assert.match(main, /if\(!ctx\|\|prefersReducedMotion\(\)\|\|document\.visibilityState!=='visible'\)return;/);
@@ -140,4 +140,30 @@ test('wired: the music plays everywhere when Music is on, and every beat reaches
   assert.match(css, /\.board-aura\{grid-column:2;grid-row:1;/);
   assert.match(css, /\.board-shell\.with-aura>\.board\{position:relative;z-index:1\}/);
   assert.match(css, /\.player time::after\{content:'';position:absolute;/);
+});
+
+test('between flickers the page rests: it is woken about 15 times a second, not at every screen refresh', () => {
+  // A view with timers: wake-ups are counted (animation frames requested plus timers set).
+  let now = 0, frames = [], timers = [], wakes = 0;
+  const calls = { clear: 0 };
+  const ctx = { createRadialGradient: () => ({ addColorStop() {} }), setTransform() {}, clearRect() { calls.clear++; }, fillRect() {}, set fillStyle(v) {}, set globalAlpha(v) {} };
+  const view = {
+    performance: { now: () => now },
+    requestAnimationFrame: f => { wakes++; frames.push(f); return frames.length; }, cancelAnimationFrame: () => { frames = []; },
+    setTimeout: (f, ms) => { wakes++; timers.push({ f, at: now + ms }); return timers.length; }, clearTimeout: () => { timers = []; },
+  };
+  const wl = new WallLights({ width: 0, height: 0, getContext: () => ctx }, { view });
+  wl.setLights(placeLights('classic', 1440, 900), 1440, 900);
+  wl.start();
+  // One second of a 120 Hz screen: a frame runs only if one was asked for.
+  for (let i = 0; i < 120; i++) {
+    now += 1000 / 120;
+    const due = timers.filter(x => x.at <= now); timers = timers.filter(x => x.at > now); due.forEach(x => x.f());
+    const run = frames; frames = []; run.forEach(f => f(now));
+  }
+  const drawn = calls.clear - 1; // minus the picture drawn on setup
+  assert.ok(drawn >= 13 && drawn <= 16, `${drawn} drawings`);
+  assert.ok(wakes <= 2 * drawn + 3, `${wakes} wake-ups for ${drawn} drawings (was one per screen refresh: 120)`);
+  wl.stop();
+  assert.equal(timers.length + frames.length, 0, 'stop cancels the pending wake-up');
 });

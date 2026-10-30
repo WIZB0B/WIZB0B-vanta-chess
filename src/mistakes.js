@@ -2,6 +2,7 @@
 // you find the better move on your own (spaced: again tomorrow, in 3 days, in a week).
 // Kept in this browser only.
 
+import { localStore } from './safe-storage.js';
 export const MISTAKES_KEY = 'vch.mistakes';
 export const MISTAKE_CLASSES = new Set(['blunder', 'mistake', 'miss']);
 export const BOX_DAYS = [0, 1, 3, 7];
@@ -37,5 +38,5 @@ export function gradeMistake(m, correct, now = Date.now()) {
 export function mistakeStats(bank = [], now = Date.now()) {
   return { total: bank.length, due: dueMistakes(bank, now).length, mastered: bank.filter(m => m.box >= MASTERED_BOX).length, fixed: bank.filter(m => m.fixed).length };
 }
-export function loadMistakes(storage = globalThis.localStorage) { try { const v = JSON.parse(storage.getItem(MISTAKES_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
-export function saveMistakes(bank, storage = globalThis.localStorage) { try { storage.setItem(MISTAKES_KEY, JSON.stringify(bank)); } catch {} return bank; }
+export function loadMistakes(storage = localStore) { try { const v = JSON.parse(storage.getItem(MISTAKES_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
+export function saveMistakes(bank, storage = localStore) { try { storage.setItem(MISTAKES_KEY, JSON.stringify(bank)); } catch {} return bank; }

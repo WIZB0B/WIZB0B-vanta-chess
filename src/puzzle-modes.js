@@ -6,6 +6,7 @@
 //   start with two, get one for each day you visit and one for every ten puzzles solved in a
 //   run, and can hold up to five. They are kept in this browser.
 import { streakDifficulty } from './puzzle-streak.js';
+import { localStore } from './safe-storage.js';
 
 export const RUN_MODES = { streak: 'streak', survival: 'survival' };
 export const SURVIVAL_SECONDS = { easiest: 45, easier: 40, normal: 35, harder: 30, hardest: 25 };
@@ -32,7 +33,7 @@ function read(storage) {
 function write(state, storage) { try { storage?.setItem(SKIP_KEY, JSON.stringify(state)) } catch {} return state; }
 const clean = v => Math.max(0, Math.min(SKIP_MAX, Math.floor(Number(v)) || 0));
 // The token purse. The first visit of each day adds one (reported as `daily: true` once).
-export function loadSkips(storage = globalThis.localStorage, now = new Date()) {
+export function loadSkips(storage = localStore, now = new Date()) {
   const saved = read(storage), today = isoDay(now);
   if (!saved) return { ...write({ tokens: SKIP_START, day: today }, storage), daily: false };
   const tokens = clean(saved.tokens);
@@ -42,22 +43,22 @@ export function loadSkips(storage = globalThis.localStorage, now = new Date()) {
   return { ...next, daily: next.tokens > tokens };
 }
 // Spends a token. Returns the new purse, or null when there is none.
-export function spendSkip(storage = globalThis.localStorage, now = new Date()) {
+export function spendSkip(storage = localStore, now = new Date()) {
   const purse = loadSkips(storage, now);
   if (purse.tokens < 1) return null;
   return write({ tokens: purse.tokens - 1, day: purse.day }, storage);
 }
 // A run that reaches 10, 20, 30… solved puzzles earns a token (up to the cap).
-export function earnMilestone(count, storage = globalThis.localStorage, now = new Date()) {
+export function earnMilestone(count, storage = localStore, now = new Date()) {
   if (!(count > 0) || count % SKIP_MILESTONE) return null;
   const purse = loadSkips(storage, now);
   if (purse.tokens >= SKIP_MAX) return null;
   return write({ tokens: purse.tokens + 1, day: purse.day }, storage);
 }
-export function loadBestSurvival(storage = globalThis.localStorage) {
+export function loadBestSurvival(storage = localStore) {
   try { return Math.max(0, Number(storage?.getItem(BEST_SURVIVAL_KEY)) || 0) } catch { return 0 }
 }
-export function saveBestSurvival(count, storage = globalThis.localStorage) {
+export function saveBestSurvival(count, storage = localStore) {
   const best = Math.max(loadBestSurvival(storage), count);
   try { storage?.setItem(BEST_SURVIVAL_KEY, String(best)) } catch {}
   return best;
