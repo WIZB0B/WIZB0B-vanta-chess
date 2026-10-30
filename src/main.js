@@ -6957,7 +6957,7 @@ function syncResonanceLoop(){
 function stepResonance(){
     const ticks=++resonanceSteps;
     // The room left by any route (Back, the Moves tab, a new screen): its sand and its score stop.
-    if(resonanceRoom&&(!resonanceRoom.canvas.isConnected||resonanceRoom.canvas.offsetParent===null))resonanceRoom.leave();
+    if(resonanceRoom&&(resonanceRoom.gen!==dynamicViewGen||!resonanceRoom.canvas.isConnected||!resonanceRoom.canvas.getClientRects().length))resonanceRoom.leave();
     const playing=!!vantaScore?.playing;
     if(resonanceRoom&&playing){const mode=modeForChord(vantaScore.chord),energy=spectrumEnergy(vantaScore.readSpectrum());resonanceRoom.plate.setMode(mode);resonanceRoom.plate.setTarget(0.25+energy*0.75);resonanceRoom.show?.(mode,energy)}
     if(!resonance)return;
@@ -7011,7 +7011,7 @@ function renderResonanceRoom(){
   const canvas=root.querySelector('.resonance-big'),plate=new ResonancePlate(canvas,{count:matchMedia('(max-width: 800px)').matches?7000:14000,color:'#f1e6c9',size:1.2});
   plate.ctx.globalCompositeOperation='lighter';plate.setMode(MODES[18]);
   let theme='vanta';
-  const room={plate,canvas,playing:false,left:false,leave(){if(room.left)return;room.left=true;watch.disconnect();plate.stop();if(room.playing){room.playing=false;vantaScore?.stop()}if(resonanceRoom===room)resonanceRoom=null;syncResonanceLoop()},show(mode,energy){const r=root.querySelector('.resonance-readout');if(r){r.querySelector('b').textContent=`Mode ${mode.n}·${mode.m}`;r.querySelector('span').textContent=`${Math.round(energy*100)}% · ${RESONANCE_THEMES.find(t=>t[0]===theme)[1]}`}}};
+  const room={plate,canvas,gen:dynamicViewGen,playing:false,left:false,leave(){if(room.left)return;room.left=true;watch.disconnect();plate.stop();if(room.playing){room.playing=false;vantaScore?.stop()}if(resonanceRoom===room)resonanceRoom=null;syncResonanceLoop()},show(mode,energy){const r=root.querySelector('.resonance-readout');if(r){r.querySelector('b').textContent=`Mode ${mode.n}·${mode.m}`;r.querySelector('span').textContent=`${Math.round(energy*100)}% · ${RESONANCE_THEMES.find(t=>t[0]===theme)[1]}`}}};
   if(resonanceRoom&&resonanceRoom!==room)resonanceRoom.leave();
   resonanceRoom=room;syncResonanceLoop();
   const pick=id=>{theme=id;root.querySelectorAll('[data-resonance-theme]').forEach(b=>b.classList.toggle('on',b.dataset.resonanceTheme===id));if(vantaScore)vantaScore.setKey(id)};
